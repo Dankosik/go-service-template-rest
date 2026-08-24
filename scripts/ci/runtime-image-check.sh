@@ -45,9 +45,10 @@ if [[ ${ready} != true ]]; then
 	exit 1
 fi
 
-if [[ -n ${expected_version} ]] && ! docker logs "${container}" 2>&1 | grep -Fq "\"service.version\":\"${expected_version}\""; then
+logs="$(docker logs "${container}" 2>&1)"
+if [[ -n ${expected_version} ]] && ! grep -Fq "\"service.version\":\"${expected_version}\"" <<<"${logs}"; then
 	echo "runtime image did not report expected version ${expected_version}" >&2
-	docker logs "${container}" >&2
+	printf '%s\n' "${logs}" >&2
 	exit 1
 fi
 

@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 
+ARG SOURCE_DATE_EPOCH=0
+
 FROM --platform=$BUILDPLATFORM golang:1.27.0-bookworm@sha256:484ef6066fa69acb059fdfeda7ba2b8f7391f2ef6abc6f9b8411e669ebd56466 AS build
 
 WORKDIR /src
@@ -10,8 +12,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
-ARG WORKTREE_FINGERPRINT=unknown
 ARG RAILWAY_GIT_COMMIT_SHA
+ARG SOURCE_DATE_EPOCH
 ARG PGO_PROFILE=off
 ARG PGO_MANIFEST
 ARG PGO_ACCEPTED_BUILD_FINGERPRINT
@@ -21,7 +23,6 @@ ENV CGO_ENABLED=0
 RUN --mount=type=bind,target=. \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    test -n "${WORKTREE_FINGERPRINT}" && \
     if [ "${PGO_PROFILE}" = "auto" ] || [ -z "${PGO_PROFILE}" ]; then \
       echo "PGO_PROFILE must be off or name an explicit representative CPU profile" >&2; \
       exit 2; \
@@ -63,14 +64,16 @@ RUN --mount=type=bind,target=. \
     mkdir -p /out/migrations && \
     if [ -d /src/migrations ]; then cp -R /src/migrations/. /out/migrations/; fi
 # profile:database-postgres:end
+RUN find /out -exec touch -d "@${SOURCE_DATE_EPOCH}" {} +
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:1b7b9f0f0e0a1d2155f531db587cc48ec26aaf97ab64364225f5bf18a054e66a
 
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
+ARG RAILWAY_GIT_COMMIT_SHA
 ARG SOURCE_URL=""
-LABEL org.opencontainers.image.version="${APP_VERSION}" \
-      org.opencontainers.image.revision="${VCS_REF}" \
+LABEL org.opencontainers.image.version="${RAILWAY_GIT_COMMIT_SHA:-$APP_VERSION}" \
+      org.opencontainers.image.revision="${RAILWAY_GIT_COMMIT_SHA:-$VCS_REF}" \
       org.opencontainers.image.source="${SOURCE_URL}"
 
 WORKDIR /

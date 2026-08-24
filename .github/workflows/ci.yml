@@ -320,6 +320,8 @@ jobs:
       - name: Performance harness
         if: needs.changes.outputs.performance_harness == 'true'
         run: make performance-harness-check
+      - name: Publication metadata
+        run: make publish-image-metadata-check
       - name: Dockerfile
         if: needs.changes.outputs.runtime_image == 'true'
         run: make dockerfile-check
@@ -419,6 +421,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
         with:
           image-ref: service:ci
+          version: v0.72.0
           scanners: vuln
           format: table
           exit-code: "1"

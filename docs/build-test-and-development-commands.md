@@ -261,7 +261,9 @@ make container-security CONTAINER_IMAGE=service:ci
 
 The source template builds one documented PostgreSQL generated output. A
 derived repository builds its own exact source. Reuse the same image tag for
-migration rehearsal and vulnerability scanning.
+migration rehearsal and vulnerability scanning. The Dockerfile fixes output
+timestamps with `SOURCE_DATE_EPOCH=0`, so identical inputs rebuild to the same
+local image digest; application version and commit remain explicit build inputs.
 
 ## Run and build
 

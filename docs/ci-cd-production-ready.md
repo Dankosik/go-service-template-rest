@@ -80,19 +80,22 @@ Publication does not rerun either suite.
 Publication remains opt-in through `ENABLE_GHCR_PUBLISH=true`. The shared
 [publish-image action](../.github/actions/publish-image/action.yml):
 
-1. builds one production image;
+1. builds one run-scoped production candidate for the exact admitted commit;
 2. preserves the previously published migration corpus;
 3. rehearses migrations and runtime lifecycle;
 4. scans the image and generates a CycloneDX SBOM;
 5. pushes the candidate and resolves its digest;
 6. signs and attests that digest;
 7. verifies signature, provenance, and SBOM attestation;
-8. advances the verified migration-history marker;
-9. promotes mutable tags and reads their digest back.
+8. uploads the run-scoped SBOM artifact and records the verified digest;
+9. advances the verified migration-history marker;
+10. promotes the SHA/main or version/latest tags and reads their digest back.
 
 Both main and release events use the same non-cancelling
 `migration-publication-${{ github.repository }}` concurrency group. Public tags
-never move before verification or migration-history preservation.
+never move before verification or migration-history preservation. Promotion is
+the final required step; a partial multi-tag registry failure records the exact
+digest, the already-promoted tags, and the failed tag before returning failure.
 
 ## Migrations
 
@@ -115,5 +118,6 @@ evidence remain release decisions.
 - Failed CI changes no external state.
 - Failed integration owns its disposable Docker resources through target traps.
 - A failed publication never promotes public tags before verification.
-- Publication candidates are immutable run/SHA tags; rollback resolves a
+- Publication candidates are run-scoped tags; SHA, version, `main`, and `latest`
+  are promoted only after verification. Rollback resolves a
   previously verified digest rather than rebuilding it.

@@ -108,7 +108,7 @@ TEMPLATE ?= ../go-service-template-rest
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check check-proto \
 	sqlc-check runtime-image-build runtime-image-check container-security benchmark-capture benchmark-compare benchmark-http performance-harness-check pgo-manifest run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
-	template-sync template-sync-check template-owned-purity-check
+	template-sync template-sync-check template-owned-purity-check publish-image-metadata-check
 # profile:object-storage:start
 .PHONY: test-s3-conformance-amazon test-s3-conformance-r2
 # profile:object-storage:end
@@ -317,12 +317,15 @@ check-sqlc: sqlc-check
 
 check-instructions: template-owned-purity-check
 
-check-delivery: actionlint shellcheck dockerfile-check
+check-delivery: actionlint shellcheck dockerfile-check publish-image-metadata-check
 
 check-security-go: govulncheck gosec
 
 changed-surfaces-check:
 	bash ./scripts/ci/changed-surfaces.sh --self-test
+
+publish-image-metadata-check:
+	bash ./scripts/ci/publish-image-metadata.sh self-test
 
 plan:
 	$(VERIFY_SCRIPT) --plan

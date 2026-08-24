@@ -1,6 +1,6 @@
 bin/
 /jobs-worker
-/s3.test
+*.test
 .artifacts/test/
 .artifacts/bench/
 *.pprof
