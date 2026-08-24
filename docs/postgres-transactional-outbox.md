@@ -128,27 +128,51 @@ River polling is used instead of `LISTEN` because this repository applies a fini
 There are no `APP__OUTBOX__*` settings. River owns its retry and rescue
 defaults. Cancelled and discarded jobs are retained indefinitely so unpublished
 intent cannot disappear through cleanup; completed jobs use River's normal
-retention. The existing process grace, PostgreSQL, messaging, and diagnostics
-settings own lifecycle and capacity.
+retention. The relay gives River a code-owned 25-second drain inside the
+existing process grace period; HTTP shutdown tuning does not change it.
 
 Use River's job list/retry and queue pause APIs from an authenticated,
 service-owned operator tool when needed. The template ships no generic admin
 endpoint and performs no automatic discard.
 
+Monitor durable intent before it reaches NATS with a low-frequency PostgreSQL
+query against the writer, or against a replica whose lag is inside the alert
+budget:
+
+```sql
+SELECT state,
+       count(*) AS jobs,
+       min(created_at) AS oldest_created_at
+FROM river_job
+WHERE queue = 'outbox'
+  AND state <> 'completed'
+GROUP BY state
+ORDER BY state;
+```
+
+Alert when `cancelled` or `discarded` is non-zero, or when the oldest active
+job exceeds the publication SLO. The state enum is the only grouping dimension;
+event and River job IDs belong in an authenticated drill-down, never metric
+labels. NATS Surveyor cannot replace this query because it sees only messages
+that already reached the broker.
+
 ## Schema and upgrades
 
 `migrations/000008_river.sql` installs the shared River v0.44.0 PostgreSQL
-schema after the retained legacy capability migrations. Its
+schema. Fresh `template-init` output removes the legacy
+`000001_postgres_outbox.sql` before SQLC generation, so a new service starts
+with River as its only outbox state. The River
 `river_migration` ledger records main versions 1 through 7, so River's migrator
 starts from the same baseline. Upgrade River modules together and append the
 matching upstream migration delta; never edit an applied generated-service
 migration.
 
-The former `outbox_events`, `outbox_ordering_heads`, receipt, and redrive tables
-remain for rollback but are not read by the River worker. A service that
+The template source retains the former `outbox_events`,
+`outbox_ordering_heads`, receipt, and redrive tables for existing adopters'
+rollback lineage, but the River worker does not read them. A service that
 deployed the older pack must drain or explicitly bridge its remaining rows
-before switching workers. Dropping the legacy tables or pending rows is a
-separate authorized production action.
+before switching workers. Dropping those tables or pending rows from an
+existing database is a separate authorized production action.
 
 ## Proof
 
@@ -157,4 +181,5 @@ go test -vet=off ./internal/domainevent ./internal/infra/postgresoutbox \
   ./internal/infra/natsjs ./cmd/outbox-relay/...
 go test -vet=off -tags=integration ./test -run '^TestPostgresOutbox' -count=1
 make sqlc-check migration-check test-outbox-race
+ALLOW_HEAVY=1 make template-init-check
 ```

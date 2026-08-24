@@ -59,4 +59,14 @@ func TestWorkerPublishesStableIdentityAndTrace(t *testing.T) {
 	if err := worker.Work(t.Context(), nil); !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("Work(nil) error = %v, want ErrRejected", err)
 	}
+
+	ambiguous := newWorker(func(context.Context, natsjs.Event) (natsjs.PublishResult, error) {
+		return natsjs.PublishResult{}, natsjs.ErrAmbiguous
+	})
+	if err := ambiguous.Work(t.Context(), &river.Job[postgresoutbox.PublishJob]{
+		JobRow: &rivertype.JobRow{},
+		Args:   args,
+	}); !errors.Is(err, natsjs.ErrAmbiguous) {
+		t.Fatalf("Work(ambiguous publish) error = %v, want ErrAmbiguous", err)
+	}
 }
