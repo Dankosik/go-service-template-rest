@@ -90,7 +90,7 @@ classify() {
 			*.md|docs/*) mark documentation ;;
 		esac
 		case "${file}" in
-			cmd/jobs-worker/*|cmd/outbox-relay/*|cmd/worker/*|internal/domainevent/*|internal/inboundwebhook/*|internal/infra/natsjs/*|internal/infra/postgres*|test/*)
+			cmd/jobs-worker/*|cmd/outbox-relay/*|cmd/worker/*|examples/reference-service/*|internal/domainevent/*|internal/inboundwebhook/*|internal/infra/natsjs/*|internal/infra/postgres*|test/*)
 				mark integration
 				;;
 		esac

@@ -63,11 +63,22 @@ type testNATSAccount struct {
 	credentials []byte
 }
 
+var sharedNATSPool natsjstest.Pool
+
 func newNATSFixture(t *testing.T) *natsFixture {
 	t.Helper()
-	// The fixed host port is required because reconnect cases stop and restart
-	// this exact container while clients retain the admitted URL.
-	server := natsjstest.Start(t, natsjstest.WithFixedHostPort(), natsjstest.WithStreams(
+	server := sharedNATSPool.Start(t, natsStreams())
+	return &natsFixture{container: server.Container, url: server.URL, raw: server.Conn, js: server.JS}
+}
+
+func newIsolatedNATSFixture(t *testing.T) *natsFixture {
+	t.Helper()
+	server := natsjstest.Start(t, natsStreams())
+	return &natsFixture{container: server.Container, url: server.URL, raw: server.Conn, js: server.JS}
+}
+
+func natsStreams() natsjstest.Option {
+	return natsjstest.WithStreams(
 		jetstream.StreamConfig{
 			Name:       sourceStream,
 			Subjects:   []string{"events.>"},
@@ -80,12 +91,12 @@ func newNATSFixture(t *testing.T) *natsFixture {
 			Storage:    jetstream.FileStorage,
 			MaxMsgSize: 2 * testMaxDeliveryBytes,
 		},
-	))
-	return &natsFixture{container: server.Container, url: server.URL, raw: server.Conn, js: server.JS}
+	)
 }
 
 func newAuthenticatedNATSFixture(t *testing.T) *authenticatedNATSFixture {
 	t.Helper()
+	natsjstest.SkipWithoutDocker(t)
 	operatorKey, err := nkeys.CreateOperator()
 	if err != nil {
 		t.Fatalf("create NATS test operator key: %v", err)

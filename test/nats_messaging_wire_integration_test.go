@@ -24,8 +24,9 @@ import (
 
 func TestNATSOversizedSourceIsRetained(t *testing.T) {
 	f := newNATSFixture(t)
+	unexpectedHandler := make(chan struct{}, 1)
 	client, _, errCh := f.worker(t, func(context.Context, natsjs.Message) error {
-		t.Fatal("oversized source reached handler")
+		unexpectedHandler <- struct{}{}
 		return nil
 	}, func(cfg *natsjs.WorkerConfig) { cfg.Consumer = "oversized-worker" })
 	payload := make([]byte, testMaxPayloadBytes+1)
@@ -33,8 +34,16 @@ func TestNATSOversizedSourceIsRetained(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish oversized source: %v", err)
 	}
-	if err := waittest.Receive(t, errCh, 5*time.Second, "worker rejecting oversized source"); !errors.Is(err, natsjs.ErrTerminal) {
-		t.Fatalf("worker error = %v, want ErrTerminal", err)
+	var workerErr error
+	select {
+	case <-unexpectedHandler:
+		t.Fatal("oversized source reached handler")
+	case workerErr = <-errCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for worker rejecting oversized source")
+	}
+	if !errors.Is(workerErr, natsjs.ErrTerminal) {
+		t.Fatalf("worker error = %v, want ErrTerminal", workerErr)
 	}
 	if client.Ready() {
 		t.Fatal("client remained ready after terminal oversized delivery")

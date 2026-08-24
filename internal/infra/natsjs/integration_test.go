@@ -18,7 +18,16 @@ import (
 
 func newPackageNATSFixture(t *testing.T) *natsjstest.Server {
 	t.Helper()
-	return natsjstest.Start(t, natsjstest.WithFixedHostPort(), natsjstest.WithStreams(
+	return packageNATSPool.Start(t, packageNATSStreams())
+}
+
+func newIsolatedPackageNATSFixture(t *testing.T, options ...natsjstest.Option) *natsjstest.Server {
+	t.Helper()
+	return natsjstest.Start(t, append(options, packageNATSStreams())...)
+}
+
+func packageNATSStreams() natsjstest.Option {
+	return natsjstest.WithStreams(
 		jetstream.StreamConfig{
 			Name: "EVENTS", Subjects: []string{"events.>"},
 			Storage: jetstream.FileStorage, MaxMsgSize: testMaxDeliveryBytes,
@@ -27,7 +36,7 @@ func newPackageNATSFixture(t *testing.T) *natsjstest.Server {
 			Name: "EVENTS_DLQ", Subjects: []string{"dead.>"},
 			Storage: jetstream.FileStorage, MaxMsgSize: 2 * testMaxDeliveryBytes,
 		},
-	))
+	)
 }
 
 func packageClient(t *testing.T, f *natsjstest.Server) *Client {
@@ -106,7 +115,7 @@ func TestNATSReadinessProbeRestoresStateAfterReconnect(t *testing.T) {
 }
 
 func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
-	f := newPackageNATSFixture(t)
+	f := newIsolatedPackageNATSFixture(t, natsjstest.WithFixedHostPort())
 	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "restart-worker"
@@ -165,7 +174,7 @@ func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 }
 
 func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
-	f := newPackageNATSFixture(t)
+	f := newIsolatedPackageNATSFixture(t)
 	client := packageClient(t, f)
 
 	before := client.nc.Stats().OutMsgs
