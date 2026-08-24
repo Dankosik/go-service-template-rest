@@ -6,7 +6,7 @@ names=(
 	openapi protobuf sqlc module_initializer integration_initializer
 	agent_instructions shell github_workflows dependency_automation
 	db_integration messaging_integration process_integration integration_race
-	migrations runtime_image image_security documentation
+	performance_harness migrations runtime_image image_security documentation
 )
 
 reset() {
@@ -73,6 +73,9 @@ classify() {
 		esac
 		case "${file}" in
 			*.sh) mark shell ;;
+		esac
+		case "${file}" in
+			test/performance/*|scripts/dev/benchmark.sh) mark performance_harness ;;
 		esac
 		case "${file}" in
 			.github/workflows/*|.github/actions/*) mark github_workflows ;;
@@ -171,6 +174,12 @@ self_test() {
 	assert_case internal/infra/natsjs/client.go \
 		"go_source messaging_integration integration_race" \
 		"db_integration migrations runtime_image image_security"
+	assert_case test/performance/http/single-flow.js \
+		"performance_harness" \
+		"go_source db_integration messaging_integration process_integration integration_race runtime_image image_security"
+	assert_case scripts/dev/benchmark.sh \
+		"shell performance_harness" \
+		"go_source db_integration messaging_integration process_integration integration_race runtime_image image_security"
 
 	local output name
 	output="$(printf '%s\n' scripts/ci/changed-surfaces.sh | classify)"

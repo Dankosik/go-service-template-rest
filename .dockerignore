@@ -21,6 +21,11 @@ env
 !migrations/**
 docs
 scripts
+!scripts/
+scripts/*
+!scripts/dev/
+scripts/dev/*
+!scripts/dev/benchmark.sh
 test
 tools
 LICENSE

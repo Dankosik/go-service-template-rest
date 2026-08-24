@@ -43,6 +43,7 @@ jobs:
       messaging_integration: ${{ steps.surfaces.outputs.messaging_integration }}
       process_integration: ${{ steps.surfaces.outputs.process_integration }}
       integration_race: ${{ steps.surfaces.outputs.integration_race }}
+      performance_harness: ${{ steps.surfaces.outputs.performance_harness }}
       migrations: ${{ steps.surfaces.outputs.migrations }}
       runtime_image: ${{ steps.surfaces.outputs.runtime_image }}
       image_security: ${{ steps.surfaces.outputs.image_security }}
@@ -304,6 +305,7 @@ jobs:
     if: >-
       needs.changes.outputs.shell == 'true' ||
       needs.changes.outputs.github_workflows == 'true' ||
+      needs.changes.outputs.performance_harness == 'true' ||
       needs.changes.outputs.runtime_image == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -315,6 +317,9 @@ jobs:
       - name: Shell
         if: needs.changes.outputs.shell == 'true'
         run: make shellcheck
+      - name: Performance harness
+        if: needs.changes.outputs.performance_harness == 'true'
+        run: make performance-harness-check
       - name: Dockerfile
         if: needs.changes.outputs.runtime_image == 'true'
         run: make dockerfile-check

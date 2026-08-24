@@ -3,6 +3,8 @@ bin/
 /s3.test
 .artifacts/test/
 .artifacts/bench/
+*.pprof
+*.pprof.meta
 .env
 .env.bench
 .cache/

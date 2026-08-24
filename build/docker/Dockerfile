@@ -13,6 +13,8 @@ ARG VCS_REF=unknown
 ARG WORKTREE_FINGERPRINT=unknown
 ARG RAILWAY_GIT_COMMIT_SHA
 ARG PGO_PROFILE=off
+ARG PGO_MANIFEST
+ARG PGO_ACCEPTED_BUILD_FINGERPRINT
 ARG TARGETOS
 ARG TARGETARCH
 ENV CGO_ENABLED=0
@@ -25,14 +27,11 @@ RUN --mount=type=bind,target=. \
       exit 2; \
     fi && \
     if [ "${PGO_PROFILE}" != "off" ]; then \
-      if [ ! -f "${PGO_PROFILE}" ]; then \
-        echo "PGO profile does not exist: ${PGO_PROFILE}" >&2; \
-        exit 2; \
-      fi; \
-      if ! go tool pprof -raw "${PGO_PROFILE}" >/dev/null; then \
-        echo "PGO profile is not a valid CPU profile: ${PGO_PROFILE}" >&2; \
-        exit 2; \
-      fi; \
+      test -n "${PGO_MANIFEST}" && \
+      test -n "${PGO_ACCEPTED_BUILD_FINGERPRINT}" && \
+      PGO_TARGET_GOOS="${TARGETOS:-linux}" PGO_TARGET_GOARCH="${TARGETARCH:-amd64}" \
+        bash ./scripts/dev/benchmark.sh verify-pgo \
+          "${PGO_PROFILE}" "${PGO_MANIFEST}" "${PGO_ACCEPTED_BUILD_FINGERPRINT}"; \
     fi && \
     module_path="$(go list -m)" && \
     build_packages="./cmd/service" && \

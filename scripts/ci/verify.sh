@@ -43,6 +43,11 @@ self_test() {
 	grep -q 'INTEGRATION_INIT_ROWS=row_e1_http' <<<"${output}"
 	if grep -q 'template-init-check' <<<"${output}"; then return 1; fi
 
+	output=$(bash "$0" --plan --files test/performance/http/single-flow.js)
+	grep -q 'performance_harness=true' <<<"${output}"
+	grep -q 'make performance-harness-check' <<<"${output}"
+	if grep -q 'benchmark-http' <<<"${output}"; then return 1; fi
+
 	output=$(bash "$0" --plan --files internal/failure/failure.go internal/failure/removed.go)
 	grep -q 'make test-package PKG=./internal/failure' <<<"${output}"
 }
@@ -204,6 +209,9 @@ fi
 if is_true dependency_automation; then
 	add_na dependency_automation "GitHub owns Dependabot schema validation; CI dependency review remains applicable"
 fi
+if is_true performance_harness; then
+	add_command make performance-harness-check "performance harness changed; inspect without load" "make performance-harness-check"
+fi
 if is_true documentation; then
 	add_na documentation "no repository-wide documentation validator is configured"
 fi
@@ -286,7 +294,7 @@ if is_true go_source || is_true go_root_dependencies || is_true go_tool_dependen
 	go_environment=$(go version 2>/dev/null || echo unavailable)
 fi
 docker_environment=not-used
-if is_true shell || is_true github_workflows || is_true db_integration || is_true messaging_integration || \
+if is_true shell || is_true github_workflows || is_true performance_harness || is_true db_integration || is_true messaging_integration || \
 	is_true process_integration || is_true integration_race || is_true migrations || is_true runtime_image || is_true image_security; then
 	docker_environment=$(docker version --format '{{.Client.Version}}/{{.Server.Version}}' 2>/dev/null || echo unavailable)
 fi
