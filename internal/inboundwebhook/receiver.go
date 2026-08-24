@@ -9,13 +9,7 @@ import (
 	"errors"
 )
 
-var (
-	ErrRejected        = errors.New("inbound webhook rejected")
-	ErrUnknownEndpoint = errors.New("inbound webhook endpoint is unknown")
-	ErrConflict        = errors.New("inbound webhook conflict")
-	ErrUnavailable     = errors.New("inbound webhook unavailable")
-	ErrInvalidDelivery = errors.New("inbound webhook delivery is invalid")
-)
+var ErrUnavailable = errors.New("inbound webhook unavailable")
 
 // Outcome is the closed synchronous acceptance category.
 type Outcome string

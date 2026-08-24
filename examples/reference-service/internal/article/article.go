@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
+	"unicode/utf16"
 
 	"github.com/example/go-service-template-rest/internal/failure"
 )
@@ -47,9 +47,8 @@ type Event struct {
 	Kind EventKind
 }
 
-// Repository is owned by the use case that consumes article storage.
-type Repository interface {
-	FindBySlug(ctx context.Context, slug string) (Article, error)
+// Writer is the transactional view Create needs.
+type Writer interface {
 	// Create stores a new article and returns ErrAlreadyExists when the slug
 	// is taken. Uniqueness is enforced by the adapter, which is the only layer
 	// that can make the check and the write atomic.
@@ -59,7 +58,7 @@ type Repository interface {
 	AppendEvent(ctx context.Context, event Event) error
 }
 
-// Atomically runs several repository calls as one unit of work.
+// Store owns reads and the unit of work that commits article writes together.
 //
 // This is the port that keeps a transaction from leaking into the domain. The
 // repository-level answer this template ships is postgres.InTx, which yields
@@ -67,7 +66,7 @@ type Repository interface {
 // a concrete infra adapter, so a use case cannot call it and must not want to. The
 // shape that resolves it is this one: the feature declares what it needs, the
 // adapter binds it to whatever transaction its datastore has, and fn receives a
-// Repository rather than a driver handle.
+// Writer rather than a driver handle.
 //
 // Getting this wrong has one shape, and it is always the same one: the second
 // write is moved outside the transaction "for now". Then a crash between the two
@@ -77,23 +76,20 @@ type Repository interface {
 //
 // fn returning an error rolls everything back. A partial success is never
 // observable.
-type Atomically interface {
-	Do(ctx context.Context, fn func(Repository) error) error
+type Store interface {
+	FindBySlug(ctx context.Context, slug string) (Article, error)
+	Do(ctx context.Context, fn func(Writer) error) error
 }
 
 type Service struct {
-	repository Repository
-	atomically Atomically
+	store Store
 }
 
-func NewService(repository Repository, atomically Atomically) (*Service, error) {
-	if repository == nil {
-		return nil, errors.New("article service: repository is required")
+func NewService(store Store) (*Service, error) {
+	if store == nil {
+		return nil, errors.New("article service: store is required")
 	}
-	if atomically == nil {
-		return nil, errors.New("article service: unit of work is required")
-	}
-	return &Service{repository: repository, atomically: atomically}, nil
+	return &Service{store: store}, nil
 }
 
 // Create validates a draft and stores it as a published article, together with
@@ -107,9 +103,9 @@ func NewService(repository Repository, atomically Atomically) (*Service, error) 
 // transaction that is.
 func (s *Service) Create(ctx context.Context, draft Draft) (Article, error) {
 	created := Article{
-		Slug:      strings.TrimSpace(draft.Slug),
-		Title:     strings.TrimSpace(draft.Title),
-		Summary:   strings.TrimSpace(draft.Summary),
+		Slug:      draft.Slug,
+		Title:     draft.Title,
+		Summary:   draft.Summary,
 		Published: true,
 	}
 	if err := validateDraft(created); err != nil {
@@ -121,11 +117,11 @@ func (s *Service) Create(ctx context.Context, draft Draft) (Article, error) {
 	// on; only Op survives into the record a transport writes for an unclassified
 	// failure, and without it an operator sees one chain of *fmt.wrapError and
 	// cannot tell which of the two broke.
-	err := s.atomically.Do(ctx, func(repository Repository) error {
-		if createErr := repository.Create(ctx, created); createErr != nil {
+	err := s.store.Do(ctx, func(writer Writer) error {
+		if createErr := writer.Create(ctx, created); createErr != nil {
 			return failure.Op("store article", createErr)
 		}
-		if appendErr := repository.AppendEvent(ctx, Event{Slug: created.Slug, Kind: EventArticleCreated}); appendErr != nil {
+		if appendErr := writer.AppendEvent(ctx, Event{Slug: created.Slug, Kind: EventArticleCreated}); appendErr != nil {
 			return failure.Op("append event", appendErr)
 		}
 		return nil
@@ -140,17 +136,25 @@ func validateDraft(candidate Article) error {
 	if !slugPattern.MatchString(candidate.Slug) {
 		return fmt.Errorf("%w: slug must match %s", ErrInvalid, slugPattern)
 	}
-	if candidate.Title == "" || len(candidate.Title) > maxTitleLength {
+	if candidate.Title == "" || textLength(candidate.Title) > maxTitleLength {
 		return fmt.Errorf("%w: title must be 1..%d characters", ErrInvalid, maxTitleLength)
 	}
-	if candidate.Summary == "" || len(candidate.Summary) > maxSummaryLength {
+	if candidate.Summary == "" || textLength(candidate.Summary) > maxSummaryLength {
 		return fmt.Errorf("%w: summary must be 1..%d characters", ErrInvalid, maxSummaryLength)
 	}
 	return nil
 }
 
+func textLength(value string) int {
+	length := 0
+	for _, r := range value {
+		length += utf16.RuneLen(r)
+	}
+	return length
+}
+
 func (s *Service) Get(ctx context.Context, slug string) (Article, error) {
-	found, err := s.repository.FindBySlug(ctx, slug)
+	found, err := s.store.FindBySlug(ctx, slug)
 	if err != nil {
 		return Article{}, failure.Op("get article", err)
 	}

@@ -42,7 +42,7 @@ type TraceExporterEndpoint = ExporterEndpoint
 // conflict: material this service cannot verify must not travel to an endpoint
 // this service chose.
 func (e TraceExporterEndpoint) fromConfig() bool {
-	return e.Source == TraceExporterConfigKey
+	return e.Source == TraceExporterConfigKey || e.Source == MetricExporterConfigKey
 }
 
 var otelSetupMu sync.Mutex
@@ -115,7 +115,7 @@ func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
 
 func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option, TraceExporterEndpoint, error) {
 	options := make([]otlptracehttp.Option, 0, 2)
-	endpoint, err := ResolveTraceExporterEndpoint(cfg)
+	endpoint, err := resolveTraceExporterEndpoint(cfg)
 	if err != nil {
 		return nil, TraceExporterEndpoint{}, err
 	}
@@ -135,7 +135,7 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 	return options, endpoint, nil
 }
 
-// ResolveTraceExporterEndpoint reports which OTLP traces endpoint the exporter
+// resolveTraceExporterEndpoint reports which OTLP traces endpoint the exporter
 // will use, and which setting supplied it.
 //
 // observability.otel.exporter.otlp_endpoint is this service's own setting and
@@ -143,7 +143,7 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 // have one owned setting, so the whole order is the argument list below and
 // [resolveOTLPEndpoint] owns what that order means — including why a configured
 // header stops it.
-func ResolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoint, error) {
+func resolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoint, error) {
 	return resolveOTLPEndpoint(
 		otlpTracesPath,
 		cfg.OTLPHeaders,

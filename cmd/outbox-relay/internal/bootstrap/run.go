@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
+	"github.com/example/go-service-template-rest/cmd/outbox-relay/outboxworker"
 	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
@@ -65,7 +66,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	defer func() {
 		cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 		defer cancel()
-		telemetryCleanup(cleanupCtx)
+		_ = telemetryCleanup(cleanupCtx)
 	}()
 
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
@@ -81,7 +82,6 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	client, err := natsjs.Connect(
 		startupCtx,
 		runtimeopts.Messaging(cfg.Messaging),
-		natsjs.RoleProducer,
 		natsjs.Observability{Logger: log},
 	)
 	if err != nil {
@@ -94,7 +94,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	}()
 
 	workers := river.NewWorkers()
-	outboxWorker, err := natsjs.NewOutboxWorker(client.Producer())
+	outboxWorker, err := outboxworker.New(client.Producer())
 	if err != nil {
 		return fmt.Errorf("initialize NATS outbox worker: %w", err)
 	}
@@ -151,15 +151,15 @@ func riverClientConfig(cfg config.Config, workers *river.Workers, log *slog.Logg
 	}
 }
 
-func runLifecycle[TTx any](
+func runLifecycle(
 	signalCtx context.Context,
 	startupCtx context.Context,
 	cfg config.Config,
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
 	pool postgresPinger,
-	client *natsjs.Client,
-	riverClient *river.Client[TTx],
+	client messagingRuntime,
+	riverClient riverRuntime,
 ) (cleanupSafe bool, deadline time.Time, result error) {
 	var ready atomic.Bool
 	readiness := health.New(postgresReadinessProbe{pool: pool}, client)
@@ -170,7 +170,7 @@ func runLifecycle[TTx any](
 		startupCtx,
 		cfg.Observability.Metrics.Addr,
 		"outbox",
-		func() bool { return ready.Load() && client.Ready() && readiness.Cached() == nil },
+		func() bool { return ready.Load() && readiness.Cached() == nil },
 		metrics,
 	)
 	if err != nil {
@@ -239,13 +239,18 @@ func runLifecycle[TTx any](
 	riverErr := riverClient.Stop(riverCtx)
 	cancelRiver()
 	cleanupSafe = riverErr == nil
-	client.StopPublish()
+	if cleanupSafe {
+		client.StopPublish()
+	}
 	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
 	backgroundCtx, cancelBackground := runtimeopts.TeardownStage(
 		processCtx, shutdownDeadline, backgroundClose,
 	)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
-	messagingErr := client.Shutdown(backgroundCtx)
+	var messagingErr error
+	if cleanupSafe {
+		messagingErr = client.Shutdown(backgroundCtx)
+	}
 	cancelBackground()
 	cleanupSafe = cleanupSafe && !errors.Is(backgroundErr, context.DeadlineExceeded)
 	return cleanupSafe, shutdownDeadline, errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
@@ -257,6 +262,20 @@ type postgresReadinessProbe struct {
 
 type postgresPinger interface {
 	Ping(ctx context.Context) error
+}
+
+type messagingRuntime interface {
+	health.Probe
+	Run(ctx context.Context) error
+	StopPublish()
+	Shutdown(ctx context.Context) error
+}
+
+type riverRuntime interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+	StopAndCancel(ctx context.Context) error
+	Stopped() <-chan struct{}
 }
 
 func (postgresReadinessProbe) Name() string { return "postgres" }

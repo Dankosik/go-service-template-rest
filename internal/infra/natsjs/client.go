@@ -35,7 +35,7 @@ type Client struct {
 	workerClaimed atomic.Bool
 }
 
-func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Client, error) {
+func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error) {
 	if err := ValidateConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 		return nil, fmt.Errorf("%w: connect context: %w", ErrRejected, err)
 	}
 	c := &Client{cfg: cfg, terminal: make(chan error, 1), closed: make(chan struct{})}
-	telemetry, err := newTelemetry(obs, role, c.Ready)
+	telemetry, err := newTelemetry(obs)
 	if err != nil {
 		return nil, fmt.Errorf("create messaging telemetry: %w", err)
 	}
@@ -176,7 +176,6 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	}
 	select {
 	case <-c.closed:
-		c.telemetry.close()
 		return nil
 	case <-ctx.Done():
 		c.Close()
@@ -193,9 +192,6 @@ func (c *Client) Close() {
 	c.draining.Store(true)
 	if c.nc != nil {
 		c.nc.Close()
-	}
-	if c.telemetry != nil {
-		c.telemetry.close()
 	}
 }
 

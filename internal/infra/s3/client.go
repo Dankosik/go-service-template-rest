@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	bucketName          = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$`)
+	bucketName          = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
 	regionName          = regexp.MustCompile(`^[a-z]{2}(?:-gov)?-[a-z]+-\d+$`)
 	r2Endpoint          = regexp.MustCompile(`^[0-9a-f]{32}(?:\.(?:eu|fedramp))?\.r2\.cloudflarestorage\.com$`)
 	bucketOwner         = regexp.MustCompile(`^\d{12}$`)
@@ -103,10 +103,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		awsconfig.WithRegion(cfg.Region),
 		awsconfig.WithHTTPClient(httpClient),
 		awsconfig.WithRetryer(func() aws.Retryer {
-			return retry.NewStandard(func(options *retry.StandardOptions) {
-				options.MaxAttempts = 3
-				options.MaxBackoff = time.Second
-			})
+			return retry.NewStandard(configureRetry)
 		}),
 	}
 	if cfg.CredentialSource == CredentialSourceStatic {
@@ -143,20 +140,27 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		options.DisableLogOutputChecksumValidationSkipped = true
 		options.ClientLogMode = 0
 	})
-	uploader := transfermanager.New(transferClient{Client: sdk}, func(options *transfermanager.Options) {
-		options.PartSizeBytes = multipartPartBytes
-		options.MultipartUploadThreshold = multipartPartBytes
-		options.Concurrency = 1
-		options.FailTimeout = multipartFailureTimeout
-		options.MaxUploadParts = maximumUploadParts
-		options.ChecksumAlgorithm = tmtypes.ChecksumAlgorithm("CRC64NVME")
-		options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
-	})
+	uploader := transfermanager.New(transferClient{Client: sdk}, configureTransfer)
 
 	return &Client{
 		config: cfg, sdk: sdk, uploader: uploader, presigner: awss3.NewPresignClient(sdk),
 		transport: transport, tokens: make(chan struct{}, maximumActiveOperations),
 	}, nil
+}
+
+func configureRetry(options *retry.StandardOptions) {
+	options.MaxAttempts = 3
+	options.MaxBackoff = time.Second
+}
+
+func configureTransfer(options *transfermanager.Options) {
+	options.PartSizeBytes = multipartPartBytes
+	options.MultipartUploadThreshold = multipartPartBytes
+	options.Concurrency = 1
+	options.FailTimeout = multipartFailureTimeout
+	options.MaxUploadParts = maximumUploadParts
+	options.ChecksumAlgorithm = tmtypes.ChecksumAlgorithm("CRC64NVME")
+	options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 }
 
 // transferClient keeps the transfer manager's unavoidable completion log free
@@ -180,7 +184,7 @@ func (cfg Config) validate() error {
 		return errors.New("build S3 adapter: bucket must be one dotless DNS name")
 	}
 	if cfg.MaxObjectBytes <= 0 || cfg.MaxObjectBytes > maximumObjectBytes {
-		// ponytail: fixed 8 MiB parts cap objects at 80 GiB; add a measured
+		// ponytail: fixed 8 MiB parts cap objects at 80,000 MiB (78.125 GiB); add a measured
 		// part-size policy if a real adopter needs larger objects.
 		return fmt.Errorf("build S3 adapter: maximum object bytes must be in 1..%d", maximumObjectBytes)
 	}

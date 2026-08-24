@@ -32,7 +32,6 @@ type Verifier struct {
 	policy    Policy
 	parser    *jwt.Parser
 	keyFunc   func(context.Context) jwt.Keyfunc
-	metrics   jwksMetrics
 	cancel    context.CancelFunc
 	closeIdle func()
 	closeOnce sync.Once
@@ -49,11 +48,11 @@ func New(
 	if log == nil {
 		log = slog.Default()
 	}
-	jwksURI, err := discoverJWKSURI(ctx, policy, meterProvider)
+	jwksURI, err := discoverJWKSURI(ctx, policy)
 	if err != nil {
 		return nil, err
 	}
-	jwksClient, closeIdle, err := newJWKSClient(jwksURI, meterProvider)
+	jwksClient, closeIdle, err := newJWKSClient(jwksURI)
 	if err != nil {
 		return nil, err
 	}
@@ -69,14 +68,15 @@ func New(
 		RefreshUnknownKID:         rate.NewLimiter(rate.Every(RefreshCooldown), 1),
 		RefreshErrorHandlerFunc: func(string) func(context.Context, error) {
 			return func(refreshCtx context.Context, _ error) {
-				if refreshCtx.Err() != nil {
+				if !shouldReportRefreshFailure(processCtx, refreshCtx) {
 					return
 				}
 				if observed, ok := refreshCtx.Value(refreshFailureKey).(*refreshFailure); ok {
 					observed.failed.Store(true)
 				}
-				metrics.recordRefreshFailure(context.WithoutCancel(refreshCtx))
-				log.WarnContext(refreshCtx, "authn_jwks_refresh_failed", "component", "authn")
+				eventCtx := context.WithoutCancel(refreshCtx)
+				metrics.recordRefreshFailure(eventCtx)
+				log.WarnContext(eventCtx, "authn_jwks_refresh_failed", "component", "authn")
 			}
 		},
 		ValidationSkipAll: false,
@@ -96,14 +96,21 @@ func New(
 		closeIdle()
 		return nil, failure(bearerauthn.KindUnavailable)
 	}
-	return newVerifier(policy, signingKeys.KeyfuncCtx, time.Now, metrics, cancel, closeIdle), nil
+	return newVerifier(policy, signingKeys.KeyfuncCtx, time.Now, cancel, closeIdle), nil
+}
+
+func shouldReportRefreshFailure(processCtx, refreshCtx context.Context) bool {
+	if processCtx.Err() != nil {
+		return false
+	}
+	_, requestRefresh := refreshCtx.Value(refreshFailureKey).(*refreshFailure)
+	return !requestRefresh || refreshCtx.Err() == nil
 }
 
 func newVerifier(
 	policy Policy,
 	keyFunc func(context.Context) jwt.Keyfunc,
 	now func() time.Time,
-	metrics jwksMetrics,
 	cancel context.CancelFunc,
 	closeIdle func(),
 ) *Verifier {
@@ -129,7 +136,6 @@ func newVerifier(
 			jwt.WithTimeFunc(now),
 		),
 		keyFunc:   keyFunc,
-		metrics:   metrics,
 		cancel:    cancel,
 		closeIdle: closeIdle,
 	}

@@ -266,7 +266,7 @@ func TestHTTPAuthnRunsInsideMaxInFlight(t *testing.T) {
 	inner.Get("/secure", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	router := MaxInFlight(1, telemetry.ServerLoad{}, inner)
+	router := MaxInFlight(1, ServerLoad{}, inner)
 
 	var first sync.WaitGroup
 	first.Go(func() {
@@ -327,7 +327,10 @@ func (v *blockingVerifier) Verify(ctx context.Context, _ string) (bearerauthn.Re
 			return bearerauthn.Result{}, fmt.Errorf("wait for test barrier: %w", ctx.Err())
 		}
 	}
-	return bearerauthn.Result{Principal: reqctx.Principal{Subject: "opaque-subject"}}, nil
+	return bearerauthn.Result{
+		Principal: reqctx.Principal{Subject: "opaque-subject"},
+		ExpiresAt: time.Now().Add(time.Hour),
+	}, nil
 }
 
 func (v *blockingVerifier) Close() {}

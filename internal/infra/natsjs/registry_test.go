@@ -33,7 +33,7 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 	}
 	createdAt := time.Unix(10, 0).In(time.FixedZone("UTC-like", 0))
 	if err := handler(t.Context(), Message{
-		messageID: "event-1", eventType: kind.Type, schema: "v1", createdAt: createdAt,
+		subject: "events.example", messageID: "event-1", eventType: kind.Type, schema: "v1", createdAt: createdAt,
 		payload: []byte(`{"value":"handled"}`),
 	}); err != nil {
 		t.Fatalf("typed handler error = %v", err)
@@ -41,9 +41,21 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 	if got := <-seen; got.ID != "event-1" || got.Payload.Value != "handled" || !got.OccurredAt.Equal(createdAt) {
 		t.Fatalf("typed event = %#v", got)
 	}
+	err = handler(t.Context(), Message{
+		subject: "events.other", messageID: "event-2", eventType: kind.Type, schema: "v1", createdAt: createdAt,
+		payload: []byte(`{"value":"wrong route"}`),
+	})
+	if !domainevent.IsPermanent(err) {
+		t.Fatalf("wrong-subject error = %v, want permanent", err)
+	}
+	select {
+	case event := <-seen:
+		t.Fatalf("wrong-subject event reached handler: %#v", event)
+	default:
+	}
 
 	broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS", Sequence: 1}}
-	publisher, err := registry.Publisher(unitClient(t, broker, RoleProducer).Producer())
+	publisher, err := registry.Publisher(unitClient(t, broker).Producer())
 	if err != nil {
 		t.Fatalf("Publisher() error = %v", err)
 	}

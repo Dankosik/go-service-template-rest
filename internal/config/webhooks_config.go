@@ -23,8 +23,8 @@ func validateWebhooks(cfg WebhooksConfig, postgres PostgresConfig, jobs JobsConf
 	if !postgres.Enabled || jobs.MaxWorkers <= 0 {
 		return fmt.Errorf("%w: webhooks.enabled requires postgres.enabled and jobs.enabled", ErrValidate)
 	}
-	if cfg.Endpoints == "" || cfg.StaticSecrets == "" {
-		return fmt.Errorf("%w: webhooks.endpoints and webhooks.static_secrets are required", ErrValidate)
+	if cfg.Endpoints == "" {
+		return fmt.Errorf("%w: webhooks.endpoints are required", ErrValidate)
 	}
 	return nil
 }

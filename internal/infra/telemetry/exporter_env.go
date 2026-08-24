@@ -10,10 +10,10 @@ import (
 )
 
 // AmbientOTLPExporterEnv returns the sorted names of non-empty
-// OTEL_EXPORTER_OTLP_* process variables. The endpoint variables among them are
-// honored when this service names no endpoint of its own; the rest are not read.
-// Callers subtract whatever supplied the endpoint and report the remainder, so
-// an injected setting never looks effective when it is not.
+// OTEL_EXPORTER_OTLP_* process variables. Endpoint variables among them may
+// supply a destination when typed configuration does not; non-secret tuning
+// remains under the official exporter's documented environment behavior.
+// Values are never returned because they may contain credentials.
 func AmbientOTLPExporterEnv() []string {
 	var names []string
 	for _, entry := range os.Environ() {

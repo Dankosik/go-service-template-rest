@@ -14,13 +14,14 @@ import (
 )
 
 type fakeVerifier struct {
-	result   Result
-	err      error
-	calls    atomic.Int64
-	inFlight atomic.Int64
-	peak     atomic.Int64
-	entered  chan struct{}
-	block    <-chan struct{}
+	result       Result
+	returnResult bool
+	err          error
+	calls        atomic.Int64
+	inFlight     atomic.Int64
+	peak         atomic.Int64
+	entered      chan struct{}
+	block        <-chan struct{}
 }
 
 func (f *fakeVerifier) Verify(ctx context.Context, _ string) (Result, error) {
@@ -49,7 +50,7 @@ func (f *fakeVerifier) Verify(ctx context.Context, _ string) (Result, error) {
 	if f.err != nil {
 		return Result{}, f.err
 	}
-	if f.result.Principal.Subject == "" && f.result.ExpiresAt.IsZero() {
+	if !f.returnResult && f.result.Principal.Subject == "" && f.result.ExpiresAt.IsZero() {
 		return Result{
 			Principal: reqctx.Principal{Issuer: "https://issuer.example.com", Subject: "subject-1"},
 			ExpiresAt: time.Unix(1_900_003_600, 0),

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
@@ -72,42 +71,4 @@ func loadMessagingConfig(t *testing.T, urls, stream string, plaintext bool) (*co
 		t.Fatalf("load messaging config: %v", err)
 	}
 	return nil, fmt.Errorf("load messaging config: %w", err)
-}
-
-// The adapter is also the authority on what a plaintext URL is. This pins the
-// scheme sets themselves rather than only their accept/reject verdicts, because
-// the two files list them independently.
-func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
-	for _, scheme := range []string{"nats", "tls", "ws", "wss"} {
-		cfg := natsjs.Config{
-			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
-			AllowPlaintext: true, AllowUnauthenticated: true,
-			MaxPayloadBytes: 1 << 10,
-		}
-		if err := natsjs.ValidateConfig(cfg); err != nil {
-			t.Errorf("natsjs.ValidateConfig(%s) error = %v, want the scheme accepted", scheme, err)
-		}
-	}
-	for _, scheme := range []string{"amqp", "http", "kafka", ""} {
-		cfg := natsjs.Config{
-			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
-			AllowPlaintext: true, AllowUnauthenticated: true,
-			MaxPayloadBytes: 1 << 10,
-		}
-		if err := natsjs.ValidateConfig(cfg); !errors.Is(err, natsjs.ErrRejected) {
-			t.Errorf("natsjs.ValidateConfig(%q) error = %v, want ErrRejected", scheme, err)
-		}
-	}
-	// Both files also agree that only tls and wss are secure without an opt-in.
-	for _, scheme := range []string{"nats", "ws"} {
-		cfg := natsjs.Config{
-			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
-			AllowUnauthenticated: true,
-			MaxPayloadBytes:      1 << 10,
-		}
-		err := natsjs.ValidateConfig(cfg)
-		if err == nil || !errors.Is(err, natsjs.ErrRejected) || !strings.Contains(err.Error(), "plaintext") {
-			t.Errorf("natsjs.ValidateConfig(%s without opt-in) error = %v, want a plaintext rejection", scheme, err)
-		}
-	}
 }

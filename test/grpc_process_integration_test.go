@@ -105,13 +105,11 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = conn.Close() })
 
-	readyCtx, cancelReady := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancelReady()
 	healthClient := healthgrpc.NewHealthClient(conn)
 	var checkErr error
-	waittest.UntilFunc(t, 10*time.Second, func() bool {
+	waittest.UntilFunc(t, 10*time.Second, func(ctx context.Context) bool {
 		response, err := healthClient.Check(
-			readyCtx,
+			ctx,
 			&healthgrpc.HealthCheckRequest{},
 		)
 		checkErr = err
@@ -120,6 +118,8 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 		}
 		return false
 	}, func() string { return fmt.Sprintf("gRPC health to become serving: %v\n%s", checkErr, output.String()) })
+	readyCtx, cancelReady := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancelReady()
 	_, err = healthClient.Check(readyCtx, &healthgrpc.HealthCheckRequest{
 		Service: "service.not.registered",
 	})
