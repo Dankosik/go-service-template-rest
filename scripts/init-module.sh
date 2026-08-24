@@ -293,7 +293,8 @@ strip_unselected_harness() {
 	local harness="$1"
 
 	rm -f -- \
-		scripts/ci/template-owned-purity-check.sh
+		scripts/ci/template-owned-purity-check.sh \
+		scripts/ci/template-sync-behavior-check.sh
 
 	if [[ "${harness}" == "all" ]]; then
 		return 0

@@ -59,11 +59,6 @@ read_string() {
 	sed -n "s/^${key} = \"\(.*\)\"$/\1/p" "${file}"
 }
 
-read_raw() {
-	local key="$1" file="$2"
-	sed -n "s/^${key} = //p" "${file}"
-}
-
 read_body() {
 	awk '
 		$0 == "instructions = \"\"\"" { body = 1; next }
@@ -71,6 +66,27 @@ read_body() {
 		body { print }
 		END { if (!found) exit 1 }
 	' "$1"
+}
+
+validate_name() {
+	local value="$1" file="$2"
+	case "${value}" in
+	"" | [!a-z0-9]* | *[!a-z0-9-]* | *-) fail "${file#"${repo}/"} has an unsafe role name ${value:-<empty>}" ;;
+	esac
+}
+
+validate_model() {
+	local key="$1" value="$2" file="$3"
+	[[ -z "${value}" ]] && return 0
+	printf '%s\n' "${value}" | LC_ALL=C grep -Eq '^[A-Za-z0-9][][A-Za-z0-9._/:=-]*$' ||
+		fail "${file#"${repo}/"} has an unsafe ${key} value"
+}
+
+validate_description() {
+	local value="$1" file="$2"
+	case "${value}" in
+	*$'\n'* | *\"* | *\\*) fail "${file#"${repo}/"} description contains unsupported quoting" ;;
+	esac
 }
 
 is_grok_session_agent() {
@@ -110,12 +126,17 @@ for source_file in "${sources}"/*.toml; do
 	grok_model=$(read_string grok_model "${source_file}")
 	grok_effort=$(read_string grok_effort "${source_file}")
 	output_schema=$(read_string output_schema "${source_file}")
-	nicknames=$(read_raw nickname_candidates "${source_file}")
 	body=$(read_body "${source_file}") || fail "${source_file#"${repo}/"} has no closed instructions block"
 
-	[[ -n "${name}" && "${name}" == "$(basename "${source_file}" .toml)" ]] ||
+	validate_name "${name}" "${source_file}"
+	[[ "${name}" == "$(basename "${source_file}" .toml)" ]] ||
 		fail "${source_file#"${repo}/"} name must match its filename"
 	[[ -n "${description}" ]] || fail "${source_file#"${repo}/"} has no description"
+	validate_description "${description}" "${source_file}"
+	validate_model claude_model "${claude_model}" "${source_file}"
+	validate_model qwen_model "${qwen_model}" "${source_file}"
+	validate_model cursor_model "${cursor_model}" "${source_file}"
+	validate_model grok_model "${grok_model}" "${source_file}"
 	case "${class}" in
 	read-only-specialist)
 		class_file="${classes}/read-only-specialist.md"
@@ -169,7 +190,6 @@ for source_file in "${sources}"/*.toml; do
 		printf 'name = "%s"\n' "${name}"
 		printf 'description = "%s"\n' "${description}"
 		printf 'sandbox_mode = "%s"\n' "${sandbox_mode}"
-		[[ -z "${nicknames}" ]] || printf 'nickname_candidates = %s\n' "${nicknames}"
 		printf '\ndeveloper_instructions = """\n%s\n' "${common}"
 		[[ -z "${schema_line}" ]] || printf '\n%s\n' "${schema_line}"
 		printf '\n%s\n"""\n' "${body}"
