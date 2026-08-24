@@ -153,6 +153,14 @@ func BenchmarkTracingWithoutExporter(b *testing.B) {
 
 	ctx := context.Background()
 	tracer := otel.Tracer("telemetry-benchmark")
+	_, preflight := tracer.Start(ctx, "preflight")
+	if preflight.IsRecording() {
+		b.Fatal("preflight span is recording without an exporter")
+	}
+	if !preflight.SpanContext().IsValid() {
+		b.Fatal("preflight span context is invalid")
+	}
+	preflight.End()
 
 	b.ReportAllocs()
 	for b.Loop() {

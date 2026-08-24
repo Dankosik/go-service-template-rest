@@ -8,8 +8,10 @@ check that did not exercise its claimed surface.
 ## Decide
 
 - `ci.yml` classifies the exact diff once. Its quality, security, secret,
-  delivery, and integration leaves are conditional; one `required` job is
-  always reported and rejects any failed or cancelled applicable leaf.
+  delivery, and integration leaves are conditional; runtime Go, root/tool
+  dependencies, lint config, initializers, database, messaging, process, race,
+  migrations, runtime image, and image security remain distinct. One `required`
+  job is always reported and rejects any failed or cancelled applicable leaf.
 - A skipped leaf is not evidence for that surface. The classifier makes the
   skip explicit, while tag dispatch marks Go and release surfaces applicable so
   integration cannot be path-skipped. Scheduled CI bypasses diff leaves and

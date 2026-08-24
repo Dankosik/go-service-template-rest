@@ -13,9 +13,11 @@ Leaf gates are independent:
 | --- | --- | --- |
 | focused `go test -vet=off ./pkg` | that package's tests | formatting, lint, other packages |
 | `make unit-check PKG=./pkg FILES='...'` | package format, tests, and the small lint set | full policy, other packages, race |
+| `make verify` | the applicable non-overlapping worktree surfaces printed by `make plan` | skipped or not-applicable surfaces, full-repository policy |
 | `make check` | full format, `lint-all`, `test-all`, tidy, generated drift | race, Docker, security, template matrices |
 | matching `*-check` | one generated-contract surface | compatibility unless its breaking check also ran |
-| `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` | real integration paths in scope | production image lifecycle |
+| matching `test-integration-{db,messaging,process,race}` | that real integration surface | sibling integration surfaces or image lifecycle |
+| `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` | full non-race integration pack | race or production image lifecycle |
 | `ALLOW_HEAVY=1 make migration-validate` | migration and exact-image runtime rehearsal | data recoverability or rollout safety |
 
 `make build` is not implied by test targets. `make lint` and `make test` require

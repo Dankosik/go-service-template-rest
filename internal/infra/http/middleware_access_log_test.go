@@ -174,14 +174,28 @@ func BenchmarkAccessLog(b *testing.B) {
 		{name: "disabled", level: slog.LevelWarn},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
-			// The benchmark needs JSON encoding and a configurable enabled level;
-			// slog.DiscardHandler provides neither signal.
-			log := slog.New(logctx.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: tc.level}))) //nolint:sloglint // Benchmark configurable JSON encoding.
-			handler := AccessLog(log, true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				w.WriteHeader(http.StatusNoContent)
-			}))
+			newHandler := func(output io.Writer) http.Handler {
+				// The benchmark needs JSON encoding and a configurable enabled level;
+				// slog.DiscardHandler provides neither signal.
+				log := slog.New(logctx.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: tc.level})))
+				return AccessLog(log, true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					w.WriteHeader(http.StatusNoContent)
+				}))
+			}
 			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 			request.Pattern = "GET /health/live"
+
+			var preflight bytes.Buffer
+			preflightResponse := httptest.NewRecorder()
+			newHandler(&preflight).ServeHTTP(preflightResponse, request)
+			if preflightResponse.Code != http.StatusNoContent {
+				b.Fatalf("preflight status = %d, want %d", preflightResponse.Code, http.StatusNoContent)
+			}
+			if logged := preflight.Len() > 0; logged != (tc.level <= slog.LevelInfo) {
+				b.Fatalf("preflight logged = %v at level %s", logged, tc.level)
+			}
+
+			handler := newHandler(io.Discard)
 			response := httptest.NewRecorder()
 
 			b.ReportAllocs()

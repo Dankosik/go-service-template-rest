@@ -12,7 +12,8 @@
 ## Test Evidence
 
 - [ ] `make unit-check PKG=./<changed> FILES='...'` (acceptance unit)
-- [ ] `make check` (integrated candidate; do not also rerun fmt/lint/test-all)
+- [ ] `make plan` reviewed and `make verify` passed or exact receipt reused
+- [ ] `make check` (only when the claim spans the full repository)
 - [ ] claim-matched focused checks or CI evidence linked before merge
 - [ ] `make openapi-check` (when API/runtime contract changed)
 - [ ] `ALLOW_HEAVY=1 make test-race` (when concurrency-sensitive code changed)

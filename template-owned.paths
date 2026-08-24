@@ -71,6 +71,7 @@ opencode.json
 template-owned.paths
 scripts/template-sync.sh
 scripts/agent-roles-sync.sh
+scripts/dev/benchmark.sh
 scripts/harness-skills-sync.sh
 scripts/codex-agents-sync.sh
 scripts/lib/manifest.sh

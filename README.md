@@ -171,6 +171,7 @@ contract; see the [integration initializer](docs/external-integration-initialize
 | `make run` | Start the HTTP service locally |
 | `go test -vet=off ./internal/<package>` | Fast feedback for one changed package |
 | `make unit-check PKG=./pkg FILES='...'` | Format, test, and lint one package-sized change |
+| `make plan` / `make verify` | Explain and run the minimal integrated surface plan |
 | `make check` | Run the full-repository aggregate once before delivery |
 | `make test-integration` | Run the container-backed integration tests |
 
@@ -178,6 +179,10 @@ Use the narrowest check that can catch a problem in the change. The full command
 catalog and routing rules live in
 [Build, test, and development commands](docs/build-test-and-development-commands.md)
 and [Validation routing](docs/validation-routing.md).
+
+Performance work uses `make benchmark-capture`, `benchmark-compare`, or
+`benchmark-http` with an accepted workload, budget, and response owner. See
+[Benchmarking](docs/benchmarking.md).
 
 ## Documentation
 

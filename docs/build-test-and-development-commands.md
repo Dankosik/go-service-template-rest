@@ -98,21 +98,34 @@ make unit-check \
   FILES="internal/<package>/a.go internal/<package>/a_test.go"
 ```
 
-One full-repository owner on the integrated candidate:
+Inspect and run the surface-aware integrated plan:
+
+```bash
+make plan
+make verify
+```
+
+`plan` collects base-branch, staged, unstaged, and untracked changes, explains
+their surfaces and not-applicable gates, and prints the minimal command set.
+`verify` runs that set sequentially, reports durations and scope, and reuses an
+exact passing receipt from the Git worktree metadata.
+
+The explicit full-repository owner remains available when the claim spans it:
 
 ```bash
 make check
 ```
 
 `make check` runs formatting, `lint-all`, `test-all`, module tidy, and
-generated-contract drift. Do not also run `fmt-check`, `lint-all`, or
-`test-all` beside it.
+generated-contract drift. Do not append it to ordinary completion or run
+`fmt-check`, `lint-all`, or `test-all` beside it.
 
 Package-scoped names refuse a missing `PKG`; they do not default to `./...`:
 
 ```bash
 make test-package PKG=./internal/<package>
-make lint-package PKG=./internal/<package>
+make lint-changed PKG=./internal/<package>
+make lint-pr
 make test-all
 make lint-all
 make fmt
@@ -131,8 +144,9 @@ Use `make lint-deep` only for whole-program dead-code and nil analysis. Use
 `make audit-full-manual` is the rare template/release audit; it is not an
 iteration or ordinary pre-commit target. It builds one image and reuses it for
 migration rehearsal and image scanning.
-While editing one module, run only its direct `go mod tidy -diff` form; the
-combined `make mod-tidy-check` is the final root/tools parity leaf.
+While editing one module, use `make root-mod-check` or `make tools-mod-check`.
+`tools-dependencies-check` adds registered-tool resolution for a tools-module
+change; the combined `make mod-check` owns ordinary root/tools parity.
 
 ## Generated contracts
 
@@ -161,12 +175,17 @@ is never edited manually.
 ## PostgreSQL and integration
 
 ```bash
-make test-integration
-REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration
+ALLOW_HEAVY=1 make test-integration-db
+ALLOW_HEAVY=1 make test-integration-messaging
+ALLOW_HEAVY=1 make test-integration-process
+ALLOW_HEAVY=1 make test-integration-race
+ALLOW_HEAVY=1 make test-integration
 ```
 
-The second form is required evidence: Docker unavailability fails instead of
-skipping.
+The first four targets own database, messaging, process, and concurrency
+surfaces. `test-integration` remains the full non-race pack; race is always an
+explicit separate claim. Add `REQUIRE_DOCKER=1` when Docker-backed proof must
+fail rather than skip.
 
 <!-- profile:database-postgres:start -->
 ```bash
@@ -244,20 +263,24 @@ make container-security CONTAINER_IMAGE=service:ci
 
 The source template builds one documented PostgreSQL generated output. A
 derived repository builds its own exact source. Reuse the same image tag for
-migration rehearsal and vulnerability scanning.
+migration rehearsal and vulnerability scanning. The Dockerfile fixes output
+timestamps with `SOURCE_DATE_EPOCH=0`, so identical inputs rebuild to the same
+local image digest; application version and commit remain explicit build inputs.
 
 ## Run and build
 
 ```bash
 make run
 make build
-make build-pgo PGO_PROFILE=<representative-cpu.pprof>
+make pgo-manifest PGO_PROFILE=<representative-cpu.pprof> # requires provenance env; see Benchmarking
+make build-pgo PGO_PROFILE=<representative-cpu.pprof> PGO_MANIFEST=<representative-cpu.pprof.meta>
 make docker-build
 make docker-run
 ```
 
-`run` sources `.env` when present. PGO accepts only an explicit readable CPU
-profile; `off` is the default and rollback.
+`run` sources `.env` when present. PGO requires an explicit CPU profile and its
+provenance manifest; `off` is the default and rollback. Off and PGO local
+binaries have distinct paths, `bin/service` and `bin/service-pgo`.
 
 <!-- profile:messaging-nats-jetstream:start -->
 `make run-worker` and `make build-worker` own the messaging worker.
@@ -271,9 +294,11 @@ profile; `off` is the default and rollback.
 
 ## Benchmarking
 
-Use direct `go test -bench`, `benchstat`, profile, integration-tagged
-PostgreSQL, or pinned k6 commands from [Benchmarking](benchmarking.md).
-Benchmarks are explicit evidence, not default CI gates.
+Use `make benchmark-capture`, `benchmark-compare`, `benchmark-http`, and the
+profile commands from [Benchmarking](benchmarking.md). The capture owner records
+comparability metadata and rejects mismatched inputs before `benchstat`.
+Benchmarks are explicit evidence, not default CI gates; CI only runs the
+non-load `performance-harness-check` when its harness changes.
 
 ## CI and publication
 

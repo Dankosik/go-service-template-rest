@@ -8,7 +8,7 @@ human-facing explanation.
 | Changed surface or claim | Load | Primary proof |
 | --- | --- | --- |
 | Agent instructions, roles, skills, mirrors, or template propagation | [Instructions](validation/instructions.md) | `make template-owned-purity-check` |
-| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | focused `go test` while iterating; `make unit-check` once per unit; `make check` once on the integrated tree |
+| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | focused `go test` while iterating; `make unit-check` once per unit; `make verify` once on the integrated tree |
 | OpenAPI, protobuf, SQLC, or generated drift | [Generated Contracts](validation/generated.md) | matching `*-check` |
 | PostgreSQL transactions, migrations, or integration semantics | [PostgreSQL](validation/postgres.md) | `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` |
 | Runtime image, container behavior, or migration rehearsal | [Containers](validation/containers.md) | `make runtime-image-build` |
@@ -20,6 +20,11 @@ Start with the focused target that can falsify the change. The table names each
 leaf's aggregate command; run that aggregate only when the completion claim
 spans it. Missing Docker or an external provider narrows the claim; it does not
 become a passing skip.
+
+`make plan` explains the current worktree's selected surfaces, commands, and
+not-applicable gates. `make verify` runs that non-overlapping plan and reuses an
+exact passing receipt while candidate, plan, and environment remain unchanged.
+`make check` remains the explicit deterministic full-repository gate.
 
 `*-fast` targets are local iteration signals. They refuse CI and local tool
 version drift; run the matching canonical leaf for final proof.
