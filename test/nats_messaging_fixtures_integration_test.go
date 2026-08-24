@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +29,6 @@ const (
 	sourceSubject        = "events.test"
 	deadLetterSubject    = "dead.events.test"
 	testMaxPayloadBytes  = 256 << 10
-	testMaxPending       = 64
 	testMaxConcurrency   = 8
 	testMaxDeliveryBytes = 1 << 20
 	testOperationTimeout = 5 * time.Second
@@ -267,8 +267,8 @@ func stopWorker(worker *natsjs.Worker) {
 func testEvent(payload string) natsjs.Event {
 	return natsjs.Event{
 		Subject:       sourceSubject,
-		MessageID:     natsjs.NewID(),
-		PublicationID: natsjs.NewID(),
+		MessageID:     rand.Text(),
+		PublicationID: rand.Text(),
 		Type:          "test.event",
 		Schema:        "v1",
 		CreatedAt:     time.Now().UTC(),
@@ -278,12 +278,12 @@ func testEvent(payload string) natsjs.Event {
 
 func waitConsumerSettled(t *testing.T, fixture *natsFixture, consumerName string) {
 	t.Helper()
-	waittest.Until(t, 5*time.Second, func() bool {
-		consumer, err := fixture.js.Consumer(t.Context(), sourceStream, consumerName)
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		consumer, err := fixture.js.Consumer(ctx, sourceStream, consumerName)
 		if err != nil {
 			return false
 		}
-		info, err := consumer.Info(t.Context())
+		info, err := consumer.Info(ctx)
 		return err == nil && info.NumAckPending == 0 && info.NumPending == 0
 	}, consumerName+" settlement")
 }

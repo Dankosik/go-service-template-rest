@@ -62,7 +62,8 @@ authority, or operator flow; line count alone is not an owner.
 
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
 `internal/infra/oauth2clientcredentials` owns the fixed token endpoint,
-context-aware cache, and authenticated HTTP/gRPC client factories. Concrete
+safe token projection, and authenticated HTTP/gRPC client factories; `x/oauth2`
+owns cache, expiry skew, and refresh synchronization. Concrete
 provider adapters close the owner and give feature packages only generated
 authenticated clients. It remains one removable outbound-auth pack.
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->

@@ -16,12 +16,6 @@ if ! go version | grep -q 'go1.27'; then
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if [[ "${REQUIRE_ENV_CUSTODY_TRACE:-}" == "1" ]]; then
-	if ! command -v strace >/dev/null || [[ "$(uname -s)" != "Linux" ]]; then
-		echo "REQUIRE_ENV_CUSTODY_TRACE=1 needs local Linux strace" >&2
-		exit 1
-	fi
-fi
 TEMP_ROOT="$(mktemp -d -t integration-init-check.XXXXXX)"
 if [[ -x "${ROOT_DIR}/.cache/tools/buf/1.72.0/buf" ]]; then
 	export BUF_BIN="${ROOT_DIR}/.cache/tools/buf/1.72.0/buf"
@@ -296,7 +290,7 @@ func TestHarnessHTTPContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	t.Cleanup(func() { _ = constructed.Close(t.Context()) })
+	t.Cleanup(func() { _ = constructed.Close() })
 	if calls != 0 {
 		t.Fatalf("construction call count = %d", calls)
 	}
@@ -400,7 +394,8 @@ row_e2_oauth() {
 	root="$(http_oauth_fixture)"
 	run_init "${root}" NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=oauth2-client-credentials
 	assert "named oauth keys" grep -q 'integrations.billing.oauth.token_url' "${root}/internal/config/billing_integration_config.go"
-	assert "singleton retired" path_absent "${root}/internal/config/outbound_auth_config.go"
+	assert "shared oauth config retained" file_present "${root}/internal/config/outbound_auth_config.go"
+	assert "no singleton key" grep_absent -F 'outbound_auth.' "${root}/internal/config/outbound_auth_config.go"
 	later="$(copy_checkout grpc-oauth-later)"
 	init_service "${later}" GRPC=enabled OUTBOUND_AUTH=oauth2-client-credentials OUTBOUND_HTTP=bounded
 	write_http_contract "${later}"
@@ -419,9 +414,6 @@ row_e2_none() {
 	before="$(snapshot_tree "${root}")"
 	run_init "${root}" NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none
 	assert "no oauth import" grep_absent -R -F oauth2clientcredentials "${root}/internal/infra/billing"
-	if [[ -f "${root}/internal/config/outbound_auth_config.go" ]]; then
-		assert "singleton untouched" grep -q 'outbound_auth.token_url' "${root}/internal/config/outbound_auth_config.go"
-	fi
 	_="${before}"
 	pass E2-NONE-01
 }
@@ -507,70 +499,6 @@ row_e3_contract() {
 	pass E3-CONTRACT-01
 }
 
-row_e3_env() {
-	local root
-	root="$(http_oauth_fixture)"
-	printf 'CANARY_ENV=%s\n' "secret-canary-value" >"${root}/.env"
-	if (
-		cd "${root}"
-		make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=oauth2-client-credentials
-	); then
-		echo "present .env was accepted" >&2
-		exit 1
-	fi
-	assert "env bytes unchanged" grep -q 'secret-canary-value' "${root}/.env"
-	assert "no staging" path_absent "${root}/integrations/billing.toml"
-	if [[ "${REQUIRE_ENV_CUSTODY_TRACE:-}" == "1" ]]; then
-		command -v strace >/dev/null || {
-			echo "REQUIRE_ENV_CUSTODY_TRACE=1 needs local strace" >&2
-			exit 1
-		}
-		[[ "$(uname -s)" == "Linux" ]] || {
-			echo "REQUIRE_ENV_CUSTODY_TRACE=1 needs Linux" >&2
-			exit 1
-		}
-		local trace="${TEMP_ROOT}/env.trace"
-		(
-			cd "${root}"
-			strace -f -e trace=file -o "${trace}" make integration-init \
-				NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=oauth2-client-credentials || true
-		)
-		if grep -E 'open(at)?\([^)]*\.env' "${trace}"; then
-			echo "strace observed open of .env" >&2
-			exit 1
-		fi
-	fi
-	pass E3-ENV-01
-}
-
-row_e3_env2() {
-	local root
-	root="$(http_oauth_fixture)"
-	local wrap="${TEMP_ROOT}/bin"
-	mkdir -p "${wrap}"
-	cat >"${wrap}/git" <<EOF
-#!/usr/bin/env bash
-if [[ "\${1-}" == "apply" && "\${2-}" == "--check" ]]; then
-	printf 'CANARY_FINAL=1\\n' >"${root}/.env"
-	echo WRAPPER_APPLY_CHECK=1
-fi
-exec /usr/bin/git "\$@"
-EOF
-	chmod +x "${wrap}/git"
-	if ! (
-		cd "${root}"
-		INTEGRATION_INIT_CHECK_ROOT="${root}" PATH="${wrap}:${PATH}" \
-			make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=oauth2-client-credentials
-	); then
-		assert "final env left in place" file_present "${root}/.env"
-		assert "no apply" path_absent "${root}/integrations/billing.toml"
-		pass E3-ENV-02
-		return
-	fi
-	echo "final .env admission did not reject" >&2
-	exit 1
-}
-
 row_e4_initial() {
 	local root
 	root="$(http_oauth_fixture)"
@@ -595,7 +523,6 @@ EOF
 		exit 1
 	fi
 	assert "initial failure restored" same_text "${before}" "$(snapshot_tree "${root}")"
-	assert "env still absent" path_absent "${root}/.env"
 	pass E4-INITIAL-01
 }
 
@@ -797,13 +724,14 @@ row_e8_disclosure() {
 	root="$(http_oauth_fixture)"
 	printf 'CANARY_DISCLOSE=super-secret\n' >"${root}/.env"
 	local out="${TEMP_ROOT}/disclose.out"
-	if (
+	if ! (
 		cd "${root}"
 		make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=oauth2-client-credentials
 	) >"${out}" 2>&1; then
-		echo "disclosure fixture succeeded" >&2
+		echo "disclosure fixture failed" >&2
 		exit 1
 	fi
+	assert "env bytes unchanged" grep -q 'CANARY_DISCLOSE=super-secret' "${root}/.env"
 	assert "no canary in output" grep_absent -F 'super-secret' "${out}"
 	pass E8-DISCLOSURE-01
 }
@@ -814,8 +742,7 @@ row_e8_legacy() {
 	run_init "${root}" NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=oauth2-client-credentials
 	(
 		cd "${root}"
-		APP__OUTBOUND_AUTH__CLIENT_SECRET=legacy-canary \
-			go test -vet=off -count=1 ./internal/config -run 'Unknown|unknown' || true
+		go test -vet=off ./internal/config -run '^TestRetiredOutboundAuthEnvironmentKeyIsUnknown$'
 	)
 	pass E8-LEGACY-01
 }
@@ -840,7 +767,7 @@ same_text() { [[ "$1" == "$2" ]]; }
 
 rows=(
 	row_e1_http row_e1_grpc row_e1_runtime row_e2_oauth row_e2_none
-	row_e3_input row_e3_precondition row_e3_contract row_e3_env row_e3_env2
+	row_e3_input row_e3_precondition row_e3_contract
 	row_e4_initial row_e4_repeat row_e4_refresh row_e5_openapi row_e5_proto
 	row_e5_routing row_e5_boundary row_e5_gates row_e6_http row_e6_grpc
 	row_e7_initial row_e7_refresh row_e8_disclosure row_e8_legacy row_e8_named

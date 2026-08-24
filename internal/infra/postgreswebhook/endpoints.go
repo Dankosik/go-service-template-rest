@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	MaxEndpointManifestBytes   = 1 << 20
-	MaxEndpointManifestEntries = 4096
+	maxEndpointManifestBytes   = 1 << 20
+	maxEndpointManifestEntries = 4096
 )
 
 type endpointKey struct {
@@ -17,7 +17,7 @@ type endpointKey struct {
 	receiver string
 }
 
-type Endpoint struct {
+type endpoint struct {
 	OwnerScope              string
 	ReceiverID              string
 	Generation              int64
@@ -27,7 +27,7 @@ type Endpoint struct {
 }
 
 type EndpointManifest struct {
-	entries map[endpointKey]Endpoint
+	entries map[endpointKey]endpoint
 }
 
 type endpointDocument struct {
@@ -44,17 +44,17 @@ type endpointEntry struct {
 }
 
 func ParseEndpointManifest(raw string) (*EndpointManifest, error) {
-	if raw == "" || len(raw) > MaxEndpointManifestBytes {
+	if raw == "" || len(raw) > maxEndpointManifestBytes {
 		return nil, errors.New("parse webhook endpoints: document size is invalid")
 	}
 	var document endpointDocument
 	if err := json.UnmarshalRead(strings.NewReader(raw), &document, json.RejectUnknownMembers(true)); err != nil {
 		return nil, errors.New("parse webhook endpoints: invalid JSON")
 	}
-	if len(document.Endpoints) == 0 || len(document.Endpoints) > MaxEndpointManifestEntries {
+	if len(document.Endpoints) == 0 || len(document.Endpoints) > maxEndpointManifestEntries {
 		return nil, errors.New("parse webhook endpoints: entries are required")
 	}
-	manifest := &EndpointManifest{entries: make(map[endpointKey]Endpoint, len(document.Endpoints))}
+	manifest := &EndpointManifest{entries: make(map[endpointKey]endpoint, len(document.Endpoints))}
 	for _, entry := range document.Endpoints {
 		for name, value := range map[string]string{
 			ownerScopeField: entry.OwnerScope, receiverIDField: entry.ReceiverID,
@@ -83,7 +83,7 @@ func ParseEndpointManifest(raw string) (*EndpointManifest, error) {
 		if _, exists := manifest.entries[key]; exists {
 			return nil, errors.New("parse webhook endpoints: duplicate receiver")
 		}
-		manifest.entries[key] = Endpoint{
+		manifest.entries[key] = endpoint{
 			OwnerScope: entry.OwnerScope, ReceiverID: entry.ReceiverID, Generation: entry.Generation,
 			URL: parsed.String(), ActiveKeyReference: entry.ActiveKeyReference,
 			PredecessorKeyReference: entry.PredecessorKeyReference,
@@ -92,13 +92,13 @@ func ParseEndpointManifest(raw string) (*EndpointManifest, error) {
 	return manifest, nil
 }
 
-func (m *EndpointManifest) Resolve(owner, receiver string) (Endpoint, error) {
+func (m *EndpointManifest) resolve(owner, receiver string) (endpoint, error) {
 	if m == nil {
-		return Endpoint{}, fmt.Errorf("%w: endpoint manifest is required", ErrConfig)
+		return endpoint{}, fmt.Errorf("%w: endpoint manifest is required", ErrConfig)
 	}
-	endpoint, ok := m.entries[endpointKey{owner: owner, receiver: receiver}]
+	resolved, ok := m.entries[endpointKey{owner: owner, receiver: receiver}]
 	if !ok {
-		return Endpoint{}, fmt.Errorf("%w: receiver is not registered", ErrNotFound)
+		return endpoint{}, fmt.Errorf("%w: receiver is not registered", ErrNotFound)
 	}
-	return endpoint, nil
+	return resolved, nil
 }

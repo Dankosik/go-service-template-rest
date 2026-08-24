@@ -35,6 +35,9 @@ INTEGRATION_PACKAGES := ./test/...
 # profile:http-idempotency-postgres:start
 INTEGRATION_PACKAGES += ./internal/infra/postgresidempotency
 # profile:http-idempotency-postgres:end
+# profile:inbound-webhooks-standard:start
+INTEGRATION_PACKAGES += ./internal/infra/postgresinboundwebhook
+# profile:inbound-webhooks-standard:end
 # profile:messaging-nats-jetstream:start
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
 MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test
@@ -104,7 +107,7 @@ TEMPLATE ?= ../go-service-template-rest
 	govulncheck gosec secret-scan secret-scan-history \
 	actionlint actionlint-fast shellcheck shellcheck-fast dockerfile-check \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check check-proto \
+	proto-format proto-format-check proto-schema-policy proto-lint proto-generate proto-drift-check proto-breaking proto-check check-proto \
 	sqlc-check runtime-image-build runtime-image-check container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-owned-purity-check
 # profile:object-storage:start
@@ -596,7 +599,17 @@ proto-format-check:
 	@if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q .; then $(GO_TOOL) buf format --diff --exit-code; fi
 	@if [ -f examples/grpc-reference-service/buf.yaml ]; then cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf format --diff --exit-code; fi
 
-proto-lint:
+proto-schema-policy:
+	@find api/proto examples/grpc-reference-service/api/proto -type f -name '*.proto' -print 2>/dev/null | \
+		while IFS= read -r file; do \
+			if grep -Eq '^edition = "2023";' "$$file" && \
+				! grep -Fq 'option features.(pb.go).api_level = API_OPAQUE;' "$$file"; then \
+				echo "$$file: Edition 2023 requires schema-owned API_OPAQUE" >&2; \
+				exit 1; \
+			fi; \
+		done
+
+proto-lint: proto-schema-policy
 	@if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q .; then $(GO_TOOL) buf lint; fi
 	@if [ -f examples/grpc-reference-service/buf.yaml ]; then cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf lint; fi
 

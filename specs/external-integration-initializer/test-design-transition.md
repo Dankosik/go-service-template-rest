@@ -1,6 +1,7 @@
 # Test Design transition
 
-status: ready
+status: superseded
+superseded_by: 2026-08-23 named-only OAuth maintainability repair
 owner: Test Design
 result: `specs/external-integration-initializer/test-plan.md` SHA-256 `4e5d409a6cc3f153d29740163817b2a01ebf64e67aca8a8dc4ac90259ca499d3`
 review: `specs/external-integration-initializer/test-design-review.md` SHA-256 `ee8fb27a050fd9cb537c95f33811b9c6225f4671ff6adb2dd7fdb719299d742b` — fresh independent Test Design Review `PASS` after one bounded delta recheck

@@ -33,7 +33,7 @@ func TestDispatcherPreparesStableReceiverJobs(t *testing.T) {
 		t.Fatalf("delivery ids = %v", ids)
 	}
 
-	first := prepared.deliveries[0].args
+	first := prepared.deliveries[0]
 	if first.ReceiverID != "alpha" || first.ReceiverGeneration != 1 || first.URL != "https://alpha.example:443/hooks" {
 		t.Fatalf("first delivery = %+v", first)
 	}

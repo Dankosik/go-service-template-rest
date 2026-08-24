@@ -40,9 +40,6 @@ func defaultValues() map[string]any {
 	// profile:authn-bearer:start
 	maps.Copy(values, authnDefaults())
 	// profile:authn-bearer:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	maps.Copy(values, outboundAuthDefaults())
-	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:grpc:start
 	maps.Copy(values, grpcDefaults())
 	// profile:grpc:end

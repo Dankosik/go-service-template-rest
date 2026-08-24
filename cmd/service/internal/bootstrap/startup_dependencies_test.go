@@ -346,9 +346,6 @@ func resetBootstrapConfigEnv(t *testing.T) {
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
 	// profile:authn-bearer:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	setOutboundAuthBootstrapTestEnv(t)
-	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:object-storage:start
 	setObjectStorageBootstrapTestEnv(t)
 	// profile:object-storage:end

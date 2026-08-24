@@ -1,5 +1,7 @@
 # Independent Task Review / Readiness
 
+superseded_by: 2026-08-23 named-only OAuth maintainability repair; this receipt does not accept the current artifacts
+
 candidate: `tasks.md` SHA-256 `70090d5907c3260c940e2420c2a627e331edc7c04dd7a5eda1762fb3a0d09824`; `tasks/T001-retained-outbound-http-choice.md` SHA-256 `f84d97fc92aab9de6cffad5053f28256f89037d7cb947b094f43a49479fd701c`; `tasks/T002-external-integration-initializer.md` SHA-256 `c4bf2b1b05d7a8f1e9fddc6b8d89923b296cbba9245ecbb08c8507f5fbc46b91`
 verdict: PASS
 findings: none

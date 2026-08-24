@@ -1,15 +1,9 @@
 // The admission budgets through a server built by NewServer: does filling one
 // from one RPC kind shed what the other owns?
 //
-// interceptors_test.go proves one policy value serves both interceptor types and
-// routes each method to the budget that owns it. Those are different questions.
-// NewServer builds the two policy lists separately and sizes the two budgets from
-// separate configuration, so whether the server actually hands both chains the
-// same policy, and whether it gave the health service a budget of its own, are
-// its composition rather than structural guarantees. Only a real server can show
-// either. Without this file, passing one limiter to the unary chain and a second
-// to the streaming chain, or sizing the health budget from MaxConcurrentRPCs,
-// would compile, lint, and pass every other test.
+// NewServer builds the unary and stream policy lists separately and sizes health
+// from a separate budget. Only a real server can show that both RPC kinds share
+// one business limit and health remains independently callable.
 
 package grpcx
 
@@ -139,13 +133,12 @@ func TestAdmissionBudgetIsProcessWide(t *testing.T) {
 // TestHealthServiceSurvivesBusinessSaturation drives the consequence the separate
 // health budget exists for.
 //
-// grpc-go's client-side health checker holds one Health/Watch open per subchannel
-// for the connection's whole life, and this repository's own client enables it by
-// default. Shedding that watch does not cost the caller one RPC: its balancer
-// stops selecting the backend entirely, so business saturation on one replica
-// would remove it from every health-checking caller at once. Check answering is
-// the second half — a platform that cannot probe a saturated instance restarts a
-// healthy one.
+// A grpc-go health-aware client holds one Health/Watch open per subchannel for
+// the connection's whole life. Shedding that watch does not cost the caller one
+// RPC: its balancer stops selecting the backend entirely, so business saturation
+// on one replica would remove it from every health-checking caller at once. Check
+// answering is the second half — a platform that cannot probe a saturated
+// instance restarts a healthy one.
 func TestHealthServiceSurvivesBusinessSaturation(t *testing.T) {
 	cfg := testServerConfig()
 	// One business slot, held for the whole test by the stream below.

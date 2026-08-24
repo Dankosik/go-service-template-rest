@@ -43,11 +43,6 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:authn-bearer:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	if err := validateOutboundAuthConfig(&cfg.OutboundAuth); err != nil {
-		return err
-	}
-	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:grpc:start
 	if err := validateGRPCConfig(&cfg.GRPC); err != nil {
 		return err

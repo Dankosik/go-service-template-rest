@@ -2,59 +2,40 @@ package natsjs
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
 type fakeConsumeContext struct {
-	once   sync.Once
-	closed chan struct{}
+	once    sync.Once
+	closed  chan struct{}
+	onDrain func()
 }
 
-func TestConsumeErrorClassification(t *testing.T) {
-	for _, err := range []error{
-		context.DeadlineExceeded,
-		jetstream.ErrNoMessages,
-		jetstream.ErrNoHeartbeat,
-		nats.ErrNoResponders,
-		jetstream.ErrConsumerLeadershipChanged,
-		nats.ErrDisconnected,
-		nats.ErrConnectionReconnecting,
-		nats.ErrReconnectBufExceeded,
-		jetstream.ErrServerShutdown,
-	} {
-		if terminalConsumeError(err) {
-			t.Errorf("terminalConsumeError(%v) = true", err)
+func (c *fakeConsumeContext) Stop() { c.once.Do(func() { close(c.closed) }) }
+func (c *fakeConsumeContext) Drain() {
+	c.once.Do(func() {
+		if c.onDrain != nil {
+			c.onDrain()
 		}
-	}
-	for _, err := range []error{
-		jetstream.ErrConsumerDeleted,
-		jetstream.ErrBadRequest,
-		jetstream.ErrConnectionClosed,
-		nats.ErrConnectionClosed,
-	} {
-		if !terminalConsumeError(err) {
-			t.Errorf("terminalConsumeError(%v) = false", err)
-		}
-	}
+		close(c.closed)
+	})
 }
-
-func (c *fakeConsumeContext) Stop()                   { c.once.Do(func() { close(c.closed) }) }
-func (c *fakeConsumeContext) Drain()                  { c.Stop() }
 func (c *fakeConsumeContext) Closed() <-chan struct{} { return c.closed }
 
 type fakePullConsumer struct {
-	started chan struct{}
+	started chan *fakeConsumeContext
 }
 
 //nolint:ireturn // The fake must implement the narrowed production interface.
 func (c *fakePullConsumer) Consume(jetstream.MessageHandler, ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
-	c.started <- struct{}{}
-	return &fakeConsumeContext{closed: make(chan struct{})}, nil
+	consumer := &fakeConsumeContext{closed: make(chan struct{})}
+	c.started <- consumer
+	return consumer, nil
 }
 
 func (*fakePullConsumer) Info(context.Context) (*jetstream.ConsumerInfo, error) {
@@ -64,7 +45,7 @@ func (*fakePullConsumer) Info(context.Context) (*jetstream.ConsumerInfo, error) 
 func TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain(t *testing.T) {
 	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
 	worker.cfg.MaxConcurrency = 3
-	consumer := &fakePullConsumer{started: make(chan struct{}, worker.cfg.MaxConcurrency)}
+	consumer := &fakePullConsumer{started: make(chan *fakeConsumeContext, worker.cfg.MaxConcurrency)}
 	worker.consumer = consumer
 	runErr := make(chan error, 1)
 	go func() { runErr <- worker.Run(t.Context()) }()
@@ -86,16 +67,45 @@ func TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain(t *testing.T) {
 	}
 }
 
-func TestConsumerPolicyKeepsOnlySettlementCoupledFields(t *testing.T) {
-	cfg := testWorkerConfig()
-	desired := desiredConsumerConfig(cfg)
-	if desired.AckPolicy != jetstream.AckExplicitPolicy || desired.MaxDeliver != -1 {
-		t.Fatalf("consumer settlement = ack %v, max deliver %d", desired.AckPolicy, desired.MaxDeliver)
+func TestWorkerStopsWhenNativeConsumeContextCloses(t *testing.T) {
+	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
+	worker.cfg.MaxConcurrency = 1
+	consumer := &fakePullConsumer{started: make(chan *fakeConsumeContext, 1)}
+	worker.consumer = consumer
+	runErr := make(chan error, 1)
+	go func() { runErr <- worker.Run(t.Context()) }()
+	(<-consumer.started).Stop()
+
+	select {
+	case err := <-runErr:
+		if !errors.Is(err, ErrTerminal) {
+			t.Fatalf("Run() error = %v, want ErrTerminal", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Run() did not report an unexpectedly closed native consume context")
 	}
-	if desired.MaxAckPending != cfg.MaxConcurrency || desired.FilterSubject != cfg.FilterSubject {
-		t.Fatalf("consumer bound = pending %d, filter %q", desired.MaxAckPending, desired.FilterSubject)
+}
+
+func TestWorkerClosesNativeIntakeBeforeReadinessFalls(t *testing.T) {
+	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
+	worker.cfg.MaxConcurrency = 1
+	worker.client.ready.Store(true)
+	consumer := &fakePullConsumer{started: make(chan *fakeConsumeContext, 1)}
+	worker.consumer = consumer
+	runErr := make(chan error, 1)
+	go func() { runErr <- worker.Run(t.Context()) }()
+	native := <-consumer.started
+	readyDuringDrain := make(chan bool, 1)
+	native.onDrain = func() { readyDuringDrain <- worker.client.Ready() }
+
+	worker.StartDrain()
+	if ready := <-readyDuringDrain; !ready {
+		t.Fatal("worker refused publishes before closing native intake")
 	}
-	if desired.MaxWaiting != 0 || desired.MaxRequestBatch != 0 || desired.MaxRequestMaxBytes != 0 {
-		t.Fatalf("consumer retained client pull policy: %#v", desired)
+	if worker.client.Ready() {
+		t.Fatal("worker remained ready after native intake closed")
+	}
+	if err := <-runErr; err != nil {
+		t.Fatalf("Run() error = %v", err)
 	}
 }

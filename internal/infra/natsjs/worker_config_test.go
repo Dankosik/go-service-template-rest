@@ -51,6 +51,9 @@ func TestWorkerConfigBoundsAndConsumerPolicy(t *testing.T) {
 	if want := valid.HandlerTimeout + 2*operationTimeout + settlementSchedulingSlack; desired.AckWait != want {
 		t.Fatalf("AckWait = %v, want %v", desired.AckWait, want)
 	}
+	if desired.MaxWaiting != 0 || desired.MaxRequestBatch != 0 || desired.MaxRequestMaxBytes != 0 {
+		t.Fatalf("consumer retained client pull policy: %#v", desired)
+	}
 }
 
 func TestNewWorkerRejectsBeforeBrokerMutation(t *testing.T) {

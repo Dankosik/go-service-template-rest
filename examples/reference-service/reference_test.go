@@ -19,13 +19,6 @@ import (
 
 const testWriteToken = "reference-write-token"
 
-var seedArticles = []article.Article{{
-	Slug:      "clear-owners",
-	Title:     "Keep responsibilities with their owner",
-	Summary:   "A transport maps HTTP, a use case owns behavior, and an adapter owns storage details.",
-	Published: true,
-}}
-
 // These tests live at the composition root because that is where the transport
 // adapter is wired. The feature package must not import it, so the assertions
 // that the example actually inherits the shared chain and the shared rejection
@@ -40,21 +33,39 @@ func TestReferenceServiceServesOverHTTP(t *testing.T) {
 	server := httptest.NewServer(mustNewHandler(t))
 	t.Cleanup(server.Close)
 
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/api/v1/articles/clear-owners", http.NoBody)
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, server.URL+"/api/v1/articles", strings.NewReader(
+		`{"slug":"clear-owners","title":"Clear owners","summary":"Keep behavior with its owner."}`,
+	))
 	if err != nil {
 		t.Fatalf("build request error = %v", err)
 	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+testWriteToken)
 	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatalf("POST article error = %v", err)
+	}
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusCreated)
+	}
+	if got := response.Header.Get("X-Request-ID"); got == "" {
+		t.Fatal("X-Request-ID is empty, want correlation applied by the shared chain")
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatalf("close POST response: %v", err)
+	}
+
+	request, err = http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/api/v1/articles/clear-owners", http.NoBody)
+	if err != nil {
+		t.Fatalf("build GET request error = %v", err)
+	}
+	response, err = server.Client().Do(request)
 	if err != nil {
 		t.Fatalf("GET article error = %v", err)
 	}
 	t.Cleanup(func() { _ = response.Body.Close() })
-
 	if response.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
-	}
-	if got := response.Header.Get("X-Request-ID"); got == "" {
-		t.Fatal("X-Request-ID is empty, want correlation applied by the shared chain")
+		t.Fatalf("GET status = %d, want %d", response.StatusCode, http.StatusOK)
 	}
 }
 
@@ -62,13 +73,13 @@ func TestReferenceServiceMapsAlreadyExistsOverHTTP(t *testing.T) {
 	t.Parallel()
 
 	handler := mustNewHandler(t)
-	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/articles", strings.NewReader(
-		`{"slug":"clear-owners","title":"Duplicate","summary":"Already present."}`,
-	))
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer "+testWriteToken)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
+	first := postReferenceArticle(t, handler,
+		`{"slug":"clear-owners","title":"Original","summary":"Created first."}`)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first create status = %d, want %d; body = %s", first.Code, http.StatusCreated, first.Body.String())
+	}
+	response := postReferenceArticle(t, handler,
+		`{"slug":"clear-owners","title":"Duplicate","summary":"Already present."}`)
 
 	if response.Code != http.StatusConflict || response.Header().Get("Retry-After") != "" {
 		t.Fatalf("status/Retry-After = %d/%q, want 409/empty; body = %s", response.Code, response.Header().Get("Retry-After"), response.Body.String())
@@ -116,7 +127,7 @@ func TestReferenceRouterInheritsHardenedChain(t *testing.T) {
 func TestReferenceRouterRejectsOversizedBody(t *testing.T) {
 	t.Parallel()
 
-	handler := mustBuildReferenceRouter(t, 16, memoryRepository(t))
+	handler := mustBuildReferenceRouter(t, 16, memory.New())
 
 	body := `{"slug":"a-very-long-slug-value","title":"t","summary":"s"}`
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", strings.NewReader(body))
@@ -139,18 +150,31 @@ func TestReferenceRouterRejectsOversizedBody(t *testing.T) {
 func TestReferenceRouterMapsMissingCredentialTo401(t *testing.T) {
 	t.Parallel()
 
-	handler := mustNewHandler(t)
+	for _, testCase := range []struct {
+		name  string
+		token string
+	}{
+		{name: "missing"},
+		{name: "wrong", token: "not-the-token"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", strings.NewReader(`{"slug":"s","title":"t","summary":"x"}`))
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/articles", strings.NewReader(`{"slug":"s","title":"t","summary":"x"}`))
+			request.Header.Set("Content-Type", "application/json")
+			if testCase.token != "" {
+				request.Header.Set("Authorization", "Bearer "+testCase.token)
+			}
+			response := httptest.NewRecorder()
+			mustNewHandler(t).ServeHTTP(response, request)
 
-	if response.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusUnauthorized, response.Body.String())
-	}
-	if got := response.Header().Get("WWW-Authenticate"); got != authenticateChallenge {
-		t.Fatalf("WWW-Authenticate = %q, want %q", got, authenticateChallenge)
+			if response.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusUnauthorized, response.Body.String())
+			}
+			if got := response.Header().Get("WWW-Authenticate"); got != authenticateChallenge {
+				t.Fatalf("WWW-Authenticate = %q, want %q", got, authenticateChallenge)
+			}
+		})
 	}
 }
 
@@ -171,38 +195,6 @@ func TestReferenceRouterRecoversPanicFromFeatureCode(t *testing.T) {
 	if got := response.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
 		t.Fatalf("Content-Type = %q, want a problem envelope", got)
 	}
-}
-
-// TestReferenceRouterLimitsOneCallerWithoutAffectingAnother is the property the
-// rate limiter seam exists for: global shedding cannot tell two callers apart, so
-// one client's burst costs everyone else their requests.
-func TestReferenceRouterLimitsOneCallerWithoutAffectingAnother(t *testing.T) {
-	t.Parallel()
-
-	handler := mustNewHandler(t)
-
-	limited := false
-	for range rateLimitBurst * 2 {
-		if readArticleStatus(handler, "Bearer "+testWriteToken) == http.StatusTooManyRequests {
-			limited = true
-			break
-		}
-	}
-	if !limited {
-		t.Fatalf("a caller never hit the %d/s limit after %d requests", rateLimitPerSecond, rateLimitBurst*2)
-	}
-
-	if got := readArticleStatus(handler, "Bearer some-other-caller"); got == http.StatusTooManyRequests {
-		t.Fatal("a second caller was limited by the first caller's burst")
-	}
-}
-
-func readArticleStatus(handler http.Handler, authorization string) int {
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/clear-owners", nil)
-	request.Header.Set("Authorization", authorization)
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	return response.Code
 }
 
 // TestReferenceServiceNamesTheInvalidFieldOverHTTP drives the real router so the
@@ -284,10 +276,7 @@ func TestReferenceServiceOmitsInvalidParamsForANonValidationProblem(t *testing.T
 func mustNewHandler(tb testing.TB) http.Handler {
 	tb.Helper()
 
-	handler, err := NewHandler(slog.New(slog.DiscardHandler), Options{
-		WriteToken: testWriteToken,
-		Seed:       seedArticles,
-	})
+	handler, err := NewHandler(slog.New(slog.DiscardHandler), testWriteToken)
 	if err != nil {
 		tb.Fatalf("NewHandler() error = %v", err)
 	}
@@ -296,10 +285,10 @@ func mustNewHandler(tb testing.TB) http.Handler {
 
 // mustBuildReferenceRouter composes what NewHandler composes, with the transport
 // bounds a single test needs to vary.
-func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository articleStore) http.Handler {
+func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article.Store) http.Handler {
 	tb.Helper()
 
-	service, err := article.NewService(repository, repository)
+	service, err := article.NewService(repository)
 	if err != nil {
 		tb.Fatalf("article.NewService() error = %v", err)
 	}
@@ -316,7 +305,7 @@ func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article
 
 	handler, err := httpx.Harden(log, telemetry.New(), httpx.HardenConfig{
 		MaxBodyBytes:   bodyLimit,
-		RequestTimeout: RequestTimeout,
+		RequestTimeout: requestTimeout,
 		MaxInFlight:    maxInFlight,
 		OTelServerName: "reference-service-test",
 	}, apiHandler)
@@ -324,23 +313,6 @@ func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article
 		tb.Fatalf("httpx.Harden() error = %v", err)
 	}
 	return handler
-}
-
-// articleStore is both halves of what the use case needs, which is what a real
-// adapter supplies from one type.
-type articleStore interface {
-	article.Repository
-	article.Atomically
-}
-
-func memoryRepository(tb testing.TB) *memory.Repository {
-	tb.Helper()
-
-	repository, err := memory.New(seedArticles)
-	if err != nil {
-		tb.Fatalf("memory.New() error = %v", err)
-	}
-	return repository
 }
 
 type panickingRepository struct{}
@@ -357,6 +329,17 @@ func (panickingRepository) AppendEvent(context.Context, article.Event) error {
 	panic("feature code bug")
 }
 
-func (p panickingRepository) Do(_ context.Context, fn func(article.Repository) error) error {
+func (p panickingRepository) Do(_ context.Context, fn func(article.Writer) error) error {
 	return fn(p)
+}
+
+func postReferenceArticle(tb testing.TB, handler http.Handler, body string) *httptest.ResponseRecorder {
+	tb.Helper()
+
+	request := httptest.NewRequestWithContext(tb.Context(), http.MethodPost, "/api/v1/articles", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+testWriteToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
 }

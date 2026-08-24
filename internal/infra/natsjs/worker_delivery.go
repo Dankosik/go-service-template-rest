@@ -11,7 +11,6 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
@@ -138,7 +137,7 @@ func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, resu
 		telemetry.recordHandler(ctx, current.message, outcomeCanceled, reasonShutdown, result.started)
 		return nil //nolint:nilerr // Shutdown is not a worker fault; the message is left for redelivery.
 	}
-	if domainevent.IsPermanent(result.err) {
+	if IsPermanent(result.err) {
 		telemetry.recordHandler(ctx, current.message, outcomePermanent, reasonHandlerPermanent, result.started)
 		return w.deadLetter(handlerRoot, current.source, current.metadata, current.message, deadLetterPermanent)
 	}

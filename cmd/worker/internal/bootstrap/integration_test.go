@@ -4,7 +4,9 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -47,8 +49,8 @@ func TestNATSWorkerComposition(t *testing.T) {
 			}), func(context.Context) { close(cleaned) }, nil
 		})
 	}()
-	waittest.Until(t, 10*time.Second, func() bool {
-		_, err := js.Consumer(t.Context(), "EVENTS", "composition-worker")
+	waittest.Until(t, 10*time.Second, func(ctx context.Context) bool {
+		_, err := js.Consumer(ctx, "EVENTS", "composition-worker")
 		return err == nil
 	}, "worker consumer admission")
 	if grace := <-loadedGrace; grace != 45*time.Second {
@@ -66,7 +68,7 @@ func TestNATSWorkerComposition(t *testing.T) {
 	}
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
-		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "composition.test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"worker composition"`),
 	}); err != nil {
 		t.Fatalf("publish worker fixture: %v", err)
@@ -126,13 +128,13 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 			}), func(context.Context) { cleaned <- struct{}{} }, nil
 		})
 	}()
-	waittest.Until(t, 10*time.Second, func() bool {
+	waittest.Until(t, 10*time.Second, func(ctx context.Context) bool {
 		select {
 		case err := <-runErr:
 			t.Fatalf("forced-cleanup worker stopped before admission: %v", err)
 		default:
 		}
-		_, err := js.Consumer(t.Context(), "EVENTS", "forced-cleanup-worker")
+		_, err := js.Consumer(ctx, "EVENTS", "forced-cleanup-worker")
 		return err == nil
 	}, "forced-cleanup worker admission")
 
@@ -147,12 +149,12 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	}
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
-		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "composition.forced-cleanup", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"forced cleanup"`),
 	}); err != nil {
 		t.Fatalf("publish forced-cleanup fixture: %v", err)
 	}
-	waittest.Receive(t, entered, 10*time.Second, "forced-cleanup handler entry")
+	waittest.ReceiveSignal(t, entered, 10*time.Second, "forced-cleanup handler entry")
 	cancelRun()
 	if err := waittest.Receive(t, runErr, 5*time.Second, "forced worker shutdown"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("forced worker shutdown error = %v, want deadline exceeded", err)
@@ -163,7 +165,7 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	default:
 	}
 	close(release)
-	waittest.Receive(t, exited, 5*time.Second, "forced handler exit")
+	waittest.ReceiveSignal(t, exited, 5*time.Second, "forced handler exit")
 }
 
 func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
@@ -180,8 +182,8 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 			}), nil, nil
 		})
 	}()
-	waittest.Until(t, 10*time.Second, func() bool {
-		_, err := js.Consumer(t.Context(), "EVENTS", "panic-composition-worker")
+	waittest.Until(t, 10*time.Second, func(ctx context.Context) bool {
+		_, err := js.Consumer(ctx, "EVENTS", "panic-composition-worker")
 		return err == nil
 	}, "panic worker consumer admission")
 	producerCfg := workerTestProducerConfig()
@@ -195,7 +197,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	}
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
-		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "composition.panic", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"panic"`),
 	}); err != nil {
 		t.Fatalf("publish panic fixture: %v", err)
@@ -247,11 +249,16 @@ func setWorkerEnvironment(t *testing.T, url, consumer, diagnosticsAddress string
 func waitWorkerHTTPStatus(t *testing.T, address, path string, want int) {
 	t.Helper()
 	client := &http.Client{Timeout: 500 * time.Millisecond}
-	waittest.Until(t, 5*time.Second, func() bool {
-		response, err := client.Get("http://" + address + path)
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+path, http.NoBody)
 		if err != nil {
 			return false
 		}
+		response, err := client.Do(request)
+		if err != nil {
+			return false
+		}
+		_, _ = io.Copy(io.Discard, response.Body)
 		_ = response.Body.Close()
 		return response.StatusCode == want
 	}, path)

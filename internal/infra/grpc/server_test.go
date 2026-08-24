@@ -2,9 +2,8 @@
 // admission and drain, does Shutdown give up on a handler that ignores
 // cancellation, and does each boundary trust exactly the errors it should?
 //
-// The trust rules are proven twice on purpose — as units in interceptors_test.go
-// and here through a real server, because only the second shows what a caller
-// actually receives.
+// The trust rules are proven here through a real server, because only that path
+// shows what a caller actually receives.
 
 package grpcx
 
@@ -228,6 +227,117 @@ func TestServerShutdownForcesBlockedRPCOnCanceledBudget(t *testing.T) {
 	}
 	if err := server.Close(); err != nil {
 		t.Fatalf("repeated Close() error = %v", err)
+	}
+}
+
+func TestServerCloseCancelsRPCBeforeReturning(t *testing.T) {
+	observed := make(chan context.Context, 1)
+	register := func(registrar grpc.ServiceRegistrar) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+				observed <- ctx
+				<-ctx.Done()
+				return nil, ctx.Err()
+			})
+	}
+	server, connection := startTestServer(t, testServerConfig(), register)
+
+	callDone := make(chan error, 1)
+	go func() {
+		callDone <- connection.Invoke(
+			t.Context(),
+			testUnaryFullMethod,
+			&emptypb.Empty{},
+			&emptypb.Empty{},
+		)
+	}()
+	rpcCtx := waittest.Receive(t, observed, time.Second, "handler context")
+
+	if err := server.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if !errors.Is(rpcCtx.Err(), context.Canceled) {
+		t.Fatalf("handler context after Close() = %v, want context.Canceled", rpcCtx.Err())
+	}
+	if err := waittest.Receive(t, callDone, time.Second, "RPC after Close"); err == nil {
+		t.Fatal("RPC succeeded after Close")
+	}
+}
+
+func TestServerShutdownDrainsAdmittedRPC(t *testing.T) {
+	cfg := testServerConfig()
+	cfg.maxConcurrentRPCs = 1
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	releaseHandler := sync.OnceFunc(func() { close(release) })
+	defer releaseHandler()
+	register := func(registrar grpc.ServiceRegistrar) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+				close(entered)
+				<-release
+				return &emptypb.Empty{}, nil
+			})
+	}
+	server, connection := startTestServer(t, cfg, register)
+
+	callDone := make(chan error, 1)
+	go func() {
+		callDone <- connection.Invoke(
+			t.Context(),
+			testUnaryFullMethod,
+			&emptypb.Empty{},
+			&emptypb.Empty{},
+		)
+	}()
+	waittest.ReceiveSignal(t, entered, time.Second, "admitted RPC")
+	shutdownDone := make(chan error, 1)
+	go func() { shutdownDone <- server.Shutdown(t.Context()) }()
+
+	var newCode codes.Code
+	waittest.UntilFunc(t, time.Second, func(waitCtx context.Context) bool {
+		err := connection.Invoke(
+			waitCtx,
+			testUnaryFullMethod,
+			&emptypb.Empty{},
+			&emptypb.Empty{},
+		)
+		newCode = status.Code(err)
+		return newCode == codes.Unavailable
+	}, func() string { return "new RPC code to become Unavailable during drain: " + newCode.String() })
+	select {
+	case err := <-shutdownDone:
+		t.Fatalf("Shutdown() returned before admitted RPC completed: %v", err)
+	default:
+	}
+
+	releaseHandler()
+	if err := waittest.Receive(t, callDone, time.Second, "admitted RPC response"); err != nil {
+		t.Fatalf("admitted RPC error = %v, want graceful success", err)
+	}
+	if err := waittest.Receive(t, shutdownDone, time.Second, "graceful shutdown"); err != nil {
+		t.Fatalf("Shutdown() error = %v", err)
+	}
+}
+
+func TestServerShutdownEndsHealthWatch(t *testing.T) {
+	server, connection := startTestServer(t, testServerConfig(), nil)
+	server.SetServing(true)
+	watch, err := healthgrpc.NewHealthClient(connection).Watch(
+		t.Context(),
+		&healthgrpc.HealthCheckRequest{},
+	)
+	if err != nil {
+		t.Fatalf("Health.Watch() error = %v", err)
+	}
+	if _, err := watch.Recv(); err != nil {
+		t.Fatalf("Health.Watch().Recv() initial error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown() with active health watch = %v", err)
 	}
 }
 

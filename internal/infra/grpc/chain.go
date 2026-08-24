@@ -74,6 +74,7 @@ func unaryChain(
 
 func streamChain(
 	log *slog.Logger,
+	healthDrain healthDrain,
 	admission admissionPolicy,
 	supplied []grpc.StreamServerInterceptor,
 	validator protovalidate.Validator,
@@ -81,6 +82,7 @@ func streamChain(
 ) []grpc.StreamServerInterceptor {
 	chain := []grpc.StreamServerInterceptor{
 		asStreamInterceptor(recoveryAround(log)),
+		asStreamInterceptor(healthDrain.around),
 		asStreamInterceptor(admission.around),
 		asStreamInterceptor(policyErrorBoundary(log)),
 	}

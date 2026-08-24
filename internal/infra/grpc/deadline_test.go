@@ -2,10 +2,9 @@
 // cancellation get cut at the configured bound, does a caller's own earlier
 // deadline still win, and does the admission slot the RPC held come back?
 //
-// interceptors_test.go drives deadlineAround directly, so a failure there names
-// the rule that broke. These cases need the whole chain, because slot release
-// and the replacement context a streaming handler observes are only visible once
-// it has run.
+// interceptors_test.go proves supplied policies see the bound. These cases need
+// the whole chain, because slot release and the replacement context a streaming
+// handler observes are only visible once it has run.
 
 package grpcx
 
@@ -21,8 +20,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// The streaming method this file drives. Each file registering a stream names
-// its own, for the reason correlation_service_test.go records.
+// The streaming method this file alone drives.
 const deadlineStreamFullMethod = "/grpcx.test.DeadlineService/Wait"
 
 func TestUnaryDeadlineCutsTheHandlerAndReleasesItsSlot(t *testing.T) {

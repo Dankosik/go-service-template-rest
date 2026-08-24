@@ -24,12 +24,9 @@ make integration-init \
 `TARGET` is required for HTTP and rejected for gRPC. Unknown command-line
 variables are rejected. The worktree must be clean and `template.lock` must
 already record the retained transport and, for OAuth, `outbound_auth`.
-
-The first `AUTH=oauth2-client-credentials` invocation that would retire the
-singleton `outbound_auth` configuration fails if repository-root `.env` exists.
-The command observes only path presence. Move or preserve that file yourself,
-run the initializer, then map values to the named `integrations.<name>.oauth.*`
-inputs.
+Retaining that profile keeps only the reusable credential package; each
+initializer invocation creates its named `integrations.<name>.oauth.*` tuple
+directly. Repository-root `.env` is never an initializer input or precondition.
 
 A same-identity repeat with an unchanged contract is a no-op. A committed
 contract change refreshes generated-only bytes. Manual adapter, config,

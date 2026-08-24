@@ -203,12 +203,6 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
 	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
 	// profile:database-postgres:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	clientID := " client:id "
-	clientSecret := " client secret "
-	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_ID", clientID)
-	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_SECRET", clientSecret)
-	// profile:outbound-auth-oauth2-client-credentials:end
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
@@ -222,14 +216,6 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	if cfg.Observability.OTel.Exporter.OTLPHeaders != headers {
 		t.Fatalf("OTLPHeaders = %q, want exact env value %q", cfg.Observability.OTel.Exporter.OTLPHeaders, headers)
 	}
-	// profile:outbound-auth-oauth2-client-credentials:start
-	if cfg.OutboundAuth.ClientID != clientID {
-		t.Fatalf("OutboundAuth.ClientID = %q, want exact env value %q", cfg.OutboundAuth.ClientID, clientID)
-	}
-	if cfg.OutboundAuth.ClientSecret != clientSecret {
-		t.Fatalf("OutboundAuth.ClientSecret = %q, want exact env value %q", cfg.OutboundAuth.ClientSecret, clientSecret)
-	}
-	// profile:outbound-auth-oauth2-client-credentials:end
 }
 
 func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
@@ -282,9 +268,6 @@ func TestEnvExampleIsFailClosedUntilObjectStorageIsConfigured(t *testing.T) {
 	for key, value := range readEnvExample(t, filepath.Join("..", "..", "env", ".env.example")) {
 		t.Setenv(key, value)
 	}
-	// profile:outbound-auth-oauth2-client-credentials:start
-	setOutboundAuthTestEnv(t)
-	// profile:outbound-auth-oauth2-client-credentials:end
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if !errors.Is(err, ErrValidate) {

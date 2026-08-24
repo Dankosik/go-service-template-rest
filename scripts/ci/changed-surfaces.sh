@@ -79,7 +79,7 @@ classify() {
 			.github/dependabot.yml) mark dependency_automation ;;
 		esac
 		case "${file}" in
-			AGENTS.md|CLAUDE.md|Grok.md|QWEN.md|.agents/*|.claude/*|.codex/*|.cursor/*|.grok/*|.opencode/*|.qwen/*|docs/agent-harness/*|docs/spec-first-workflow/*|docs/prompt-*|docs/skill-authoring.md|docs/validation/*|scripts/agent-roles-sync.sh|scripts/harness-skills-sync.sh|scripts/codex-agents-sync.sh|scripts/template-sync.sh|scripts/ci/template-owned-purity-check.sh)
+			AGENTS.md|CLAUDE.md|Grok.md|QWEN.md|.agents/*|.claude/*|.codex/*|.cursor/*|.grok/*|.opencode/*|.qwen/*|docs/agent-harness/*|docs/spec-first-workflow/*|docs/prompt-*|docs/skill-authoring.md|docs/validation/*|scripts/agent-roles-sync.sh|scripts/harness-skills-sync.sh|scripts/codex-agents-sync.sh|scripts/template-sync.sh|scripts/ci/template-owned-purity-check.sh|scripts/ci/template-sync-behavior-check.sh)
 				mark agent_instructions
 				;;
 		esac
@@ -186,6 +186,9 @@ self_test() {
 	for name in "${names[@]}"; do
 		grep -qx "${name}=true" <<<"${output}"
 	done
+	output="$(printf '%s\n' scripts/ci/template-sync-behavior-check.sh | classify)"
+	grep -qx 'agent_instructions=true' <<<"${output}"
+	grep -qx 'shell=true' <<<"${output}"
 	output="$(bash "$0" --release)"
 	for name in "${names[@]}"; do
 		grep -qx "${name}=true" <<<"${output}"

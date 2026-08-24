@@ -246,7 +246,7 @@ func TestPostgresHTTPIdempotencySchemaReplacementBlocksConcurrentWriter(t *testi
 		result, runErr := postgresmigrate.MigrateUp(ctx, options)
 		migrationResult <- migrationRun{result: result, err: runErr}
 	}()
-	waitForMigrationQuery(t, ctx, pool, "LOCK TABLE postgres_http_idempotency IN ACCESS EXCLUSIVE MODE")
+	waitForMigrationQuery(t, pool, "LOCK TABLE postgres_http_idempotency IN ACCESS EXCLUSIVE MODE")
 
 	writerResult := make(chan error, 1)
 	go func() {
@@ -261,9 +261,9 @@ func TestPostgresHTTPIdempotencySchemaReplacementBlocksConcurrentWriter(t *testi
 			)`)
 		writerResult <- writerErr
 	}()
-	waittest.Until(t, migrationQueryWait, func() bool {
+	waittest.Until(t, migrationQueryWait, func(waitCtx context.Context) bool {
 		var waiting int
-		err := pool.QueryRow(ctx, `
+		err := pool.QueryRow(waitCtx, `
 			SELECT count(*)
 			FROM pg_locks
 			WHERE relation = 'postgres_http_idempotency'::regclass
@@ -486,11 +486,11 @@ func TestPostgresMigrateSessionLockSerializesConcurrentRunners(t *testing.T) {
 	}
 	firstResult := make(chan migrationRun, 1)
 	go run(firstResult)
-	waitForMigrationQuery(t, ctx, pool, "ALTER TABLE migration_serialization_gate")
+	waitForMigrationQuery(t, pool, "ALTER TABLE migration_serialization_gate")
 
 	secondResult := make(chan migrationRun, 1)
 	go run(secondResult)
-	waitForMigrationConnections(t, ctx, pool, 2)
+	waitForMigrationConnections(t, pool, 2)
 
 	if err := blocker.Rollback(ctx); err != nil {
 		t.Fatalf("release serialization gate: %v", err)
@@ -571,7 +571,7 @@ func TestPostgresMigrateCancellationStopsLaterMigration(t *testing.T) {
 	}()
 
 	pool := openVerificationPool(t, outer, dsn)
-	waitForMigrationQuery(t, outer, pool, "pg_sleep")
+	waitForMigrationQuery(t, pool, "pg_sleep")
 	cancelRun()
 
 	result := <-resultCh
@@ -662,16 +662,12 @@ func columnExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, table, 
 
 func waitForMigrationQuery(
 	t *testing.T,
-	ctx context.Context,
 	pool *pgxpool.Pool,
 	queryFragment string,
 ) {
 	t.Helper()
 
-	// ctx still bounds the observation itself: when the caller's deadline passes
-	// first, the query below fails and names that, rather than this wait running
-	// on past the test that owns it.
-	waittest.Until(t, migrationQueryWait, func() bool {
+	waittest.Until(t, migrationQueryWait, func(ctx context.Context) bool {
 		var count int
 		err := pool.QueryRow(
 			ctx,
@@ -692,13 +688,12 @@ func waitForMigrationQuery(
 
 func waitForMigrationConnections(
 	t *testing.T,
-	ctx context.Context,
 	pool *pgxpool.Pool,
 	want int,
 ) {
 	t.Helper()
 
-	waittest.Until(t, migrationQueryWait, func() bool {
+	waittest.Until(t, migrationQueryWait, func(ctx context.Context) bool {
 		var count int
 		err := pool.QueryRow(
 			ctx,
@@ -714,9 +709,8 @@ func waitForMigrationConnections(
 	}, fmt.Sprintf("at least %d migration connections", want))
 }
 
-// migrationQueryWait bounds the wait above. It sits under the 20s budget each
-// caller gives its context, so a broken wait fails here with what it was looking
-// for rather than as an expired context somewhere further along.
+// migrationQueryWait is passed through the predicates to their database calls,
+// so a broken wait fails here with what it was looking for.
 const migrationQueryWait = 10 * time.Second
 
 func TestPostgresMigrateFailureDoesNotCreateDirtyState(t *testing.T) {

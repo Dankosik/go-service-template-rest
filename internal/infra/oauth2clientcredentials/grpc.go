@@ -8,26 +8,27 @@ import (
 	"strings"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 )
 
 type grpcCredential struct {
-	client *Client
+	source oauth2.TokenSource
 }
 
 func (c grpcCredential) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
-	if ctx == nil || c.client == nil {
+	if ctx == nil || c.source == nil {
 		return nil, ErrInvalidConfiguration
 	}
 	requestInfo, _ := credentials.RequestInfoFromContext(ctx)
 	if err := credentials.CheckSecurityLevel(requestInfo.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
 		return nil, ErrUnavailable
 	}
-	token, err := c.client.resolve(ctx)
+	token, err := c.source.Token()
 	if err != nil {
-		return nil, err
+		return nil, ErrUnavailable
 	}
 	return map[string]string{"authorization": token.Type() + " " + token.AccessToken}, nil
 }
@@ -46,12 +47,12 @@ type GRPCClient struct {
 }
 
 // GRPC builds one authenticated connection without provider or resource I/O.
-func (c *Client) GRPC(cfg grpcclient.Config, options grpcclient.Options) (*GRPCClient, error) {
+func (c *Client) GRPC(target string, options grpcclient.Options) (*GRPCClient, error) {
 	if !c.available() || options.PerRPCCredentials != nil {
 		return nil, ErrInvalidConfiguration
 	}
-	options.PerRPCCredentials = grpcCredential{client: c}
-	connection, err := grpcclient.New(cfg, options)
+	options.PerRPCCredentials = grpcCredential{source: clientTokenSource{client: c}}
+	connection, err := grpcclient.New(target, options)
 	if err != nil {
 		return nil, fmt.Errorf("build authenticated gRPC client: %w", err)
 	}

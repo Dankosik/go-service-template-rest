@@ -14,7 +14,8 @@ tokens, or customer data.
 
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
 `internal/infra/oauth2clientcredentials` owns one process-local OAuth
-client-credentials factory for one fixed dependency. A concrete provider
+client-credentials factory for one fixed dependency while `x/oauth2` owns its
+token cache and refresh synchronization. A concrete provider
 adapter constructs and closes the owner, then gives feature code only its
 generated client over an authenticated fixed-target HTTP client or authenticated
 gRPC connection. Token sources, tokens, provider bodies, and raw retrieval

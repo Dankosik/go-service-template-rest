@@ -266,15 +266,6 @@ func sentinelConfigSourceValues() map[string]any {
 		// profile:authn-oidc-introspection:end
 		// profile:authn-bearer:end
 
-		// profile:outbound-auth-oauth2-client-credentials:start
-		"outbound_auth.token_url":     "https://auth.snapshot.example/oauth/token",
-		"outbound_auth.client_id":     " snapshot-client:id ",
-		"outbound_auth.client_secret": " snapshot-client-secret ",
-		"outbound_auth.scopes":        "snapshot.read snapshot.write",
-		"outbound_auth.resource":      "https://resource.snapshot.example",
-		"outbound_auth.audience":      "",
-		// profile:outbound-auth-oauth2-client-credentials:end
-
 		// profile:grpc:start
 		"grpc.server.enabled":            true,
 		"grpc.server.addr":               ":19091",
@@ -387,15 +378,6 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"authn.introspection_client_secret":       " snapshot-introspection-secret ",
 		// profile:authn-oidc-introspection:end
 		// profile:authn-bearer:end
-
-		// profile:outbound-auth-oauth2-client-credentials:start
-		"outbound_auth.token_url":     "https://auth.snapshot.example/oauth/token",
-		"outbound_auth.client_id":     " snapshot-client:id ",
-		"outbound_auth.client_secret": " snapshot-client-secret ",
-		"outbound_auth.scopes":        "snapshot.read snapshot.write",
-		"outbound_auth.resource":      "https://resource.snapshot.example",
-		"outbound_auth.audience":      "",
-		// profile:outbound-auth-oauth2-client-credentials:end
 
 		// profile:grpc:start
 		"grpc.server.enabled":            true,

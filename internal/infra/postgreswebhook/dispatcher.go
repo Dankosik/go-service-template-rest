@@ -46,26 +46,10 @@ type Dispatcher struct {
 	endpoints *EndpointManifest
 }
 
-type preparedDelivery struct {
-	args        deliveryArgs
-	scheduledAt time.Time
-}
-
 type Prepared struct {
 	client     *river.Client[pgx.Tx]
-	deliveries []preparedDelivery
+	deliveries []deliveryArgs
 }
-
-type AcceptanceStatus string
-
-const (
-	AcceptanceNew         AcceptanceStatus = "new"
-	AcceptanceExisting    AcceptanceStatus = "existing"
-	AcceptanceAccepted    AcceptanceStatus = "accepted"
-	AcceptanceNotAccepted AcceptanceStatus = "not_accepted"
-	AcceptanceConflict    AcceptanceStatus = "conflict"
-	AcceptanceUnknown     AcceptanceStatus = "unknown"
-)
 
 type deliveryArgs struct {
 	AcceptanceID            string          `json:"acceptance_id" river:"unique"`
@@ -125,9 +109,9 @@ func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, err
 		return Prepared{}, fmt.Errorf("%w: encode event: %w", ErrConfig, err)
 	}
 
-	resolved := make([]Endpoint, len(ordered))
+	resolved := make([]endpoint, len(ordered))
 	for i, receiver := range ordered {
-		endpoint, err := d.endpoints.Resolve(event.OwnerScope, string(receiver))
+		endpoint, err := d.endpoints.resolve(event.OwnerScope, string(receiver))
 		if err != nil {
 			return Prepared{}, err
 		}
@@ -135,7 +119,7 @@ func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, err
 	}
 	fanoutFingerprint := fingerprintFanout(event.OwnerScope, event.ID, body, resolved)
 	eventAnchor := deriveStableID("whe_", event.OwnerScope, event.ID)
-	prepared := Prepared{client: d.client, deliveries: make([]preparedDelivery, 0, len(ordered))}
+	prepared := Prepared{client: d.client, deliveries: make([]deliveryArgs, 0, len(ordered))}
 	for i, receiver := range ordered {
 		endpoint := resolved[i]
 		deliveryID := deriveJobID(event.OwnerScope, event.ID, string(receiver), endpoint.Generation)
@@ -153,7 +137,7 @@ func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, err
 		if err := args.validate(); err != nil {
 			return Prepared{}, fmt.Errorf("prepare webhook delivery %s: %w", args.DeliveryID, err)
 		}
-		prepared.deliveries = append(prepared.deliveries, preparedDelivery{args: args, scheduledAt: event.OccurredAt.UTC()})
+		prepared.deliveries = append(prepared.deliveries, args)
 	}
 	return prepared, nil
 }
@@ -161,86 +145,85 @@ func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, err
 func (p Prepared) DeliveryIDs() []string {
 	ids := make([]string, len(p.deliveries))
 	for i := range p.deliveries {
-		ids[i] = p.deliveries[i].args.DeliveryID
+		ids[i] = p.deliveries[i].DeliveryID
 	}
 	return ids
 }
 
 // Stage must be the final operation in the caller-owned transaction. The
-// caller rolls the transaction back when Stage returns an error.
-func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (AcceptanceStatus, error) {
+// caller rolls the transaction back when Stage returns an error. The boolean
+// reports whether this call inserted the fan-out rather than finding it.
+func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (bool, error) {
 	if p.client == nil || tx == nil || len(p.deliveries) == 0 {
-		return AcceptanceUnknown, fmt.Errorf("%w: prepared deliveries and transaction are required", ErrConfig)
+		return false, fmt.Errorf("%w: prepared deliveries and transaction are required", ErrConfig)
 	}
 	newCount := 0
 	existingCount := 0
 	for _, delivery := range p.deliveries {
-		result, err := p.client.InsertTx(ctx, tx, delivery.args, deliveryInsertOpts(delivery.scheduledAt))
+		result, err := p.client.InsertTx(ctx, tx, delivery, deliveryInsertOpts())
 		if err != nil {
-			return AcceptanceUnknown, fmt.Errorf("stage webhook delivery: %w", err)
+			return false, fmt.Errorf("stage webhook delivery: %w", err)
 		}
 		if !result.UniqueSkippedAsDuplicate {
 			newCount++
 			continue
 		}
-		if result.Job == nil || !sameDelivery(result.Job.EncodedArgs, delivery.args) {
-			return AcceptanceConflict, ErrConflict
+		if result.Job == nil || !sameDelivery(result.Job.EncodedArgs, delivery) {
+			return false, ErrConflict
 		}
 		existingCount++
 	}
 	if newCount != 0 && existingCount != 0 {
-		return AcceptanceConflict, fmt.Errorf("%w: partial fanout replay", ErrConflict)
+		return false, fmt.Errorf("%w: partial fanout replay", ErrConflict)
 	}
-	if existingCount != 0 {
-		return AcceptanceExisting, nil
-	}
-	return AcceptanceNew, nil
+	return newCount != 0, nil
 }
 
-func (p Prepared) Resolve(ctx context.Context, pool *pgxpool.Pool) (AcceptanceStatus, error) {
+// ResolveCurrent reconciles an immediate unknown commit against current River
+// rows. The caller's business transaction owns replay after River retention.
+func (p Prepared) ResolveCurrent(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
 	if pool == nil || len(p.deliveries) == 0 {
-		return AcceptanceUnknown, fmt.Errorf("%w: prepared deliveries and pool are required", ErrConfig)
+		return false, fmt.Errorf("%w: prepared deliveries and pool are required", ErrConfig)
 	}
 	found := make(map[string]deliveryArgs, len(p.deliveries))
 	rows, err := pool.Query(ctx, `SELECT args FROM river_job WHERE kind = $1 AND args->>'delivery_id' = ANY($2)`, deliveryKind, p.DeliveryIDs())
 	if err != nil {
-		return AcceptanceUnknown, fmt.Errorf("resolve webhook acceptance: %w", err)
+		return false, fmt.Errorf("resolve webhook acceptance: %w", err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var encoded []byte
 		if err := rows.Scan(&encoded); err != nil {
-			return AcceptanceUnknown, fmt.Errorf("resolve webhook acceptance: %w", err)
+			return false, fmt.Errorf("resolve webhook acceptance: %w", err)
 		}
 		var args deliveryArgs
 		if err := json.Unmarshal(encoded, &args); err != nil {
-			return AcceptanceConflict, fmt.Errorf("%w: stored webhook arguments are invalid", ErrConflict)
+			return false, fmt.Errorf("%w: stored webhook arguments are invalid", ErrConflict)
 		}
 		found[args.DeliveryID] = args
 	}
 	if err := rows.Err(); err != nil {
-		return AcceptanceUnknown, fmt.Errorf("resolve webhook acceptance: %w", err)
+		return false, fmt.Errorf("resolve webhook acceptance: %w", err)
 	}
 	if len(found) == 0 {
-		return AcceptanceNotAccepted, nil
+		return false, nil
 	}
 	if len(found) != len(p.deliveries) {
-		return AcceptanceConflict, fmt.Errorf("%w: fanout readback is not atomic", ErrConflict)
+		return false, fmt.Errorf("%w: fanout readback is not atomic", ErrConflict)
 	}
 	for _, delivery := range p.deliveries {
-		stored, ok := found[delivery.args.DeliveryID]
-		if !ok || !equalDelivery(stored, delivery.args) {
-			return AcceptanceConflict, ErrConflict
+		stored, ok := found[delivery.DeliveryID]
+		if !ok || !equalDelivery(stored, delivery) {
+			return false, ErrConflict
 		}
 	}
-	return AcceptanceAccepted, nil
+	return true, nil
 }
 
-func deliveryInsertOpts(scheduledAt time.Time) *river.InsertOpts {
+func deliveryInsertOpts() *river.InsertOpts {
 	states := append(rivertype.UniqueOptsByStateDefault(), rivertype.JobStateCancelled, rivertype.JobStateDiscarded)
 	return &river.InsertOpts{
 		MaxAttempts: maxAttempts,
-		ScheduledAt: scheduledAt,
 		UniqueOpts:  river.UniqueOpts{ByArgs: true, ByState: states},
 	}
 }
@@ -305,7 +288,7 @@ func deriveStableID(prefix string, values ...string) string {
 	return prefix + hex.EncodeToString(hash.Sum(nil))
 }
 
-func fingerprintFanout(owner, eventID string, body []byte, endpoints []Endpoint) string {
+func fingerprintFanout(owner, eventID string, body []byte, endpoints []endpoint) string {
 	hash := sha256.New()
 	for _, value := range []string{owner, eventID} {
 		_, _ = hash.Write([]byte(value))

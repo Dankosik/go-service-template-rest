@@ -293,7 +293,8 @@ strip_unselected_harness() {
 	local harness="$1"
 
 	rm -f -- \
-		scripts/ci/template-owned-purity-check.sh
+		scripts/ci/template-owned-purity-check.sh \
+		scripts/ci/template-sync-behavior-check.sh
 
 	if [[ "${harness}" == "all" ]]; then
 		return 0
@@ -567,8 +568,8 @@ if [[ "${outbox}" == "postgres" && "${messaging}" != "nats-jetstream" ]]; then
 fi
 
 # The reference example is upstream teaching material. Keeping it would make a
-# generated service own five extra packages, a second OpenAPI contract, and a
-# second main() that it must lint, test, and regenerate forever.
+# generated service own extra packages and a second OpenAPI contract that it
+# must lint, test, and regenerate forever.
 reference_example="${REFERENCE_EXAMPLE:-remove}"
 case "${reference_example}" in
 remove | keep) ;;
@@ -747,6 +748,8 @@ if [[ "${source_checkout}" != true ]]; then
 		remove_outbox_migrations
 		strip_profile outbox-postgres remove
 	else
+		# Existing adopters retain 000001 for rollback; a new service starts on River.
+		rm -f -- migrations/000001_postgres_outbox.sql
 		strip_profile outbox-postgres keep
 	fi
 
@@ -797,8 +800,7 @@ if [[ "${source_checkout}" != true ]]; then
 				migrations/000005_postgres_webhooks.sql \
 				migrations/000006_postgres_webhook_reference_repairs.sql \
 				migrations/000007_postgres_webhooks_retire.sql \
-				test/postgres_webhook_*_test.go \
-				test/webhook_network_integration_test.go
+				test/postgres_webhook_*_test.go
 			if [[ "${inbound_webhooks}" == "none" ]]; then
 				rm -f -- \
 					cmd/jobs-worker/builder_webhooks.go \
@@ -1020,7 +1022,6 @@ fi
 		rm -f -- \
 			buf.yaml \
 			buf.gen.yaml \
-			examples/reference-service/grpc_failure_mapping_contract_test.go \
 			cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls.go \

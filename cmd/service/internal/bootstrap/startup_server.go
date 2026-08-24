@@ -49,6 +49,7 @@ type serveRuntimeArgs struct {
 	readinessCheck     func(context.Context) error
 	backgroundFailures <-chan error
 	admission          *startupAdmissionController
+	onReady            func()
 	shutdownDelay      time.Duration
 	// profile:messaging-nats-jetstream:start
 	preDrain func()

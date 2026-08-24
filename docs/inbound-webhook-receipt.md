@@ -17,6 +17,10 @@ The service process selects both leaves:
 The jobs worker selects only `inbound_webhooks.endpoints` and rejects
 `inbound_webhooks.static_secrets` when present.
 
+If a pending receipt names an endpoint absent from the worker snapshot, the job
+is snoozed without consuming its attempt budget. Processing resumes after the
+worker restarts with the complete binding set.
+
 ## Mixed-version rollout
 
 Forward: additive migration; stop and drain every old jobs worker; start only

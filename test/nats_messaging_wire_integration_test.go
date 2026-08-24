@@ -95,12 +95,12 @@ func TestNATSOversizedHeadersAreDeadLettered(t *testing.T) {
 		t.Fatalf("publish oversized headers: %v", err)
 	}
 	var deadLetter *jetstream.RawStreamMsg
-	waittest.Until(t, 5*time.Second, func() bool {
-		stream, streamErr := f.js.Stream(t.Context(), deadLetterStream)
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		stream, streamErr := f.js.Stream(ctx, deadLetterStream)
 		if streamErr != nil {
 			return false
 		}
-		deadLetter, streamErr = stream.GetLastMsgForSubject(t.Context(), deadLetterSubject)
+		deadLetter, streamErr = stream.GetLastMsgForSubject(ctx, deadLetterSubject)
 		return streamErr == nil
 	}, "oversized headers dead-letter transfer")
 	if handlerCalls.Load() != 0 {
@@ -175,7 +175,7 @@ func TestNATSTraceCorrelation(t *testing.T) {
 		t.Fatalf("handler correlation = %+v, want trace %s and no baggage", got, parent.SpanContext().TraceID())
 	}
 	parent.End()
-	waittest.Until(t, 5*time.Second, func() bool { return len(recorder.Ended()) >= 3 }, "producer, consumer, and parent spans")
+	waittest.Until(t, 5*time.Second, func(context.Context) bool { return len(recorder.Ended()) >= 3 }, "producer, consumer, and parent spans")
 	spansByName := make(map[string]sdktrace.ReadOnlySpan)
 	for _, span := range recorder.Ended() {
 		if _, duplicate := spansByName[span.Name()]; duplicate {
