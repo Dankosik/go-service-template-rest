@@ -104,16 +104,21 @@ func TestNATSHandlerPanicIsSupervised(t *testing.T) {
 	if _, err := client.Producer().Publish(t.Context(), testEvent("worker publication")); !errors.Is(err, natsjs.ErrDraining) {
 		t.Fatalf("worker Publish(after terminal failure) error = %v, want ErrDraining", err)
 	}
+	consumer, err := f.js.Consumer(t.Context(), sourceStream, "panic-worker")
+	if err != nil {
+		t.Fatalf("lookup panic consumer: %v", err)
+	}
+	info, err := consumer.Info(t.Context())
+	if err != nil {
+		t.Fatalf("read panic consumer before external publication: %v", err)
+	}
+	ownedBefore := info.NumPending + uint64(info.NumAckPending)
 	if _, err := producer.Producer().Publish(t.Context(), testEvent("external publication")); err != nil {
 		t.Fatalf("publish external post-failure fixture: %v", err)
 	}
 	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
-		consumer, lookupErr := f.js.Consumer(ctx, sourceStream, "panic-worker")
-		if lookupErr != nil {
-			return false
-		}
 		info, infoErr := consumer.Info(ctx)
-		return infoErr == nil && (info.NumPending >= 1 || info.NumAckPending >= 1)
+		return infoErr == nil && info.NumPending+uint64(info.NumAckPending) > ownedBefore
 	}, "post-failure message to remain broker-owned")
 	select {
 	case payload := <-startedAfterFailure:
@@ -126,23 +131,19 @@ func TestNATSHandlerPanicIsSupervised(t *testing.T) {
 	default:
 	}
 	close(release)
-	err := waittest.Receive(t, errCh, 5*time.Second, "handler panic reaching worker supervision")
+	err = waittest.Receive(t, errCh, 5*time.Second, "handler panic reaching worker supervision")
 	if !errors.Is(err, natsjs.ErrTerminal) || strings.Contains(err.Error(), "feature panic canary") {
 		t.Fatalf("worker panic supervision error = %v, want sanitized ErrTerminal", err)
 	}
 	if client.Ready() {
 		t.Fatal("client remained ready after handler panic")
 	}
-	consumer, err := f.js.Consumer(t.Context(), sourceStream, "panic-worker")
-	if err != nil {
-		t.Fatalf("lookup panic consumer: %v", err)
-	}
-	info, err := consumer.Info(t.Context())
+	info, err = consumer.Info(t.Context())
 	if err != nil {
 		t.Fatalf("read panic consumer: %v", err)
 	}
-	if info.NumAckPending != 1 {
-		t.Fatalf("panic consumer ack pending = %d, want source retained", info.NumAckPending)
+	if info.NumAckPending < 1 || info.NumPending+uint64(info.NumAckPending) < 2 {
+		t.Fatalf("panic consumer state = ack_pending:%d pending:%d, want panic source and external message retained", info.NumAckPending, info.NumPending)
 	}
 }
 
