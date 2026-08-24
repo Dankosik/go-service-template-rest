@@ -10,7 +10,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
-ARG WORKTREE_FINGERPRINT=unknown
 ARG RAILWAY_GIT_COMMIT_SHA
 ARG PGO_PROFILE=off
 ARG TARGETOS
@@ -19,7 +18,6 @@ ENV CGO_ENABLED=0
 RUN --mount=type=bind,target=. \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    test -n "${WORKTREE_FINGERPRINT}" && \
     if [ "${PGO_PROFILE}" = "auto" ] || [ -z "${PGO_PROFILE}" ]; then \
       echo "PGO_PROFILE must be off or name an explicit representative CPU profile" >&2; \
       exit 2; \

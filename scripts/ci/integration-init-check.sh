@@ -2,23 +2,28 @@
 # Prove make integration-init against disposable initialized fixtures.
 set -euo pipefail
 
-export GOTOOLCHAIN="${GOTOOLCHAIN:-local}"
-export GOPROXY="${GOPROXY:-off}"
-export GOSUMDB="${GOSUMDB:-off}"
-if ! go version | grep -q 'go1.27'; then
-	if [[ -x "${HOME}/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.0.darwin-arm64/bin/go" ]]; then
-		PATH="${HOME}/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.0.darwin-arm64/bin:${PATH}"
-	elif [[ -x "${HOME}/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.0.linux-arm64/bin/go" ]]; then
-		PATH="${HOME}/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.0.linux-arm64/bin:${PATH}"
-	elif [[ -x "${HOME}/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.0.linux-amd64/bin/go" ]]; then
-		PATH="${HOME}/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.0.linux-amd64/bin:${PATH}"
-	fi
-fi
-
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export GOTOOLCHAIN="${GOTOOLCHAIN:-local}"
+required_go="$(awk '/^go / { print "go" $2; exit }' "${ROOT_DIR}/go.mod")"
+actual_go="$(go env GOVERSION)"
+cached_toolchain="$(go env GOPATH)/pkg/mod/golang.org/toolchain@v0.0.1-${required_go}.$(go env GOOS)-$(go env GOARCH)/bin"
+if [[ "${actual_go}" != "${required_go}" && -x "${cached_toolchain}/go" ]]; then
+	PATH="${cached_toolchain}:${PATH}"
+	actual_go="$(go env GOVERSION)"
+fi
+[[ "${actual_go}" == "${required_go}" ]] || {
+	echo "integration-init contract requires ${required_go}, found ${actual_go}" >&2
+	exit 2
+}
+# The row selector belongs only to this harness. GNU Make propagates command-line
+# variables through MAKEFLAGS; derived fixture invocations must see only the five
+# public integration-init variables they explicitly receive.
+unset MAKEFLAGS MAKEOVERRIDES
+
 TEMP_ROOT="$(mktemp -d -t integration-init-check.XXXXXX)"
-if [[ -x "${ROOT_DIR}/.cache/tools/buf/1.72.0/buf" ]]; then
-	export BUF_BIN="${ROOT_DIR}/.cache/tools/buf/1.72.0/buf"
+buf_version="$(awk '$1 == "github.com/bufbuild/buf" { sub(/^v/, "", $2); print $2; exit }' "${ROOT_DIR}/tools/go.mod")"
+if [[ -x "${ROOT_DIR}/.cache/tools/buf/${buf_version}/buf" ]]; then
+	export BUF_BIN="${ROOT_DIR}/.cache/tools/buf/${buf_version}/buf"
 fi
 trap 'rm -rf "${TEMP_ROOT}"' EXIT
 PASSED=()
@@ -200,9 +205,9 @@ snapshot_tree() {
 	)
 }
 
-HTTP_NONE_BASE=""
-GRPC_NONE_BASE=""
-HTTP_OAUTH_BASE=""
+HTTP_NONE_BASE="${TEMP_ROOT}/http-none-base"
+GRPC_NONE_BASE="${TEMP_ROOT}/grpc-none-base"
+HTTP_OAUTH_BASE="${TEMP_ROOT}/http-oauth-base"
 
 clone_base() {
 	local src="$1"
@@ -221,8 +226,8 @@ clone_base() {
 }
 
 http_none_fixture() {
-	if [[ -z "${HTTP_NONE_BASE}" ]]; then
-		HTTP_NONE_BASE="$(copy_checkout http-none-base)"
+	if [[ ! -d "${HTTP_NONE_BASE}/.git" ]]; then
+		copy_checkout http-none-base >/dev/null
 		init_service "${HTTP_NONE_BASE}" OUTBOUND_HTTP=bounded
 		write_http_contract "${HTTP_NONE_BASE}"
 	fi
@@ -230,8 +235,8 @@ http_none_fixture() {
 }
 
 grpc_none_fixture() {
-	if [[ -z "${GRPC_NONE_BASE}" ]]; then
-		GRPC_NONE_BASE="$(copy_checkout grpc-none-base)"
+	if [[ ! -d "${GRPC_NONE_BASE}/.git" ]]; then
+		copy_checkout grpc-none-base >/dev/null
 		init_service "${GRPC_NONE_BASE}" GRPC=enabled
 		write_grpc_contract "${GRPC_NONE_BASE}"
 	fi
@@ -239,8 +244,8 @@ grpc_none_fixture() {
 }
 
 http_oauth_fixture() {
-	if [[ -z "${HTTP_OAUTH_BASE}" ]]; then
-		HTTP_OAUTH_BASE="$(copy_checkout http-oauth-base)"
+	if [[ ! -d "${HTTP_OAUTH_BASE}/.git" ]]; then
+		copy_checkout http-oauth-base >/dev/null
 		init_service "${HTTP_OAUTH_BASE}" OUTBOUND_HTTP=bounded OUTBOUND_AUTH=oauth2-client-credentials
 		write_http_contract "${HTTP_OAUTH_BASE}"
 	fi
@@ -410,11 +415,8 @@ row_e2_oauth() {
 row_e2_none() {
 	local root
 	root="$(http_none_fixture)"
-	local before
-	before="$(snapshot_tree "${root}")"
 	run_init "${root}" NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none
 	assert "no oauth import" grep_absent -R -F oauth2clientcredentials "${root}/internal/infra/billing"
-	_="${before}"
 	pass E2-NONE-01
 }
 
@@ -570,6 +572,7 @@ EOF
 		echo "refresh failure succeeded" >&2
 		exit 1
 	fi
+	assert "refresh failure restored" same_text "${before}" "$(snapshot_tree "${root}")"
 	assert "refresh env identical" grep -q 'CANARY_REFRESH=1' "${root}/.env"
 	pass E4-REFRESH-01
 }

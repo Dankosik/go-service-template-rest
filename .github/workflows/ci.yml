@@ -7,6 +7,8 @@ on:
   pull_request:
     branches: [main]
   merge_group:
+  schedule:
+    - cron: "41 4 * * 2"
   workflow_dispatch:
 
 concurrency:
@@ -50,7 +52,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          if [[ "${EVENT_NAME}" == schedule ]]; then
+            bash ./scripts/ci/changed-surfaces.sh </dev/null >>"${GITHUB_OUTPUT}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             bash ./scripts/ci/changed-surfaces.sh --release >>"${GITHUB_OUTPUT}"
           elif [[ "${EVENT_NAME}" == workflow_dispatch ]]; then
             bash ./scripts/ci/changed-surfaces.sh --all >>"${GITHUB_OUTPUT}"
@@ -186,6 +190,7 @@ jobs:
 
   secrets:
     needs: changes
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -245,8 +250,6 @@ jobs:
     if: needs.changes.outputs.integration == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    env:
-      TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -291,17 +294,39 @@ jobs:
       - name: Migration and runtime rehearsal
         run: make migration-validate RUNTIME_IMAGE=service:ci RUNTIME_EXPECTED_VERSION="sha-${GITHUB_SHA}"
       - name: Image vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        run: make container-security CONTAINER_IMAGE=service:ci
+
+  security-refresh:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          image-ref: service:ci
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
+          go-version-file: go.mod
+          cache: false
+      - name: Restore Go modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-security-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-security-${{ runner.os }}-${{ runner.arch }}-
+      - name: Reachable Go vulnerabilities
+        run: make govulncheck
+      - name: Production image
+        env:
+          APP_VERSION: sha-${{ github.sha }}
+          VCS_REF: ${{ github.sha }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: make runtime-image-build RUNTIME_IMAGE=service:security-refresh
+      - name: Image vulnerabilities
+        run: make container-security CONTAINER_IMAGE=service:security-refresh
 
   required:
     if: always()
-    needs: [changes, quality, security, secrets, delivery, integration]
+    needs: [changes, quality, security, secrets, delivery, integration, security-refresh]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
