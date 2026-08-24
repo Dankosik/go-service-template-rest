@@ -41,10 +41,11 @@ if [[ ${TOOLS_RESOLUTION_ALL:-} == 1 ]]; then
 fi
 
 base_ref=${BASE_REF:-origin/main}
-git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1 || {
-	echo "tools resolution base is unavailable: ${base_ref}; set BASE_REF to a readable commit" >&2
-	exit 2
-}
+if ! git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1; then
+	echo "tools resolution base is unavailable: ${base_ref}; resolving every registered tool"
+	resolve_registered_tools
+	exit
+fi
 tmp=$(mktemp -d)
 trap 'rm -rf -- "${tmp}"' EXIT
 diff_file=${tmp}/tools.diff
