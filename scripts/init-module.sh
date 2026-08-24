@@ -747,6 +747,8 @@ if [[ "${source_checkout}" != true ]]; then
 		remove_outbox_migrations
 		strip_profile outbox-postgres remove
 	else
+		# Existing adopters retain 000001 for rollback; a new service starts on River.
+		rm -f -- migrations/000001_postgres_outbox.sql
 		strip_profile outbox-postgres keep
 	fi
 
