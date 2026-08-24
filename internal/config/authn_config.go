@@ -1,6 +1,6 @@
 package config
 
-// profile:authn-oidc-jwt:start
+// profile:authn-bearer:start
 
 import (
 	"fmt"
@@ -13,9 +13,11 @@ import (
 // and time policy is fixed by the capability rather than provider-controlled
 // configuration.
 type AuthnConfig struct {
-	Issuer       string `koanf:"issuer"`
-	Audience     string `koanf:"audience"`
+	Issuer   string `koanf:"issuer"`
+	Audience string `koanf:"audience"`
+	// profile:authn-oidc-jwt:start
 	TokenProfile string `koanf:"token_profile"`
+	// profile:authn-oidc-jwt:end
 	// profile:authn-oidc-introspection:start
 	IntrospectionEndpoint          string `koanf:"introspection_endpoint"`
 	IntrospectionTargetClass       string `koanf:"introspection_target_class"`
@@ -29,9 +31,11 @@ func authnDefaults() map[string]any {
 	// Trust policy has no executable placeholder. OIDC profiles fail config
 	// validation until deployment supplies every required value.
 	return map[string]any{
-		"authn.issuer":        "",
-		"authn.audience":      "",
+		"authn.issuer":   "",
+		"authn.audience": "",
+		// profile:authn-oidc-jwt:start
 		"authn.token_profile": authntrust.TokenProfileResourceServer,
+		// profile:authn-oidc-jwt:end
 		// profile:authn-oidc-introspection:start
 		"authn.introspection_endpoint":            "",
 		"authn.introspection_target_class":        "",
@@ -49,7 +53,9 @@ func authnDefaults() map[string]any {
 func validateAuthnConfig(cfg *AuthnConfig) error {
 	cfg.Issuer = strings.TrimSpace(cfg.Issuer)
 	cfg.Audience = strings.TrimSpace(cfg.Audience)
+	// profile:authn-oidc-jwt:start
 	cfg.TokenProfile = strings.ToLower(strings.TrimSpace(cfg.TokenProfile))
+	// profile:authn-oidc-jwt:end
 
 	if !authntrust.ValidIssuerURL(cfg.Issuer) {
 		return fmt.Errorf(
@@ -61,24 +67,31 @@ func validateAuthnConfig(cfg *AuthnConfig) error {
 		return fmt.Errorf("%w: authn.audience cannot be empty", ErrValidate)
 	}
 
+	// profile:authn-oidc-jwt:start
 	if !authntrust.ValidTokenProfile(cfg.TokenProfile) {
 		return fmt.Errorf(
 			"%w: authn.token_profile must be one of resource-server or rfc9068",
 			ErrValidate,
 		)
 	}
+	// profile:authn-oidc-jwt:end
 	// profile:authn-oidc-introspection:start
+	// profile:authn-oidc-jwt:start
 	if introspectionConfigured(cfg) {
+		// profile:authn-oidc-jwt:end
 		if err := validateIntrospectionConfig(cfg); err != nil {
 			return err
 		}
+		// profile:authn-oidc-jwt:start
 	}
+	// profile:authn-oidc-jwt:end
 	// profile:authn-oidc-introspection:end
 	return nil
 }
 
 // profile:authn-oidc-introspection:start
 
+// profile:authn-oidc-jwt:start
 func introspectionConfigured(cfg *AuthnConfig) bool {
 	return cfg.IntrospectionEndpoint != "" ||
 		cfg.IntrospectionTargetClass != "" ||
@@ -86,6 +99,8 @@ func introspectionConfigured(cfg *AuthnConfig) bool {
 		cfg.IntrospectionClientID != "" ||
 		cfg.IntrospectionClientSecret != ""
 }
+
+// profile:authn-oidc-jwt:end
 
 func validateIntrospectionConfig(cfg *AuthnConfig) error {
 	if !authntrust.ValidIntrospectionEndpoint(cfg.IntrospectionEndpoint) {
@@ -118,4 +133,4 @@ func validateIntrospectionConfig(cfg *AuthnConfig) error {
 
 // profile:authn-oidc-introspection:end
 
-// profile:authn-oidc-jwt:end
+// profile:authn-bearer:end

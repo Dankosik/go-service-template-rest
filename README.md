@@ -157,7 +157,7 @@ it, and read it here or in
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
 | Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign, CycloneDX, and durable migration-history enforcement |
-| Agent workflow | The complete Codex, Claude Code, Qwen, Grok Build, Cursor, and OpenCode workflow, always retained ([what that costs](#what-the-agent-workflow-costs)) |
+| Agent workflow | Shared workflow core plus the adapter selected by `AGENT_HARNESS` ([what that costs](#what-the-agent-workflow-costs)) |
 
 <!-- profile:grpc:start -->
 The optional native gRPC profile adds gRPC-Go client/server support, Buf v2,
@@ -170,12 +170,10 @@ and test dependencies; [`tools/go.mod`](tools/go.mod) owns development tools.
 
 ### What the agent workflow costs
 
-Initialization keeps the workflow byte-for-byte; there is no option to decline
-it. A generated service inherits the repository contract, conditional domain
-methods, five generic capability roles, and their generated Codex, Claude,
-Qwen, Grok, Cursor, and OpenCode carriers. If your team will not use those harnesses, keep
-[`AGENTS.md`](AGENTS.md) and `docs/`, and drop `.agents/`, `.codex/`,
-`.claude/`, `.cursor/`, `.qwen/`, `.grok/`, `.opencode/`, and `opencode.json`.
+Initialization always keeps the repository contract, conditional domain methods,
+and canonical `.agents` sources. `AGENT_HARNESS=core` omits generated adapter
+carriers; selecting one adapter keeps only that adapter, while `all` keeps every
+carrier. `template.lock` makes the choice durable across later template syncs.
 
 `specs/` is not in that table because initialization deletes it. Those bundles
 record decisions about building this template, and a generated service that kept

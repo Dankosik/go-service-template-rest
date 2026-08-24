@@ -95,22 +95,26 @@ func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
 	t.Parallel()
 
 	expected := map[failure.Code]codes.Code{
-		failure.CodeBadRequest:                  codes.InvalidArgument,
-		failure.CodeUnauthorized:                codes.Unauthenticated,
-		failure.CodeForbidden:                   codes.PermissionDenied,
-		failure.CodeNotFound:                    codes.NotFound,
-		failure.CodeMethodNotAllowed:            codes.Unimplemented,
-		failure.CodeAlreadyExists:               codes.AlreadyExists,
-		failure.CodeRequestEntityTooLarge:       codes.ResourceExhausted,
+		failure.CodeBadRequest:            codes.InvalidArgument,
+		failure.CodeUnauthorized:          codes.Unauthenticated,
+		failure.CodeForbidden:             codes.PermissionDenied,
+		failure.CodeNotFound:              codes.NotFound,
+		failure.CodeMethodNotAllowed:      codes.Unimplemented,
+		failure.CodeAlreadyExists:         codes.AlreadyExists,
+		failure.CodeRequestEntityTooLarge: codes.ResourceExhausted,
+		// profile:authn-bearer:start
 		failure.CodeRequestHeaderFieldsTooLarge: codes.ResourceExhausted,
-		failure.CodeUnprocessableContent:        codes.InvalidArgument,
-		failure.CodeTooManyRequests:             codes.ResourceExhausted,
-		failure.CodeIdempotencyKeyMismatch:      codes.InvalidArgument,
-		failure.CodeIdempotencyUnavailable:      codes.Unavailable,
-		failure.CodeIdempotencyOutcomeUnknown:   codes.Unavailable,
-		failure.CodeInternalError:               codes.Internal,
-		failure.CodeServiceUnavailable:          codes.Unavailable,
-		failure.CodeGatewayTimeout:              codes.DeadlineExceeded,
+		// profile:authn-bearer:end
+		failure.CodeUnprocessableContent: codes.InvalidArgument,
+		failure.CodeTooManyRequests:      codes.ResourceExhausted,
+		// profile:http-idempotency-postgres:start
+		failure.CodeIdempotencyKeyMismatch:    codes.InvalidArgument,
+		failure.CodeIdempotencyUnavailable:    codes.Unavailable,
+		failure.CodeIdempotencyOutcomeUnknown: codes.Unavailable,
+		// profile:http-idempotency-postgres:end
+		failure.CodeInternalError:      codes.Internal,
+		failure.CodeServiceUnavailable: codes.Unavailable,
+		failure.CodeGatewayTimeout:     codes.DeadlineExceeded,
 	}
 	allCodes := failure.AllCodes()
 	if len(expected) != len(allCodes) {
