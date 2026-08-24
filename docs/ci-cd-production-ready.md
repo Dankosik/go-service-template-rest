@@ -33,11 +33,12 @@ only applicable leaves. Runtime Go, root/tool dependencies, lint config,
 initializers, workflows, dependency automation, performance harness, database,
 messaging, process, race, migrations, runtime image, and image security are
 separate surfaces.
-Instruction-only quality does not install Go. Gitleaks uses a checksum-pinned
-binary and range scans pull requests, merge groups, and main pushes; tags and
-manual runs retain full-history proof. Integration builds one image only when a
-selected runtime gate needs it and reuses that image for lifecycle, migration,
-and vulnerability gates. The always-reported `required` job fails when any
+Instruction-only quality does not install Go. Gitleaks uses the tools-module
+version through a checksum-pinned binary and range scans pull requests, merge
+groups, and main pushes; tags and manual runs retain full-history proof.
+Integration builds one image only when a selected runtime gate needs it and
+reuses that image for lifecycle, migration, and the canonical Make-owned
+vulnerability gate. The always-reported `required` job fails when any
 applicable leaf fails or is cancelled and accepts deliberate path skips.
 Pull requests and merge groups are path-aware; main pushes, tags, and manual
 runs deliberately select the full surface set.
@@ -82,8 +83,8 @@ Publication remains opt-in through `ENABLE_GHCR_PUBLISH=true`. The shared
 
 1. builds one run-scoped production candidate for the exact admitted commit;
 2. preserves the previously published migration corpus;
-3. rehearses migrations and runtime lifecycle;
-4. scans the image and generates a CycloneDX SBOM;
+3. rehearses migrations through the shared runtime lifecycle checker;
+4. scans the image through the canonical Make target and generates a CycloneDX SBOM;
 5. pushes the candidate and resolves its digest;
 6. signs and attests that digest;
 7. verifies signature, provenance, and SBOM attestation;

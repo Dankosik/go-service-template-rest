@@ -397,7 +397,7 @@ jobs:
           needs.changes.outputs.migrations == 'true' ||
           needs.changes.outputs.runtime_image == 'true' ||
           needs.changes.outputs.image_security == 'true'
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Database integration
         if: needs.changes.outputs.db_integration == 'true'
         run: REQUIRE_DOCKER=1 make test-integration-db
@@ -430,15 +430,7 @@ jobs:
         run: make migration-validate RUNTIME_IMAGE=service:ci RUNTIME_EXPECTED_VERSION="sha-${GITHUB_SHA}"
       - name: Image vulnerabilities
         if: needs.changes.outputs.image_security == 'true'
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
-        with:
-          image-ref: service:ci
-          version: v0.72.0
-          scanners: vuln
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
+        run: make container-security CONTAINER_IMAGE=service:ci
 
   security-refresh:
     if: github.event_name == 'schedule'

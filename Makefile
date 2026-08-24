@@ -97,16 +97,17 @@ S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test/s
 # profile:object-storage:end
 # profile:database-postgres:start
 MIGRATION_HISTORY_CHECK_SCRIPT := bash ./scripts/ci/migration-history-check.sh
+MIGRATION_VALIDATE_SCRIPT := bash ./scripts/ci/migration-validate.sh
 # profile:database-postgres:end
 TEMPLATE_OWNED_PURITY_CHECK_SCRIPT := bash ./scripts/ci/template-owned-purity-check.sh
 TEMPLATE ?= ../go-service-template-rest
 
 .DEFAULT_GOAL := help
 
-# One same-target A/B on the 10-core/16-GiB reference Mac measured 138.7s
-# serial versus 294.6s with make -j4. Re-measure after host, toolchain, or
-# aggregate membership changes before enabling parallel prerequisites.
-.NOTPARALLEL: check check-go check-go-pr unit-check tools-dependencies-check audit-full-manual mod-check lint-all lint-pr lint-deep openapi-check proto-check verify
+# The broad-aggregate reference-host A/B recorded by 5d8d9652e rejected -j4.
+# Only targets with prerequisites belong here; re-measure after their membership,
+# host, or toolchain changes.
+.NOTPARALLEL: check check-go check-go-pr unit-check tools-dependencies-check mod-check openapi-check proto-check
 
 .PHONY: help template-init template-init-check integration-init integration-init-check integration-record-check integration-routing-check \
 	tidy fmt mod-check root-mod-check tools-mod-check tools-smoke tools-dependencies-check mod-tidy-check mod-verify fmt-check fmt-files-check unit-check plan verify verify-check check check-go check-go-pr check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check \
@@ -142,44 +143,47 @@ help:
 	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team AGENT_HARNESS=core"
 	@echo "  go test -vet=off ./internal/<package>     # edit loop"
 	@echo "  make unit-check PKG=./internal/<package> FILES='...'"
-	@echo "  make plan | make verify                  # explain or run the surface-aware final route"
+	@echo "  make plan or make verify                 # explain or run the surface-aware final route"
 	@echo "  make check                               # explicit full-repository aggregate"
 	@echo "  ALLOW_HEAVY=1 make audit-full-manual     # rare template/release audit; refused otherwise"
 	@echo "  make lint-fast PKG=./internal/config      # local changed-code signal; not a lint claim"
 	@echo "  make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none"
 	@echo "  make integration-record-check             # exact integration identity/source/output parity"
-	@echo "  make agent-roles-check | codex-agents-check | claude-skills-check | qwen-skills-check"
+	@echo "  make agent-roles-check, make codex-agents-check, make claude-skills-check, or make qwen-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt committed template instructions"
 	@echo "  make run"
 	@echo "  make benchmark-capture | benchmark-compare | benchmark-http"
 	@echo "  make pgo-manifest | build-pgo PGO_PROFILE=<cpu.pprof>"
 # profile:messaging-nats-jetstream:start
-	@echo "  make run-worker | build-worker"
+	@echo "  make run-worker or make build-worker"
 	@echo "  make test-messaging-race"
 # profile:messaging-nats-jetstream:end
 
 # profile:outbox-postgres:start
-	@echo "  make run-outbox-relay | build-outbox-relay"
+	@echo "  make run-outbox-relay or make build-outbox-relay"
 	@echo "  make test-outbox-race"
 # profile:outbox-postgres:end
+# profile:jobs-postgres:start
+	@echo "  make run-jobs-worker or make build-jobs-worker"
+# profile:jobs-postgres:end
 # profile:webhooks-durable:start
 	@echo "  make test-webhook-race"
 # profile:webhooks-durable:end
 	@echo ""
 	@echo "Focused validation:"
-	@echo "  make test-package PKG=./pkg | test-all"
-	@echo "  make lint-changed PKG=./pkg | lint-pr | lint-all | lint-deep"
-	@echo "  make test-race | test-integration[-db|-messaging|-process|-race]"
-	@echo "  make root-mod-check | tools-mod-check | mod-check"
-	@echo "  make govulncheck | gosec | secret-scan | secret-scan-history"
-	@echo "  local agents: actionlint-fast | shellcheck-fast"
+	@echo "  make test-package PKG=./pkg or make test-all"
+	@echo "  make lint-changed PKG=./pkg, make lint-pr, make lint-all, or make lint-deep"
+	@echo "  make test-race, make test-integration, or a focused test-integration-{db,messaging,process,race} target"
+	@echo "  make root-mod-check, make tools-mod-check, or make mod-check"
+	@echo "  make govulncheck, make gosec, make secret-scan, or make secret-scan-history"
+	@echo "  local agents: make actionlint-fast or make shellcheck-fast"
 	@echo "  make openapi-check"
 	@echo "  make proto-check"
 # profile:database-postgres:start
-	@echo "  make sqlc-check | migration-validate"
+	@echo "  make sqlc-check or make migration-validate"
 # profile:database-postgres:end
-	@echo "  make docker-build | container-security"
+	@echo "  make docker-build or make container-security"
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
 
@@ -263,6 +267,7 @@ root-mod-check:
 
 tools-mod-check:
 	GOFLAGS= go -C tools mod tidy -diff
+	go -C tools mod verify
 	@test "$$(awk '/^go / {print $$2; exit}' go.mod)" = "$$(awk '/^go / {print $$2; exit}' tools/go.mod)" || { \
 		echo "go.mod and tools/go.mod must use the same Go version"; \
 		exit 1; \
@@ -459,13 +464,7 @@ run-outbox-relay:
 	go run $(OUTBOX_RELAY_CMD)
 # profile:outbox-postgres:end
 
-lint lint-package:
-	$(REQUIRE_PKG)
-	@new_from=""; \
-	if git rev-parse --verify "$(LINT_BASE_REF)" >/dev/null 2>&1; then \
-		new_from="--new-from-merge-base=$(LINT_BASE_REF)"; \
-	fi; \
-	$(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PACKAGE_LINTERS) $$new_from --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
+lint lint-package: lint-changed
 
 lint-all:
 	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
@@ -657,62 +656,7 @@ check-proto: proto-check
 # profile:database-postgres:start
 migration-validate:
 	$(HEAVY_GUARD)
-	@project="service-migration-$$(date +%s)-$$$$"; \
-	runtime=""; \
-	compose() { POSTGRES_PORT=0 docker compose -p "$$project" -f env/docker-compose.yml "$$@"; }; \
-	cleanup() { \
-		if [ -n "$$runtime" ]; then docker rm -f "$$runtime" >/dev/null 2>&1 || true; fi; \
-		compose down -v --remove-orphans >/dev/null 2>&1 || true; \
-	}; \
-	trap cleanup EXIT INT TERM; \
-	compose up -d --wait postgres; \
-	address="$$(compose port postgres 5432)"; \
-	port="$${address##*:}"; \
-	test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
-	dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
-	$(GO_TOOL) goose -dir migrations validate; \
-	PGTEST_POSTGRES_DSN="$$dsn" REQUIRE_DOCKER=1 $(GO) test -vet=off -count=1 -tags=integration ./test \
-		-run '^TestPostgres(MigrateRepositorySourceRehearsal|HTTPIdempotencySchemaReplacementIsFailClosed)$$'; \
-	image="$(RUNTIME_IMAGE)"; \
-	if [ -z "$$image" ]; then \
-		image="$(SERVICE_NAME):migration"; \
-		$(MAKE) runtime-image-build RUNTIME_IMAGE="$$image" || exit 1; \
-	fi; \
-	docker run --rm --network "$${project}_default" \
-		-e APP__POSTGRES__ENABLED=true \
-		-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
-		--entrypoint /migrate "$$image"; \
-	command -v curl >/dev/null 2>&1 || { echo "curl is required for runtime image readiness validation"; exit 1; }; \
-	runtime="$${project}-runtime"; \
-	docker run -d --name "$$runtime" \
-		--network "$${project}_default" \
-		-p 127.0.0.1::8080 \
-		--read-only \
-		--cap-drop=ALL \
-		--security-opt=no-new-privileges \
-		-e APP__POSTGRES__ENABLED=true \
-		-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
-		"$$image" >/dev/null; \
-	address="$$(docker port "$$runtime" 8080/tcp | head -n 1)"; \
-	port="$${address##*:}"; \
-	test -n "$$port" || { echo "failed to resolve runtime service port"; docker logs "$$runtime"; exit 1; }; \
-	ready=false; \
-	attempt=0; \
-	while [ "$$attempt" -lt 45 ]; do \
-		if curl -fs --max-time 2 "http://127.0.0.1:$$port/health/ready" >/dev/null; then ready=true; break; fi; \
-		if [ "$$(docker inspect -f '{{.State.Running}}' "$$runtime")" != "true" ]; then break; fi; \
-		attempt=$$((attempt + 1)); \
-		sleep 1; \
-	done; \
-	if [ "$$ready" != "true" ]; then echo "runtime image did not become ready"; docker logs "$$runtime"; exit 1; fi; \
-	if [ -n "$(RUNTIME_EXPECTED_VERSION)" ] && ! docker logs "$$runtime" 2>&1 | grep -Fq "\"service.version\":\"$(RUNTIME_EXPECTED_VERSION)\""; then \
-		echo "runtime image did not report expected version $(RUNTIME_EXPECTED_VERSION)"; \
-		docker logs "$$runtime"; \
-		exit 1; \
-	fi; \
-	docker stop --time 45 "$$runtime" >/dev/null; \
-	exit_code="$$(docker inspect -f '{{.State.ExitCode}}' "$$runtime")"; \
-	test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }
+	GO="$(GO)" $(MIGRATION_VALIDATE_SCRIPT) "$(RUNTIME_IMAGE)" "$(RUNTIME_EXPECTED_VERSION)" "$(SERVICE_NAME)"
 # profile:database-postgres:end
 
 container-security:
@@ -723,6 +667,7 @@ container-security:
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v "$(TRIVY_CACHE_VOLUME):/root/.cache/trivy" \
 		-e DOCKER_HOST=unix:///var/run/docker.sock \
+		-e TRIVY_DB_REPOSITORY \
 		"$(TRIVY_IMAGE)" image \
 		--cache-dir /root/.cache/trivy \
 		--quiet \
