@@ -13,3 +13,21 @@ var (
 	ErrDraining  = errors.New("messaging runtime draining")
 	ErrTerminal  = errors.New("messaging runtime terminal failure")
 )
+
+type permanentError struct{ err error }
+
+func (e permanentError) Error() string { return e.err.Error() }
+func (e permanentError) Unwrap() error { return e.err }
+
+// Permanent marks bytes that retrying unchanged cannot make processable.
+func Permanent(err error) error {
+	if err == nil {
+		return nil
+	}
+	return permanentError{err: err}
+}
+
+func IsPermanent(err error) bool {
+	var target permanentError
+	return errors.As(err, &target)
+}

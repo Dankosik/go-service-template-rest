@@ -2,7 +2,6 @@ package natsjs
 
 import (
 	"context"
-	"crypto/rand"
 	"slices"
 	"time"
 )
@@ -80,5 +79,3 @@ func (m Message) Metadata() DeliveryMetadata { return m.metadata }
 // skip that budget. A handler runs under its own timeout and must tolerate
 // duplicates, because delivery is at-least-once.
 type Handler func(context.Context, Message) error
-
-func NewID() string { return rand.Text() }

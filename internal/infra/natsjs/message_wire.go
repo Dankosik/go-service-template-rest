@@ -48,7 +48,8 @@ func validateEvent(event Event, maxPayloadBytes int) error {
 	if err := validateRequiredValue("event schema", event.Schema); err != nil {
 		return err
 	}
-	if event.CreatedAt.IsZero() || event.CreatedAt.Location() != time.UTC {
+	_, offset := event.CreatedAt.Zone()
+	if event.CreatedAt.IsZero() || offset != 0 {
 		return fmt.Errorf("%w: creation time must be non-zero UTC", ErrRejected)
 	}
 	if len(event.Payload) > maxPayloadBytes {
