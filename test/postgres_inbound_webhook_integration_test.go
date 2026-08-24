@@ -3,7 +3,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -53,7 +52,7 @@ func inboundTrust(t *testing.T, endpoint string) *postgresinboundwebhook.TrustMa
 
 func inboundReceiver(t *testing.T, dsn string) *postgresinboundwebhook.Receiver {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 8})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +82,7 @@ func inboundDelivery(endpoint, id, body, signature string) inboundwebhook.Delive
 func TestPostgresInboundWebhookAtomicAcceptance(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
 	receiver := inboundReceiver(t, dsn)
-	ctx := context.Background()
+	ctx := t.Context()
 	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
 	if err != nil || result.Outcome != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("result=%+v err=%v", result, err)
@@ -118,7 +117,7 @@ func TestPostgresInboundWebhookAtomicAcceptance(t *testing.T) {
 
 func TestPostgresInboundWebhookAtomicAcceptanceRollsBackOnJobFailure(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
-	ctx := context.Background()
+	ctx := t.Context()
 	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 2})
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +162,7 @@ func TestPostgresInboundWebhookAtomicAcceptanceRollsBackOnJobFailure(t *testing.
 func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
 	receiver := inboundReceiver(t, dsn)
-	ctx := context.Background()
+	ctx := t.Context()
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	outcomes := make(chan inboundwebhook.Outcome, 32)
@@ -244,7 +243,7 @@ func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 
 func TestPostgresInboundWebhookSchemaLifecycle(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
-	ctx := context.Background()
+	ctx := t.Context()
 	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 2})
 	if err != nil {
 		t.Fatal(err)

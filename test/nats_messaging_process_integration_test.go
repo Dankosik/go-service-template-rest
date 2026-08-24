@@ -24,7 +24,7 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGTERM process lifecycle is Unix-specific")
 	}
-	f := newNATSFixture(t)
+	f := newIsolatedNATSFixture(t)
 	repositoryRoot, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
@@ -128,6 +128,10 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 			accepted <- struct{}{}
 		}
 	}()
+	t.Cleanup(func() {
+		_ = listener.Close()
+		<-acceptDone
+	})
 
 	workingDirectory, err := os.Getwd()
 	if err != nil {
@@ -157,7 +161,7 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 		"APP__MESSAGING__WORKER__CONSUMER=unregistered-worker",
 		"APP__MESSAGING__WORKER__FILTER_SUBJECT=events.test",
 		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT=dead.events.test",
-		"APP__OBSERVABILITY__METRICS__ADDR=127.0.0.1:19090",
+		"APP__OBSERVABILITY__METRICS__ADDR="+waittest.FreeTCPAddr(t, "worker diagnostics"),
 	)
 	output, runErr := run.CombinedOutput()
 	if runErr == nil || !strings.Contains(string(output), "worker feature handler builder is not registered") {

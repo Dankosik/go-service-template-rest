@@ -101,7 +101,7 @@ func TestPostgresJobsTransactionalInsertionAndWorkerLifecycle(t *testing.T) {
 
 	events, unsubscribe := client.Subscribe(river.EventKindJobCompleted)
 	defer unsubscribe()
-	runCtx, stopRun := context.WithCancel(context.Background())
+	runCtx, stopRun := context.WithCancel(t.Context())
 	defer stopRun()
 	if err := client.Start(runCtx); err != nil {
 		t.Fatalf("start River client: %v", err)

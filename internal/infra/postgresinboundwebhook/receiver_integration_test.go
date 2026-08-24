@@ -21,7 +21,7 @@ func TestMain(m *testing.M) { os.Exit(pgtest.Main(m, "")) }
 
 func TestPostgresInboundWebhookCommitUnknownRetry(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS("../../.."), "migrations")
-	ctx := context.Background()
+	ctx := t.Context()
 	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 4})
 	if err != nil {
 		t.Fatal(err)

@@ -31,7 +31,11 @@ REDOCLY_CLI ?= npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION)
 GO_TOOL := go tool -modfile=tools/go.mod
 GOLANGCI_LINT ?= $(GO_TOOL) golangci-lint
 GO_REQUIRED_VERSION = $(shell awk '/^go / {print $$2; exit}' go.mod)
-INTEGRATION_PACKAGES := ./test/...
+REFERENCE_INTEGRATION_PACKAGE := $(if $(wildcard examples/reference-service/*_integration_test.go),./examples/reference-service)
+INTEGRATION_PACKAGES := ./test/... $(REFERENCE_INTEGRATION_PACKAGE)
+# profile:database-postgres:start
+INTEGRATION_PACKAGES += ./internal/infra/postgres
+# profile:database-postgres:end
 # profile:http-idempotency-postgres:start
 INTEGRATION_PACKAGES += ./internal/infra/postgresidempotency
 # profile:http-idempotency-postgres:end
@@ -46,7 +50,8 @@ MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstr
 OUTBOX_RACE_PACKAGES := ./test
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-WEBHOOK_RACE_PACKAGES := ./test
+INTEGRATION_PACKAGES += ./internal/infra/postgreswebhook
+WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./test
 # profile:webhooks-durable:end
 INTEGRATION_RACE_PACKAGES := $(sort $(MESSAGING_RACE_PACKAGES) $(OUTBOX_RACE_PACKAGES) $(WEBHOOK_RACE_PACKAGES))
 LINT_BASE_REF ?= origin/main
@@ -93,7 +98,7 @@ TEMPLATE ?= ../go-service-template-rest
 # aggregate membership changes before enabling parallel prerequisites.
 .NOTPARALLEL: check check-go audit-full-manual mod-check lint-all lint-deep openapi-check proto-check
 
-.PHONY: help template-init template-init-check integration-init integration-init-check \
+.PHONY: help template-init template-init-check integration-init integration-init-check integration-routing-check \
 	tidy fmt mod-check mod-tidy-check mod-verify fmt-check unit-check check check-go check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check \
 	test test-package test-all test-watch test-race test-integration test-integration-race \
 	lint lint-package lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
@@ -285,12 +290,15 @@ check-sqlc: sqlc-check
 
 check-instructions: template-owned-purity-check
 
-check-delivery: actionlint shellcheck dockerfile-check
+check-delivery: actionlint shellcheck dockerfile-check integration-routing-check
 
 check-security-go: govulncheck gosec
 
 changed-surfaces-check:
 	bash ./scripts/ci/changed-surfaces.sh --self-test
+
+integration-routing-check:
+	INTEGRATION_PACKAGES='$(INTEGRATION_PACKAGES)' WEBHOOK_RACE_PACKAGES='$(WEBHOOK_RACE_PACKAGES)' bash ./scripts/ci/integration-routing-check.sh
 
 check: check-go check-openapi check-proto check-sqlc
 
@@ -336,12 +344,12 @@ test-outbox-race:
 # profile:outbox-postgres:end
 
 # profile:webhooks-durable:start
-test-webhook-race:
+test-webhook-race: integration-routing-check
 	$(HEAVY_GUARD)
 	go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhookAcceptance|WebhookNetwork)'
 # profile:webhooks-durable:end
 
-test-integration-race:
+test-integration-race: integration-routing-check
 	$(HEAVY_GUARD)
 	@if [ -z "$(strip $(INTEGRATION_RACE_PACKAGES))" ]; then \
 		echo "no focused integration race packages selected; skipping"; \
@@ -349,7 +357,7 @@ test-integration-race:
 		go test -vet=off -p=1 -count=1 -race -tags=integration $(INTEGRATION_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain|TestPostgresOutbox.*|TestPostgresWebhookAcceptance.*|TestWebhookNetwork.*)$$'; \
 	fi
 
-test-integration:
+test-integration: integration-routing-check
 	$(HEAVY_GUARD)
 	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
 	$(MAKE) test-integration-race
