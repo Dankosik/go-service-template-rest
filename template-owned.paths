@@ -21,8 +21,9 @@
 # marks a directory, mirrored recursively with deletions. Blank lines and lines
 # starting with `#` are ignored.
 #
-# Eval catalogs, instruction-eval checks, and template-purity scripts stay in
-# the source template. Generated services do not inherit them.
+# Eval catalogs, instruction-eval checks, template-purity scripts, and sync
+# behavior fixtures stay in the source template. Generated services do not
+# inherit them.
 
 AGENTS.md
 CLAUDE.md

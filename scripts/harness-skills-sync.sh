@@ -92,8 +92,8 @@ preflight() {
 		shopt -u nullglob dotglob
 		if ((${#entries[@]} > 0)); then
 			for entry in "${entries[@]}"; do
-				if [[ -d "${entry}" && ! -L "${entry}" ]]; then
-					fail "${entry#"${repo}/"} is a real directory; move or remove it before rebuilding generated links"
+				if [[ ! -L "${entry}" ]]; then
+					fail "${entry#"${repo}/"} is not a generated symlink; move or remove it before rebuilding generated links"
 				fi
 			done
 		fi
