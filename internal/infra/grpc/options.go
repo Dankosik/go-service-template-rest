@@ -1,7 +1,6 @@
 package grpcx
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 
@@ -30,7 +29,6 @@ type Options struct {
 	MeterProvider        metric.MeterProvider
 	TracerProvider       trace.TracerProvider
 	DomainErrors         []failure.Mapper
-	Load                 LoadRecorder
 	Services             []RegisterService
 	UnaryPolicy          []grpc.UnaryServerInterceptor
 	StreamPolicy         []grpc.StreamServerInterceptor
@@ -46,17 +44,7 @@ func withOptionDefaults(options Options) Options {
 	if options.TracerProvider == nil {
 		options.TracerProvider = tracenoop.NewTracerProvider()
 	}
-	if options.Load == nil {
-		options.Load = newServerLoad(options.MeterProvider)
-	}
 	return options
-}
-
-// LoadRecorder observes process-wide business and health admission.
-type LoadRecorder interface {
-	Admitted(ctx context.Context) func()
-	Shed(ctx context.Context)
-	HealthShed(ctx context.Context)
 }
 
 // NewServer builds the complete native server product with fixed safe defaults.
@@ -75,7 +63,12 @@ func newServer(cfg serverConfig, options Options) (*Server, error) {
 		return nil, fmt.Errorf("build protobuf validator: %w", err)
 	}
 	options = withOptionDefaults(options)
-	admission := newAdmissionPolicy(cfg.maxConcurrentRPCs, cfg.maxConcurrentHealthRPCs, options.Load)
+	admission := newAdmissionPolicy(
+		cfg.maxConcurrentRPCs,
+		cfg.maxConcurrentHealthRPCs,
+		newServerLoad(options.MeterProvider),
+	)
+	healthDrain := newHealthDrain()
 	registeredMethods := make(methodSet)
 	handlerErrors := handlerErrorBoundary(options.Logger, options.DomainErrors)
 
@@ -93,6 +86,7 @@ func newServer(cfg serverConfig, options Options) (*Server, error) {
 				return known && !isHealthMethod(info.FullMethodName)
 			}),
 		)),
+		grpc.StatsHandler(admission.statsHandler()),
 		grpc.ChainUnaryInterceptor(unaryChain(
 			options.Logger,
 			admission,
@@ -103,6 +97,7 @@ func newServer(cfg serverConfig, options Options) (*Server, error) {
 		)...),
 		grpc.ChainStreamInterceptor(streamChain(
 			options.Logger,
+			healthDrain,
 			admission,
 			options.StreamPolicy,
 			validator,
@@ -118,14 +113,16 @@ func newServer(cfg serverConfig, options Options) (*Server, error) {
 	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
 	healthgrpc.RegisterHealthServer(nativeServer, healthServer)
 	if err := registerServices(nativeServer, options.Services, registeredMethods); err != nil {
+		healthDrain.stop()
 		nativeServer.Stop()
 		return nil, err
 	}
 	return &Server{
-		server:       nativeServer,
-		health:       healthServer,
-		gracefulDone: make(chan struct{}),
-		forceStarted: make(chan struct{}),
+		server:      nativeServer,
+		health:      healthServer,
+		healthDrain: healthDrain,
+		drain:       admission.drain,
+		stopDone:    make(chan struct{}),
 	}, nil
 }
 

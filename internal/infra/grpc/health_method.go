@@ -1,10 +1,37 @@
 package grpcx
 
 import (
+	"context"
 	"strings"
 
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
+
+type healthDrain struct {
+	ctx    context.Context //nolint:containedctx // One server-lifetime cancellation signal.
+	cancel context.CancelFunc
+}
+
+func newHealthDrain() healthDrain {
+	ctx, cancel := context.WithCancel(context.Background())
+	return healthDrain{ctx: ctx, cancel: cancel}
+}
+
+func (d healthDrain) stop() { d.cancel() }
+
+func (d healthDrain) around(ctx context.Context, fullMethod string, call func(context.Context) error) error {
+	if !isHealthMethod(fullMethod) {
+		return call(ctx)
+	}
+	bounded, cancel := context.WithCancel(ctx)
+	if d.ctx.Err() != nil {
+		cancel()
+	}
+	stop := context.AfterFunc(d.ctx, cancel) //nolint:contextcheck // Server drain cancels this RPC-derived context.
+	defer stop()
+	defer cancel()
+	return call(bounded)
+}
 
 const healthMethodPrefix = "/grpc.health.v1.Health/"
 

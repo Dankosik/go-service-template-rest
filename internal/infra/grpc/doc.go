@@ -2,7 +2,7 @@
 // server.
 //
 // grpc-go owns HTTP/2, generated service dispatch, transport bounds, health,
-// and graceful-stop primitives. otelgrpc owns protocol traces and metrics, and
+// and transport-stop primitives. otelgrpc owns protocol traces and metrics, and
 // Protovalidate owns protobuf constraints. This package retains only policy a
 // library cannot choose: process admission, the unary safety deadline, panic
 // recovery, authentication/authorization slots, public validation rendering,

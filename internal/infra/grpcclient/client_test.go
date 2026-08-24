@@ -20,7 +20,7 @@ import (
 func TestNewIsLazyAndRequiresTargetAndCredentials(t *testing.T) {
 	t.Parallel()
 	connection, err := grpcclient.New(
-		grpcclient.DefaultConfig("dns:///unreachable.invalid:443"),
+		"dns:///unreachable.invalid:443",
 		grpcclient.Options{TransportCredentials: insecure.NewCredentials()},
 	)
 	if err != nil {
@@ -32,15 +32,15 @@ func TestNewIsLazyAndRequiresTargetAndCredentials(t *testing.T) {
 
 	for _, testCase := range []struct {
 		name    string
-		cfg     grpcclient.Config
+		target  string
 		options grpcclient.Options
 	}{
 		{name: "missing target", options: grpcclient.Options{TransportCredentials: insecure.NewCredentials()}},
-		{name: "missing credentials", cfg: grpcclient.DefaultConfig("dns:///service.internal:9000")},
+		{name: "missing credentials", target: "dns:///service.internal:9000"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			if connection, err := grpcclient.New(testCase.cfg, testCase.options); err == nil {
+			if connection, err := grpcclient.New(testCase.target, testCase.options); err == nil {
 				_ = connection.Close()
 				t.Fatal("New() error = nil")
 			}
@@ -66,7 +66,7 @@ func TestNewDisablesResolverServiceConfig(t *testing.T) {
 	builder := serviceConfigResolver{address: address}
 	resolver.Register(builder)
 	connection, err := grpcclient.New(
-		grpcclient.DefaultConfig(builder.Scheme()+":///service"),
+		builder.Scheme()+":///service",
 		grpcclient.Options{TransportCredentials: insecure.NewCredentials()},
 	)
 	if err != nil {
@@ -92,7 +92,7 @@ func TestNewUsesExplicitTLSCredentials(t *testing.T) {
 	serverCredentials, clientCredentials := testTLSCredentials(t)
 	target := startTestServer(t, registerServingHealth, grpc.Creds(serverCredentials))
 	connection, err := grpcclient.New(
-		grpcclient.DefaultConfig(target),
+		target,
 		grpcclient.Options{TransportCredentials: clientCredentials},
 	)
 	if err != nil {

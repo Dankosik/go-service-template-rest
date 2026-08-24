@@ -54,9 +54,9 @@ func TestGRPCBuildsAuthenticatedGuardedConnection(t *testing.T) {
 		return validTestToken("opaque"), nil
 	}, nil)
 	t.Cleanup(owner.Close)
-	config := grpcclient.DefaultConfig("dns:///resource.example.com:443")
+	target := "dns:///resource.example.com:443"
 	options := grpcclient.Options{TransportCredentials: credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})}
-	client, err := owner.GRPC(config, options)
+	client, err := owner.GRPC(target, options)
 	if err != nil {
 		t.Fatalf("GRPC() error = %v", err)
 	}
@@ -65,7 +65,7 @@ func TestGRPCBuildsAuthenticatedGuardedConnection(t *testing.T) {
 	}
 
 	options.PerRPCCredentials = staticCredential{}
-	if _, err := owner.GRPC(config, options); !errors.Is(err, ErrInvalidConfiguration) {
+	if _, err := owner.GRPC(target, options); !errors.Is(err, ErrInvalidConfiguration) {
 		t.Fatalf("GRPC() competing credential error = %v", err)
 	}
 }

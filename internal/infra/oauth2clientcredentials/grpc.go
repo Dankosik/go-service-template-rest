@@ -47,12 +47,12 @@ type GRPCClient struct {
 }
 
 // GRPC builds one authenticated connection without provider or resource I/O.
-func (c *Client) GRPC(cfg grpcclient.Config, options grpcclient.Options) (*GRPCClient, error) {
+func (c *Client) GRPC(target string, options grpcclient.Options) (*GRPCClient, error) {
 	if !c.available() || options.PerRPCCredentials != nil {
 		return nil, ErrInvalidConfiguration
 	}
 	options.PerRPCCredentials = grpcCredential{source: clientTokenSource{client: c}}
-	connection, err := grpcclient.New(cfg, options)
+	connection, err := grpcclient.New(target, options)
 	if err != nil {
 		return nil, fmt.Errorf("build authenticated gRPC client: %w", err)
 	}

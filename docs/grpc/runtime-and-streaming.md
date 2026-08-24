@@ -49,7 +49,7 @@ Build one client connection per dependency:
 
 ```go
 conn, err := grpcclient.New(
-    grpcclient.DefaultConfig("dns:///widgets.internal:9091"),
+	"dns:///widgets.internal:9091",
     grpcclient.Options{TransportCredentials: transportCredentials},
 )
 client := widgetsv1.NewWidgetServiceClient(conn)
