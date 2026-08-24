@@ -249,21 +249,25 @@ make secret-scan BASE_REF=origin/main
 make secret-scan-history
 ```
 
-Gitleaks runs directly from the tools module and consumes the reviewed baseline.
-Local review scans the current tree and exact base-to-HEAD history. Clean pull
-request CI scans only that commit range; push and release admission scan full
-history.
+Gitleaks consumes the reviewed baseline. Local commands use the tools module;
+CI downloads a checksum-pinned binary whose version is read from that same
+module. Local review scans the current tree and exact base-to-HEAD history.
+Clean pull-request CI scans only that commit range; push and release admission
+scan full history.
 
 ## Runtime images
 
 ```bash
 make runtime-image-build RUNTIME_IMAGE=service:ci
+make runtime-image-check RUNTIME_IMAGE=service:ci
 make container-security CONTAINER_IMAGE=service:ci
 ```
 
 The source template builds one documented PostgreSQL generated output. A
-derived repository builds its own exact source. Reuse the same image tag for
-migration rehearsal and vulnerability scanning. The Dockerfile fixes output
+derived repository builds its own exact source. The lifecycle check starts a
+disposable PostgreSQL only when that current profile requires it; migration
+rehearsal reuses its own database. Reuse the same image tag for lifecycle,
+migration rehearsal, and vulnerability scanning. The Dockerfile fixes output
 timestamps with `SOURCE_DATE_EPOCH=0`, so identical inputs rebuild to the same
 local image digest; application version and commit remain explicit build inputs.
 

@@ -16,7 +16,7 @@ require (
 	github.com/aws/smithy-go v1.27.8
 	github.com/exaring/otelpgx v0.11.1
 	github.com/felixge/httpsnoop v1.1.0
-	github.com/getkin/kin-openapi v0.146.0
+	github.com/getkin/kin-openapi v0.147.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
