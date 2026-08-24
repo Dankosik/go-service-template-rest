@@ -9,7 +9,6 @@ import (
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
 // TestListenDiagnosticsRefusesAnOccupiedAddress covers why the bind happens
@@ -47,7 +46,7 @@ func TestDiagnosticsListenerStopsAndJoins(t *testing.T) {
 	t.Parallel()
 
 	served, err := runtimeopts.ListenDiagnostics(
-		t.Context(), waittest.FreeTCPAddr(t, "diagnostics"), "probe", func() bool { return true }, telemetry.New(),
+		t.Context(), "127.0.0.1:0", "probe", func() bool { return true }, telemetry.New(),
 	)
 	if err != nil {
 		t.Fatalf("ListenDiagnostics() error = %v", err)

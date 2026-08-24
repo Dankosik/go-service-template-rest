@@ -117,15 +117,18 @@ func TestPostgresHTTPIdempotencySerializesConcurrentReplicas(t *testing.T) {
 		secondDone <- outcome{replayed: replayed, err: err}
 	}()
 
-	waittest.UntilFunc(t, 5*time.Second, func() bool {
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
 		var waiters int
-		err := fixture.pool.QueryRow(fixture.ctx, `
+		err := fixture.pool.QueryRow(ctx, `
 			SELECT count(*) FROM pg_stat_activity
 			WHERE application_name = 'idempotency-concurrent'
 			  AND query LIKE '%INSERT INTO postgres_http_idempotency%'
 			  AND wait_event_type = 'Lock'`).Scan(&waiters)
-		return err == nil && waiters == 1
-	}, func() string { return "second replica to wait on PostgreSQL uniqueness" })
+		if err != nil {
+			t.Fatalf("observe PostgreSQL uniqueness wait: %v", err)
+		}
+		return waiters == 1
+	}, "second replica to wait on PostgreSQL uniqueness")
 	close(release)
 
 	first := <-firstDone

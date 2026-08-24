@@ -51,12 +51,12 @@ func TestNATSRegistryRejectsSubjectMismatch(t *testing.T) {
 	}
 
 	var deadLetter *jetstream.RawStreamMsg
-	waittest.Until(t, 5*time.Second, func() bool {
-		stream, streamErr := f.js.Stream(t.Context(), deadLetterStream)
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		stream, streamErr := f.js.Stream(ctx, deadLetterStream)
 		if streamErr != nil {
 			return false
 		}
-		deadLetter, streamErr = stream.GetLastMsgForSubject(t.Context(), deadLetterSubject)
+		deadLetter, streamErr = stream.GetLastMsgForSubject(ctx, deadLetterSubject)
 		return streamErr == nil
 	}, "wrong-subject dead-letter transfer")
 	select {
@@ -254,12 +254,12 @@ func TestNATSRetryExhaustionAndCrashBudget(t *testing.T) {
 	secondRunCtx, secondCancel := context.WithCancel(t.Context())
 	defer secondCancel()
 	go func() { _ = secondWorker.Run(secondRunCtx) }()
-	waittest.Until(t, 15*time.Second, func() bool {
-		stream, err := f.js.Stream(t.Context(), deadLetterStream)
+	waittest.Until(t, 15*time.Second, func(ctx context.Context) bool {
+		stream, err := f.js.Stream(ctx, deadLetterStream)
 		if err != nil {
 			return false
 		}
-		_, err = stream.GetLastMsgForSubject(t.Context(), deadLetterSubject)
+		_, err = stream.GetLastMsgForSubject(ctx, deadLetterSubject)
 		return err == nil
 	}, "delivery beyond budget to dead-letter transfer")
 	select {
@@ -349,12 +349,12 @@ func TestNATSPoisonDLQAndRedrive(t *testing.T) {
 		t.Fatalf("publish poison: %v", err)
 	}
 	var dlq *jetstream.RawStreamMsg
-	waittest.Until(t, 5*time.Second, func() bool {
-		stream, streamErr := f.js.Stream(t.Context(), deadLetterStream)
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		stream, streamErr := f.js.Stream(ctx, deadLetterStream)
 		if streamErr != nil {
 			return false
 		}
-		dlq, streamErr = stream.GetLastMsgForSubject(t.Context(), deadLetterSubject)
+		dlq, streamErr = stream.GetLastMsgForSubject(ctx, deadLetterSubject)
 		return streamErr == nil
 	}, "poison dead-letter transfer")
 	if handlerCalls.Load() != 0 {
@@ -372,7 +372,7 @@ func TestNATSPoisonDLQAndRedrive(t *testing.T) {
 	if err != nil || result.Duplicate {
 		t.Fatalf("redrive result = %+v, error = %v", result, err)
 	}
-	waittest.Until(t, 5*time.Second, func() bool { return handlerCalls.Load() == 1 }, "redriven poison delivery")
+	waittest.Until(t, 5*time.Second, func(context.Context) bool { return handlerCalls.Load() == 1 }, "redriven poison delivery")
 	stream, err := f.js.Stream(t.Context(), sourceStream)
 	if err != nil {
 		t.Fatalf("lookup source stream for old-ID redrive: %v", err)

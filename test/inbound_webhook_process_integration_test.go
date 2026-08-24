@@ -64,7 +64,7 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 	}
 
 	first := startWorker()
-	waittest.Until(t, 30*time.Second, func() bool {
+	waittest.Until(t, 30*time.Second, func(context.Context) bool {
 		marked, err := os.ReadFile(marker)
 		return err == nil && slices.Contains(strings.Fields(string(marked)), inboundVectorID)
 	}, "first inbound worker handled receipt")
@@ -101,7 +101,7 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 	if err != nil || control.Outcome != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("control=%+v err=%v", control, err)
 	}
-	waittest.Until(t, 30*time.Second, func() bool {
+	waittest.Until(t, 30*time.Second, func(context.Context) bool {
 		marked, err := os.ReadFile(marker)
 		return err == nil && slices.Contains(strings.Fields(string(marked)), controlID)
 	}, "restarted inbound worker handled control receipt")
@@ -177,9 +177,9 @@ func TestInboundWebhookDisclosureBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	waittest.Until(t, 30*time.Second, func() bool {
+	waittest.Until(t, 30*time.Second, func(waitCtx context.Context) bool {
 		var outcome string
-		err := pool.QueryRow(ctx, `SELECT outcome FROM inbound_webhook_receipts WHERE delivery_id = 'msg_disclosure'`).Scan(&outcome)
+		err := pool.QueryRow(waitCtx, `SELECT outcome FROM inbound_webhook_receipts WHERE delivery_id = 'msg_disclosure'`).Scan(&outcome)
 		return err == nil && outcome == "handled"
 	}, "disclosure receipt reached handled")
 	_ = process.Process.Kill()
