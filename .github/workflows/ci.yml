@@ -41,6 +41,8 @@ jobs:
       template_generator: ${{ steps.surfaces.outputs.template_generator }}
       documentation: ${{ steps.surfaces.outputs.documentation }}
       integration: ${{ steps.surfaces.outputs.integration }}
+      integration_initializer: ${{ steps.surfaces.outputs.integration_initializer }}
+      integration_records: ${{ steps.surfaces.outputs.integration_records }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,9 +75,11 @@ jobs:
       needs.changes.outputs.protobuf == 'true' ||
       needs.changes.outputs.sqlc == 'true' ||
       needs.changes.outputs.agent_instructions == 'true' ||
-      needs.changes.outputs.template_generator == 'true'
+      needs.changes.outputs.template_generator == 'true' ||
+      needs.changes.outputs.integration_initializer == 'true' ||
+      needs.changes.outputs.integration_records == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -118,6 +122,12 @@ jobs:
       - name: Initializer contract
         if: needs.changes.outputs.template_generator == 'true'
         run: make template-init-check
+      - name: External integration initializer contract
+        if: needs.changes.outputs.integration_initializer == 'true'
+        run: make integration-init-check
+      - name: Integration record parity
+        if: needs.changes.outputs.integration_records == 'true'
+        run: make integration-record-check
       - name: Instruction ownership
         if: needs.changes.outputs.agent_instructions == 'true'
         run: make check-instructions

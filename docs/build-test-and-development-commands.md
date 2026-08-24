@@ -57,7 +57,7 @@ make integration-init NAME=billing TRANSPORT=http \
 ```
 
 While changing the initializer harness, select one named row and keep the
-25-row default for final acceptance:
+current complete matrix for final acceptance:
 
 ```bash
 bash scripts/ci/integration-init-check.sh --list

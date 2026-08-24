@@ -7,17 +7,16 @@ The accepted behavior, exclusions, proof expectations, and reopen conditions
 remain authoritative. This design adds no provider operation, retry policy,
 business port, deployment step, credential value, or live-provider claim.
 
-Current repository authority is commit
-`8967a4ac06d4fce0515703b15ffa5db35e5378ae` plus the inspected dirty tree.
-The dirty HTTP-client, OAuth, and workflow edits remain evidence only; the
-initializer does not consume their uncommitted shapes as implementation input.
+Current repository authority is PR base
+`94dc45411c99413739a75a435aa37b25befeba77` plus this fixed implementation
+candidate. Unrelated worktree edits are not implementation inputs.
 
 ## Drivers and selected mechanism
 
 | Driver | Forced consequence |
 | --- | --- |
-| The command is build-time, local, and must not contact a provider or network | `make integration-init` delegates to one repository Bash script and runs pinned tools with `GOTOOLCHAIN=local`, `GOPROXY=off`, and `GOSUMDB=off`; an unavailable local tool fails before the caller worktree changes. |
-| The input contract and start state are immutable | Preflight requires one clean worktree, the same `HEAD` throughout the run, a regular committed contract at the accepted path, a regular `template.lock`, resolved profile choices, and no unresolved profile markers. |
+| The command is build-time, local, and must not contact a provider or network | `make integration-init` delegates to one repository Bash script, admits only document-local HTTP `$ref` values, and runs pinned tools with `GOTOOLCHAIN=local`, `GOPROXY=off`, and `GOSUMDB=off`; an unavailable local tool fails before the caller worktree changes. |
+| The input contract and start state are immutable | Preflight requires one clean worktree, the same `HEAD` throughout the run, a regular committed contract at the accepted path, a regular `template.lock` with canonical `state = "complete"`, resolved profile choices, and no unresolved profile markers. |
 | OAuth config must have one runtime owner | Retaining the profile keeps only the reusable credential package; each OAuth invocation creates its named tuple directly and never installs a root singleton. |
 | A multi-file failure must restore exactly the clean start | Rendering, generation, formatting, and validation occur in one temporary detached Git worktree at the caller's `HEAD`; only its validated cached diff is applied to the caller. `git apply` is the sole caller-worktree mutation. |
 | Manual adapter work must survive regeneration | Initial creation and same-identity refresh are separate modes. Refresh runs only the registered generator and validation; it never renders the adapter, config, bootstrap, docs, record, or proof files again. |
@@ -35,7 +34,9 @@ the production decision to `scripts/init-module.sh`: it admits exactly
 `OUTBOUND_HTTP=none|bounded`, records `outbound_http` in `template.lock`, retains
 `internal/infra/httpclient` for `bounded` and whenever another selected retained
 capability still imports it, and removes it only when no selected capability
-does. `template-init-check.sh` proves the selector/profile cross-product. The
+does. `make template-init-check` through
+`scripts/ci/init-module-contract-check.sh` proves the selector/profile
+cross-product. The
 initializer reads only that committed lock field and never reconstructs the
 package.
 
@@ -57,9 +58,10 @@ command-line assignment except `NAME`, `TRANSPORT`, `CONTRACT`, `TARGET`, and
 `AUTH`; this catches misspelled initializer variables instead of treating them
 as ambient configuration. The script accepts no undocumented public flag.
 
-`NAME` is admitted by `^[a-z][a-z0-9_]*$`, `go/token.IsIdentifier`, and
-`!token.IsKeyword`; the token check is performed by the installed Go toolchain,
-not by a maintained keyword copy. HTTP requires the exact path
+`NAME` is admitted by `^[a-z][a-z0-9_]*$`, absence of the reserved `__`
+environment-key delimiter, `go/token.IsIdentifier`, and `!token.IsKeyword`; the
+token check is performed by the installed Go toolchain, not by a maintained
+keyword copy. HTTP requires the exact path
 `api/external/<NAME>/openapi.yaml`. gRPC requires a `.proto` entry point below
 `api/proto/external/<NAME>/`. Exact accepted paths make traversal and
 repository escape unrepresentable; Git and filesystem checks additionally
@@ -70,12 +72,14 @@ The command takes an exclusive initializer lock below `git rev-parse
 sequence is:
 
 1. Resolve the repository root; reject a non-clean caller tree, a missing or
-   non-regular `template.lock`, another initializer, unresolved profile sources
+   non-regular or incomplete `template.lock`, another initializer, unresolved profile sources
    or markers, a changed `HEAD`, a missing retained choice, an invalid contract,
    a record collision, and an output collision. Classify initial versus refresh.
-2. Validate the contract without network. HTTP uses the pinned local OpenAPI
-   validator. gRPC uses the pinned cached Buf binary and current module config.
-   A missing tool/cache fails here.
+2. Validate the contract without network. Before any OpenAPI validator or
+   generator receives the HTTP document, a YAML-node check rejects every
+   `$ref` that is not document-local (`#...`). HTTP then uses the pinned local
+   OpenAPI validator. gRPC uses the pinned cached Buf binary and current module
+   config. A missing tool/cache fails here.
 3. Add a temporary detached worktree at the exact caller `HEAD` and invoke the
    same script's private staging mode with the already validated tuple. The
    private mode is not a public command surface.
@@ -121,7 +125,10 @@ remain pinned by that source and `tools/go.mod`.
 
 - No record selects initial mode. Every reserved output must be absent, except
   the accepted contract.
-- An exact record selects refresh mode. `name`, `transport`, `contract`,
+- An exact byte-for-byte canonical regular non-symlink record selects refresh
+  mode. `schema`, `name`, `transport`, `contract`, applicable `target`, `auth`,
+  and `generator_source` are all checked; duplicate, reordered, or extra fields
+  are rejected. `name`, `transport`, `contract`,
   applicable `target`, and `auth` are the locked integration identity. A new
   committed contract blob at the same path is allowed.
 - A present non-exact record, duplicate name, reserved-path collision, missing
@@ -170,12 +177,13 @@ service subset.
 
 `Makefile` discovers only the fixed external OpenAPI contract and generator
 package shapes for canonical `openapi-generate`, validation, and drift. The
-OpenAPI drift script snapshots every discovered external generated file before
-`go generate`. Buf already generates the complete `api/proto` module and
-snapshots `internal/gen/proto`; `scripts/proto.sh` gains record/source/output
-parity so the previously implicit subtree becomes an explicit canonical input.
-The aggregate and change-scope owners route initializer, record, contract,
-generator, and generated-path changes into those canonical checks.
+Make's `openapi-drift-check` snapshots every discovered external generated file
+before `go generate`. The root `proto-generate` and `proto-drift-check` targets
+generate and snapshot the complete `api/proto` module. The separate
+`scripts/ci/integration-record-check.sh` binds each exact record to its contract,
+generated output, adapter, config, bootstrap, and documentation. The
+changed-surface owner routes initializer, record, contract, generator, and
+generated paths into those canonical checks.
 
 Generated Go is never formatted or edited as manual source. Manual adapter,
 config, bootstrap, documentation, record, generator config, and proof files
@@ -215,9 +223,11 @@ selected public/private class. `private-https` requires the non-empty DNS suffix
 and `external-https` has no suffix field. The adapter revalidates through
 `httpclient.NewExternalHTTPS` or `NewPrivateHTTPS`.
 
-gRPC config validation admits exactly `dns:///hostname:443`: no user info, IP
-literal, extra path, query, fragment, or other resolver. Bootstrap derives the
-hostname, builds system-root TLS with that `ServerName`, and calls
+gRPC config validation trims the required value. The generated adapter is the
+single transport-policy owner and admits exactly `dns:///hostname:443`: no
+authority, user info, IP literal, encoded or extra path, query, fragment, invalid
+ASCII DNS label, or other resolver. It returns the canonical target and hostname,
+builds system-root TLS with that `ServerName`, and calls
 `grpcclient.New`, which retains resolution, reconnect, `pick_first`, transparent
 transport retry, service-config denial, and shared message/header bounds.
 
@@ -344,14 +354,14 @@ matrix or enter Test Design.
 
 | Specification claim | Selected proving surface |
 | --- | --- |
-| Command grammar, capability/path admission, clean transaction, collisions, identity, no-op/refresh, failure restoration, and unrelated-byte preservation | `scripts/ci/integration-init-check.sh` over fresh committed initialized fixtures; the harness owns fixture-byte comparison and distinct non-disclosure canaries |
-| HTTP source/generator/output drift | per-integration `go:generate`, canonical `openapi-generate`, and `scripts/ci/generated-drift-check.sh` |
-| gRPC source/generator/output drift | current Buf module, `buf.gen.yaml`, and `scripts/proto.sh` |
+| Command grammar, capability/path/reference admission, clean transaction, collisions, identity, no-op/refresh, failure restoration, and unrelated-byte preservation | `scripts/ci/integration-init-check.sh` over fresh committed initialized fixtures; the harness owns fixture-byte comparison, a metadata-style remote-reference falsifier, and distinct non-disclosure canaries |
+| HTTP source/generator/output drift | per-integration `go:generate` plus Make `openapi-generate` and `openapi-drift-check` |
+| gRPC source/generator/output drift | current Buf module and `buf.gen.yaml` through Make `proto-generate` and `proto-drift-check` |
 | Typed config, target denial, OAuth absence/presence, constructor no-I/O, and cleanup order | package-local config/adapter/bootstrap proof beside each owner |
-| Generated local fake: construction, one bounded successful exchange, and one sanitized failure | `scripts/ci/integration-init-check.sh` owns fixed test contracts and emits fixture-only `internal/infra/<NAME>/client_contract_test.go` inside its temporary initialized checkout, where the known fixture operation may be selected without inferring an adopter's provider semantics |
-| Generated code containment and import direction | Go `internal`, generated depguard rule for gRPC, `project-structure-check`, and package compile |
+| Generated binding and construction split proof | `scripts/ci/integration-init-check.sh` proves no-I/O concrete-adapter construction, then emits fixture-only `internal/infra/<NAME>/client_contract_test.go` for one local generated-binding exchange; retained transport/auth package tests remain the independent bounded-denial and credential-failure owners because the scaffold exposes no operation to drive end to end |
+| Generated code containment and import direction | Go `internal`, generated depguard rule for gRPC, `integration-record-check`, and package compile |
 | Secret and raw-value non-disclosure | existing config secret-source policy and repository secret-scan owner plus focused generated-output and command-output sinks |
-| Aggregate routing after dynamic paths exist | `ci-change-scope` self-test and the canonical OpenAPI/proto/format/compile aggregates |
+| Aggregate routing after dynamic paths exist | `changed-surfaces-check` and the canonical record/OpenAPI/proto/format/compile aggregates |
 
 The later Test Design owner must choose the smallest deterministic HTTP/gRPC
 fixture matrix and falsifiers for the eight locked proof expectations. This
@@ -364,12 +374,13 @@ as proof of provider semantics or live compatibility.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Make command and accepted variable surface | `Makefile` | `template-init` is already a thin Make-to-script target | repository build command | add `integration-init` and `integration-init-check`; reject extra command-line assignments | no runtime import or new executable | none | command harness | reopen Specification if another public invocation shape is required |
 | Initial/refresh transaction | `scripts/integration-init.sh` | Git and Bash already own template mutation | initializer | one parent/stage script with detached-worktree patch application | may invoke only current pinned repository tools | owns lock/worktree removal | command harness | reopen System Design if Git clean-start staging cannot cover an adopter |
+| OpenAPI reference admission | `scripts/openapi-ref-check.go` | pinned tools otherwise allow external URI references | initializer | parse YAML nodes and admit only document-local `#...` references before validation/generation | reuses `go.yaml.in/yaml/v3` already pinned by `tools/go.mod`; no network-capable loader | none | E3 contract row with local control and remote mutant | reopen Specification to support repository-local multi-file contracts |
 | Integration identity | `integrations/<NAME>.toml` | `template.lock` uses fixed line-oriented TOML-like records | named integration | add once; exact parse on repeat | not consumed at runtime or used as registry | no removal in v1 | command harness/project structure | reopen Specification for rename/remove/reconfigure |
 | External contract authority | accepted `api/external` or `api/proto/external` path | current OpenAPI and Buf contracts are canonical | service developer | never rewrite; register only | contract -> generated output -> adapter | none | canonical generator drift | reopen Specification for SDK/custom generator/dynamic source |
 | HTTP generation | adapter-internal OpenAPI package and canonical scripts | current service OpenAPI uses `go:generate` + pinned tool | named adapter plus generator | add client-only config/directive/output; extend discovery/drift | generated package is Go-internal to adapter | none | OpenAPI drift/compile | reopen ownership if generated client cannot stay internal |
 | gRPC generation | existing Buf module and `internal/gen/proto/external/<NAME>` | current Buf config already owns recursive module output | Buf/Protobuf generator | keep source-relative output; add explicit record/source/output parity | generated imports denied outside named adapter/generated subtree | none | proto drift/compile/depguard | reopen ownership if contract layout defeats adapter containment |
 | Per-integration runtime config | `internal/config` | tagged structs own decode/known keys; section file owns defaults/validation | named integration config | add one concrete aggregate field and one per-name config file | no map/registry; bootstrap is first runtime consumer | immutable snapshot | config package proof | reopen Specification for dynamic integration sets or reload |
-| Retained outbound HTTP selection | `scripts/init-module.sh` and `template.lock` | authoritative `HEAD` lacks the field; current dirty selector is evidence, not input | template initialization | add exact `none|bounded` choice, lock write/readback, dependency-aware httpclient retain/remove | only `template-init` selects physical capability; integration initializer reads and fails closed | none | `template-init-check.sh` cross-product | reopen Specification if another selector value or reconstruction is required |
+| Retained outbound HTTP selection | `scripts/init-module.sh` and `template.lock` | authoritative `HEAD` lacks the field; current dirty selector is evidence, not input | template initialization | add exact `none|bounded` choice, lock write/readback, dependency-aware httpclient retain/remove | only `template-init` selects physical capability; integration initializer reads and fails closed | none | `make template-init-check` / `scripts/ci/init-module-contract-check.sh` cross-product | reopen Specification if another selector value or reconstruction is required |
 | OAuth config cardinality | each OAuth invocation adds only `integrations.<NAME>.oauth.*` | retained capability has no runtime tuple | named adapter for OAuth; retained package for later invocation | retain package through `template.lock` and generate one named tuple | no shared credential owner and no root compatibility path | adapter closes its owner | profile/config/adapter proof | reopen Specification for a dynamic integration set |
 | Concrete adapter | `internal/infra/<NAME>` | repository architecture places providers under `internal/infra` | named integration | add `doc.go` and `client.go`; no initial operation | only adapter imports generated client/connection and retained transport/auth | owns transport/auth close | adapter package proof | reopen Specification for provider SDK, stream lifecycle, or callable generated behavior |
 | Composition and partial startup | `cmd/service/internal/bootstrap` | `run.go` explicitly constructs and closes dependencies | service bootstrap | add `startup_<NAME>.go` and explicit `run.go` edges | feature receives adapter only through later explicit injection | reverse-order close post-drain/pre-dependencies | bootstrap lifecycle proof | reopen System Design if another binary adopts the integration |
@@ -400,16 +411,16 @@ placement, dependency, generated/manual, lifecycle, and proof decisions follow.
 | change `internal/config/snapshot_contract_test.go` | add concrete named leaf sentinels | current reflection contract requires every generated field | test-only maps | config proof | no production lifecycle | config/test deps | provider operation semantics |
 | change `internal/config/testhelpers_test.go` and `internal/config/configtest/configtest.go` | install exact named required tuple | generated config makes those values required | test-private setup | config tests -> load | none | testing/stdlib | provider fake |
 | add/change `internal/config/integrations_config.go` | concrete aggregate fields only | nested `integrations.<NAME>` needs one tagged struct without a map | `IntegrationsConfig`; exact per-name fields | decode shape | none | no imports | registry iteration, defaults, validation |
-| add `internal/config/<NAME>_integration_config.go` | exact transport/auth fields, empty defaults, pure validation through the shared OAuth tuple | one named config owner | unexported section type/functions; exported leaf fields only as bootstrap needs | config decode/validate -> bootstrap | closed key-only errors | stdlib | I/O, generator, adapter construction, business policy |
+| add `internal/config/<NAME>_integration_config.go` | exact transport/auth fields, empty defaults, required target presence, pure validation through the shared OAuth tuple | one named config owner | unexported section type/functions; exported leaf fields only as bootstrap needs | config decode/validate -> bootstrap | closed key-only errors | stdlib | gRPC resolver policy, I/O, generator, adapter construction, business policy |
 | add `internal/config/<NAME>_integration_config_test.go` | routine decode/validation and secret-source parity | production config file needs local proof | test only | config proof | none | config test support | broad initializer transaction matrix |
 | change `cmd/service/internal/bootstrap/run.go` | explicit construction, later injection point, partial and ordered close | composition root is the only valid runtime owner | local concrete variable/close guard; no registry | config -> adapter -> future feature; drain -> close | closes once after background join | config, named adapter, existing bootstrap owners | provider operation, target parsing, generic integration collection |
 | add `cmd/service/internal/bootstrap/startup_<NAME>.go` | config-to-adapter mapping | keeps generated wiring out of the already broad lifecycle function | private `init<NAME>` | run -> adapter New | wrap closed construction error only | config, named adapter, telemetry collaborators only if selected owner needs them | readiness, retries, feature semantics |
 | add `cmd/service/internal/bootstrap/startup_<NAME>_test.go` | routine no-I/O construction mapping and close parity | exact mapping has one package owner | test-private fakes only at consumer seam | bootstrap proof | partial-close observables | bootstrap/test deps | provider emulation or Test Design matrix |
 | conditionally change `cmd/service/internal/bootstrap/run_test.go` | add exact named integration keys | shutdown/lifecycle tests need one valid required config tuple after generation | test-private setup only | bootstrap test setup | none | stdlib/testing | adapter or provider behavior |
 | add `internal/infra/<NAME>/doc.go` | package audience, authority, absent seams | concrete adapter has generated/manual and lifecycle audiences | package documentation only | none | documents Close owner | none | behavior, generator directive |
-| add `internal/infra/<NAME>/client.go` | transport-specific Config, concrete Client, New, close; private generated client/connection | one concrete adapter is required now | exported concrete `Config`, `Client`, `New`, transport/auth-specific `Close`; no operation method | bootstrap -> adapter -> retained clients | validates again, owns auth/transport close and sanitized construction errors | stdlib, retained httpclient or grpcclient, optional oauth, generated package only as allowed | feature/domain imports, retry, readiness, provider mapping, token API |
+| add `internal/infra/<NAME>/client.go` | transport-specific Config, concrete Client, New, idempotent close; private generated client/connection; exact gRPC resolver/TLS target admission | one concrete adapter is required now | exported concrete `Config`, `Client`, `New`, transport/auth-specific `Close`; no operation method | bootstrap -> adapter -> retained clients | validates the dial boundary, owns auth/transport close and sanitized construction errors | stdlib, retained httpclient or grpcclient, optional oauth, generated package only as allowed | feature/domain imports, retry, readiness, provider mapping, token API |
 | add `internal/infra/<NAME>/client_test.go` | routine constructor, target, no-I/O, no-auth-path and idempotent close proof | production adapter needs local contract proof | test only | adapter proof | cleanup observable | adapter/test deps | live provider or generated business semantics |
-| fixture-only `internal/infra/<NAME>/client_contract_test.go` created by `scripts/ci/integration-init-check.sh` | local fake for construction, one bounded successful exchange, and one sanitized failure over the harness's fixed contract | Specification proof 6 needs one fixed package/file owner without forcing adopter operation inference | temporary test only; never an initializer output or exported seam | known generated fixture client -> concrete adapter -> retained transport/auth | owns and joins only its fixture listeners/connections | adapter package, stdlib, existing package-local test support | adopter/provider semantics, live endpoint, persisted scaffold file |
+| fixture-only `internal/infra/<NAME>/client_contract_test.go` created by `scripts/ci/integration-init-check.sh` | no-I/O adapter construction plus one separate local generated-binding exchange over the harness contract | Specification proof 6 needs honest split proof without inventing an adapter operation | temporary test only; never an initializer output or exported seam | concrete adapter construction; separately generated fixture client -> local fake | owns and joins only its fixture listeners/connections | adapter package, generated binding, stdlib/current gRPC test support | adopter/provider semantics, live endpoint, persisted scaffold file |
 | add `internal/infra/<NAME>/internal/openapi/doc.go` (HTTP) | exact `go:generate` authority | external HTTP client needs a canonical package generator | directive/package doc only | contract -> generator | none | repository script | manual adapter behavior |
 | add generated `internal/infra/<NAME>/internal/openapi/client.gen.go` (HTTP) | client/models derived from exact contract | pinned oapi-codegen output | generated declarations only | adapter private dependency | generated errors remain inside adapter | generator-selected runtime deps already installed | manual edits or business mapping |
 | add generator-determined `internal/gen/proto/external/<NAME>/**/*.pb.go` and `*_grpc.pb.go` (gRPC) | messages and service client interfaces derived from exact contracts | current Buf source-relative output | generated declarations only | named adapter private dependency when a later method selects a service | grpc-go generated semantics only | protobuf/grpc generated deps | adapter, config, lifecycle, manual edits |
@@ -427,11 +438,10 @@ No other Go path is implementation-local.
 | change `Makefile` | public target, help, fixed external OpenAPI discovery, and focused check target |
 | add `scripts/integration-init.sh` | sole initial/refresh transaction and render owner; `.env` is not an input or precondition |
 | add `scripts/ci/integration-init-check.sh` | deterministic command/rollback/identity, non-disclosure and byte-comparison owner, and sole generator/runner of the temporary package-local successful/sanitized-failure fake; exact oracle selection remains Test Design |
-| change `scripts/ci/generated-drift-check.sh` | include every fixed external OpenAPI generated output |
-| change `scripts/proto.sh` | make external gRPC record/source/output parity explicit inside canonical generation/drift |
-| change `scripts/ci/project-structure-check.sh` | enforce record/contract/config/adapter/docs/generated containment and no orphan reserved path |
-| change `scripts/ci/ci-change-scope.sh` | route initializer and generated integration deltas to the owning gates |
-| change `scripts/ci/template-init-check.sh` | prove initializer retention and the `OUTBOUND_HTTP`/`GRPC`/`OUTBOUND_AUTH` prerequisite shapes in initialized fixtures |
+| change `Makefile` OpenAPI/protobuf targets | discover fixed external OpenAPI packages and keep root Buf generation/drift canonical |
+| add `scripts/ci/integration-record-check.sh` | enforce exact record/contract/config/adapter/bootstrap/docs/generated parity and reject orphaned owners |
+| change `scripts/ci/changed-surfaces.sh` | route initializer and every record-bound source/output/owner delta to its gates |
+| change `scripts/ci/init-module-contract-check.sh` through `make template-init-check` | prove initializer retention and the `OUTBOUND_HTTP`/`GRPC`/`OUTBOUND_AUTH` prerequisite shapes in initialized fixtures |
 | change `scripts/init-module.sh` | production owner for exact `OUTBOUND_HTTP=none|bounded`, `template.lock` persistence/readback, and dependency-aware retention/removal of `internal/infra/httpclient`; it does not create integration config or reconstruct a removed profile |
 | change `.golangci.yml` | template adapter-ownership rule plus each generated gRPC integration's exact adapter-only import denial |
 | conditionally change `env/config/local.yaml` and `env/.env.example` | every invocation adds only its exact empty tracked named integration inputs; `AUTH=none` adds no OAuth fields |

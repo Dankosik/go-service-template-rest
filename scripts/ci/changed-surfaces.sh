@@ -4,6 +4,7 @@ set -euo pipefail
 names=(
 	go go_dependencies openapi protobuf sqlc migrations runtime_image shell
 	github_actions agent_instructions template_generator documentation integration
+	integration_initializer integration_records
 )
 
 reset() {
@@ -48,8 +49,18 @@ classify() {
 				;;
 		esac
 		case "${file}" in
+			api/external/*/openapi.yaml|internal/infra/*/internal/openapi/*)
+				mark integration_records
+				;;
+		esac
+		case "${file}" in
 			buf.yaml|buf.gen.yaml|api/proto/*|examples/grpc-reference-service/buf.yaml|examples/grpc-reference-service/buf.gen.yaml|examples/grpc-reference-service/api/proto/*|examples/grpc-reference-service/internal/gen/proto/*|internal/gen/proto/*)
 				mark protobuf
+				;;
+		esac
+		case "${file}" in
+			api/proto/external/*|internal/gen/proto/external/*)
+				mark integration_records
 				;;
 		esac
 		case "${file}" in
@@ -79,11 +90,22 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			scripts/init-module.sh|scripts/integration-init.sh|scripts/ci/init-module-contract-check.sh|scripts/ci/integration-init-check.sh|scripts/ci/template-init-check.sh|scripts/profiles/*)
+			scripts/integration-init.sh|scripts/openapi-ref-check.go|scripts/ci/integration-init-check.sh)
+				mark go template_generator integration integration_initializer
+				;;
+			scripts/init-module.sh|scripts/ci/init-module-contract-check.sh|scripts/ci/template-init-check.sh|scripts/profiles/*)
 				mark go template_generator integration
+				;;
+			integrations/*.toml|scripts/ci/integration-record-check.sh|scripts/ci/integration-record-constructor-check.go|scripts/ci/integration-record-bootstrap-check.go|scripts/ci/integration-record-grpc-check.go)
+				mark integration_records
 				;;
 			template-owned.paths|template.lock)
 				mark template_generator
+				;;
+		esac
+		case "${file}" in
+			internal/infra/*/client.go|internal/config/*_integration_config.go|cmd/service/internal/bootstrap/startup_*.go|docs/integrations/*)
+				mark integration_records
 				;;
 		esac
 		case "${file}" in
@@ -99,7 +121,7 @@ classify() {
 		# gates they route instead of trusting the classifier that changed.
 		case "${file}" in
 			Makefile)
-				mark go openapi protobuf sqlc migrations runtime_image shell template_generator integration
+				mark go openapi protobuf sqlc migrations runtime_image shell template_generator integration integration_initializer integration_records
 				;;
 			scripts/ci/changed-surfaces.sh)
 				mark "${names[@]}"
@@ -123,6 +145,23 @@ self_test() {
 	output="$(printf '%s\n' scripts/ci/template-sync-behavior-check.sh | classify)"
 	grep -qx 'agent_instructions=true' <<<"${output}"
 	grep -qx 'shell=true' <<<"${output}"
+
+	output="$(printf '%s\n' scripts/integration-init.sh | classify)"
+	grep -qx 'integration_initializer=true' <<<"${output}"
+
+	for file in \
+		integrations/billing.toml \
+		api/external/billing/openapi.yaml \
+		internal/infra/billing/internal/openapi/client.gen.go \
+		internal/infra/billing/client.go \
+		internal/config/billing_integration_config.go \
+		cmd/service/internal/bootstrap/startup_billing.go \
+		docs/integrations/billing.md \
+		api/proto/external/identity/v1/identity.proto \
+		internal/gen/proto/external/identity/v1/identity.pb.go; do
+		output="$(printf '%s\n' "${file}" | classify)"
+		grep -qx 'integration_records=true' <<<"${output}"
+	done
 
 	output="$(printf '%s\n' internal/infra/postgres/queries/widgets.sql | classify)"
 	grep -qx 'go=false' <<<"${output}"
