@@ -46,7 +46,7 @@ if [[ ${user_seconds} == unknown ]]; then
 	cpu_seconds=unknown
 	max_rss_mb=unknown
 else
-	cpu_seconds=$(awk -v user="${user_seconds}" -v system="${system_seconds}" 'BEGIN { printf "%.2f", user + system }')
+	cpu_seconds=$(awk -v user="${user_seconds}" -v sys="${system_seconds}" 'BEGIN { printf "%.2f", user + sys }')
 	max_rss_mb=$(awk -v kb="${max_rss_kb}" 'BEGIN { printf "%.1f", kb / 1024 }')
 fi
 cache_restore_mb=$(awk -v kb="${cache_before}" 'BEGIN { printf "%.1f", kb / 1024 }')
