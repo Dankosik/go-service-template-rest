@@ -31,16 +31,10 @@ if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	(cd "${context}" && CODEOWNER=@acme/platform DATABASE=postgres bash ./scripts/init-module.sh)
 fi
 
-fingerprint="$({
-	cd "${context}"
-	find . -type f -not -path './.git/*' -exec shasum -a 256 {} +
-} | LC_ALL=C sort | shasum -a 256 | awk '{print $1}')"
-
 docker build \
 	--build-arg "APP_VERSION=${APP_VERSION:-dev}" \
 	--build-arg "VCS_REF=${VCS_REF:-unknown}" \
 	--build-arg "SOURCE_URL=${SOURCE_URL:-}" \
-	--build-arg "WORKTREE_FINGERPRINT=${fingerprint}" \
 	-f "${context}/build/docker/Dockerfile" \
 	-t "${IMAGE}" \
 	"${context}"

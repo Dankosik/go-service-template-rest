@@ -12,21 +12,21 @@ tmp="$(mktemp -d -t init-module-check.XXXXXX)"
 checkout="${tmp}/service"
 trap 'rm -rf -- "${tmp}"' EXIT
 mkdir -p "${checkout}"
-git -C "${ROOT_DIR}" archive HEAD | tar -xf - -C "${checkout}"
+automation_paths=(
+	Makefile README.md CONTRIBUTING.md .github .gitleaks.toml scripts tools/go.mod tools/go.sum
+	buf.yaml buf.gen.yaml examples/grpc-reference-service/buf.gen.yaml
+	internal/openapi/doc.go examples/reference-service/internal/openapi/doc.go
+	docs/benchmarking.md docs/benchmarking docs/build-test-and-development-commands.md
+	docs/ci-cd-production-ready.md docs/template-sync.md docs/validation-routing.md
+	docs/validation template-owned.paths
+)
+fixture_index="${tmp}/fixture.index"
+GIT_INDEX_FILE="${fixture_index}" git -C "${ROOT_DIR}" read-tree HEAD
+GIT_INDEX_FILE="${fixture_index}" git -C "${ROOT_DIR}" add -A -- "${automation_paths[@]}"
+fixture_tree="$(GIT_INDEX_FILE="${fixture_index}" git -C "${ROOT_DIR}" write-tree)"
+git -C "${ROOT_DIR}" archive "${fixture_tree}" | tar -xf - -C "${checkout}"
 git -C "${checkout}" init -q
 git -C "${checkout}" remote add origin git@github.com:acme/service.git
-
-patch="${tmp}/automation.patch"
-git -C "${ROOT_DIR}" diff --binary HEAD -- \
-	Makefile README.md CONTRIBUTING.md .github .gitleaks.toml scripts tools/go.mod tools/go.sum \
-	buf.yaml buf.gen.yaml examples/grpc-reference-service/buf.gen.yaml \
-	internal/openapi/doc.go examples/reference-service/internal/openapi/doc.go \
-	docs/benchmarking.md docs/benchmarking docs/build-test-and-development-commands.md \
-	docs/ci-cd-production-ready.md docs/template-sync.md docs/validation-routing.md \
-	docs/validation template-owned.paths >"${patch}"
-[[ ! -s "${patch}" ]] || git -C "${checkout}" apply "${patch}"
-mkdir -p "${checkout}/scripts/ci" "${checkout}/.github/workflows"
-cp "${ROOT_DIR}/scripts/ci/init-module-contract-check.sh" "${checkout}/scripts/ci/"
 
 # Keep unrelated profile candidates outside this automation oracle until their
 # initializer selector is present in the accepted owner.
