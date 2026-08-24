@@ -1,6 +1,7 @@
 # Technical Design transition
 
-status: ready
+status: superseded
+superseded_by: 2026-08-23 named-only OAuth maintainability repair
 owner: Technical Design
 result: `specs/external-integration-initializer/design/overview.md` SHA-256 `ad02cc02cd79dae097850eb241cb8d0f04ce8ee399fc5b2882a68b0255d3c2ac`
 review: `specs/external-integration-initializer/design/review.md` SHA-256 `d80db1713d1118e2345b5cb3297b842f6bf9c21e5ca2d7d04a960a5d4dbd2639` — fresh independent Technical Design Review `PASS`

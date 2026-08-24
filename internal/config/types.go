@@ -20,9 +20,6 @@ type Config struct {
 	// profile:authn-bearer:start
 	Authn AuthnConfig `koanf:"authn"`
 	// profile:authn-bearer:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	OutboundAuth OutboundAuthConfig `koanf:"outbound_auth"`
-	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:grpc:start
 	GRPC GRPCConfig `koanf:"grpc"`
 	// profile:grpc:end

@@ -48,18 +48,6 @@ func IsolateEnv(tb testing.TB) {
 	tb.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_SECRET", "rs-secret")
 	// profile:authn-oidc-introspection:end
 	// profile:authn-bearer:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	// #nosec G101 -- Deterministic test-only placeholders are installed only through testing.TB.Setenv.
-	for key, value := range map[string]string{
-		"APP__OUTBOUND_AUTH__TOKEN_URL":     "https://auth.example.com/oauth/token",
-		"APP__OUTBOUND_AUTH__CLIENT_ID":     "test-client",
-		"APP__OUTBOUND_AUTH__CLIENT_SECRET": "test-client-secret",
-		"APP__OUTBOUND_AUTH__SCOPES":        "payments.read payments.write",
-		"APP__OUTBOUND_AUTH__RESOURCE":      "https://payments.example.com",
-	} {
-		tb.Setenv(key, value)
-	}
-	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:object-storage:start
 	for key, value := range map[string]string{
 		"APP__OBJECT_STORAGE__PROVIDER":              "amazon_s3",

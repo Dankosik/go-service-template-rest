@@ -28,14 +28,12 @@ func (staticCredential) GetRequestMetadata(context.Context, ...string) (map[stri
 
 func (staticCredential) RequireTransportSecurity() bool { return true }
 
-func TestGRPCCredentialUsesCallerContextAndRequiresSecureTransport(t *testing.T) {
+func TestGRPCCredentialRequiresSecureTransport(t *testing.T) {
 	owner := newClient(func(context.Context) (*oauth2.Token, error) {
 		return validTestToken("opaque"), nil
 	}, nil)
-	credential := grpcCredential{client: owner}
-	if !credential.RequireTransportSecurity() {
-		t.Fatal("credential does not require transport security")
-	}
+	t.Cleanup(owner.Close)
+	credential := grpcCredential{source: clientTokenSource{client: owner}}
 	secure := credentials.NewContextWithRequestInfo(context.Background(), credentials.RequestInfo{
 		AuthInfo: testAuthInfo{CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -55,6 +53,7 @@ func TestGRPCBuildsAuthenticatedGuardedConnection(t *testing.T) {
 	owner := newClient(func(context.Context) (*oauth2.Token, error) {
 		return validTestToken("opaque"), nil
 	}, nil)
+	t.Cleanup(owner.Close)
 	config := grpcclient.DefaultConfig("dns:///resource.example.com:443")
 	options := grpcclient.Options{TransportCredentials: credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})}
 	client, err := owner.GRPC(config, options)

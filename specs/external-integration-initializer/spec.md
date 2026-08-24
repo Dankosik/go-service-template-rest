@@ -91,34 +91,15 @@ required choice. Absence of `template.lock`, unresolved template profile
 sources or markers, an invalid contract, a path collision, or a changed locked
 integration identity also fails before any owned output is replaced.
 
-## Ignored `.env` fail-closed contract
+## OAuth configuration ownership
 
-The initializer never takes custody of the repository-root ignored `.env`. On
-the first `AUTH=oauth2-client-credentials` invocation whose success would retire
-the singleton `outbound_auth` configuration, any filesystem entry at `.env`
-fails the invocation before output mutation. The command may observe only that
-the path exists. It does not open, source, parse, hash, copy, rename, chmod,
-delete, restore, or include the path in its rollback snapshot. The failure names
-the path and the manual prerequisite, but not its file type, size, keys, values,
-or other contents.
-
-The service developer or operator remains the sole custodian of any sensitive
-values in that file. They must preserve or move it outside the initializer's
-authority, run the initializer, and then manually map retained values to the
-generated named integration inputs before local runtime. Restoring unchanged
-legacy `APP__OUTBOUND_AUTH__*` entries is not compatibility input: existing
-unknown-key validation rejects them at startup without echoing their values.
-The initializer does not retain a singleton alias, infer whether values are
-secrets, or migrate values automatically.
-
-`AUTH=none` does not trigger this precondition and leaves `.env` outside command
-authority. After the first OAuth integration is recorded, a same-identity no-op
-or generated-only refresh neither requires `.env` to be absent nor gains
-authority over it. Initial rejection leaves the clean-start repository and
-`.env` bytes unchanged. An induced initial failure after the absence check
-restores only initializer-owned repository bytes and leaves `.env` absent. An
-induced refresh failure restores generated-only repository bytes and leaves any
-present `.env` byte-identical.
+Retaining `OUTBOUND_AUTH=oauth2-client-credentials` keeps only the reusable
+credential package. It adds no root runtime tuple. Every OAuth initializer
+invocation creates one named `integrations.<name>.oauth.*` tuple directly, so
+there is no singleton migration or compatibility alias. Legacy
+`APP__OUTBOUND_AUTH__*` keys remain unknown and fail validation without value
+disclosure. Repository-root `.env` is never an initializer input, precondition,
+or action target.
 
 ## Generated result
 
@@ -194,8 +175,8 @@ and a provider result into a domain result.
   raw provider bodies, and raw provider errors never become logs, spans,
   metrics labels, caller-visible errors, documentation examples, or command
   output.
-- Shutdown rejects new credential acquisition, joins bounded in-flight
-  authentication work where applicable, closes the gRPC connection, and closes
+- Shutdown rejects new credential acquisition, cancels the bounded provider
+  context, closes the gRPC connection, and closes
   HTTP idle connections within the service's existing shutdown owner.
 - Transport unavailability, cancellation, and deadline expiry remain distinct
   from a provider business rejection. No raw error is promoted into a domain or
@@ -236,19 +217,6 @@ rejection_reason: none
 reopen_owner_or_condition: Security Decision when a new credential type, secret store, disclosure sink, or reader class is introduced
 ```
 
-Ignored `.env` custody:
-
-```text
-disposition: decision
-decision_or_constraint: fail before mutation when the first OAuth initializer would retire singleton config and any repository-root .env entry exists; observe path presence only and leave all value migration to its developer or operator custodian
-forced_consequences: no automatic read, rewrite, backup, deletion, restoration, or singleton alias; unchanged legacy keys fail current startup unknown-key validation; AUTH=none and post-migration refresh never take .env custody
-proof_or_gap: use distinct canaries to prove initial rejection is pre-mutation and non-disclosing, initial failure with no .env restores owned bytes without creating it, and same-identity refresh leaves a present .env byte-identical and absent from command output and generated artifacts
-blocker: none
-strongest_rejected_alternative: automatically parse or rewrite the ignored file, or preserve a singleton runtime alias for the first named integration
-rejection_reason: automatic migration would make a build-time scaffold owner read and restore potentially sensitive shell bytes, while an alias makes stale singleton authority ambiguous once integrations are independently named
-reopen_owner_or_condition: Specification and Security Decision when a named adopter requires automatic ignored-file migration or legacy singleton compatibility
-```
-
 ## Deliberately unchanged behavior and non-goals
 
 - `make template-init` remains the only owner of template profile selection,
@@ -259,7 +227,7 @@ reopen_owner_or_condition: Specification and Security Decision when a named adop
   idempotency, retry eligibility, partial-success meaning, reconciliation, and
   effect finality remain service-owned work after initialization.
 - The initializer does not infer an OpenAPI operation subset, Protobuf service
-  subset, OAuth scopes, audience, resource, provider base URL, dependency
+  subset, OAuth scopes, provider-specific token parameters, provider base URL, dependency
   criticality, timeout value, response-size value, concurrency limit, or
   telemetry business vocabulary.
 - It does not create a generic `Integration`, `Provider`, `Client[T]`, factory,
@@ -283,12 +251,10 @@ proves all of the following:
    secret or token API; `AUTH=none` leaves no auth-specific config or code.
 3. Missing retained capabilities, invalid or escaping contract paths, symlinks,
    invalid names, unknown choices, collisions, dirty worktrees, and changed
-   locked identities fail before output mutation. A first OAuth migration with
-   any root `.env` entry does the same without inspecting its contents.
+   locked identities fail before output mutation.
 4. An induced generation or validation failure restores the clean-start
    repository bytes, while a same-identity repeat is a no-op and a committed
-   contract change updates generated-only bytes. Initial and refresh fixtures
-   also prove the `.env` absence or bytes from command entry are unchanged.
+   contract change updates generated-only bytes.
 5. After the initializer extends their inputs, the repository's canonical
    generated-drift and aggregate checks detect stale external client code.
    Generated output also passes project-structure, formatting, compile, focused
@@ -298,12 +264,10 @@ proves all of the following:
    business semantics or require a live endpoint.
 7. Before and after invocation, unrelated template capabilities and manually
    owned paths are byte-identical.
-8. Distinct sensitive canaries from an operator-owned `.env` are absent from
-   initializer output, errors, rollback material, generated files,
-   documentation, logs, and test diagnostics. Restoring an unchanged legacy
-   fixture after successful first OAuth initialization proves startup rejects
-   the retired key names without disclosing their values; a manually mapped
-   named fixture proves the accepted local-runtime path.
+8. Distinct secret and provider canaries are absent from initializer output,
+   errors, rollback material, generated files, documentation, logs, and test
+   diagnostics. Legacy singleton environment keys are rejected without value
+   disclosure, while a named tuple proves the accepted local-runtime path.
 
 These checks establish scaffold integrity and negative safety boundaries. They
 do not establish a concrete provider operation's semantics, retry safety,
@@ -329,12 +293,6 @@ operation's own Specification, design, and proof.
   disjoint config, generated, adapter, documentation, and lock ownership.
   Observed repeated code does not by itself justify a generic registry or
   manifest.
-- The ignored `.env` boundary deliberately requires a manual custody step for
-  the first OAuth migration. Reopen Specification and Security Decision only
-  when a named adopter requires the initializer itself to migrate that file;
-  then define its shell grammar, concurrent-change detection, permissions,
-  atomic replacement, backup custody, and recovery before granting read or
-  write authority.
 - A contract that requires a provider SDK, custom code generator, dynamic
   endpoint, streaming-specific lifecycle, or unsupported authentication fails
   closed and reopens Specification rather than silently emitting a weaker

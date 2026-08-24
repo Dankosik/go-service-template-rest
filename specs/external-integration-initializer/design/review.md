@@ -1,5 +1,7 @@
 # Independent Technical Design Review
 
+superseded_by: 2026-08-23 named-only OAuth maintainability repair; this receipt does not accept the current artifacts
+
 candidate: `specs/external-integration-initializer/design/overview.md` SHA-256 `ad02cc02cd79dae097850eb241cb8d0f04ce8ee399fc5b2882a68b0255d3c2ac`
 verdict: PASS
 findings: none
