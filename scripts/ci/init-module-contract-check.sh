@@ -249,7 +249,11 @@ verify_profile() {
 		cd "${profile_checkout}"
 		go test -vet=off -run '^$' ./...
 		GOFLAGS='' go mod tidy -diff
-		GOFLAGS='' go -C tools mod tidy -diff
+		if [[ "${name}" == "minimal" ]]; then
+			TOOLS_SMOKE_ALL=1 make tools-dependencies-check
+		else
+			GOFLAGS='' go -C tools mod tidy -diff
+		fi
 		make openapi-drift-check sqlc-check
 		git add -A
 		git -c user.name=init-check -c user.email=init-check@example.invalid commit -qm generated
