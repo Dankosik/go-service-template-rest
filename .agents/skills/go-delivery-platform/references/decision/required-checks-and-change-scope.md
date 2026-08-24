@@ -13,9 +13,10 @@ check that did not exercise its claimed surface.
   migrations, runtime image, and image security remain distinct. One `required`
   job is always reported and rejects any failed or cancelled applicable leaf.
 - A skipped leaf is not evidence for that surface. The classifier makes the
-  skip explicit, while tag dispatch marks Go and release surfaces applicable so
-  integration cannot be path-skipped. Scheduled CI bypasses diff leaves and
-  runs only reachable Go vulnerability and built-image scans.
+  skip explicit. Pull requests, merge groups, and main pushes use their exact
+  comparison base; tags, manual runs, and the weekly audit select every surface.
+  Generated Go, compose, publication metadata, and each race owner remain
+  independently visible.
 - OpenAPI and Protobuf breaking comparisons run only on pull requests with the
   event's exact base SHA. A missing base OpenAPI contract means no comparison,
   not proof of compatibility.
