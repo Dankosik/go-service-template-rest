@@ -35,6 +35,13 @@ dependencies before adding machinery. Match the surrounding code's naming,
 comment density, idiom, and responsibility boundaries. Preserve unrelated work
 and generated/manual authority.
 
+Make failure and replacement decisions explicit. When an operation cannot
+establish the authority or preconditions required before an effect, reject it
+through the canonical failure path; do not claim success or silently weaken the
+contract. Retain a fallback, compatibility shim, or legacy path only for an
+accepted current requirement with one owner, observable activation, proof, and
+a removal condition; otherwise the replacement removes the superseded path.
+
 ## Validation budget
 
 During implementation, run one focused falsifier after a coherent edit batch.
