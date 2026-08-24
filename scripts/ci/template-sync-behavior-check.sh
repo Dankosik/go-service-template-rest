@@ -103,9 +103,10 @@ assert_v1() {
 
 target_direct="${fixture}/target-direct"
 target_generated="${fixture}/target-generated"
+target_pruned="${fixture}/target-pruned"
 target_dirty="${fixture}/target-dirty"
 target_invalid="${fixture}/target-invalid"
-for target in "${target_direct}" "${target_generated}" "${target_dirty}" "${target_invalid}"; do
+for target in "${target_direct}" "${target_generated}" "${target_pruned}" "${target_dirty}" "${target_invalid}"; do
 	clone_target "${target}"
 done
 
@@ -145,12 +146,25 @@ printf 'keep qwen content\n' >"${target_generated}/.qwen/skills/local-note"
 printf 'keep codex content\n' >"${target_generated}/.codex/config.toml"
 report=$(expect_failure "sync with ignored generated content" \
 	bash "${template}/scripts/template-sync.sh" --apply --from "${template}" --repo "${target_generated}")
-grep -Fq 'ignored generated content could be overwritten' <<<"${report}" ||
+grep -Fq 'ignored generated or pruned content could be overwritten' <<<"${report}" ||
 	fail "ignored generated content was refused for the wrong reason: ${report}"
 grep -Fxq 'keep claude content' "${target_generated}/.claude/skills/local-note" || fail "sync changed ignored Claude content"
 grep -Fxq 'keep qwen content' "${target_generated}/.qwen/skills/local-note" || fail "sync changed ignored Qwen content"
 grep -Fxq 'keep codex content' "${target_generated}/.codex/config.toml" || fail "sync changed ignored Codex content"
 assert_v1 "${target_generated}" "ignored generated target"
+
+printf '%s\n' 'state = "complete"' 'agent_harness = "core"' >"${target_pruned}/template.lock"
+git -C "${target_pruned}" add template.lock
+git -C "${target_pruned}" commit -qm core-harness
+mkdir -p "${target_pruned}/.opencode/node_modules"
+printf 'keep pruned content\n' >"${target_pruned}/.opencode/node_modules/local-note"
+report=$(expect_failure "sync with ignored pruned content" \
+	bash "${template}/scripts/template-sync.sh" --apply --from "${template}" --repo "${target_pruned}")
+grep -Fq 'ignored generated or pruned content could be overwritten' <<<"${report}" ||
+	fail "ignored pruned content was refused for the wrong reason: ${report}"
+grep -Fxq 'keep pruned content' "${target_pruned}/.opencode/node_modules/local-note" ||
+	fail "sync changed ignored pruned content"
+assert_v1 "${target_pruned}" "ignored pruned target"
 
 printf '\nfixture dirty source\n' >>"${template}/AGENTS.md"
 report=$(expect_failure "check with dirty source" \
