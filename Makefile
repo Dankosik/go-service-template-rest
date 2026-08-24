@@ -82,6 +82,7 @@ AGENT_ROLES_SYNC_SCRIPT := bash ./scripts/agent-roles-sync.sh
 CODEX_AGENTS_SYNC_SCRIPT := bash ./scripts/codex-agents-sync.sh
 INTEGRATION_INIT_SCRIPT := bash ./scripts/integration-init.sh
 INTEGRATION_INIT_CHECK_SCRIPT := bash ./scripts/ci/integration-init-check.sh
+INTEGRATION_RECORD_CHECK_SCRIPT := bash ./scripts/ci/integration-record-check.sh
 # profile:object-storage:start
 S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
 # profile:object-storage:end
@@ -98,7 +99,7 @@ TEMPLATE ?= ../go-service-template-rest
 # aggregate membership changes before enabling parallel prerequisites.
 .NOTPARALLEL: check check-go audit-full-manual mod-check lint-all lint-deep openapi-check proto-check
 
-.PHONY: help template-init template-init-check integration-init integration-init-check integration-routing-check \
+.PHONY: help template-init template-init-check integration-init integration-init-check integration-record-check integration-routing-check \
 	tidy fmt mod-check mod-tidy-check mod-verify fmt-check unit-check check check-go check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check \
 	test test-package test-all test-watch test-race test-integration test-integration-race \
 	lint lint-package lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
@@ -136,6 +137,7 @@ help:
 	@echo "  ALLOW_HEAVY=1 make audit-full-manual     # rare template/release audit; refused otherwise"
 	@echo "  make lint-fast PKG=./internal/config      # local changed-code signal; not a lint claim"
 	@echo "  make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none"
+	@echo "  make integration-record-check             # exact integration identity/source/output parity"
 	@echo "  make agent-roles-check | codex-agents-check | claude-skills-check | qwen-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt committed template instructions"
@@ -191,6 +193,9 @@ integration-init-check:
 		if [ "$(ALLOW_HEAVY)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_HEAVY=1 (CI sets CI=true)\n' "$@"; exit 2; fi; \
 	fi
 	$(INTEGRATION_INIT_CHECK_SCRIPT) $(INTEGRATION_INIT_ROWS)
+
+integration-record-check:
+	$(INTEGRATION_RECORD_CHECK_SCRIPT)
 
 template-owned-purity-check:
 	$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT)
@@ -300,7 +305,7 @@ changed-surfaces-check:
 integration-routing-check:
 	INTEGRATION_PACKAGES='$(INTEGRATION_PACKAGES)' WEBHOOK_RACE_PACKAGES='$(WEBHOOK_RACE_PACKAGES)' bash ./scripts/ci/integration-routing-check.sh
 
-check: check-go check-openapi check-proto check-sqlc
+check: check-go check-openapi check-proto check-sqlc integration-record-check
 
 audit-full-manual:
 	$(HEAVY_GUARD)

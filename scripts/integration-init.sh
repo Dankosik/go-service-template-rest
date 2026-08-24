@@ -2,9 +2,9 @@
 # make integration-init: add one named outbound HTTP or gRPC integration.
 set -euo pipefail
 
-export GOTOOLCHAIN="${GOTOOLCHAIN:-local}"
-export GOPROXY="${GOPROXY:-off}"
-export GOSUMDB="${GOSUMDB:-off}"
+export GOTOOLCHAIN=local
+export GOPROXY=off
+export GOSUMDB=off
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 NAME="${1-}"
@@ -30,12 +30,16 @@ usage() {
 
 lock_path=""
 stage_dir=""
+patch_path=""
 cleanup() {
 	if [[ -n "${stage_dir}" && -d "${stage_dir}" ]]; then
 		git -C "${ROOT_DIR}" worktree remove --force "${stage_dir}" >/dev/null 2>&1 || rm -rf "${stage_dir}"
 	fi
 	if [[ -n "${lock_path}" && -d "${lock_path}" ]]; then
 		rmdir "${lock_path}" >/dev/null 2>&1 || true
+	fi
+	if [[ -n "${patch_path}" ]]; then
+		rm -f "${patch_path}"
 	fi
 }
 
@@ -53,6 +57,7 @@ field_name() {
 admit_name() {
 	local name="$1"
 	[[ "${name}" =~ ^[a-z][a-z0-9_]*$ ]] || return 1
+	[[ "${name}" != *"__"* ]] || return 1
 	local tmp
 	tmp="$(mktemp -d)"
 	cat >"${tmp}/main.go" <<'EOF'
@@ -90,20 +95,16 @@ record_path() {
 	printf '%s/integrations/%s.toml' "${ROOT_DIR}" "${NAME}"
 }
 
-parse_record() {
-	local file="$1"
-	local key="$2"
-	local line
-	line="$(grep -E "^${key} = \"" "${file}" 2>/dev/null | head -n1 || true)"
-	[[ -n "${line}" ]] || return 1
-	line="${line#*\"}"
-	printf '%s' "${line%\"}"
+generator_source() {
+	if [[ "${TRANSPORT}" == "http" ]]; then
+		printf 'internal/infra/%s/internal/openapi/doc.go' "${NAME}"
+	else
+		printf 'buf.gen.yaml'
+	fi
 }
 
-write_record() {
-	local dest="$1"
-	local generator_source="$2"
-	mkdir -p "$(dirname "${dest}")"
+render_record() {
+	local source="$1"
 	{
 		echo "schema = 1"
 		echo "name = \"${NAME}\""
@@ -113,8 +114,15 @@ write_record() {
 			echo "target = \"${TARGET}\""
 		fi
 		echo "auth = \"${AUTH}\""
-		echo "generator_source = \"${generator_source}\""
-	} >"${dest}"
+		echo "generator_source = \"${source}\""
+	}
+}
+
+write_record() {
+	local dest="$1"
+	local source="$2"
+	mkdir -p "$(dirname "${dest}")"
+	render_record "${source}" >"${dest}"
 }
 
 clean_worktree() {
@@ -128,7 +136,7 @@ same_head() {
 
 contract_ok() {
 	local path="$1"
-	local abs
+	local abs root_real
 	abs="$(cd "${ROOT_DIR}" && python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${path}")"
 	root_real="$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "${ROOT_DIR}")"
 	case "${abs}" in
@@ -165,26 +173,13 @@ path_exists() {
 classify_mode() {
 	local rec
 	rec="$(record_path)"
-	if [[ ! -f "${rec}" ]]; then
+	if ! path_exists "${rec}"; then
 		printf 'initial'
 		return
 	fi
-	local got_name got_transport got_contract got_target got_auth
-	got_name="$(parse_record "${rec}" name || true)"
-	got_transport="$(parse_record "${rec}" transport || true)"
-	got_contract="$(parse_record "${rec}" contract || true)"
-	got_auth="$(parse_record "${rec}" auth || true)"
-	if [[ "${got_name}" != "${NAME}" || "${got_transport}" != "${TRANSPORT}" || "${got_contract}" != "${CONTRACT}" || "${got_auth}" != "${AUTH}" ]]; then
-		die "${reason_precondition}" "locked integration identity does not match this invocation"
-	fi
-	if [[ "${TRANSPORT}" == "http" ]]; then
-		got_target="$(parse_record "${rec}" target || true)"
-		if [[ "${got_target}" != "${TARGET}" ]]; then
-			die "${reason_precondition}" "locked integration identity does not match this invocation"
-		fi
-	elif parse_record "${rec}" target >/dev/null; then
-		die "${reason_precondition}" "gRPC record must not declare target"
-	fi
+	[[ -f "${rec}" && ! -L "${rec}" ]] || die "${reason_precondition}" "integration record must be a regular non-symlink file"
+	cmp -s "${rec}" <(render_record "$(generator_source)") ||
+		die "${reason_precondition}" "locked integration identity does not match the canonical record"
 	printf 'refresh'
 }
 
@@ -205,6 +200,10 @@ validate_contract_schema() {
 			go tool -modfile=tools/go.mod buf lint "${CONTRACT}"
 		)
 	fi
+}
+
+validate_http_contract_refs() {
+	go -C "${ROOT_DIR}" run -modfile=tools/go.mod ./scripts/openapi-ref-check.go -- "${CONTRACT}"
 }
 
 insert_integrations_field() {
@@ -301,34 +300,6 @@ if f"{fn}(" in text:
 if needle not in text:
     raise SystemExit("validate.go is missing the validateHTTPConfig anchor")
 path.write_text(text.replace(needle, insert, 1))
-PY
-}
-
-add_snapshot_sentinels() {
-	local dest="${ROOT_DIR}/internal/config/snapshot_contract_test.go"
-	local keys_src="$1"
-	local keys_exp="$2"
-	python3 - "${dest}" "${keys_src}" "${keys_exp}" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-src, exp = sys.argv[2], sys.argv[3]
-text = path.read_text()
-for fn, block in (
-    ("func sentinelConfigSourceValues() map[string]any {", src),
-    ("func expectedSentinelSnapshotValues() map[string]any {", exp),
-):
-    start = text.find(fn)
-    if start < 0:
-        raise SystemExit(f"missing {fn}")
-    marker = "return map[string]any{"
-    brace = text.find(marker, start)
-    if brace < 0:
-        raise SystemExit(f"missing map literal in {fn}")
-    insert_at = text.find("\n", brace) + 1
-    if block.strip() and block.strip() not in text:
-        text = text[:insert_at] + block + text[insert_at:]
-path.write_text(text)
 PY
 }
 
@@ -442,8 +413,6 @@ package config
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 	"strings"
 )
 
@@ -459,28 +428,10 @@ func ${NAME}IntegrationDefaults() map[string]any {
 
 func validate${field}Integration(cfg *IntegrationsConfig) error {
 	cfg.${field}.Target = strings.TrimSpace(cfg.${field}.Target)
-	if err := validateGRPCIntegrationTarget(cfg.${field}.Target, "integrations.${NAME}.target"); err != nil {
-		return err
+	if cfg.${field}.Target == "" {
+		return fmt.Errorf("%w: integrations.${NAME}.target is required", ErrValidate)
 	}
-${oauth_validate}
-	return nil
-}
-
-func validateGRPCIntegrationTarget(raw, key string) error {
-	endpoint, err := url.Parse(raw)
-	if err != nil || endpoint == nil || endpoint.Scheme != "dns" || endpoint.Opaque != "" ||
-		endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" {
-		return fmt.Errorf("%w: %s must be dns:///hostname:443", ErrValidate, key)
-	}
-	host := strings.TrimPrefix(endpoint.Path, "/")
-	if host == "" || host != endpoint.Path[1:] && endpoint.Path != "/"+host {
-		return fmt.Errorf("%w: %s must be dns:///hostname:443", ErrValidate, key)
-	}
-	hostname, port, err := net.SplitHostPort(host)
-	if err != nil || port != "443" || hostname == "" || net.ParseIP(hostname) != nil ||
-		strings.Contains(hostname, "/") {
-		return fmt.Errorf("%w: %s must be dns:///hostname:443", ErrValidate, key)
-	}
+	${oauth_validate}
 	return nil
 }
 EOF
@@ -553,8 +504,7 @@ EOF
 }
 
 write_http_adapter() {
-	local field="$1"
-	local module="$2"
+	local module="$1"
 	local dir="${ROOT_DIR}/internal/infra/${NAME}"
 	mkdir -p "${dir}/internal/openapi"
 	cat >"${dir}/doc.go" <<EOF
@@ -689,8 +639,7 @@ EOF
 }
 
 write_grpc_adapter() {
-	local field="$1"
-	local module="$2"
+	local module="$1"
 	local dir="${ROOT_DIR}/internal/infra/${NAME}"
 	mkdir -p "${dir}"
 	cat >"${dir}/doc.go" <<EOF
@@ -702,45 +651,28 @@ write_grpc_adapter() {
 // stub and exposes no provider operation.
 package ${NAME}
 EOF
+	local auth_import=""
+	local auth_config=""
+	local auth_build=""
+	local auth_field=""
+	local auth_close=""
+	local auth_return=""
+	local connection_build=""
 	if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
-		cat >"${dir}/client.go" <<EOF
-package ${NAME}
-
-import (
-	"crypto/tls"
-	"fmt"
-	"net"
-	"net/url"
-	"strings"
-
-	"${module}/internal/infra/grpcclient"
-	"${module}/internal/infra/oauth2clientcredentials"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-)
-
-type Config struct {
-	Target string
-	OAuth  struct {
+		auth_import=$'\n\t"'"${module}"'/internal/infra/oauth2clientcredentials"'
+		auth_config=$(
+			cat <<'EOF'
+	OAuth struct {
 		TokenURL     string
 		ClientID     string
 		ClientSecret string
 		Scopes       string
 	}
-}
-
-type Client struct {
-	conn   grpc.ClientConnInterface
-	closer interface{ Close() error }
-	auth   *oauth2clientcredentials.Client
-}
-
-func New(cfg Config) (*Client, error) {
-	hostname, err := grpcHostname(cfg.Target)
-	if err != nil {
-		return nil, fmt.Errorf("build ${NAME} client: %w", err)
-	}
-	creds := credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostname})
+EOF
+		)
+		auth_field=$'\n\tauth *oauth2clientcredentials.Client'
+		auth_build=$(
+			cat <<EOF
 	auth, err := oauth2clientcredentials.New(oauth2clientcredentials.Config{
 		TokenURL:     cfg.OAuth.TokenURL,
 		ClientID:     cfg.OAuth.ClientID,
@@ -750,42 +682,26 @@ func New(cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
-	authenticated, err := auth.GRPC(cfg.Target, grpcclient.Options{TransportCredentials: creds})
+	conn, err := auth.GRPC(target, grpcclient.Options{TransportCredentials: creds})
 	if err != nil {
 		auth.Close()
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
-	return &Client{conn: authenticated, closer: authenticated, auth: auth}, nil
-}
-
-func grpcHostname(raw string) (string, error) {
-	endpoint, err := url.Parse(raw)
-	if err != nil {
-		return "", err
-	}
-	host := strings.TrimPrefix(endpoint.Path, "/")
-	hostname, port, splitErr := net.SplitHostPort(host)
-	if splitErr != nil || port != "443" || hostname == "" {
-		return "", fmt.Errorf("target must be dns:///hostname:443")
-	}
-	return hostname, nil
-}
-
-func (c *Client) Close() error {
-	if c == nil {
-		return nil
-	}
-	if c.auth != nil {
-		c.auth.Close()
-	}
-	if c.closer != nil {
-		return c.closer.Close()
-	}
-	return nil
-}
 EOF
+		)
+		auth_close=$'\n\t\tif c.auth != nil {\n\t\t\tc.auth.Close()\n\t\t}'
+		auth_return=$'\n\t\tauth: auth,'
 	else
-		cat >"${dir}/client.go" <<EOF
+		connection_build=$(
+			cat <<EOF
+	conn, err := grpcclient.New(target, grpcclient.Options{TransportCredentials: creds})
+	if err != nil {
+		return nil, fmt.Errorf("build ${NAME} client: %w", err)
+	}
+EOF
+		)
+	fi
+	cat >"${dir}/client.go" <<EOF
 package ${NAME}
 
 import (
@@ -794,64 +710,116 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync"
 
-	"${module}/internal/infra/grpcclient"
+	"${module}/internal/infra/grpcclient"${auth_import}
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
 type Config struct {
 	Target string
+${auth_config}
+}
+
+type grpcConnection interface {
+	grpc.ClientConnInterface
+	Close() error
 }
 
 type Client struct {
-	conn   *grpc.ClientConn
-	closer interface{ Close() error }
+	conn grpcConnection${auth_field}
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func New(cfg Config) (*Client, error) {
-	hostname, err := grpcHostname(cfg.Target)
+	target, hostname, err := parseGRPCTarget(cfg.Target)
 	if err != nil {
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
 	creds := credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostname})
-	conn, err := grpcclient.New(cfg.Target, grpcclient.Options{TransportCredentials: creds})
-	if err != nil {
-		return nil, fmt.Errorf("build ${NAME} client: %w", err)
-	}
-	return &Client{conn: conn, closer: conn}, nil
+${auth_build}${connection_build}
+	return &Client{
+		conn: conn,${auth_return}
+	}, nil
 }
 
-func grpcHostname(raw string) (string, error) {
-	endpoint, err := url.Parse(raw)
-	if err != nil {
-		return "", err
+func parseGRPCTarget(raw string) (string, string, error) {
+	endpoint, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || endpoint == nil || endpoint.Scheme != "dns" || endpoint.Opaque != "" ||
+		endpoint.User != nil || endpoint.Host != "" || endpoint.RawPath != "" ||
+		endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" {
+		return "", "", fmt.Errorf("target must be dns:///hostname:443")
 	}
-	host := strings.TrimPrefix(endpoint.Path, "/")
-	hostname, port, splitErr := net.SplitHostPort(host)
-	if splitErr != nil || port != "443" || hostname == "" {
-		return "", fmt.Errorf("target must be dns:///hostname:443")
+	hostPort := strings.TrimPrefix(endpoint.Path, "/")
+	if hostPort == "" || endpoint.Path != "/"+hostPort || strings.Contains(hostPort, "/") {
+		return "", "", fmt.Errorf("target must be dns:///hostname:443")
 	}
-	return hostname, nil
+	hostname, port, splitErr := net.SplitHostPort(hostPort)
+	if splitErr != nil || port != "443" || net.ParseIP(hostname) != nil || !validDNSHostname(hostname) {
+		return "", "", fmt.Errorf("target must be dns:///hostname:443")
+	}
+	hostname = strings.ToLower(hostname)
+	return "dns:///" + net.JoinHostPort(hostname, "443"), hostname, nil
+}
+
+func validDNSHostname(hostname string) bool {
+	if hostname == "" || len(hostname) > 253 || strings.HasPrefix(hostname, ".") || strings.HasSuffix(hostname, ".") {
+		return false
+	}
+	for _, label := range strings.Split(hostname, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for i := range len(label) {
+			char := label[i]
+			if char != '-' && (char < '0' || char > '9') && (char < 'A' || char > 'Z') && (char < 'a' || char > 'z') {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (c *Client) Close() error {
 	if c == nil {
 		return nil
 	}
-	if c.closer != nil {
-		return c.closer.Close()
-	}
-	return nil
+	c.closeOnce.Do(func() {${auth_close}
+		if c.conn != nil {
+			c.closeErr = c.conn.Close()
+		}
+	})
+	return c.closeErr
 }
 EOF
-	fi
 	write_adapter_test "${dir}" "grpc"
 }
 
 write_adapter_test() {
 	local dir="$1"
 	local kind="$2"
+	local valid_target auth_setup
+	if [[ "${kind}" == "http" ]]; then
+		if [[ "${TARGET}" == "private-https" ]]; then
+			printf -v valid_target '\t\tBaseURL: "https://%s.svc.cluster.local",\n\t\tPrivateDNSSuffix: "svc.cluster.local",' "${NAME}"
+		else
+			printf -v valid_target '\t\tBaseURL: "https://%s.example.com",' "${NAME}"
+		fi
+	else
+		printf -v valid_target '\t\tTarget: "dns:///%s.example.com:443",' "${NAME}"
+	fi
+	if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
+		auth_setup=$(cat <<'EOF'
+	cfg.OAuth.TokenURL = "https://auth.example.com/oauth/token"
+	cfg.OAuth.ClientID = "client"
+	cfg.OAuth.ClientSecret = "secret"
+EOF
+		)
+	else
+		auth_setup=""
+	fi
 	cat >"${dir}/client_test.go" <<EOF
 package ${NAME}
 
@@ -868,12 +836,46 @@ func TestNewRejectsEmptyTarget(t *testing.T) {
 
 func TestCloseIdempotent(t *testing.T) {
 	t.Parallel()
-	var client *Client
+	cfg := Config{
+${valid_target}
+	}
+${auth_setup}
+	client, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
 	if err := client.Close(); err != nil {
+		t.Fatalf("first Close() error = %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	var nilClient *Client
+	if err := nilClient.Close(); err != nil {
 		t.Fatalf("nil Close() error = %v", err)
 	}
 }
 EOF
+	if [[ "${kind}" == "grpc" ]]; then
+		cat >>"${dir}/client_test.go" <<EOF
+
+func TestNewRejectsNonCanonicalGRPCTargets(t *testing.T) {
+	t.Parallel()
+	for _, target := range []string{
+		"dns://authority/${NAME}.example.com:443",
+		"https:///${NAME}.example.com:443",
+		"dns:///127.0.0.1:443",
+		"dns:///${NAME}.example.com:8443",
+		"dns:///bad host:443",
+		"dns:///${NAME}.example.com:443?route=other",
+	} {
+		if _, err := New(Config{Target: target}); err == nil {
+			t.Errorf("New(%q) error = nil, want rejection", target)
+		}
+	}
+}
+EOF
+	fi
 }
 
 write_bootstrap() {
@@ -1199,7 +1201,11 @@ install_test_env_tuple() {
 	local env_key env_val
 	if [[ "${TRANSPORT}" == "http" ]]; then
 		env_key="APP__INTEGRATIONS__$(printf '%s' "${NAME}" | tr '[:lower:]' '[:upper:]')__BASE_URL"
-		env_val="https://${NAME}.example.com"
+		if [[ "${TARGET}" == "private-https" ]]; then
+			env_val="https://${NAME}.svc.cluster.local"
+		else
+			env_val="https://${NAME}.example.com"
+		fi
 	else
 		env_key="APP__INTEGRATIONS__$(printf '%s' "${NAME}" | tr '[:lower:]' '[:upper:]')__TARGET"
 		env_val="dns:///${NAME}.example.com:443"
@@ -1256,12 +1262,48 @@ for needle in needles:
         insert = needle.replace("\t}\n}\n", f'\t}}\n\tt.Setenv("{key}", "{value}")\n}}\n', 1)
         path.write_text(text.replace(needle, insert, 1))
         raise SystemExit(0)
-raise SystemExit(0)
+raise SystemExit("run_test.go is missing resetShutdownConfigEnv insertion anchor")
 PY
+	fi
+	if [[ "${TRANSPORT}" == "http" && "${TARGET}" == "private-https" ]]; then
+		install_named_test_env_key \
+			"${env_key}" \
+			"APP__INTEGRATIONS__$(printf '%s' "${NAME}" | tr '[:lower:]' '[:upper:]')__PRIVATE_DNS_SUFFIX" \
+			"svc.cluster.local"
 	fi
 	if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 		install_named_oauth_test_env "${env_key}"
 	fi
+}
+
+install_named_test_env_key() {
+	local anchor_key="$1"
+	local key="$2"
+	local value="$3"
+	local item dest receiver
+	for item in \
+		"${ROOT_DIR}/internal/config/testhelpers_test.go|t" \
+		"${ROOT_DIR}/internal/config/configtest/configtest.go|tb" \
+		"${ROOT_DIR}/cmd/service/internal/bootstrap/run_test.go|t"; do
+		dest="${item%|*}"
+		receiver="${item##*|}"
+		[[ -f "${dest}" ]] || continue
+		python3 - "${dest}" "${receiver}" "${anchor_key}" "${key}" "${value}" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+receiver, anchor_key, key, value = sys.argv[2:6]
+text = path.read_text()
+if key in text:
+    raise SystemExit(0)
+anchor = f'{receiver}.Setenv("{anchor_key}",'
+start = text.find(anchor)
+if start < 0:
+    raise SystemExit(f"missing generated integration env anchor {anchor_key}")
+end = text.find("\n", start) + 1
+path.write_text(text[:end] + f'\t{receiver}.Setenv("{key}", "{value}")\n' + text[end:])
+PY
+	done
 }
 
 install_named_oauth_test_env() {
@@ -1309,7 +1351,7 @@ generate_clients() {
 	else
 		(
 			cd "${ROOT_DIR}"
-			make proto-generate
+			go tool -modfile=tools/go.mod buf generate
 		)
 	fi
 }
@@ -1324,6 +1366,7 @@ format_manual_go() {
 		"${ROOT_DIR}/internal/config/validate.go"
 		"${ROOT_DIR}/internal/config/snapshot_contract_test.go"
 		"${ROOT_DIR}/internal/config/testhelpers_test.go"
+		"${ROOT_DIR}/internal/config/configtest/configtest.go"
 		"${ROOT_DIR}/internal/infra/${NAME}/client.go"
 		"${ROOT_DIR}/internal/infra/${NAME}/client_test.go"
 		"${ROOT_DIR}/internal/infra/${NAME}/doc.go"
@@ -1347,13 +1390,15 @@ format_manual_go() {
 }
 
 admit_stage() {
-	(
-		cd "${ROOT_DIR}"
-		go test -vet=off -count=1 -run '^$' \
-			"./internal/config" \
-			"./internal/infra/${NAME}" \
-			"./cmd/service/internal/bootstrap"
+	local packages=(
+		"./internal/config"
+		"./internal/infra/${NAME}"
+		"./cmd/service/internal/bootstrap"
 	)
+	if [[ "${TRANSPORT}" == "grpc" ]]; then
+		packages+=("./internal/gen/proto/external/${NAME}/...")
+	fi
+	(cd "${ROOT_DIR}" && go test -vet=off -run '^$' "${packages[@]}")
 }
 
 changed_paths() {
@@ -1428,23 +1473,17 @@ stage_work() {
 		add_validate_call "validate${field}Integration"
 		if [[ "${TRANSPORT}" == "http" ]]; then
 			write_http_config "${field}"
-			write_http_adapter "${field}" "${module}"
+			write_http_adapter "${module}"
 		else
 			write_grpc_config "${field}"
-			write_grpc_adapter "${field}" "${module}"
+			write_grpc_adapter "${module}"
 			add_golangci_grpc_rule
 		fi
 		write_bootstrap "${field}" "${module}"
 		write_docs
 		render_examples
 		add_snapshot_keys
-		local generator_source
-		if [[ "${TRANSPORT}" == "http" ]]; then
-			generator_source="internal/infra/${NAME}/internal/openapi/doc.go"
-		else
-			generator_source="buf.gen.yaml"
-		fi
-		write_record "$(record_path)" "${generator_source}"
+		write_record "$(record_path)" "$(generator_source)"
 		install_test_env_tuple
 	fi
 	generate_clients
@@ -1458,7 +1497,7 @@ stage_work() {
 parent_main() {
 	[[ "${#}" -eq 5 ]] || usage
 	[[ -n "${NAME}" && -n "${TRANSPORT}" && -n "${CONTRACT}" && -n "${AUTH}" ]] || die "${reason_input}" "NAME, TRANSPORT, CONTRACT, and AUTH are required"
-	admit_name "${NAME}" || die "${reason_input}" "NAME must be a lower-case Go package identifier"
+	admit_name "${NAME}" || die "${reason_input}" "NAME must be a lower-case Go package identifier without __"
 	case "${TRANSPORT}" in
 	http | grpc) ;;
 	*) die "${reason_input}" "TRANSPORT must be http or grpc" ;;
@@ -1489,15 +1528,22 @@ parent_main() {
 
 	cd "${ROOT_DIR}"
 	[[ -f template.lock && ! -L template.lock ]] || die "${reason_precondition}" "template.lock is required"
+	[[ "$(lock_value state || true)" == "complete" ]] || die "${reason_precondition}" "template.lock state must be complete"
 	clean_worktree || die "${reason_input}" "worktree must be clean"
 	if [[ -d scripts/profiles ]]; then
 		die "${reason_precondition}" "unresolved template profile sources remain"
 	fi
-	if git grep -q 'profile:.*:start' HEAD -- . ':(exclude)scripts/init-module.sh' ':(exclude)scripts/ci/*' >/dev/null 2>&1; then
-		# Remaining markers are expected in the source template; initialized services have none.
-		if [[ -f scripts/profiles ]]; then
-			die "${reason_precondition}" "unresolved template profile markers remain"
-		fi
+	local marker_roots=(
+		README.md Makefile railway.toml .gitleaks.toml .golangci.yml
+		api build cmd docs env internal migrations test .github scripts/dev scripts/ci
+	)
+	local present_marker_roots=()
+	local marker_root
+	for marker_root in "${marker_roots[@]}"; do
+		[[ -e "${marker_root}" ]] && present_marker_roots+=("${marker_root}")
+	done
+	if grep -R -E 'profile:[a-z0-9-]+:(start|end)' "${present_marker_roots[@]}"; then
+		die "${reason_precondition}" "unresolved template profile markers remain"
 	fi
 
 	case "${TRANSPORT}" in
@@ -1513,6 +1559,9 @@ parent_main() {
 	fi
 
 	contract_ok "${CONTRACT}" || die "${reason_contract}" "CONTRACT must be a tracked committed regular non-symlink file"
+	if [[ "${TRANSPORT}" == "http" ]]; then
+		validate_http_contract_refs || die "${reason_contract}" "HTTP CONTRACT permits only document-local \$ref values"
+	fi
 
 	local mode
 	mode="$(classify_mode)"
@@ -1546,22 +1595,23 @@ parent_main() {
 			bash "${ROOT_DIR}/scripts/integration-init.sh" "${NAME}" "${TRANSPORT}" "${CONTRACT}" "${TARGET}" "${AUTH}"
 	)
 
-	local patch
-	patch="$(mktemp)"
+	patch_path="$(mktemp)"
 	git -C "${stage_dir}" add -A
-	git -C "${stage_dir}" diff --binary --cached >"${patch}"
+	git -C "${stage_dir}" diff --binary --cached >"${patch_path}"
 	git worktree remove --force "${stage_dir}" >/dev/null
 	stage_dir=""
 
 	same_head "${start_head}" || die "${reason_precondition}" "HEAD changed during staging"
 	clean_worktree || die "${reason_precondition}" "worktree changed during staging"
-	if [[ ! -s "${patch}" ]]; then
-		rm -f "${patch}"
+	if [[ ! -s "${patch_path}" ]]; then
+		rm -f "${patch_path}"
+		patch_path=""
 		return 0
 	fi
-	git apply --check "${patch}"
-	git apply "${patch}"
-	rm -f "${patch}"
+	git apply --check "${patch_path}"
+	git apply "${patch_path}"
+	rm -f "${patch_path}"
+	patch_path=""
 }
 
 stage_main() {
