@@ -177,7 +177,7 @@ func BenchmarkAccessLog(b *testing.B) {
 			newHandler := func(output io.Writer) http.Handler {
 				// The benchmark needs JSON encoding and a configurable enabled level;
 				// slog.DiscardHandler provides neither signal.
-				log := slog.New(logctx.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: tc.level}))) //nolint:sloglint // Benchmark configurable JSON encoding.
+				log := slog.New(logctx.New(slog.NewJSONHandler(output, &slog.HandlerOptions{Level: tc.level})))
 				return AccessLog(log, true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.WriteHeader(http.StatusNoContent)
 				}))
