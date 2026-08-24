@@ -30,6 +30,7 @@ import (
 const (
 	startupTimeout       = 30 * time.Second
 	defaultOutboxWorkers = 16
+	outboxDrain          = 25 * time.Second
 	diagnosticsClose     = 2 * time.Second
 	backgroundClose      = 5 * time.Second
 	telemetryClose       = 5 * time.Second
@@ -103,7 +104,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	}
 	riverClient, err := river.NewClient(
 		riverpgxv5.New(pool),
-		riverClientConfig(cfg, workers, log),
+		riverClientConfig(workers, log),
 	)
 	if err != nil {
 		return fmt.Errorf("initialize River outbox worker: %w", err)
@@ -126,13 +127,13 @@ func validateRuntimeConfig(cfg config.Config) error {
 	}
 	return runtimeopts.ValidateGracePeriod(
 		cfg.HTTP.GracePeriod,
-		"http.shutdown_timeout",
-		cfg.HTTP.ShutdownTimeout,
+		"the code-owned outbox relay drain",
+		outboxDrain,
 		outboxTailBudget,
 	)
 }
 
-func riverClientConfig(cfg config.Config, workers *river.Workers, log *slog.Logger) *river.Config {
+func riverClientConfig(workers *river.Workers, log *slog.Logger) *river.Config {
 	plugin := otelriver.NewMiddleware(&otelriver.MiddlewareConfig{
 		EnableSemanticMetrics:  true,
 		EnableTracePropagation: true,
@@ -146,7 +147,7 @@ func riverClientConfig(cfg config.Config, workers *river.Workers, log *slog.Logg
 		Queues: map[string]river.QueueConfig{
 			postgresoutbox.Queue: {MaxWorkers: defaultOutboxWorkers},
 		},
-		SoftStopTimeout: cfg.HTTP.ShutdownTimeout,
+		SoftStopTimeout: outboxDrain,
 		Workers:         workers,
 	}
 }
@@ -170,7 +171,7 @@ func runLifecycle(
 		startupCtx,
 		cfg.Observability.Metrics.Addr,
 		"outbox",
-		func() bool { return ready.Load() && readiness.Cached() == nil },
+		func() bool { return relayReady(ready.Load(), client.Ready(), readiness.Cached()) },
 		metrics,
 	)
 	if err != nil {
@@ -199,7 +200,7 @@ func runLifecycle(
 		var riverErr error
 		if started {
 			riverCtx, cancelRiver := runtimeopts.TeardownStage(
-				processCtx, shutdownDeadline, cfg.HTTP.ShutdownTimeout,
+				processCtx, shutdownDeadline, outboxDrain,
 			)
 			riverErr = riverClient.StopAndCancel(riverCtx)
 			cancelRiver()
@@ -234,7 +235,7 @@ func runLifecycle(
 	processCtx, cancelProcess, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
 	riverCtx, cancelRiver := runtimeopts.TeardownStage(
-		processCtx, shutdownDeadline, cfg.HTTP.ShutdownTimeout,
+		processCtx, shutdownDeadline, outboxDrain,
 	)
 	riverErr := riverClient.Stop(riverCtx)
 	cancelRiver()
@@ -266,9 +267,14 @@ type postgresPinger interface {
 
 type messagingRuntime interface {
 	health.Probe
+	Ready() bool
 	Run(ctx context.Context) error
 	StopPublish()
 	Shutdown(ctx context.Context) error
+}
+
+func relayReady(started, messagingReady bool, dependencyErr error) bool {
+	return started && messagingReady && dependencyErr == nil
 }
 
 type riverRuntime interface {

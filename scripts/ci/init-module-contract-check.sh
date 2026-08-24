@@ -118,8 +118,30 @@ verify_authn_profile() {
 	)
 }
 
+verify_outbox_profile() {
+	local profile_checkout="${tmp}/service-outbox"
+	git clone -q "${checkout}" "${profile_checkout}"
+	git -C "${profile_checkout}" remote set-url origin git@github.com:acme/service.git
+
+	(
+		cd "${profile_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+		test ! -e migrations/000001_postgres_outbox.sql
+		test -e migrations/000008_river.sql
+		grep -Fq 'outbox = "postgres"' template.lock
+		grep -Fq 'messaging = "nats-jetstream"' template.lock
+		if grep -R -E 'type Outbox(Event|CommitReceipt|OrderingHead|Redrife)' internal/infra/postgres/sqlcgen 2>/dev/null; then
+			echo "initializer contract: fresh outbox retained legacy generated models" >&2
+			exit 1
+		fi
+		go test -vet=off -run '^$' ./cmd/outbox-relay/... ./internal/infra/postgresoutbox ./internal/infra/natsjs
+	)
+}
+
 verify_authn_profile none
 verify_authn_profile oidc-jwt
 verify_authn_profile oidc-introspection
+verify_outbox_profile
 
 echo "initializer contract passed"

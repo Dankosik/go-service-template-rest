@@ -80,7 +80,7 @@ func TestPostgresJobsWorkerProcess(t *testing.T) {
 
 	var earlyExit bool
 	var earlyErr error
-	waittest.Until(t, 30*time.Second, func() bool {
+	waittest.Until(t, 30*time.Second, func(context.Context) bool {
 		select {
 		case earlyErr = <-waitErr:
 			earlyExit = true

@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -228,8 +229,12 @@ func cleanMessagingEnvironment(environment []string) []string {
 func waitHTTPStatus(t *testing.T, address string, want int) {
 	t.Helper()
 	client := &http.Client{Timeout: 500 * time.Millisecond}
-	waittest.Until(t, 10*time.Second, func() bool {
-		response, err := client.Get("http://" + address + "/health/ready")
+	waittest.Until(t, 10*time.Second, func(ctx context.Context) bool {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/health/ready", http.NoBody)
+		if err != nil {
+			return false
+		}
+		response, err := client.Do(request)
 		if err != nil {
 			return false
 		}
