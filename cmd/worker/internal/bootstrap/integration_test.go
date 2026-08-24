@@ -4,6 +4,7 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"io"
 	"log/slog"
@@ -67,7 +68,7 @@ func TestNATSWorkerComposition(t *testing.T) {
 	}
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
-		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "composition.test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"worker composition"`),
 	}); err != nil {
 		t.Fatalf("publish worker fixture: %v", err)
@@ -148,7 +149,7 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	}
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
-		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "composition.forced-cleanup", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"forced cleanup"`),
 	}); err != nil {
 		t.Fatalf("publish forced-cleanup fixture: %v", err)
@@ -196,7 +197,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	}
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
-		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "composition.panic", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"panic"`),
 	}); err != nil {
 		t.Fatalf("publish panic fixture: %v", err)
