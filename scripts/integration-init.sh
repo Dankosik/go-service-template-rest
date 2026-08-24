@@ -750,7 +750,7 @@ func New(cfg Config) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
-	authenticated, err := auth.GRPC(grpcclient.Config{Target: cfg.Target}, grpcclient.Options{TransportCredentials: creds})
+	authenticated, err := auth.GRPC(cfg.Target, grpcclient.Options{TransportCredentials: creds})
 	if err != nil {
 		auth.Close()
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
@@ -815,7 +815,7 @@ func New(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
 	creds := credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostname})
-	conn, err := grpcclient.New(grpcclient.Config{Target: cfg.Target}, grpcclient.Options{TransportCredentials: creds})
+	conn, err := grpcclient.New(cfg.Target, grpcclient.Options{TransportCredentials: creds})
 	if err != nil {
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}

@@ -36,10 +36,10 @@ type Server struct {
 	draining bool
 	ready    bool
 
-	gracefulOnce sync.Once
-	stopOnce     sync.Once
-	gracefulDone chan struct{}
-	forceStarted chan struct{}
+	healthDrain healthDrain
+	drain       *rpcDrain
+	stopOnce    sync.Once
+	stopDone    chan struct{}
 }
 
 // publishHealthLocked republishes standard health from the current inputs. It
@@ -79,6 +79,7 @@ func (s *Server) StartDrain() {
 	}
 	s.draining = true
 	s.health.Shutdown()
+	s.healthDrain.stop()
 }
 
 // Serve runs the native server and normalizes the expected stop result.
@@ -90,22 +91,24 @@ func (s *Server) Serve(listener net.Listener) error {
 	return fmt.Errorf("serve native gRPC server: %w", err)
 }
 
-// Shutdown waits for active RPCs until ctx expires, then forces every remaining
-// transport stream to stop. grpc-go's stop calls may remain parked while a
-// handler ignores its canceled RPC context, so this adapter deliberately does
-// not join those process-lifetime goroutines past the caller's shutdown budget.
+// Shutdown rejects new business RPCs and waits for pre-drain RPCs to publish
+// their terminal status before GracefulStop. If ctx expires, Stop cancels every
+// RPC context but does not wait for a handler that ignores that cancellation.
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.gracefulOnce.Do(func() {
-		go func() {
-			s.server.GracefulStop()
-			close(s.gracefulDone)
-		}()
-	})
+	s.StartDrain()
+	drained := s.drain.start()
+	select {
+	case <-drained:
+		s.gracefulStop()
+		return nil
+	default:
+	}
 
 	select {
-	case <-s.gracefulDone:
+	case <-drained:
+		s.gracefulStop()
 		return nil
-	case <-s.forceStarted:
+	case <-s.stopDone:
 		return nil
 	case <-ctx.Done():
 		s.forceStop()
@@ -113,15 +116,24 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 }
 
-// Close immediately abandons active RPCs. Repeated calls are safe.
+// Close immediately stops the transport and abandons active RPCs. Repeated calls
+// are safe.
 func (s *Server) Close() error {
 	s.forceStop()
 	return nil
 }
 
 func (s *Server) forceStop() {
+	s.healthDrain.stop()
 	s.stopOnce.Do(func() {
-		go s.server.Stop()
-		close(s.forceStarted)
+		s.server.Stop()
+		close(s.stopDone)
+	})
+}
+
+func (s *Server) gracefulStop() {
+	s.stopOnce.Do(func() {
+		s.server.GracefulStop()
+		close(s.stopDone)
 	})
 }

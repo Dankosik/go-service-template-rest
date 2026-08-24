@@ -14,7 +14,7 @@ func TestGeneratedClientUsesSharedInstrumentedConnection(t *testing.T) {
 	received, target := startMetadataCaptureServer(t)
 	recorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 	connection, err := grpcclient.New(
-		grpcclient.DefaultConfig(target),
+		target,
 		grpcclient.Options{
 			TransportCredentials: insecure.NewCredentials(),
 			TracerProvider:       tracerProvider,

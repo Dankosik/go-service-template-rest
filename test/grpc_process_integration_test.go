@@ -95,7 +95,7 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	})
 
 	conn, err := grpcclient.New(
-		grpcclient.DefaultConfig(grpcAddr),
+		grpcAddr,
 		grpcclient.Options{
 			TransportCredentials: insecure.NewCredentials(),
 		},

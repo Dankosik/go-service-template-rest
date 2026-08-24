@@ -1,16 +1,19 @@
 # Contract And Generation
 
 Put owned schemas below `api/proto`, use Edition 2023, and give each package a
-stable version and `go_package`. `buf.gen.yaml` selects the Go Opaque API; the
-schema does not repeat generator policy.
+stable version and `go_package`. The schema selects the Go Opaque API so every
+generator invocation produces the same public Go shape.
 
 ```proto
 edition = "2023";
 
 package acme.widgets.v1;
 
+import "google/protobuf/go_features.proto";
+
 option go_package =
   "github.com/acme/widgets/internal/gen/proto/acme/widgets/v1;widgetsv1";
+option features.(pb.go).api_level = API_OPAQUE;
 
 service WidgetService {
   rpc GetWidget(GetWidgetRequest) returns (GetWidgetResponse);
@@ -43,4 +46,6 @@ BASE_REF=origin/main make proto-breaking
 ```
 
 Buf v2 owns formatting, `STANDARD`/`COMMENTS` lint, generation, and `FILE`
-compatibility. The pinned local Go plugins avoid a system `protoc` dependency.
+compatibility. `proto-lint` also rejects Edition 2023 schemas that omit the
+schema-owned Opaque API option. The pinned local Go plugins avoid a system
+`protoc` dependency.
