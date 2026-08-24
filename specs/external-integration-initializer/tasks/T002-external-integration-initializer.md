@@ -37,10 +37,7 @@ Accept when:
   ownership, or avoidable-complexity finding.
 
 Candidate:
-Base `94dc45411c99413739a75a435aa37b25befeba77` plus ordered bounded
-implementation/spec/test manifest SHA-256
-`5c8da93a73ade008a6f5fb1c6f40867042f8013d99db19da0093a099e004b41f`.
-Receipt and ledger files are excluded from that self-independent manifest.
+Git commit `cdfd44fc1744de009dda593f46833e807b31ac9a`.
 
 Evidence Result V1:
 
@@ -62,9 +59,9 @@ Acceptance Result V1:
 
 unit: T002
 verdict: Accepted
-candidate: base and bounded manifest above
+candidate: commit above
 evidence: every Test Plan ladder claim is verified in the table above
-review: `../implementation-review.md` SHA-256 `4fcf36be376d47fb3f7384583e699e8e75acfe799846e302f0680c7f389fe6e9` — PASS; current Specification, Technical Design, and Test Design reviews also PASS
+review: `../implementation-review.md` SHA-256 `df996682572ad57cf03d76ab12d85f5127b8241d092d5ba11d72a5968b86efa0` — PASS; current Specification, Technical Design, and Test Design reviews also PASS
 provides: fail-closed deterministic HTTP/gRPC integration initialization with exact record, named config, bounded transport/auth, generated containment, and local proof
 
 Provider compatibility, credentials, live network, deployment, and rollout

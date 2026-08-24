@@ -21,7 +21,7 @@ claim is made.
     proof.
   - Packet: `tasks/T002-external-integration-initializer.md`.
 
-Accepted: T002; evidence: full initializer matrix 23 plus focused repaired-oracle rows 3, focused Go 416, OpenAPI/Proto PASS, template initializer contract PASS, record/routing PASS, containerized ShellCheck PASS, secret scan 0 leaks, independent Specification/Technical Design/Test Design/Implementation reviews PASS; candidate: base `94dc45411c99413739a75a435aa37b25befeba77` plus bounded implementation manifest SHA-256 `5c8da93a73ade008a6f5fb1c6f40867042f8013d99db19da0093a099e004b41f`
+Accepted: T002; evidence: full initializer matrix 23 plus focused repaired-oracle rows 3, focused Go 416, OpenAPI/Proto PASS, template initializer contract PASS, record/routing PASS, containerized ShellCheck PASS, secret scan 0 leaks, independent Specification/Technical Design/Test Design/Implementation reviews PASS; candidate: commit `cdfd44fc1744de009dda593f46833e807b31ac9a`
 
 ## No-implementation dispositions
 
