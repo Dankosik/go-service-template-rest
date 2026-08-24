@@ -258,9 +258,9 @@ shape is the `pgAdapter` in
 in-memory repository's replacement, satisfying the same feature-owned interfaces
 against a real pool, and it composes two repository calls in one transaction.
 Read it before writing the first `internal/infra/postgres/<feature>_repository.go`.
-For a repository integration test, `pgtest.MigratedPool` supplies the isolated
-migrated pool and registers cleanup; the test writes no pool, migration, or
-container setup.
+For a repository integration test, `pgtest.Migrated` supplies the isolated,
+migrated DSN and registers database cleanup; open the pool with the production
+PostgreSQL adapter and close it through the test cleanup.
 
 The PostgreSQL profile is required, not a degraded mode:
 `APP__POSTGRES__ENABLED` must remain `true` and the DSN must be configured

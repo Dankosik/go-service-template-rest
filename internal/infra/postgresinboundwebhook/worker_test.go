@@ -233,7 +233,7 @@ func TestInboundWebhookRetryAndFinalization(t *testing.T) {
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 1, MaxAttempts: 3},
 	})
-	if !errors.Is(err, errHandlerFailed) || err.Error() != errHandlerFailed.Error() {
+	if err == nil || !errors.Is(err, errHandlerFailed) || err.Error() != errHandlerFailed.Error() {
 		t.Fatalf("retryable err=%v", err)
 	}
 	if handled != 1 {

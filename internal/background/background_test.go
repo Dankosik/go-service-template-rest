@@ -143,7 +143,7 @@ func TestCheckReportsAFailedTask(t *testing.T) {
 	<-sup.Failures()
 
 	err := sup.Check(context.Background())
-	if !errors.Is(err, ErrTaskFailed) || !errors.Is(err, taskErr) {
+	if err == nil || !errors.Is(err, ErrTaskFailed) || !errors.Is(err, taskErr) {
 		t.Fatalf("Check() = %v, want ErrTaskFailed wrapping %v", err, taskErr)
 	}
 	if !strings.Contains(err.Error(), "outbox") {
