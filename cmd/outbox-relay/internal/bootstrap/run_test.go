@@ -15,12 +15,14 @@ import (
 )
 
 type lifecycleMessaging struct {
+	ready            bool
 	stopPublishCalls int
 	shutdownCalls    int
 }
 
 func (*lifecycleMessaging) Name() string                { return "messaging" }
 func (*lifecycleMessaging) Check(context.Context) error { return nil }
+func (m *lifecycleMessaging) Ready() bool               { return m.ready }
 func (*lifecycleMessaging) Run(ctx context.Context) error {
 	<-ctx.Done()
 	return fmt.Errorf("run messaging fixture: %w", ctx.Err())
@@ -52,9 +54,7 @@ func (healthyPostgres) Ping(context.Context) error { return nil }
 func TestRiverClientConfigUsesFixedBoundedCapacity(t *testing.T) {
 	t.Parallel()
 
-	cfg := config.Config{}
-	cfg.HTTP.ShutdownTimeout = 3 * time.Second
-	got := riverClientConfig(cfg, river.NewWorkers(), slog.Default())
+	got := riverClientConfig(river.NewWorkers(), slog.Default())
 	if got.Queues[postgresoutbox.Queue].MaxWorkers != defaultOutboxWorkers {
 		t.Fatalf("MaxWorkers = %d, want %d", got.Queues[postgresoutbox.Queue].MaxWorkers, defaultOutboxWorkers)
 	}
@@ -67,6 +67,9 @@ func TestRiverClientConfigUsesFixedBoundedCapacity(t *testing.T) {
 	if !got.PollOnly {
 		t.Fatal("River LISTEN must stay disabled on the statement-bounded pool")
 	}
+	if got.SoftStopTimeout != outboxDrain {
+		t.Fatalf("SoftStopTimeout = %s, want relay-owned %s", got.SoftStopTimeout, outboxDrain)
+	}
 }
 
 func TestValidateRuntimeConfig(t *testing.T) {
@@ -77,7 +80,6 @@ func TestValidateRuntimeConfig(t *testing.T) {
 	valid.Messaging.URLs = "tls://nats.example:4222"
 	valid.Observability.Metrics.Addr = "127.0.0.1:9090"
 	valid.HTTP.GracePeriod = 45 * time.Second
-	valid.HTTP.ShutdownTimeout = 25 * time.Second
 	if err := validateRuntimeConfig(valid); err != nil {
 		t.Fatalf("validateRuntimeConfig() error = %v", err)
 	}
@@ -99,15 +101,25 @@ func TestValidateRuntimeConfig(t *testing.T) {
 	}
 }
 
+func TestRelayReadinessRequiresImmediateMessagingReadiness(t *testing.T) {
+	t.Parallel()
+
+	if relayReady(true, false, nil) {
+		t.Fatal("relay remained ready after messaging disconnected")
+	}
+	if !relayReady(true, true, nil) {
+		t.Fatal("relay was not ready after runtime, messaging, and dependencies were ready")
+	}
+}
+
 func TestRunLifecycleDoesNotCloseMessagingBeforeRiverStops(t *testing.T) {
 	stopErr := errors.New("River jobs still running")
 	riverClient := &lifecycleRiver{
 		started: make(chan struct{}), stopped: make(chan struct{}), stopErr: stopErr,
 	}
-	messaging := &lifecycleMessaging{}
+	messaging := &lifecycleMessaging{ready: true}
 	cfg := config.Config{}
 	cfg.HTTP.GracePeriod = time.Second
-	cfg.HTTP.ShutdownTimeout = 100 * time.Millisecond
 	cfg.HTTP.ReadinessTimeout = 100 * time.Millisecond
 	cfg.Health.RefreshInterval = time.Second
 	cfg.Health.FailureThreshold = 1
