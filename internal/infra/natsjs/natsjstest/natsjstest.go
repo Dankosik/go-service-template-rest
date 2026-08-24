@@ -1,5 +1,5 @@
-// Package natsjstest starts a JetStream-enabled NATS broker for one test and
-// hands back a client already connected to it.
+// Package natsjstest starts isolated or test-binary-pooled JetStream brokers
+// and hands back a client already connected to the selected broker.
 //
 // Usage from any package that exercises messaging:
 //
@@ -10,16 +10,22 @@
 //
 // A fixture the broker options below cannot express — an authenticated server,
 // for instance — builds its own [testcontainers.ContainerRequest] from [Request]
-// and still reaches the broker through [Terminate], [Connect], and
-// [CreateStreams], so the pinned image and the ready, cleanup, and dial budgets
-// stay in one place regardless of how the server itself is configured.
+// and still reaches the broker through [SkipWithoutDocker], [Terminate],
+// [Connect], and [CreateStreams], so the availability policy, pinned image, and
+// ready, cleanup, and dial budgets stay in one place regardless of how the
+// server itself is configured.
 package natsjstest
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"net/netip"
+	"os"
 	"strconv"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -54,6 +60,14 @@ type Server struct {
 	URL       string
 	Conn      *nats.Conn
 	JS        jetstream.JetStream
+}
+
+// Pool amortizes one broker across a test binary while keeping each stream
+// fixture isolated and serial. Tests that stop or restart the broker use Start.
+type Pool struct {
+	mu        sync.Mutex
+	container testcontainers.Container
+	url       string
 }
 
 // Client is a connection to a broker and the JetStream context on it.
@@ -93,14 +107,70 @@ func WithFixedHostPort() Option {
 func Start(t *testing.T, options ...Option) *Server {
 	t.Helper()
 
+	applied := applyOptions(options)
+	container := startContainer(t, applied)
+	Terminate(t, container)
+
+	url := URL(t, container)
+	client := Connect(t, url)
+	CreateStreams(t, client.JS, applied.streams...)
+	return &Server{Container: container, URL: url, Conn: client.Conn, JS: client.JS}
+}
+
+// Start returns one isolated stream fixture on the pool's shared broker. The
+// pool-level lock matches the repository's serial integration target; use
+// per-test stream namespaces before making callers parallel.
+func (p *Pool) Start(t *testing.T, options ...Option) *Server {
+	t.Helper()
+
+	p.mu.Lock()
+	t.Cleanup(p.mu.Unlock)
+	applied := applyOptions(options)
+	if applied.fixedHostPort {
+		t.Fatal("shared NATS pool does not support fixed host ports")
+	}
+	if p.container == nil {
+		p.container = startContainer(t, applied)
+		p.url = URL(t, p.container)
+	}
+	client := Connect(t, p.url)
+	cleanupStreams(t, client.JS, applied.streams)
+	CreateStreams(t, client.JS, applied.streams...)
+	return &Server{Container: p.container, URL: p.url, Conn: client.Conn, JS: client.JS}
+}
+
+// Close removes the shared broker after the test binary has run.
+func (p *Pool) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.container == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), terminateTimeout)
+	defer cancel()
+	err := testcontainers.TerminateContainer(p.container, testcontainers.StopContext(ctx))
+	p.container = nil
+	p.url = ""
+	if err != nil {
+		return fmt.Errorf("terminate shared NATS container: %w", err)
+	}
+	return nil
+}
+
+func applyOptions(options []Option) settings {
 	var applied settings
 	for _, option := range options {
 		option(&applied)
 	}
+	return applied
+}
 
+//nolint:ireturn // Testcontainers exposes containers through this lifecycle interface.
+func startContainer(t *testing.T, applied settings) testcontainers.Container {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), startTimeout)
 	defer cancel()
-
+	skipWithoutDocker(ctx, t)
 	request := Request()
 	if applied.fixedHostPort {
 		bindHostPort(t, &request)
@@ -112,12 +182,36 @@ func Start(t *testing.T, options ...Option) *Server {
 	if err != nil {
 		t.Fatalf("start NATS container: %v", err)
 	}
-	Terminate(t, container)
+	return container
+}
 
-	url := URL(t, container)
-	client := Connect(t, url)
-	CreateStreams(t, client.JS, applied.streams...)
-	return &Server{Container: container, URL: url, Conn: client.Conn, JS: client.JS}
+// SkipWithoutDocker skips an optional fixture when Docker is unavailable.
+// REQUIRE_DOCKER keeps the later container start fail-closed instead.
+func SkipWithoutDocker(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), startTimeout)
+	defer cancel()
+	skipWithoutDocker(ctx, t)
+}
+
+func skipWithoutDocker(ctx context.Context, t *testing.T) {
+	t.Helper()
+	if !requireDocker() && !dockerIsHealthy(ctx) {
+		t.Skip("docker provider is not healthy; set REQUIRE_DOCKER=1 to require it")
+	}
+}
+
+func cleanupStreams(t *testing.T, js jetstream.JetStream, streams []jetstream.StreamConfig) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+		defer cancel()
+		for _, stream := range streams {
+			if err := js.DeleteStream(ctx, stream.Name); err != nil && !errors.Is(err, jetstream.ErrStreamNotFound) {
+				t.Errorf("delete shared NATS stream %s: %v", stream.Name, err)
+			}
+		}
+	})
 }
 
 // Request is the broker request Start uses: JetStream on, file storage under
@@ -228,5 +322,23 @@ func bindHostPort(t *testing.T, request *testcontainers.ContainerRequest) {
 				{HostIP: netip.MustParseAddr("127.0.0.1"), HostPort: strconv.Itoa(port)},
 			},
 		}
+	}
+}
+
+func dockerIsHealthy(ctx context.Context) bool {
+	provider, err := testcontainers.NewDockerProvider()
+	if err != nil {
+		return false
+	}
+	defer func() { _ = provider.Close() }()
+	return provider.Health(ctx) == nil
+}
+
+func requireDocker() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("REQUIRE_DOCKER"))) {
+	case "1", "true", "yes":
+		return true
+	default:
+		return false
 	}
 }

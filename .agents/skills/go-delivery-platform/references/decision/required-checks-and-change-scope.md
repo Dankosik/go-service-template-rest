@@ -14,13 +14,15 @@ check that did not exercise its claimed surface.
   job is always reported and rejects any failed or cancelled applicable leaf.
 - A skipped leaf is not evidence for that surface. The classifier makes the
   skip explicit, while tag dispatch marks Go and release surfaces applicable so
-  integration cannot be path-skipped.
+  integration cannot be path-skipped. Scheduled CI bypasses diff leaves and
+  runs only reachable Go vulnerability and built-image scans.
 - OpenAPI and Protobuf breaking comparisons run only on pull requests with the
   event's exact base SHA. A missing base OpenAPI contract means no comparison,
   not proof of compatibility.
-- CodeQL reports one stable `codeql-required` context. Go analysis is the
-  latency-first main, tag, schedule, and manual gate; pull requests use Gosec
-  and Govulncheck. Actions analysis remains conditional on workflow source.
+- CodeQL reports one stable `codeql-required` context. Go source and dependency
+  changes run Go analysis on pull requests and merge groups before admission as
+  well as on main, tags, schedules, and manual runs. Actions analysis remains
+  conditional on workflow source.
 - Both workflows handle `merge_group` before their aggregate contexts are
   required for merge queue events.
 

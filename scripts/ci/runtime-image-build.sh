@@ -29,12 +29,8 @@ if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	git -C "${context}" add -A
 	git -C "${context}" -c user.name=runtime-image -c user.email=runtime-image@example.invalid commit -qm baseline
 	(cd "${context}" && CODEOWNER=@acme/platform DATABASE=postgres bash ./scripts/init-module.sh)
+	TZ=UTC find "${context}" -path "${context}/.git" -prune -o -exec touch -h -t 197001010000 {} +
 fi
-
-fingerprint="$({
-	cd "${context}"
-	find . -type f -not -path './.git/*' -exec shasum -a 256 {} +
-} | LC_ALL=C sort | shasum -a 256 | awk '{print $1}')"
 
 build=(docker build)
 if [[ -n ${RUNTIME_IMAGE_CACHE_FROM:-}${RUNTIME_IMAGE_CACHE_TO:-} ]]; then
@@ -47,7 +43,6 @@ fi
 	--build-arg "APP_VERSION=${APP_VERSION:-dev}" \
 	--build-arg "VCS_REF=${VCS_REF:-unknown}" \
 	--build-arg "SOURCE_URL=${SOURCE_URL:-}" \
-	--build-arg "WORKTREE_FINGERPRINT=${fingerprint}" \
 	-f "${context}/build/docker/Dockerfile" \
 	-t "${IMAGE}" \
 	"${context}"

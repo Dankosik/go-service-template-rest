@@ -16,7 +16,9 @@ Connect the derived GitHub repository and branch in Railway. Railway builds
 For GitHub-triggered builds, Railway supplies `RAILWAY_GIT_COMMIT_SHA`.
 The Dockerfile embeds its first 12 characters as the default application
 version, so startup logs identify the source commit without a project-specific
-variable. A caller-provided `APP_VERSION` build argument takes precedence.
+variable. The OCI version and revision labels retain the full Railway commit;
+a caller-provided `APP_VERSION` and `VCS_REF` remain authoritative outside
+Railway.
 
 The GHCR image published by `.github/workflows/cd.yml` is a different build.
 Its signature and attestations do not prove what a Railway source build runs.

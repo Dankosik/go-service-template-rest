@@ -72,10 +72,7 @@ jobs:
 
   analyze-go:
     needs: changes
-    if: >-
-      github.event_name != 'pull_request' &&
-      github.event_name != 'merge_group' &&
-      (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_root_dependencies == 'true')
+    if: needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_root_dependencies == 'true'
     name: Analyze (go)
     runs-on: ubuntu-latest
     timeout-minutes: 20

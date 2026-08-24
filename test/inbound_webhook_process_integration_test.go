@@ -60,6 +60,12 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 		if err := process.Start(); err != nil {
 			t.Fatalf("start jobs worker: %v", err)
 		}
+		t.Cleanup(func() {
+			if process.ProcessState == nil {
+				_ = process.Process.Kill()
+				_, _ = process.Process.Wait()
+			}
+		})
 		return process
 	}
 
@@ -82,11 +88,7 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 	if outcome != "handled" {
 		t.Fatalf("first receipt outcome = %s", outcome)
 	}
-	second := startWorker()
-	t.Cleanup(func() {
-		_ = second.Process.Kill()
-		_, _ = second.Process.Wait()
-	})
+	startWorker()
 	controlID := "msg_restart_control"
 	controlBody := `{"hello":"control"}`
 	webhook, err := standardwebhooks.NewWebhookRaw(inboundKey())
@@ -125,7 +127,8 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 
 func TestInboundWebhookDisclosureBoundary(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
 	receiver := inboundReceiver(t, dsn)
 	rejected, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, `{"secret":"`+disclosureCanary+`"}`, "v1,bad"))
 	if err != nil || rejected.Outcome != inboundwebhook.OutcomeRejected {
@@ -157,6 +160,7 @@ func TestInboundWebhookDisclosureBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = logFile.Close() })
 	process := exec.CommandContext(ctx, binary)
 	process.Stdout = logFile
 	process.Stderr = logFile
@@ -172,6 +176,12 @@ func TestInboundWebhookDisclosureBoundary(t *testing.T) {
 	if err := process.Start(); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if process.ProcessState == nil {
+			_ = process.Process.Kill()
+			_, _ = process.Process.Wait()
+		}
+	})
 	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 2})
 	if err != nil {
 		t.Fatal(err)

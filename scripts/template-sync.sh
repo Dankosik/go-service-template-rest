@@ -98,6 +98,7 @@ fi
 source "$(dirname -- "${BASH_SOURCE[0]}")/lib/manifest.sh"
 manifest_paths "${manifest}"
 ((${#paths[@]} > 0)) || fail "manifest lists no paths"
+all_paths=("${paths[@]}")
 
 template_pathspecs=()
 for entry in "${paths[@]}"; do template_pathspecs+=("${entry%/}"); done
@@ -133,6 +134,7 @@ first_manifest_symlink() {
 # They stay outside the verbatim manifest.
 generated_paths=(.claude/skills .qwen/skills .codex/config.toml)
 source_pathspecs=("${template_pathspecs[@]}" "${generated_paths[@]}")
+pruned_paths=()
 # Historical generated receipts removed by the sync.
 retired_paths=(.template-sync)
 # These files carry service-specific decisions and therefore cannot be mirrored,
@@ -145,6 +147,66 @@ required_repo_owned_paths=(
 	docs/railway-deployment-profile.md
 	test/README.md
 )
+
+target_lock_value() {
+	local repo="$1" key="$2" line
+	line="$(grep -E "^${key} = \"" "${repo}/template.lock" | head -n1 || true)"
+	[[ -n "${line}" ]] || return 1
+	line="${line#*\"}"
+	printf '%s\n' "${line%%\"*}"
+}
+
+path_enabled_for_harness() {
+	local entry="$1" harness="$2"
+	case "${entry}" in
+	.claude/*) [[ "${harness}" == "claude" || "${harness}" == "all" ]] ;;
+	.qwen/*) [[ "${harness}" == "qwen" || "${harness}" == "all" ]] ;;
+	.codex/*) [[ "${harness}" == "codex" || "${harness}" == "all" ]] ;;
+	.cursor/agents/*) [[ "${harness}" == "cursor" || "${harness}" == "all" ]] ;;
+	.cursor/*) [[ "${harness}" == "core" || "${harness}" == "cursor" || "${harness}" == "all" ]] ;;
+	.grok/*) [[ "${harness}" == "grok" || "${harness}" == "all" ]] ;;
+	.opencode/* | opencode.json) [[ "${harness}" == "opencode" || "${harness}" == "all" ]] ;;
+	*) return 0 ;;
+	esac
+}
+
+configure_target_harness() {
+	local repo="$1" entry state
+	agent_harness="all"
+	if [[ -f "${repo}/template.lock" ]]; then
+		state="$(target_lock_value "${repo}" state || true)"
+		[[ -z "${state}" || "${state}" == "complete" ]] || return 2
+		agent_harness="$(target_lock_value "${repo}" agent_harness || true)"
+		[[ -n "${agent_harness}" ]] || return 2
+	fi
+	case "${agent_harness}" in
+	core | cursor | claude | qwen | grok | opencode | codex | all) ;;
+	*) return 2 ;;
+	esac
+
+	paths=()
+	for entry in "${all_paths[@]}"; do
+		path_enabled_for_harness "${entry}" "${agent_harness}" && paths+=("${entry}")
+	done
+	generated_paths=()
+	[[ "${agent_harness}" == "claude" || "${agent_harness}" == "all" ]] && generated_paths+=(.claude/skills)
+	[[ "${agent_harness}" == "qwen" || "${agent_harness}" == "all" ]] && generated_paths+=(.qwen/skills)
+	[[ "${agent_harness}" == "codex" || "${agent_harness}" == "all" ]] && generated_paths+=(.codex/config.toml)
+	pruned_paths=()
+	[[ "${agent_harness}" == "claude" || "${agent_harness}" == "all" ]] || pruned_paths+=(.claude)
+	[[ "${agent_harness}" == "qwen" || "${agent_harness}" == "all" ]] || pruned_paths+=(.qwen)
+	[[ "${agent_harness}" == "codex" || "${agent_harness}" == "all" ]] || pruned_paths+=(.codex)
+	[[ "${agent_harness}" == "grok" || "${agent_harness}" == "all" ]] || pruned_paths+=(.grok)
+	if [[ "${agent_harness}" != "opencode" && "${agent_harness}" != "all" ]]; then
+		pruned_paths+=(.opencode opencode.json)
+	fi
+	if [[ "${agent_harness}" == "core" ]]; then
+		pruned_paths+=(.cursor/agents)
+	elif [[ "${agent_harness}" != "cursor" && "${agent_harness}" != "all" ]]; then
+		pruned_paths+=(.cursor)
+	fi
+	return 0
+}
 
 source_root="${template}"
 source_snapshot=""
@@ -279,7 +341,8 @@ apply_entry() {
 collect_present() {
 	local repo="$1" entry
 	present=()
-	for entry in "${paths[@]}" "${generated_paths[@]}" "${retired_paths[@]}"; do
+	for entry in "${paths[@]}" "${generated_paths[@]-}" "${retired_paths[@]}" "${pruned_paths[@]-}"; do
+		[[ -n "${entry}" ]] || continue
 		if [[ -e "${repo}/${entry%/}" || -L "${repo}/${entry%/}" ]]; then present+=("${entry%/}"); fi
 	done
 	# A trailing false test would return non-zero and `set -e` would end the run.
@@ -411,6 +474,14 @@ target="${explicit_repo:-$PWD}"
 		printf '   skipped: target is the template itself\n'
 		exit 0
 	fi
+	if ! configure_target_harness "${repo}"; then
+		if [[ "${mode}" == "check" ]]; then
+			printf '  ! template.lock has no complete supported agent_harness\n'
+			check_failed
+		else
+			reject "template.lock has no complete supported agent_harness"
+		fi
+	fi
 
 	target_symlink=$(first_manifest_symlink "${repo}")
 	if [[ -n "${target_symlink}" ]]; then
@@ -456,8 +527,8 @@ target="${explicit_repo:-$PWD}"
 		fi
 	fi
 	collect_service_skill_exclusions "${repo}"
-	ignored_generated_pathspecs=("${generated_paths[@]}")
-	for entry in "${service_skill_exclusions[@]-}"; do
+	ignored_generated_pathspecs=()
+	for entry in "${generated_paths[@]-}" "${pruned_paths[@]-}" "${service_skill_exclusions[@]-}"; do
 		[[ -n "${entry}" ]] && ignored_generated_pathspecs+=("${entry}")
 	done
 	target_generated_ignored=""
@@ -467,11 +538,11 @@ target="${explicit_repo:-$PWD}"
 	fi
 	if [[ -n "${target_generated_ignored}" ]]; then
 		if [[ "${mode}" == "check" ]]; then
-			printf '  ! ignored generated content; first: %s\n' \
+			printf '  ! ignored generated or pruned content; first: %s\n' \
 				"$(printf '%s' "${target_generated_ignored}" | head -1)"
 			check_failed
 		else
-			reject "ignored generated content could be overwritten; first: $(printf '%s' "${target_generated_ignored}" | head -1)"
+			reject "ignored generated or pruned content could be overwritten; first: $(printf '%s' "${target_generated_ignored}" | head -1)"
 		fi
 	fi
 
@@ -489,25 +560,29 @@ target="${explicit_repo:-$PWD}"
 			report+="  - ${entry} (retired)"$'\n'
 		fi
 	done
-	if ! generated_report=$(bash "${harness_skills_helper}" claude --check --repo "${repo}" 2>&1); then
+	for entry in "${pruned_paths[@]-}"; do
+		[[ -n "${entry}" ]] || continue
+		if [[ -e "${repo}/${entry}" || -L "${repo}/${entry}" ]]; then
+			drift=1
+			report+="  - ${entry} (not selected by agent_harness=${agent_harness})"$'\n'
+		fi
+	done
+	if [[ "${agent_harness}" == "claude" || "${agent_harness}" == "all" ]] &&
+		! generated_report=$(bash "${harness_skills_helper}" claude --check --repo "${repo}" 2>&1); then
 		drift=1
 		while IFS= read -r line; do
 			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
 		done <<<"${generated_report}"
 	fi
-	if ! generated_report=$(bash "${harness_skills_helper}" qwen --check --repo "${repo}" 2>&1); then
+	if [[ "${agent_harness}" == "qwen" || "${agent_harness}" == "all" ]] &&
+		! generated_report=$(bash "${harness_skills_helper}" qwen --check --repo "${repo}" 2>&1); then
 		drift=1
 		while IFS= read -r line; do
 			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
 		done <<<"${generated_report}"
 	fi
-	if ! generated_report=$(bash "${agent_roles_helper}" --check --repo "${repo}" 2>&1); then
-		drift=1
-		while IFS= read -r line; do
-			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
-		done <<<"${generated_report}"
-	fi
-	if ! generated_report=$(bash "${codex_agents_helper}" --check --repo "${repo}" 2>&1); then
+	if [[ "${agent_harness}" == "codex" || "${agent_harness}" == "all" ]] &&
+		! generated_report=$(bash "${codex_agents_helper}" --check --repo "${repo}" 2>&1); then
 		drift=1
 		while IFS= read -r line; do
 			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
@@ -560,17 +635,20 @@ target="${explicit_repo:-$PWD}"
 	fi
 
 	assert_no_identity_leak "${repo}"
-	if ! preflight_report=$(bash "${harness_skills_helper}" claude --preflight --repo "${repo}" 2>&1); then
+	if [[ "${agent_harness}" == "claude" || "${agent_harness}" == "all" ]] &&
+		! preflight_report=$(bash "${harness_skills_helper}" claude --preflight --repo "${repo}" 2>&1); then
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
 		reject "generated Claude skill links cannot be rebuilt safely"
 	fi
-	if ! preflight_report=$(bash "${harness_skills_helper}" qwen --preflight --repo "${repo}" 2>&1); then
+	if [[ "${agent_harness}" == "qwen" || "${agent_harness}" == "all" ]] &&
+		! preflight_report=$(bash "${harness_skills_helper}" qwen --preflight --repo "${repo}" 2>&1); then
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
 		reject "generated Qwen skill links cannot be rebuilt safely"
 	fi
-	if ! preflight_report=$(bash "${codex_agents_helper}" --preflight --repo "${repo}" 2>&1); then
+	if [[ "${agent_harness}" == "codex" || "${agent_harness}" == "all" ]] &&
+		! preflight_report=$(bash "${codex_agents_helper}" --preflight --repo "${repo}" 2>&1); then
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
 		reject "generated Codex project config cannot be rebuilt safely"
@@ -578,6 +656,9 @@ target="${explicit_repo:-$PWD}"
 
 	for entry in "${paths[@]}"; do apply_entry "${repo}" "${entry}"; done
 	for entry in "${retired_paths[@]}"; do rm -f -- "${repo}/${entry}"; done
+	for entry in "${pruned_paths[@]-}"; do
+		[[ -n "${entry}" ]] && rm -rf -- "${repo:?}/${entry:?}"
+	done
 
 	if [[ -f "${repo}/scripts/template-sync.sh" ]]; then
 		chmod +x \
@@ -586,13 +667,16 @@ target="${explicit_repo:-$PWD}"
 			"${repo}/scripts/harness-skills-sync.sh" \
 			"${repo}/scripts/codex-agents-sync.sh"
 	fi
-	if ! bash "${repo}/scripts/harness-skills-sync.sh" claude --apply --repo "${repo}"; then
+	if [[ "${agent_harness}" == "claude" || "${agent_harness}" == "all" ]] &&
+		! bash "${repo}/scripts/harness-skills-sync.sh" claude --apply --repo "${repo}"; then
 		reject "Claude skill link rebuild failed; the mirror is in the working tree and was not committed"
 	fi
-	if ! bash "${repo}/scripts/harness-skills-sync.sh" qwen --apply --repo "${repo}"; then
+	if [[ "${agent_harness}" == "qwen" || "${agent_harness}" == "all" ]] &&
+		! bash "${repo}/scripts/harness-skills-sync.sh" qwen --apply --repo "${repo}"; then
 		reject "Qwen skill link rebuild failed; the mirror is in the working tree and was not committed"
 	fi
-	if ! bash "${repo}/scripts/codex-agents-sync.sh" --apply --repo "${repo}"; then
+	if [[ "${agent_harness}" == "codex" || "${agent_harness}" == "all" ]] &&
+		! bash "${repo}/scripts/codex-agents-sync.sh" --apply --repo "${repo}"; then
 		reject "Codex agent registry rebuild failed; the mirror is in the working tree and was not committed"
 	fi
 	printf '   synced into the working tree at template %s\n' "${template_revision}"

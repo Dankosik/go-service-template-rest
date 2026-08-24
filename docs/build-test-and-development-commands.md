@@ -40,12 +40,14 @@ individual choices and dependency combinations documented in the README:
 Other cross-products are not a supported preset merely because the initializer
 can mechanically resolve their markers.
 
-`init-module.sh` validates selections and identity before mutation, rewrites
-module/CODEOWNERS/service identity, physically removes unselected profiles,
-regenerates retained outputs, tidies modules, writes `template.lock`, and is
-idempotent for the same selection. The contract check uses invalid synthetic
-inputs and one default generated checkout; profile-owned Go tests retain their
-own behavior.
+`init-module.sh` validates selections and identity before mutation, records an
+`initializing` journal, rewrites module/CODEOWNERS/service identity, physically
+removes unselected profiles, regenerates retained outputs, tidies modules, and
+marks `template.lock` complete only after postconditions pass. A same-selection
+rerun resumes or returns without drift; another identity or profile fails
+unchanged. The contract check captures the exact current working tree, clears
+ambient profile variables, and exercises the smallest representative profile
+rows plus partial-failure recovery.
 
 ## Add an outbound integration
 
@@ -55,7 +57,7 @@ make integration-init NAME=billing TRANSPORT=http \
 ```
 
 While changing the initializer harness, select one named row and keep the
-25-row default for final acceptance:
+current complete matrix for final acceptance:
 
 ```bash
 bash scripts/ci/integration-init-check.sh --list
@@ -265,20 +267,24 @@ The source template builds one documented PostgreSQL generated output. A
 derived repository builds its own exact source. The lifecycle check starts a
 disposable PostgreSQL only when that current profile requires it; migration
 rehearsal reuses its own database. Reuse the same image tag for lifecycle,
-migration rehearsal, and vulnerability scanning.
+migration rehearsal, and vulnerability scanning. The Dockerfile fixes output
+timestamps with `SOURCE_DATE_EPOCH=0`, so identical inputs rebuild to the same
+local image digest; application version and commit remain explicit build inputs.
 
 ## Run and build
 
 ```bash
 make run
 make build
-make build-pgo PGO_PROFILE=<representative-cpu.pprof>
+make pgo-manifest PGO_PROFILE=<representative-cpu.pprof> # requires provenance env; see Benchmarking
+make build-pgo PGO_PROFILE=<representative-cpu.pprof> PGO_MANIFEST=<representative-cpu.pprof.meta>
 make docker-build
 make docker-run
 ```
 
-`run` sources `.env` when present. PGO accepts only an explicit readable CPU
-profile; `off` is the default and rollback.
+`run` sources `.env` when present. PGO requires an explicit CPU profile and its
+provenance manifest; `off` is the default and rollback. Off and PGO local
+binaries have distinct paths, `bin/service` and `bin/service-pgo`.
 
 <!-- profile:messaging-nats-jetstream:start -->
 `make run-worker` and `make build-worker` own the messaging worker.
@@ -292,9 +298,11 @@ profile; `off` is the default and rollback.
 
 ## Benchmarking
 
-Use direct `go test -bench`, `benchstat`, profile, integration-tagged
-PostgreSQL, or pinned k6 commands from [Benchmarking](benchmarking.md).
-Benchmarks are explicit evidence, not default CI gates.
+Use `make benchmark-capture`, `benchmark-compare`, `benchmark-http`, and the
+profile commands from [Benchmarking](benchmarking.md). The capture owner records
+comparability metadata and rejects mismatched inputs before `benchstat`.
+Benchmarks are explicit evidence, not default CI gates; CI only runs the
+non-load `performance-harness-check` when its harness changes.
 
 ## CI and publication
 

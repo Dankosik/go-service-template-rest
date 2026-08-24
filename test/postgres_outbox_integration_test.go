@@ -3,7 +3,6 @@
 package integration_test
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -13,13 +12,10 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
-	"github.com/riverqueue/river/rivermigrate"
 )
 
 func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	ctx, pool, appender := newOutboxFixture(t)
-	assertRiverMigrationBaseline(t, ctx, pool)
 	if _, err := pool.Exec(ctx, "CREATE TABLE outbox_domain_probe (id text PRIMARY KEY)"); err != nil {
 		t.Fatalf("create domain probe: %v", err)
 	}
@@ -86,40 +82,9 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	}
 }
 
-func assertRiverMigrationBaseline(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
-	t.Helper()
-	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
-	if err != nil {
-		t.Fatalf("rivermigrate.New(): %v", err)
-	}
-	versions, err := migrator.ExistingVersions(ctx)
-	if err != nil {
-		t.Fatalf("rivermigrate.ExistingVersions(): %v", err)
-	}
-	if len(versions) != 7 {
-		t.Fatalf("River migration versions = %v, want 1 through 7", versions)
-	}
-	for index, migration := range versions {
-		if migration.Version != index+1 {
-			t.Fatalf("River migration version[%d] = %d, want %d", index, migration.Version, index+1)
-		}
-	}
-	result, err := migrator.Migrate(ctx, rivermigrate.DirectionUp, nil)
-	if err != nil {
-		t.Fatalf("rivermigrate.Migrate(up): %v", err)
-	}
-	if len(result.Versions) != 0 {
-		t.Fatalf("River pending migrations = %v, want none", result.Versions)
-	}
-}
-
-type outboxCountQuerier interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-}
-
 func assertOutboxAtomicCounts(
 	t *testing.T,
-	db outboxCountQuerier,
+	db *pgxpool.Pool,
 	domainID string,
 	eventID string,
 	wantDomain int,

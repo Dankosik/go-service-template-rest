@@ -37,16 +37,17 @@ func TestNATSWorkerComposition(t *testing.T) {
 	release := make(chan struct{})
 	cleaned := make(chan struct{})
 	loadedGrace := make(chan time.Duration, 1)
+	registry := testRegistry(t, "composition.test", func(_ context.Context, payload string) error {
+		entered <- payload
+		<-release
+		return nil
+	})
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- run(runCtx, nil, func(_ context.Context, cfg config.Config, _ *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
 			loadedGrace <- cfg.HTTP.GracePeriod
-			return testRegistry(t, "composition.test", func(_ context.Context, payload string) error {
-				entered <- payload
-				<-release
-				return nil
-			}), func(context.Context) { close(cleaned) }, nil
+			return registry, func(context.Context) { close(cleaned) }, nil
 		})
 	}()
 	waittest.Until(t, 10*time.Second, func(ctx context.Context) bool {
@@ -116,16 +117,17 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	release := make(chan struct{})
 	exited := make(chan struct{})
 	cleaned := make(chan struct{}, 1)
+	registry := testRegistry(t, "composition.forced-cleanup", func(context.Context, string) error {
+		close(entered)
+		<-release
+		close(exited)
+		return nil
+	})
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
-			return testRegistry(t, "composition.forced-cleanup", func(context.Context, string) error {
-				close(entered)
-				<-release
-				close(exited)
-				return nil
-			}), func(context.Context) { cleaned <- struct{}{} }, nil
+			return registry, func(context.Context) { cleaned <- struct{}{} }, nil
 		})
 	}()
 	waittest.Until(t, 10*time.Second, func(ctx context.Context) bool {
@@ -172,14 +174,15 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	url, js := workerNATSFixture(t)
 	diagnosticsAddress := waittest.FreeTCPAddr(t, "worker diagnostics")
 	setWorkerEnvironment(t, url, "panic-composition-worker", diagnosticsAddress)
+	registry := testRegistry(t, "composition.panic", func(context.Context, string) error {
+		panic("worker panic canary")
+	})
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	defer cancelRun()
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
-			return testRegistry(t, "composition.panic", func(context.Context, string) error {
-				panic("worker panic canary")
-			}), nil, nil
+			return registry, nil, nil
 		})
 	}()
 	waittest.Until(t, 10*time.Second, func(ctx context.Context) bool {
@@ -210,7 +213,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 
 func workerNATSFixture(t *testing.T) (string, jetstream.JetStream) {
 	t.Helper()
-	server := natsjstest.Start(t, natsjstest.WithStreams(
+	server := workerNATSPool.Start(t, natsjstest.WithStreams(
 		jetstream.StreamConfig{
 			Name: "EVENTS", Subjects: []string{"events.>"},
 			Storage: jetstream.FileStorage, MaxMsgSize: workerTestMaxDeliveryBytes,

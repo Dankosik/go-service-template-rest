@@ -30,8 +30,9 @@ separate Docker-backed leaves. A host-only result does not prove them.
 
 [ci.yml](../.github/workflows/ci.yml) classifies the exact diff once and starts
 only applicable leaves. Runtime Go, root/tool dependencies, lint config,
-initializers, workflows, dependency automation, database, messaging, process,
-race, migrations, runtime image, and image security are separate surfaces.
+initializers, workflows, dependency automation, performance harness, database,
+messaging, process, race, migrations, runtime image, and image security are
+separate surfaces.
 Instruction-only quality does not install Go. Gitleaks uses the tools-module
 version through a checksum-pinned binary and range scans pull requests, merge
 groups, and main pushes; tags and manual runs retain full-history proof.
@@ -41,6 +42,10 @@ vulnerability gate. The always-reported `required` job fails when any
 applicable leaf fails or is cancelled and accepts deliberate path skips.
 Pull requests and merge groups are path-aware; main pushes, tags, and manual
 runs deliberately select the full surface set.
+
+Performance-harness changes run a pinned k6 `inspect` and evidence-owner
+self-test. That gate makes broken scenario wiring fail without starting a
+service or turning noisy benchmark thresholds into merge admission.
 
 GitHub Rulesets or organization policy own merge admission. Require `required`
 and `codeql-required`; the repository does not rewrite its own protection
@@ -76,19 +81,22 @@ Publication does not rerun either suite.
 Publication remains opt-in through `ENABLE_GHCR_PUBLISH=true`. The shared
 [publish-image action](../.github/actions/publish-image/action.yml):
 
-1. builds one production image;
+1. builds one run-scoped production candidate for the exact admitted commit;
 2. preserves the previously published migration corpus;
 3. rehearses migrations through the shared runtime lifecycle checker;
 4. scans the image through the canonical Make target and generates a CycloneDX SBOM;
 5. pushes the candidate and resolves its digest;
 6. signs and attests that digest;
 7. verifies signature, provenance, and SBOM attestation;
-8. advances the verified migration-history marker;
-9. promotes mutable tags and reads their digest back.
+8. uploads the run-scoped SBOM artifact and records the verified digest;
+9. advances the verified migration-history marker;
+10. promotes the SHA/main or version/latest tags and reads their digest back.
 
 Both main and release events use the same non-cancelling
 `migration-publication-${{ github.repository }}` concurrency group. Public tags
-never move before verification or migration-history preservation.
+never move before verification or migration-history preservation. Promotion is
+the final required step; a partial multi-tag registry failure records the exact
+digest, the already-promoted tags, and the failed tag before returning failure.
 
 ## Migrations
 
@@ -111,5 +119,6 @@ evidence remain release decisions.
 - Failed CI changes no external state.
 - Failed integration owns its disposable Docker resources through target traps.
 - A failed publication never promotes public tags before verification.
-- Publication candidates are immutable run/SHA tags; rollback resolves a
+- Publication candidates are run-scoped tags; SHA, version, `main`, and `latest`
+  are promoted only after verification. Rollback resolves a
   previously verified digest rather than rebuilding it.

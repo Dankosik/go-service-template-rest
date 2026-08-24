@@ -3,8 +3,8 @@ description: >-
   Build, prove, scan, push, sign, attest, verify, and only then promote the
   runtime image tags anyone deploys from.
 
-# The one publication path, used by both cd.yml jobs. It exists because those two
-# jobs previously spelled this sequence out separately: ninety lines of migration,
+# The one publication path, used by both cd.yml modes. It exists because those
+# modes previously spelled this sequence out separately: ninety lines of migration,
 # cosign, and attestation steps duplicated across a main publication and a release
 # publication is a supply chain that can disagree with itself, and the
 # disagreement would first be visible at a release — a tag verified under rules
@@ -23,9 +23,9 @@ description: >-
 inputs:
   mode:
     description: >-
-      Which publication this is. "main" builds an immutable sha- tag and promotes
-      `main`; "release" builds a run-scoped candidate tag and promotes the version
-      tag plus `latest`.
+      Which publication this is. Both modes build a run-scoped candidate;
+      "main" promotes the sha- tag plus `main`, and "release" promotes the
+      version tag plus `latest`, only after verification.
     required: true
   candidate_sha:
     description: >-
@@ -62,43 +62,18 @@ runs:
       id: meta
       shell: bash
       env:
-        MODE: ${{ inputs.mode }}
-        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        CANDIDATE_SHA: ${{ inputs.candidate_sha }}
       run: |
-        IMAGE_REPO="ghcr.io/${GITHUB_REPOSITORY,,}"
-        case "${MODE}" in
-        main)
-          SHORT_SHA="${GITHUB_SHA:0:12}"
-          VERSION="sha-${SHORT_SHA}"
-          PRIMARY_TAG="sha-${SHORT_SHA}"
-          PROMOTE_TAGS="main"
-          ARTIFACT_NAME="sbom-main-${SHORT_SHA}"
-          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/cd.yml@refs/heads/${DEFAULT_BRANCH}"
-          ;;
-        release)
-          VERSION="${GITHUB_REF_NAME}"
-          # Run-scoped rather than the version tag: the candidate is pushed
-          # before it has been verified, and a re-run must not be able to
-          # overwrite a tag a deployment already resolved.
-          PRIMARY_TAG="build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          PROMOTE_TAGS="${GITHUB_REF_NAME} latest"
-          ARTIFACT_NAME="sbom-${GITHUB_REF_NAME}"
-          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/cd.yml@${GITHUB_REF}"
-          ;;
-        *)
-          echo "publish-image: unsupported mode '${MODE}'" >&2
-          exit 1
-          ;;
-        esac
-
-        {
-          echo "image_repo=${IMAGE_REPO}"
-          echo "primary_image=${IMAGE_REPO}:${PRIMARY_TAG}"
-          echo "version=${VERSION}"
-          echo "promote_tags=${PROMOTE_TAGS}"
-          echo "artifact_name=${ARTIFACT_NAME}"
-          echo "identity=${IDENTITY}"
-        } >> "$GITHUB_OUTPUT"
+        test "$(git rev-parse HEAD)" = "${CANDIDATE_SHA}"
+        bash ./scripts/ci/publish-image-metadata.sh metadata \
+          "${{ inputs.mode }}" \
+          "${CANDIDATE_SHA}" \
+          "${GITHUB_REPOSITORY}" \
+          "${{ github.event.repository.default_branch }}" \
+          "${GITHUB_REF_NAME}" \
+          "${GITHUB_REF}" \
+          "${GITHUB_RUN_ID}" \
+          "${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
 
     - name: Login to GHCR
       shell: bash
@@ -167,11 +142,12 @@ runs:
       shell: bash
       env:
         APP_VERSION: ${{ steps.meta.outputs.version }}
+        CANDIDATE_SHA: ${{ inputs.candidate_sha }}
         PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
         RUNTIME_IMAGE_CACHE_FROM: type=gha,scope=runtime-image
         RUNTIME_IMAGE_CACHE_TO: type=gha,mode=max,scope=runtime-image
       run: |
-        VCS_REF="${GITHUB_SHA}" \
+        VCS_REF="${CANDIDATE_SHA}" \
           SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
           make runtime-image-build RUNTIME_IMAGE="${PRIMARY_IMAGE}"
 
@@ -211,11 +187,12 @@ runs:
       run: make container-security CONTAINER_IMAGE="${PRIMARY_IMAGE}"
 
     - name: Generate SBOM (CycloneDX)
-      uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # 0.34.2
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
       env:
         TRIVY_DB_REPOSITORY: ${{ inputs.trivy_db_repository }}
       with:
         image-ref: ${{ steps.meta.outputs.primary_image }}
+        version: v0.72.0
         scanners: vuln
         format: cyclonedx
         output: sbom.cdx.json
@@ -284,6 +261,30 @@ runs:
           --repo "${GITHUB_REPOSITORY}" \
           --predicate-type "https://cyclonedx.org/bom"
 
+    - name: Record verified image
+      shell: bash
+      env:
+        IMAGE_REPO: ${{ steps.meta.outputs.image_repo }}
+        DIGEST: ${{ steps.digest.outputs.digest }}
+        PROMOTE_TAGS: ${{ steps.meta.outputs.promote_tags }}
+      run: |
+        {
+          echo "### Verified image"
+          echo
+          # Markdown backticks are intentionally literal.
+          # shellcheck disable=SC2016
+          printf '`%s@%s`\n' "${IMAGE_REPO}" "${DIGEST}"
+          echo
+          echo "Intended tags: ${PROMOTE_TAGS}"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.meta.outputs.artifact_name }}
+        path: sbom.cdx.json
+        if-no-files-found: error
+
     # profile:database-postgres:start
     - name: Advance verified migration history marker
       shell: bash
@@ -311,34 +312,9 @@ runs:
         DIGEST: ${{ steps.digest.outputs.digest }}
         PROMOTE_TAGS: ${{ steps.meta.outputs.promote_tags }}
       run: |
-        read -ra tags <<<"${PROMOTE_TAGS}"
-        for tag in "${tags[@]}"; do
-          docker tag "${PRIMARY_IMAGE}" "${IMAGE_REPO}:${tag}"
-          docker push "${IMAGE_REPO}:${tag}"
-          test "$(
-            docker buildx imagetools inspect \
-              --format '{{.Manifest.Digest}}' \
-              "${IMAGE_REPO}:${tag}"
-          )" = "${DIGEST}"
-        done
-
-    - name: Publish immutable image reference
-      shell: bash
-      env:
-        IMAGE_REPO: ${{ steps.meta.outputs.image_repo }}
-        DIGEST: ${{ steps.digest.outputs.digest }}
-      run: |
-        {
-          echo "### Published image"
-          echo
-          # Markdown backticks are intentionally literal.
-          # shellcheck disable=SC2016
-          printf '`%s`\n' "${IMAGE_REPO}@${DIGEST}"
-        } >> "$GITHUB_STEP_SUMMARY"
-
-    - name: Upload SBOM artifact
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-      with:
-        name: ${{ steps.meta.outputs.artifact_name }}
-        path: sbom.cdx.json
-        if-no-files-found: error
+        bash ./scripts/ci/publish-image-metadata.sh promote \
+          "${IMAGE_REPO}" \
+          "${PRIMARY_IMAGE}" \
+          "${DIGEST}" \
+          "${PROMOTE_TAGS}" \
+          "${GITHUB_STEP_SUMMARY}"

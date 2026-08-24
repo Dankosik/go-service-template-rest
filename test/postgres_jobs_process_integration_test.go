@@ -75,6 +75,7 @@ func TestPostgresJobsWorkerProcess(t *testing.T) {
 	t.Cleanup(func() {
 		if process.ProcessState == nil {
 			_ = process.Process.Kill()
+			<-waitErr
 		}
 	})
 

@@ -9,9 +9,9 @@ Integration tests use the `integration` build tag and are not executed by defaul
 Run locally:
 
 ```bash
-make test-integration
+ALLOW_HEAVY=1 make test-integration
 # require rather than conditionally skip Docker-backed cases:
-REQUIRE_DOCKER=1 make test-integration
+REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration
 ```
 
 Placement rules:
@@ -48,6 +48,13 @@ all four RPC cardinalities remain in focused package/reference tests.
 Docker behavior:
 - Local `make test-integration` skips Docker-backed tests when Docker is unavailable.
 - CI sets `REQUIRE_DOCKER=1`, so Docker unavailability fails the job instead of silently skipping.
+
+Shared NATS harness:
+- Ordinary scenarios share one broker per test binary and reset their streams
+  while holding the fixture lock, so broker startup is paid once without
+  carrying messages or consumers into the next test.
+- Broker restart, pause, and authenticated-server scenarios keep isolated
+  containers because they mutate process-wide broker state.
 
 Shared PostgreSQL harness:
 - `TestMain` starts one digest-pinned PostgreSQL container for the whole package and terminates it after the run.
