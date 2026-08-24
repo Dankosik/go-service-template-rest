@@ -4,7 +4,7 @@
 
 `WEBHOOKS=durable` requires `DATABASE=postgres JOBS=postgres`. It contributes
 one `outbound_webhook` definition to `/jobs-worker`; the PostgreSQL jobs pack
-owns durable acceptance, claims, retries, recovery, concurrency, telemetry, and
+owns durable jobs, claims, retries, recovery, concurrency, telemetry, and
 shutdown. There is no webhook-specific worker or active delivery schema.
 
 ## Feature API
@@ -13,14 +13,17 @@ Construct a `postgreswebhook.Dispatcher` from the immutable endpoint manifest.
 Before opening the feature transaction, call `Prepare` with one semantic JSON
 event and its receiver IDs. Inside the transaction, call `Prepared.Stage` as
 the final operation and return its error so the transaction rolls back on a
-conflict.
+conflict. Its boolean reports whether the fan-out was inserted or already
+existed.
 
 Each receiver becomes one job with a stable `whd_...` identity. Every job also
 contains the fingerprint of the complete sorted fan-out, so adding, removing,
 or changing a receiver under the same event identity conflicts rather than
 partially replaying. Reuse the same `Prepared` value across transaction retries.
-After an unknown commit result, `Prepared.Resolve` reads the writable primary
-and reports only a completely accepted or completely absent fan-out as such.
+After an unknown commit result, `Prepared.ResolveCurrent` reads the writable
+primary and reports whether the complete fan-out still exists. This is an
+immediate reconciliation aid, not a permanent acceptance ledger: the feature's
+business transaction must reject replay after River removes terminal jobs.
 
 The business input is intentionally small:
 
@@ -81,9 +84,9 @@ Only public HTTPS destinations on port 443 are accepted. The transport rejects
 credentials, queries, fragments, redirects, non-public DNS answers, and private
 addresses rechecked at dial. It pins each authorized resolved address while
 retaining the original hostname for Host and SNI, disables environment proxies,
-compression, keep-alive, and HTTP/2, requires TLS 1.3, and bounds response
-headers and non-success bodies. Deployment network policy remains defense in
-depth; application validation is not a firewall.
+compression, keep-alive, and HTTP/2, requires TLS 1.3, bounds response headers,
+and closes ignored response bodies without draining them. Deployment network
+policy remains defense in depth; application validation is not a firewall.
 
 ## Deliberate removals
 

@@ -11,7 +11,7 @@ func TestWebhookManifests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	endpoint, err := endpoints.Resolve("orders", "alpha")
+	endpoint, err := endpoints.resolve("orders", "alpha")
 	if err != nil || endpoint.URL != "https://alpha.example:443/hooks" {
 		t.Fatalf("Resolve() = %+v, %v", endpoint, err)
 	}
@@ -21,8 +21,8 @@ func TestWebhookManifests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key, err := secrets.Resolve("orders", "alpha", "key-v1")
-	if err != nil || len(key.Bytes) != 32 {
+	key, err := secrets.resolve("orders", "alpha", "key-v1")
+	if err != nil || len(key) != 32 {
 		t.Fatalf("Resolve() = %+v, %v", key, err)
 	}
 
