@@ -877,6 +877,7 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/infra/telemetry/telemetrytest/metrics.go \
 			scripts/ci/migration-history-check.sh \
 			scripts/ci/migration-image-history-check.sh \
+			scripts/ci/migration-validate.sh \
 			env/docker-compose.yml
 		cp \
 			scripts/profiles/database-none/startup_dependencies.go.tmpl \
@@ -888,8 +889,6 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile database-postgres remove
 		go -C tools mod edit -droptool=github.com/sqlc-dev/sqlc/cmd/sqlc
 		go -C tools mod edit -droptool=github.com/pressly/goose/v3/cmd/goose
-		go mod tidy
-		go -C tools mod tidy
 	else
 		strip_profile database-postgres keep
 	fi
@@ -1007,7 +1006,6 @@ fi
 			test/nats_messaging_*_test.go \
 			test/postgres_outbox_natsjs_integration_test.go
 		strip_profile messaging-nats-jetstream remove
-		go mod tidy
 	else
 		strip_profile messaging-nats-jetstream keep
 	fi

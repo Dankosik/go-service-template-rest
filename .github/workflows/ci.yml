@@ -411,14 +411,7 @@ jobs:
         run: make migration-validate RUNTIME_IMAGE=service:ci RUNTIME_EXPECTED_VERSION="sha-${GITHUB_SHA}"
       - name: Image vulnerabilities
         if: needs.changes.outputs.image_security == 'true'
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
-        with:
-          image-ref: service:ci
-          scanners: vuln
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
+        run: make container-security CONTAINER_IMAGE=service:ci
 
   required:
     if: always()

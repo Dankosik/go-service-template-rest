@@ -204,16 +204,11 @@ runs:
     # profile:database-postgres:end
 
     - name: Scan image with Trivy
-      uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # 0.34.2
+      shell: bash
       env:
+        PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
         TRIVY_DB_REPOSITORY: ${{ inputs.trivy_db_repository }}
-      with:
-        image-ref: ${{ steps.meta.outputs.primary_image }}
-        scanners: vuln
-        format: table
-        exit-code: "1"
-        ignore-unfixed: true
-        severity: CRITICAL,HIGH
+      run: make container-security CONTAINER_IMAGE="${PRIMARY_IMAGE}"
 
     - name: Generate SBOM (CycloneDX)
       uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # 0.34.2
@@ -224,7 +219,6 @@ runs:
         scanners: vuln
         format: cyclonedx
         output: sbom.cdx.json
-        skip-setup-trivy: true
 
     - name: Push candidate image
       shell: bash

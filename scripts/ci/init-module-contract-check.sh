@@ -109,7 +109,11 @@ verify_authn_profile() {
 
 		go test -vet=off -run '^$' ./...
 		GOFLAGS='' go mod tidy -diff
-		GOFLAGS='' go -C tools mod tidy -diff
+		if [[ "${authn}" == "none" ]]; then
+			TOOLS_SMOKE_ALL=1 make tools-dependencies-check
+		else
+			GOFLAGS='' go -C tools mod tidy -diff
+		fi
 		git add -A
 		git -c user.name=init-check -c user.email=init-check@example.invalid commit -qm generated
 		make openapi-drift-check sqlc-check

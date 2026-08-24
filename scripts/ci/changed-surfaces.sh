@@ -41,7 +41,7 @@ classify() {
 		esac
 		case "${file}" in
 			go.mod|go.sum|examples/*/go.mod|examples/*/go.sum) mark go_root_dependencies ;;
-			tools/go.mod|tools/go.sum) mark go_tool_dependencies ;;
+			tools/go.mod|tools/go.sum|scripts/ci/tools-smoke.sh) mark go_tool_dependencies ;;
 		esac
 		case "${file}" in
 			.golangci.yml) mark go_lint_config ;;
@@ -52,7 +52,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			buf.yaml|buf.gen.yaml|api/proto/*|examples/grpc-reference-service/buf.yaml|examples/grpc-reference-service/buf.gen.yaml|examples/grpc-reference-service/api/proto/*|examples/grpc-reference-service/internal/gen/proto/*|internal/gen/proto/*)
+			buf.yaml|buf.gen.yaml|buf.lock|api/proto/*|examples/grpc-reference-service/buf.yaml|examples/grpc-reference-service/buf.gen.yaml|examples/grpc-reference-service/buf.lock|examples/grpc-reference-service/api/proto/*|examples/grpc-reference-service/internal/gen/proto/*|internal/gen/proto/*)
 				mark protobuf
 				;;
 		esac
@@ -109,7 +109,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			.dockerignore|build/docker/*|env/docker-compose.yml|scripts/ci/runtime-image-build.sh|.github/actions/publish-image/*)
+			.dockerignore|build/docker/*|env/docker-compose.yml|scripts/ci/runtime-image-*.sh|.github/actions/publish-image/*)
 				mark runtime_image image_security
 				;;
 		esac
@@ -150,12 +150,21 @@ self_test() {
 	assert_case tools/go.mod \
 		"go_tool_dependencies" \
 		"go_source go_root_dependencies go_lint_config db_integration messaging_integration process_integration integration_race runtime_image image_security"
+	assert_case scripts/ci/tools-smoke.sh \
+		"go_tool_dependencies shell" \
+		"go_source go_root_dependencies go_lint_config db_integration messaging_integration process_integration integration_race runtime_image image_security"
 	assert_case .golangci.yml \
 		"go_lint_config" \
 		"go_source go_root_dependencies go_tool_dependencies db_integration messaging_integration process_integration integration_race runtime_image image_security"
 	assert_case build/docker/Dockerfile \
 		"runtime_image image_security" \
 		"go_source go_root_dependencies go_tool_dependencies go_lint_config db_integration messaging_integration process_integration integration_race"
+	assert_case scripts/ci/runtime-image-check.sh \
+		"shell runtime_image image_security" \
+		"go_source go_root_dependencies go_tool_dependencies go_lint_config db_integration messaging_integration process_integration integration_race"
+	assert_case examples/grpc-reference-service/buf.lock \
+		"protobuf" \
+		"go_source go_root_dependencies go_tool_dependencies go_lint_config db_integration messaging_integration process_integration integration_race runtime_image image_security"
 	assert_case scripts/integration-init.sh \
 		"integration_initializer shell" \
 		"module_initializer go_source db_integration messaging_integration process_integration integration_race runtime_image image_security"
