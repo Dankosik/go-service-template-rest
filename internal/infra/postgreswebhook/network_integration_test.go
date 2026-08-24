@@ -7,11 +7,17 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"net/url"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -34,8 +40,8 @@ func TestWebhookNetworkSecurity(t *testing.T) {
 			defer cancel()
 			prepared, err := prepareSend(ctx, resolver, attempt, manifest)
 			if test.wantDeny {
-				if !errors.Is(err, ErrDestinationDenied) {
-					t.Fatalf("prepareSend() error = %v, want ErrDestinationDenied", err)
+				if !errors.Is(err, errDestinationDenied) {
+					t.Fatalf("prepareSend() error = %v, want destination denial", err)
 				}
 				return
 			}
@@ -59,11 +65,69 @@ func TestWebhookBoundedAttempt(t *testing.T) {
 	defer cancel()
 	started := time.Now()
 	result, err := send(ctx, prepared)
-	if !errors.Is(err, ErrDestinationDenied) {
-		t.Fatalf("send() error = %v, want ErrDestinationDenied", err)
+	if !errors.Is(err, errDestinationDenied) {
+		t.Fatalf("send() error = %v, want destination denial", err)
 	}
 	if !result.Evidence.DefinitelyNotSent || result.Evidence.MayHaveSent || time.Since(started) > time.Second {
 		t.Fatalf("bounded denial result = %+v", result)
+	}
+}
+
+func TestWebhookComposedTransportContract(t *testing.T) {
+	key := []byte("0123456789abcdef0123456789abcdef")
+	body := []byte(`{"type":"order.created","data":{"id":"ord-1"}}`)
+	attemptedAt := time.Unix(1_700_000_000, 0).UTC()
+	verifier, err := standardwebhooks.NewWebhookRaw(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var delivered atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/deliver", func(response http.ResponseWriter, request *http.Request) {
+		got, readErr := io.ReadAll(request.Body)
+		if readErr != nil || string(got) != string(body) {
+			t.Errorf("receiver body = %q, %v", got, readErr)
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if request.Header.Get("Content-Type") != "application/json" || verifier.VerifyIgnoringTimestamp(got, request.Header) != nil {
+			t.Errorf("receiver headers = %v", request.Header)
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		delivered.Add(1)
+		response.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("/redirect", func(response http.ResponseWriter, request *http.Request) {
+		http.Redirect(response, request, "/deliver", http.StatusTemporaryRedirect)
+	})
+	server := httptest.NewTLSServer(mux)
+	t.Cleanup(server.Close)
+	transport := server.Client().Transport.(*http.Transport).Clone()
+	t.Cleanup(transport.CloseIdleConnections)
+	signature, err := signV1("whd_test", attemptedAt, body, [][]byte{key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(server.URL + "/deliver")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	prepared := preparedSend{
+		Attempt: deliveryAttempt{ID: "whd_test", Body: body, AttemptedAt: attemptedAt, Deadline: deadline},
+		URL:     parsed, SelectedAddress: netip.MustParseAddr("8.8.8.8"), Signature: signature,
+	}
+	ctx, cancel := context.WithDeadline(t.Context(), deadline)
+	defer cancel()
+	result, err := sendWithTransport(ctx, prepared, transport, new(bool))
+	if err != nil || result.Evidence.StatusCode != http.StatusNoContent || delivered.Load() != 1 {
+		t.Fatalf("delivery result = %+v, %v, count=%d", result, err, delivered.Load())
+	}
+	prepared.URL.Path = "/redirect"
+	result, err = sendWithTransport(ctx, prepared, transport, new(bool))
+	if err != nil || result.Evidence.StatusCode != http.StatusTemporaryRedirect || delivered.Load() != 1 {
+		t.Fatalf("redirect result = %+v, %v, count=%d", result, err, delivered.Load())
 	}
 }
 

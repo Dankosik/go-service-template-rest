@@ -19,6 +19,8 @@ func MessagingCases() []MessagingCase {
 	return []MessagingCase{
 		{Name: "valid plaintext", URLs: "nats://broker.example:4222", Stream: eventsStream, Plaintext: true},
 		{Name: "valid tls", URLs: tlsBrokerURL, Stream: eventsStream},
+		{Name: "valid websocket", URLs: "ws://broker.example:4222", Stream: eventsStream, Plaintext: true},
+		{Name: "valid secure websocket", URLs: "wss://broker.example:4222", Stream: eventsStream},
 		{Name: "two urls", URLs: "tls://a.example:4222,tls://b.example:4222", Stream: eventsStream},
 		{Name: "userinfo", URLs: "tls://user@broker.example:4222", Stream: eventsStream, ConfigRejects: true},
 		{Name: "unsupported scheme", URLs: "amqp://broker.example:5672", Stream: eventsStream, ConfigRejects: true},

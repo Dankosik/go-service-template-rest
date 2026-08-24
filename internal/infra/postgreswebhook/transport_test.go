@@ -43,7 +43,7 @@ func TestWebhookRequestContractAndAddressFallback(t *testing.T) {
 }
 
 func TestWebhookURLAndDialPolicy(t *testing.T) {
-	for _, raw := range []string{"http://example.com", "https://example.com:8443", "https://user@example.com", "https://example.com/?query=1"} {
+	for _, raw := range []string{"http://example.com", "https://example.com:8443", "https://user@example.com", "https://example.com/?", "https://example.com/?query=1"} {
 		if _, err := parseWebhookURL(raw); err == nil {
 			t.Fatalf("parseWebhookURL(%q) succeeded", raw)
 		}
@@ -51,7 +51,7 @@ func TestWebhookURLAndDialPolicy(t *testing.T) {
 	transport := newAttemptTransport("localhost", netip.MustParseAddr("127.0.0.1"))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if _, err := transport.DialContext(ctx, "tcp", "ignored:443"); err == nil || !strings.Contains(err.Error(), ErrDestinationDenied.Error()) {
+	if _, err := transport.DialContext(ctx, "tcp", "ignored:443"); err == nil || !strings.Contains(err.Error(), errDestinationDenied.Error()) {
 		t.Fatalf("private dial error = %v", err)
 	}
 }

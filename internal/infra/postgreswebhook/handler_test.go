@@ -41,3 +41,14 @@ func TestWebhookDeliveryClassification(t *testing.T) {
 		})
 	}
 }
+
+func TestWebhookFailuresPreserveSafeCause(t *testing.T) {
+	cause := errors.New("resolver unavailable")
+	if err := prepareFailure(t.Context(), cause); !errors.Is(err, cause) {
+		t.Fatalf("prepareFailure() error = %v, want cause", err)
+	}
+	result := sendResult{Evidence: transportEvidence{MayHaveSent: true}}
+	if err := classifyDelivery(result, cause); !errors.Is(err, cause) {
+		t.Fatalf("classifyDelivery() error = %v, want cause", err)
+	}
+}

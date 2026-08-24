@@ -797,8 +797,7 @@ if [[ "${source_checkout}" != true ]]; then
 				migrations/000005_postgres_webhooks.sql \
 				migrations/000006_postgres_webhook_reference_repairs.sql \
 				migrations/000007_postgres_webhooks_retire.sql \
-				test/postgres_webhook_*_test.go \
-				test/webhook_network_integration_test.go
+				test/postgres_webhook_*_test.go
 			if [[ "${inbound_webhooks}" == "none" ]]; then
 				rm -f -- \
 					cmd/jobs-worker/builder_webhooks.go \
