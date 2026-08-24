@@ -10,7 +10,6 @@ import (
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -79,10 +78,6 @@ func readinessProbeBudget(cfg config.Config) time.Duration {
 	return cfg.HTTP.ReadinessTimeout
 }
 
-func (d runtimeDependencies) DomainErrors() []failure.Mapper {
-	return nil
-}
-
 // Close releases pooled dependencies, bounded by ctx, and is safe to call twice.
 //
 // The bound is the point. pgxpool.Close blocks until every acquired connection is
@@ -95,11 +90,6 @@ func (d runtimeDependencies) Close(ctx context.Context) {
 	if d.postgres == nil {
 		return
 	}
-	if d.closed == nil {
-		d.postgres.Close()
-		return
-	}
-
 	d.closed.Do(func() {
 		done := make(chan struct{})
 		go func() {

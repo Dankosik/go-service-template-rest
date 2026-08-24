@@ -35,8 +35,9 @@ const tick = 20 * time.Millisecond
 // consumer's stream state, a row count — and none of them offers a channel to
 // select on. Prefer [Receive] wherever the code under test does offer one: a
 // poll can only report that a condition was not reached in time, never when it
-// was reached.
-func Until(tb testing.TB, timeout time.Duration, predicate func() bool, description string) {
+// was reached. The predicate receives the wait's deadline context and must use
+// it for every blocking operation.
+func Until(tb testing.TB, timeout time.Duration, predicate func(context.Context) bool, description string) {
 	tb.Helper()
 
 	UntilFunc(tb, timeout, predicate, func() string { return description })
@@ -53,7 +54,12 @@ func Until(tb testing.TB, timeout time.Duration, predicate func() bool, descript
 //
 // describe runs once, after the deadline, so it may be as expensive as the
 // message needs and may read whatever the final poll left behind.
-func UntilFunc(tb testing.TB, timeout time.Duration, predicate func() bool, describe func() string) {
+func UntilFunc(
+	tb testing.TB,
+	timeout time.Duration,
+	predicate func(context.Context) bool,
+	describe func() string,
+) {
 	tb.Helper()
 
 	ctx, cancel := context.WithTimeout(tb.Context(), timeout)
@@ -61,7 +67,7 @@ func UntilFunc(tb testing.TB, timeout time.Duration, predicate func() bool, desc
 	ticker := time.NewTicker(tick)
 	defer ticker.Stop()
 	for {
-		if predicate() {
+		if predicate(ctx) {
 			return
 		}
 		select {
@@ -72,34 +78,40 @@ func UntilFunc(tb testing.TB, timeout time.Duration, predicate func() bool, desc
 	}
 }
 
-// Receive returns the next value sent on values, and fails the test when
-// timeout expires first.
+// Receive returns the next value sent on values, and fails the test when values
+// closes or timeout expires first.
 func Receive[T any](tb testing.TB, values <-chan T, timeout time.Duration, description string) T {
 	tb.Helper()
 
 	var value T
 	received := false
+	closed := false
 	select {
-	case value = <-values:
-		received = true
+	case value, received = <-values:
+		closed = !received
 	case <-time.After(timeout):
 	}
 	// The failure is reported outside the select, and behind a condition, so
 	// that the function keeps one reachable exit. Fatalf ends the goroutine, so
 	// any statement written after it — in the timeout case or after the select —
 	// is dead code that go/unreachable-statement reports.
-	if !received {
+	if closed {
+		tb.Fatalf("channel closed while waiting for %s", description)
+	} else if !received {
 		tb.Fatalf("timed out waiting for %s", description)
 	}
 	return value
 }
 
-// ReceiveSignal waits for one send on a close-only channel. It exists so a
-// caller that wants the event rather than a value does not have to discard one.
+// ReceiveSignal waits for a send or close on a signal channel.
 func ReceiveSignal(tb testing.TB, signal <-chan struct{}, timeout time.Duration, description string) {
 	tb.Helper()
 
-	_ = Receive(tb, signal, timeout, description)
+	select {
+	case <-signal:
+	case <-time.After(timeout):
+		tb.Fatalf("timed out waiting for %s", description)
+	}
 }
 
 // FreeTCPAddr reserves a loopback address, releases it, and returns it for a

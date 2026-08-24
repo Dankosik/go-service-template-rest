@@ -11,7 +11,6 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 )
 
@@ -167,12 +166,10 @@ func TestShutdownBudgetClampsStagesToTheRemainingGracePeriod(t *testing.T) {
 			t.Fatalf("clamp(4s) with 1s left = %s, want 1s", got)
 		}
 
-		// Past the deadline a stage still gets a floor. The process is about to be
-		// killed either way, and a stage given nothing cannot report that it was
-		// cut short.
+		// Past the deadline no stage may extend the process-wide grace period.
 		time.Sleep(2 * time.Second)
-		if got := budget.clamp(4 * time.Second); got != runtimeopts.TeardownFloor {
-			t.Fatalf("clamp(4s) past the deadline = %s, want the floor %s", got, runtimeopts.TeardownFloor)
+		if got := budget.clamp(4 * time.Second); got != 0 {
+			t.Fatalf("clamp(4s) past the deadline = %s, want zero", got)
 		}
 	})
 }
@@ -188,10 +185,6 @@ func TestShutdownBudgetStartsWhenTeardownBegins(t *testing.T) {
 		budget.start()
 		// A second caller must not restart it: several points can each be the
 		// first to observe that serving ended.
-		//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-		// resetShutdownConfigEnv clears the ambient APP__ variables a developer shell may
-		// carry, so the defaults under test are the shipped ones.
 		budget.start()
 
 		if got := budget.clamp(time.Hour); got != 10*time.Second {
@@ -218,30 +211,11 @@ func resetShutdownConfigEnv(t *testing.T) {
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
 	// profile:authn-bearer:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	setOutboundAuthBootstrapTestEnv(t)
-	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:object-storage:start
 	setObjectStorageBootstrapTestEnv(t)
 	// profile:object-storage:end
 }
 
-// profile:outbound-auth-oauth2-client-credentials:start
-//
-//nolint:paralleltest // resetShutdownConfigEnv mutates process-wide configuration environment.
-func setOutboundAuthBootstrapTestEnv(t *testing.T) {
-	t.Helper()
-	for key, value := range map[string]string{
-		"APP__OUTBOUND_AUTH__TOKEN_URL":     "https://auth.example.com/oauth/token",
-		"APP__OUTBOUND_AUTH__CLIENT_ID":     "test-client",
-		"APP__OUTBOUND_AUTH__CLIENT_SECRET": "test-secret",
-		"APP__OUTBOUND_AUTH__SCOPES":        "payments.read",
-	} {
-		t.Setenv(key, value)
-	}
-}
-
-// profile:outbound-auth-oauth2-client-credentials:end
 // profile:object-storage:start
 //
 //nolint:paralleltest // This test mutates process-global environment or working directory.

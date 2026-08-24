@@ -38,18 +38,6 @@ http_idempotency:
   retention: 0s
 # profile:http-idempotency-postgres:end
 
-# profile:outbound-auth-oauth2-client-credentials:start
-# OAuth client credentials are environment-only. Keep this non-secret shape
-# empty until deployment supplies one complete fixed dependency.
-outbound_auth:
-  token_url: ""
-  client_id: ""
-  client_secret: ""
-  scopes: ""
-  audience: ""
-  resource: ""
-# profile:outbound-auth-oauth2-client-credentials:end
-
 log:
   level: debug
 

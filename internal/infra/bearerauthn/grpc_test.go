@@ -23,6 +23,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+const expiringBidiMethod = "/bearerauthn.test.Expiry/Block"
+
 func TestGRPCAuthenticationErrorsStayPrivate(t *testing.T) {
 	t.Parallel()
 
@@ -213,6 +215,64 @@ func TestProtectedStreamExpiryUnblocksMessageIO(t *testing.T) {
 			})
 		})
 	}
+}
+
+func TestProtectedStreamExpiryReleasesRealTransportIO(t *testing.T) {
+	verifier := new(fakeVerifier)
+	runtime := newTestRuntime(t, verifier)
+	blocked := make(chan struct{})
+	handlerDone := make(chan struct{})
+	server, err := grpcx.NewServer(grpcx.Options{
+		StreamPolicy: []grpc.StreamServerInterceptor{runtime.StreamInterceptor()},
+		Services: []grpcx.RegisterService{func(registrar grpc.ServiceRegistrar) {
+			registrar.RegisterService(&grpc.ServiceDesc{
+				ServiceName: "bearerauthn.test.Expiry",
+				Streams: []grpc.StreamDesc{{
+					StreamName:    "Block",
+					ClientStreams: true,
+					ServerStreams: true,
+					Handler: func(_ any, stream grpc.ServerStream) error {
+						defer close(handlerDone)
+						var message emptypb.Empty
+						if recvErr := stream.RecvMsg(&message); recvErr != nil {
+							return fmt.Errorf("receive initial message: %w", recvErr)
+						}
+						close(blocked)
+						return stream.RecvMsg(&message)
+					},
+				}},
+			}, nil)
+		}},
+	})
+	if err != nil {
+		t.Fatalf("grpcx.NewServer() error = %v", err)
+	}
+	connection := grpctest.ServeBufconn(t, server)
+	verifier.result = Result{
+		Principal: reqctx.Principal{Subject: "subject-1"},
+		ExpiresAt: time.Now().Add(500*time.Millisecond - ClockSkew),
+	}
+	credential := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("authorization", "Bearer token"))
+	stream, err := connection.NewStream(
+		credential,
+		&grpc.StreamDesc{ClientStreams: true, ServerStreams: true},
+		expiringBidiMethod,
+	)
+	if err != nil {
+		t.Fatalf("ClientConn.NewStream() error = %v", err)
+	}
+	if err := stream.SendMsg(&emptypb.Empty{}); err != nil {
+		t.Fatalf("ClientStream.SendMsg() error = %v", err)
+	}
+	waittest.ReceiveSignal(t, blocked, time.Second, "handler to block on the next receive")
+
+	result := make(chan error, 1)
+	go func() { result <- stream.RecvMsg(&emptypb.Empty{}) }()
+	err = waittest.Receive(t, result, 2*time.Second, "expired stream result")
+	if status.Code(err) != codes.DeadlineExceeded {
+		t.Fatalf("expired stream code = %s, want %s (%v)", status.Code(err), codes.DeadlineExceeded, err)
+	}
+	waittest.ReceiveSignal(t, handlerDone, time.Second, "expired handler to exit")
 }
 
 func TestGRPCAuthnRunsInsideBusinessAdmission(t *testing.T) {

@@ -23,17 +23,23 @@ make integration-init \
 
 `TARGET` is required for HTTP and rejected for gRPC. Unknown command-line
 variables are rejected. The worktree must be clean and `template.lock` must
-already record the retained transport and, for OAuth, `outbound_auth`.
-
-The first `AUTH=oauth2-client-credentials` invocation that would retire the
-singleton `outbound_auth` configuration fails if repository-root `.env` exists.
-The command observes only path presence. Move or preserve that file yourself,
-run the initializer, then map values to the named `integrations.<name>.oauth.*`
-inputs.
+have `state = "complete"` and already record the retained transport and, for
+OAuth, `outbound_auth`.
+`NAME` is a lower-case Go package identifier; `__` is rejected because that
+sequence is reserved by the `APP__...` environment-key delimiter.
+Retaining that profile keeps only the reusable credential package; each
+initializer invocation creates its named `integrations.<name>.oauth.*` tuple
+directly. Repository-root `.env` is never an initializer input or precondition.
 
 A same-identity repeat with an unchanged contract is a no-op. A committed
 contract change refreshes generated-only bytes. Manual adapter, config,
 bootstrap, record, and documentation files are not rewritten.
+The integration record must remain byte-exact; schema, generator source, extra
+keys, duplicate keys, and symlinks fail closed. `make integration-record-check`
+verifies record/source/output parity independently of a refresh invocation.
+HTTP contracts may use document-local `#...` references. External file and URI
+references are rejected before validation or generation so the initializer
+cannot fetch contract material.
 
 The scaffold constructs transport and generated bindings. A later manual
 operation in the adapter must own mapping, errors, budget, and retry

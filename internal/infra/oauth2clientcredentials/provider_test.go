@@ -1,7 +1,6 @@
 package oauth2clientcredentials
 
 import (
-	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -23,28 +22,27 @@ func TestProviderDelegatesParsingAndPublishesOnlySafeBearerState(t *testing.T) {
 		if err := request.ParseForm(); err != nil {
 			t.Errorf("ParseForm() error = %v", err)
 		}
-		if request.Form.Get("grant_type") != "client_credentials" ||
-			request.Form.Get("scope") != "payments.read" || request.Form.Get("audience") != "payments" {
+		if request.Form.Get("grant_type") != "client_credentials" || request.Form.Get("scope") != "payments.read" {
 			t.Errorf("token form = %v", request.Form)
 		}
 		response.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(response, `{"access_token":"opaque","token_type":"Bearer","expires_in":"86400","refresh_token":"discard-me","provider_extra":"discard-me"}`)
+		_, _ = io.WriteString(response, "{\"access_token\":\"opaque\",\"token_type\":\"Bearer\",\"expires_in\":\"3600\",\"refresh_token\":\"discard-me\",\"provider_extra\":\"discard-me\"}")
 	}))
 	t.Cleanup(server.Close)
 
-	acquire := newProviderAcquirer(Config{
-		TokenURL: server.URL, ClientID: "client", ClientSecret: "secret",
-		Scopes: []string{"payments.read"}, Audience: "payments",
-	}, server.Client())
-	token, err := acquire(context.Background())
+	client := newClient(newProviderAcquirer(Config{
+		TokenURL: server.URL, ClientID: "client", ClientSecret: "secret", Scopes: []string{"payments.read"},
+	}, server.Client()), nil)
+	t.Cleanup(client.Close)
+	token, err := (clientTokenSource{client: client}).Token()
 	if err != nil {
-		t.Fatalf("acquire() error = %v", err)
+		t.Fatalf("Token() error = %v", err)
 	}
 	if token.AccessToken != "opaque" || token.TokenType != "Bearer" || token.RefreshToken != "" || token.Extra("provider_extra") != nil {
 		t.Fatalf("published token = %#v", token)
 	}
-	if remaining := time.Until(token.Expiry); remaining < 23*time.Hour {
-		t.Fatalf("token lifetime = %v, want provider value near 24h", remaining)
+	if remaining := time.Until(token.Expiry); remaining < 50*time.Minute {
+		t.Fatalf("token lifetime = %v, want provider value near 1h", remaining)
 	}
 }
 
@@ -54,13 +52,17 @@ func TestProviderErrorsAndUnusableTokensAreOpaque(t *testing.T) {
 		http.Error(response, canary, http.StatusBadRequest)
 	}))
 	t.Cleanup(server.Close)
-	acquire := newProviderAcquirer(Config{TokenURL: server.URL, ClientID: "client", ClientSecret: "secret"}, server.Client())
-	_, err := acquire(context.Background())
+	client := newClient(newProviderAcquirer(
+		Config{TokenURL: server.URL, ClientID: "client", ClientSecret: "secret"},
+		server.Client(),
+	), nil)
+	t.Cleanup(client.Close)
+	_, err := (clientTokenSource{client: client}).Token()
 	if err == nil {
-		t.Fatal("acquire() error = nil, want opaque ErrUnavailable")
+		t.Fatal("Token() error = nil, want opaque ErrUnavailable")
 	}
 	if !errors.Is(err, ErrUnavailable) || strings.Contains(err.Error(), canary) {
-		t.Fatalf("acquire() error = %q, want opaque ErrUnavailable", err)
+		t.Fatalf("Token() error = %q, want opaque ErrUnavailable", err)
 	}
 	if _, ok := errors.AsType[*oauth2.RetrieveError](err); ok {
 		t.Fatal("raw oauth2.RetrieveError escaped")
@@ -70,6 +72,7 @@ func TestProviderErrorsAndUnusableTokensAreOpaque(t *testing.T) {
 		"missing expiry": {AccessToken: "opaque", TokenType: "Bearer"},
 		"missing type":   {AccessToken: "opaque", Expiry: time.Now().Add(time.Hour)},
 		"header newline": {AccessToken: "opaque\nleak", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour)},
+		"expires soon":   {AccessToken: "opaque", TokenType: "Bearer", Expiry: time.Now().Add(defaultEarlyExpiry / 2)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := sanitizeToken(token); !errors.Is(err, ErrUnavailable) {

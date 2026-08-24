@@ -21,9 +21,6 @@ const (
 	maxSendMessageBytes    = 4 << 20
 )
 
-// What the composition root supplies, and the construction that turns it plus a
-// [Config] into a connection. config.go owns the Config shape itself.
-
 // Options supplies the trust decision and the observability collaborators the
 // composition root owns.
 type Options struct {
@@ -48,9 +45,9 @@ type Options struct {
 // New constructs a shareable ClientConn without performing network I/O. The
 // caller owns Close and each operation owns its context deadline and retry
 // semantics.
-func New(cfg Config, options Options) (*grpc.ClientConn, error) {
-	cfg.Target = strings.TrimSpace(cfg.Target)
-	if err := validateConfig(cfg, options); err != nil {
+func New(target string, options Options) (*grpc.ClientConn, error) {
+	target = strings.TrimSpace(target)
+	if err := validateConfig(target, options); err != nil {
 		return nil, err
 	}
 	options = withOptionDefaults(options)
@@ -75,7 +72,7 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 		dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(options.PerRPCCredentials))
 	}
 
-	connection, err := grpc.NewClient(cfg.Target, dialOptions...)
+	connection, err := grpc.NewClient(target, dialOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("build gRPC client connection: %w", err)
 	}
@@ -97,10 +94,9 @@ func withOptionDefaults(options Options) Options {
 }
 
 // validateConfig proves the trust and bounds New is about to hand grpc-go.
-// cfg.Target is already trimmed, because New dials exactly the value checked
-// here.
-func validateConfig(cfg Config, options Options) error {
-	if cfg.Target == "" {
+// target is already trimmed, because New dials exactly the value checked here.
+func validateConfig(target string, options Options) error {
+	if target == "" {
 		return errors.New("build gRPC client: target is required")
 	}
 	if options.TransportCredentials == nil {

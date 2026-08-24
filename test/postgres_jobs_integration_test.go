@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivermigrate"
 )
 
 type riverIntegrationArgs struct {
@@ -48,6 +49,17 @@ func TestPostgresJobsTransactionalInsertionAndWorkerLifecycle(t *testing.T) {
 	workers := river.NewWorkers()
 	if err := river.AddWorkerSafely(workers, &riverIntegrationWorker{worked: worked}); err != nil {
 		t.Fatalf("register River worker: %v", err)
+	}
+	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
+	if err != nil {
+		t.Fatalf("create River migrator: %v", err)
+	}
+	validation, err := migrator.Validate(ctx, nil)
+	if err != nil {
+		t.Fatalf("validate River migrations: %v", err)
+	}
+	if !validation.OK {
+		t.Fatalf("River migrations are stale: %v", validation.Messages)
 	}
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		JobTimeout:  time.Minute,
@@ -89,7 +101,7 @@ func TestPostgresJobsTransactionalInsertionAndWorkerLifecycle(t *testing.T) {
 
 	events, unsubscribe := client.Subscribe(river.EventKindJobCompleted)
 	defer unsubscribe()
-	runCtx, stopRun := context.WithCancel(context.Background())
+	runCtx, stopRun := context.WithCancel(t.Context())
 	defer stopRun()
 	if err := client.Start(runCtx); err != nil {
 		t.Fatalf("start River client: %v", err)

@@ -33,10 +33,17 @@ REDOCLY_CLI ?= npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION)
 GO_TOOL := go tool -modfile=tools/go.mod
 GOLANGCI_LINT ?= $(GO_TOOL) golangci-lint
 GO_REQUIRED_VERSION = $(shell awk '/^go / {print $$2; exit}' go.mod)
-INTEGRATION_PACKAGES := ./test/...
+REFERENCE_INTEGRATION_PACKAGE := $(if $(wildcard examples/reference-service/*_integration_test.go),./examples/reference-service)
+INTEGRATION_PACKAGES := ./test/... $(REFERENCE_INTEGRATION_PACKAGE)
+# profile:database-postgres:start
+INTEGRATION_PACKAGES += ./internal/infra/postgres
+# profile:database-postgres:end
 # profile:http-idempotency-postgres:start
 INTEGRATION_PACKAGES += ./internal/infra/postgresidempotency
 # profile:http-idempotency-postgres:end
+# profile:inbound-webhooks-standard:start
+INTEGRATION_PACKAGES += ./internal/infra/postgresinboundwebhook
+# profile:inbound-webhooks-standard:end
 # profile:messaging-nats-jetstream:start
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
 MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test
@@ -45,7 +52,8 @@ MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstr
 OUTBOX_RACE_PACKAGES := ./test
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-WEBHOOK_RACE_PACKAGES := ./test
+INTEGRATION_PACKAGES += ./internal/infra/postgreswebhook
+WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./test
 # profile:webhooks-durable:end
 INTEGRATION_RACE_PACKAGES := $(sort $(MESSAGING_RACE_PACKAGES) $(OUTBOX_RACE_PACKAGES) $(WEBHOOK_RACE_PACKAGES))
 LINT_BASE_REF ?= origin/main
@@ -83,6 +91,7 @@ INTEGRATION_INIT_CHECK_SCRIPT := bash ./scripts/ci/integration-init-check.sh
 VERIFY_SCRIPT := bash ./scripts/ci/verify.sh
 RUNTIME_IMAGE_CHECK_SCRIPT := bash ./scripts/ci/runtime-image-check.sh
 PERFORMANCE_SCRIPT := bash ./scripts/dev/benchmark.sh
+INTEGRATION_RECORD_CHECK_SCRIPT := bash ./scripts/ci/integration-record-check.sh
 # profile:object-storage:start
 S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
 # profile:object-storage:end
@@ -99,14 +108,14 @@ TEMPLATE ?= ../go-service-template-rest
 # aggregate membership changes before enabling parallel prerequisites.
 .NOTPARALLEL: check check-go check-go-pr unit-check tools-dependencies-check audit-full-manual mod-check lint-all lint-pr lint-deep openapi-check proto-check verify
 
-.PHONY: help template-init template-init-check integration-init integration-init-check \
+.PHONY: help template-init template-init-check integration-init integration-init-check integration-record-check integration-routing-check \
 	tidy fmt mod-check root-mod-check tools-mod-check tools-smoke tools-dependencies-check mod-tidy-check mod-verify fmt-check fmt-files-check unit-check plan verify verify-check check check-go check-go-pr check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check \
 	test test-package test-all test-watch test-race test-integration test-integration-db test-integration-messaging test-integration-process test-integration-race \
 	lint lint-package lint-changed lint-pr lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
 	govulncheck gosec secret-scan secret-scan-history \
 	actionlint actionlint-fast shellcheck shellcheck-fast dockerfile-check \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check check-proto \
+	proto-format proto-format-check proto-schema-policy proto-lint proto-generate proto-drift-check proto-breaking proto-check check-proto \
 	sqlc-check runtime-image-build runtime-image-check container-security benchmark-capture benchmark-compare benchmark-http performance-harness-check pgo-manifest run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-owned-purity-check publish-image-metadata-check
 # profile:object-storage:start
@@ -138,6 +147,7 @@ help:
 	@echo "  ALLOW_HEAVY=1 make audit-full-manual     # rare template/release audit; refused otherwise"
 	@echo "  make lint-fast PKG=./internal/config      # local changed-code signal; not a lint claim"
 	@echo "  make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none"
+	@echo "  make integration-record-check             # exact integration identity/source/output parity"
 	@echo "  make agent-roles-check | codex-agents-check | claude-skills-check | qwen-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt committed template instructions"
@@ -194,6 +204,9 @@ integration-init-check:
 		if [ "$(ALLOW_HEAVY)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_HEAVY=1 (CI sets CI=true)\n' "$@"; exit 2; fi; \
 	fi
 	MAKEFLAGS= MAKEOVERRIDES= INTEGRATION_INIT_ROWS= $(INTEGRATION_INIT_CHECK_SCRIPT) $(INTEGRATION_INIT_ROWS)
+
+integration-record-check:
+	$(INTEGRATION_RECORD_CHECK_SCRIPT)
 
 template-owned-purity-check:
 	$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT)
@@ -317,7 +330,7 @@ check-sqlc: sqlc-check
 
 check-instructions: template-owned-purity-check
 
-check-delivery: actionlint shellcheck dockerfile-check publish-image-metadata-check
+check-delivery: actionlint shellcheck dockerfile-check publish-image-metadata-check integration-routing-check
 
 check-security-go: govulncheck gosec
 
@@ -336,7 +349,10 @@ verify:
 verify-check:
 	$(VERIFY_SCRIPT) --self-test
 
-check: check-go check-openapi check-proto check-sqlc
+integration-routing-check:
+	INTEGRATION_PACKAGES='$(INTEGRATION_PACKAGES)' WEBHOOK_RACE_PACKAGES='$(WEBHOOK_RACE_PACKAGES)' bash ./scripts/ci/integration-routing-check.sh
+
+check: check-go check-openapi check-proto check-sqlc integration-record-check
 
 audit-full-manual:
 	$(HEAVY_GUARD)
@@ -380,12 +396,12 @@ test-outbox-race:
 # profile:outbox-postgres:end
 
 # profile:webhooks-durable:start
-test-webhook-race:
+test-webhook-race: integration-routing-check
 	$(HEAVY_GUARD)
 	go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhookAcceptance|WebhookNetwork)'
 # profile:webhooks-durable:end
 
-test-integration-race:
+test-integration-race: integration-routing-check
 	$(HEAVY_GUARD)
 	@if [ -z "$(strip $(INTEGRATION_RACE_PACKAGES))" ]; then \
 		echo "not applicable: no focused integration race packages"; \
@@ -393,7 +409,7 @@ test-integration-race:
 		go test -vet=off -p=1 -count=1 -race -tags=integration $(INTEGRATION_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain|TestPostgresOutbox.*|TestPostgresWebhookAcceptance.*|TestWebhookNetwork.*)$$'; \
 	fi
 
-test-integration:
+test-integration: integration-routing-check
 	$(HEAVY_GUARD)
 	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
 
@@ -604,7 +620,17 @@ proto-format-check:
 	@if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q .; then $(GO_TOOL) buf format --diff --exit-code; fi
 	@if [ -f examples/grpc-reference-service/buf.yaml ]; then cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf format --diff --exit-code; fi
 
-proto-lint:
+proto-schema-policy:
+	@find api/proto examples/grpc-reference-service/api/proto -type f -name '*.proto' -print 2>/dev/null | \
+		while IFS= read -r file; do \
+			if grep -Eq '^edition = "2023";' "$$file" && \
+				! grep -Fq 'option features.(pb.go).api_level = API_OPAQUE;' "$$file"; then \
+				echo "$$file: Edition 2023 requires schema-owned API_OPAQUE" >&2; \
+				exit 1; \
+			fi; \
+		done
+
+proto-lint: proto-schema-policy
 	@if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q .; then $(GO_TOOL) buf lint; fi
 	@if [ -f examples/grpc-reference-service/buf.yaml ]; then cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf lint; fi
 

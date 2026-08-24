@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	MaxSecretManifestBytes   = 1 << 20
-	MaxSecretManifestEntries = 4096
+	maxSecretManifestBytes   = 1 << 20
+	maxSecretManifestEntries = 4096
 )
 
 type secretTuple struct {
@@ -37,14 +37,14 @@ type secretEntry struct {
 }
 
 func ParseSecretManifest(raw string) (*SecretManifest, error) {
-	if raw == "" || len(raw) > MaxSecretManifestBytes {
+	if raw == "" || len(raw) > maxSecretManifestBytes {
 		return nil, errors.New("parse webhook secret manifest: document size is invalid")
 	}
 	var document secretDocument
 	if err := json.UnmarshalRead(strings.NewReader(raw), &document, json.RejectUnknownMembers(true)); err != nil {
 		return nil, errors.New("parse webhook secret manifest: invalid JSON")
 	}
-	if len(document.Entries) == 0 || len(document.Entries) > MaxSecretManifestEntries {
+	if len(document.Entries) == 0 || len(document.Entries) > maxSecretManifestEntries {
 		return nil, errors.New("parse webhook secret manifest: entries are required")
 	}
 	manifest := &SecretManifest{entries: make(map[secretTuple][]byte, len(document.Entries))}
@@ -79,13 +79,13 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 	return manifest, nil
 }
 
-func (m *SecretManifest) Resolve(owner, receiver, reference string) (SigningKey, error) {
+func (m *SecretManifest) resolve(owner, receiver, reference string) ([]byte, error) {
 	if m == nil {
-		return SigningKey{}, fmt.Errorf("%w: secret manifest is required", ErrConfig)
+		return nil, fmt.Errorf("%w: secret manifest is required", ErrConfig)
 	}
 	value, ok := m.entries[secretTuple{owner: owner, receiver: receiver, reference: reference}]
 	if !ok {
-		return SigningKey{}, fmt.Errorf("%w: binding not found", ErrSecretUnavailable)
+		return nil, fmt.Errorf("%w: binding not found", errSecretUnavailable)
 	}
-	return SigningKey{Reference: reference, Bytes: bytes.Clone(value)}, nil
+	return bytes.Clone(value), nil
 }

@@ -3,9 +3,9 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"os"
 	"sync"
 	"testing"
@@ -15,8 +15,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresinboundwebhook"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 )
 
@@ -54,7 +52,7 @@ func inboundTrust(t *testing.T, endpoint string) *postgresinboundwebhook.TrustMa
 
 func inboundReceiver(t *testing.T, dsn string) *postgresinboundwebhook.Receiver {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 8})
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +82,7 @@ func inboundDelivery(endpoint, id, body, signature string) inboundwebhook.Delive
 func TestPostgresInboundWebhookAtomicAcceptance(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
 	receiver := inboundReceiver(t, dsn)
-	ctx := context.Background()
+	ctx := t.Context()
 	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
 	if err != nil || result.Outcome != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("result=%+v err=%v", result, err)
@@ -117,10 +115,54 @@ func TestPostgresInboundWebhookAtomicAcceptance(t *testing.T) {
 	}
 }
 
+func TestPostgresInboundWebhookAtomicAcceptanceRollsBackOnJobFailure(t *testing.T) {
+	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
+	ctx := t.Context()
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	if _, err := pool.Exec(ctx, `
+		CREATE FUNCTION reject_inbound_webhook_job() RETURNS trigger
+		LANGUAGE plpgsql AS $$
+		BEGIN
+			IF NEW.kind = 'inbound_webhook_receipt' THEN
+				RAISE EXCEPTION 'reject inbound webhook job';
+			END IF;
+			RETURN NEW;
+		END
+		$$`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		CREATE TRIGGER reject_inbound_webhook_job
+		BEFORE INSERT ON river_job
+		FOR EACH ROW EXECUTE FUNCTION reject_inbound_webhook_job()`); err != nil {
+		t.Fatal(err)
+	}
+
+	receiver := inboundReceiver(t, dsn)
+	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
+	if result.Outcome != inboundwebhook.OutcomeUnavailable || !errors.Is(err, inboundwebhook.ErrUnavailable) {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	var receipts, jobs int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM inbound_webhook_receipts`).Scan(&receipts); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = 'inbound_webhook_receipt'`).Scan(&jobs); err != nil {
+		t.Fatal(err)
+	}
+	if receipts != 0 || jobs != 0 {
+		t.Fatalf("receipts=%d jobs=%d", receipts, jobs)
+	}
+}
+
 func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
 	receiver := inboundReceiver(t, dsn)
-	ctx := context.Background()
+	ctx := t.Context()
 	start := make(chan struct{})
 	var wg sync.WaitGroup
 	outcomes := make(chan inboundwebhook.Outcome, 32)
@@ -154,6 +196,21 @@ func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 	if accepted != 1 || duplicate != 31 {
 		t.Fatalf("accepted=%d duplicate=%d", accepted, duplicate)
 	}
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	var receipts, jobs int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM inbound_webhook_receipts`).Scan(&receipts); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = 'inbound_webhook_receipt'`).Scan(&jobs); err != nil {
+		t.Fatal(err)
+	}
+	if receipts != 1 || jobs != 1 {
+		t.Fatalf("receipts=%d jobs=%d", receipts, jobs)
+	}
 
 	otherBody := `{"hello":"other"}`
 	webhook, err := standardwebhooks.NewWebhookRaw(inboundKey())
@@ -184,51 +241,9 @@ func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 	}
 }
 
-func TestPostgresInboundWebhookCommitUnknownRetry(t *testing.T) {
-	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
-	ctx := context.Background()
-	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 4})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-	store, err := postgresinboundwebhook.NewReceiptStore(pool)
-	if err != nil {
-		t.Fatal(err)
-	}
-	store.WithInTx(func(ctx context.Context, pool *pgxpool.Pool, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
-		if err := postgres.InTx(ctx, pool, opts, fn); err != nil {
-			return err
-		}
-		return postgres.ErrCommitUnknown
-	})
-	receiver, err := postgresinboundwebhook.NewReceiver(pool, inboundTrust(t, "orders"),
-		postgresinboundwebhook.WithStore(store),
-		postgresinboundwebhook.WithClock(func() time.Time { return time.Unix(1700000000, 0).UTC() }),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
-	if result.Outcome == inboundwebhook.OutcomeAccepted || err == nil && result.Outcome != inboundwebhook.OutcomeUnavailable {
-		t.Fatalf("commit-unknown result=%+v err=%v", result, err)
-	}
-
-	plain, err := postgresinboundwebhook.NewReceiver(pool, inboundTrust(t, "orders"),
-		postgresinboundwebhook.WithClock(func() time.Time { return time.Unix(1700000000, 0).UTC() }),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	retry, err := plain.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
-	if err != nil || retry.Outcome != inboundwebhook.OutcomeDuplicate {
-		t.Fatalf("retry=%+v err=%v", retry, err)
-	}
-}
-
 func TestPostgresInboundWebhookSchemaLifecycle(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
-	ctx := context.Background()
+	ctx := t.Context()
 	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 2})
 	if err != nil {
 		t.Fatal(err)

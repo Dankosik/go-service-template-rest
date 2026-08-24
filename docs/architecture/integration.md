@@ -14,7 +14,8 @@ tokens, or customer data.
 
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
 `internal/infra/oauth2clientcredentials` owns one process-local OAuth
-client-credentials factory for one fixed dependency. A concrete provider
+client-credentials factory for one fixed dependency while `x/oauth2` owns its
+token cache and refresh synchronization. A concrete provider
 adapter constructs and closes the owner, then gives feature code only its
 generated client over an authenticated fixed-target HTTP client or authenticated
 gRPC connection. Token sources, tokens, provider bodies, and raw retrieval
@@ -26,7 +27,11 @@ environment-only.
 from a committed local OpenAPI or Protobuf contract. It reuses
 `internal/infra/httpclient`, `internal/infra/grpcclient`, and
 `internal/infra/oauth2clientcredentials`. It does not add a registry, provider
-SDK, or callable operation.
+SDK, or callable operation. The name excludes `__`, which is reserved by the
+runtime environment-key delimiter. `integrations/<name>.toml` is a byte-exact
+identity/provenance record rather than runtime configuration; `make
+integration-record-check` binds it to the contract, generated output, adapter,
+config, bootstrap, and documentation owners.
 
 Provider adapters live under `internal/infra/<integration>` and start with the
 always-available fixed-target HTTP client. The provider adapter owns authentication, budgets, retry eligibility,

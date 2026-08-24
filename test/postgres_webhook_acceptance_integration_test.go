@@ -48,54 +48,64 @@ WHERE schemaname = current_schema()`).Scan(&activeRelations, &deprecatedRelation
 	if err != nil {
 		t.Fatal(err)
 	}
+	futureOccurredAt := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Second)
 	event := postgreswebhook.Event{
 		OwnerScope: "orders", ID: "evt-1", Type: "order.created",
-		OccurredAt: time.Date(2026, 8, 18, 10, 0, 0, 0, time.UTC),
+		OccurredAt: futureOccurredAt,
 		Data:       json.RawMessage(`{"order_id":"ord-1"}`),
 	}
 	prepared, err := dispatcher.Prepare(event, []postgreswebhook.ReceiverID{"alpha", "beta"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	stage := func(prepared postgreswebhook.Prepared) (postgreswebhook.AcceptanceStatus, error) {
-		var status postgreswebhook.AcceptanceStatus
+	stage := func(prepared postgreswebhook.Prepared) (bool, error) {
+		var inserted bool
 		err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			var err error
-			status, err = prepared.Stage(ctx, tx)
+			inserted, err = prepared.Stage(ctx, tx)
 			return err
 		})
-		return status, err
+		return inserted, err
 	}
-	if status, err := stage(prepared); err != nil || status != postgreswebhook.AcceptanceNew {
-		t.Fatalf("Stage(new) = %s, %v", status, err)
+	if inserted, err := stage(prepared); err != nil || !inserted {
+		t.Fatalf("Stage(new) = %t, %v", inserted, err)
 	}
-	if status, err := stage(prepared); err != nil || status != postgreswebhook.AcceptanceExisting {
-		t.Fatalf("Stage(existing) = %s, %v", status, err)
+	if inserted, err := stage(prepared); err != nil || inserted {
+		t.Fatalf("Stage(existing) = %t, %v", inserted, err)
 	}
 
-	var count int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = 'outbound_webhook'`).Scan(&count); err != nil {
+	var count, available int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*), count(*) FILTER (WHERE state = 'available')
+		FROM river_job
+		WHERE kind = 'outbound_webhook'`).Scan(&count, &available); err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Fatalf("webhook jobs = %d, want 2", count)
+	if count != 2 || available != 2 {
+		t.Fatalf("webhook jobs = %d, available = %d, want 2 immediately eligible", count, available)
 	}
 
 	narrowed, err := dispatcher.Prepare(event, []postgreswebhook.ReceiverID{"alpha"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status, err := stage(narrowed); !errors.Is(err, postgreswebhook.ErrConflict) || status != postgreswebhook.AcceptanceConflict {
-		t.Fatalf("Stage(narrowed fanout) = %s, %v", status, err)
+	if inserted, err := stage(narrowed); !errors.Is(err, postgreswebhook.ErrConflict) || inserted {
+		t.Fatalf("Stage(narrowed fanout) = %t, %v", inserted, err)
 	}
 	replaced, err := dispatcher.Prepare(event, []postgreswebhook.ReceiverID{"gamma"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status, err := stage(replaced); !errors.Is(err, postgreswebhook.ErrConflict) || status != postgreswebhook.AcceptanceConflict {
-		t.Fatalf("Stage(replaced fanout) = %s, %v", status, err)
+	if inserted, err := stage(replaced); !errors.Is(err, postgreswebhook.ErrConflict) || inserted {
+		t.Fatalf("Stage(replaced fanout) = %t, %v", inserted, err)
 	}
-	if status, err := prepared.Resolve(ctx, pool); err != nil || status != postgreswebhook.AcceptanceAccepted {
-		t.Fatalf("Resolve() = %s, %v", status, err)
+	if accepted, err := prepared.ResolveCurrent(ctx, pool); err != nil || !accepted {
+		t.Fatalf("ResolveCurrent() = %t, %v", accepted, err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM river_job WHERE kind = 'outbound_webhook'`); err != nil {
+		t.Fatal(err)
+	}
+	if accepted, err := prepared.ResolveCurrent(ctx, pool); err != nil || accepted {
+		t.Fatalf("ResolveCurrent(after retention) = %t, %v", accepted, err)
 	}
 }

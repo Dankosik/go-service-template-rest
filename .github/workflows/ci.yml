@@ -7,6 +7,8 @@ on:
   pull_request:
     branches: [main]
   merge_group:
+  schedule:
+    - cron: "41 4 * * 2"
   workflow_dispatch:
 
 concurrency:
@@ -48,6 +50,7 @@ jobs:
       runtime_image: ${{ steps.surfaces.outputs.runtime_image }}
       image_security: ${{ steps.surfaces.outputs.image_security }}
       documentation: ${{ steps.surfaces.outputs.documentation }}
+      integration_records: ${{ steps.surfaces.outputs.integration_records }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -68,7 +71,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: |
           set -euo pipefail
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          if [[ "${EVENT_NAME}" == schedule ]]; then
+            bash ./scripts/ci/changed-surfaces.sh </dev/null | tee -a "${GITHUB_OUTPUT}" >>"${GITHUB_STEP_SUMMARY}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             bash ./scripts/ci/changed-surfaces.sh --release | tee -a "${GITHUB_OUTPUT}" >>"${GITHUB_STEP_SUMMARY}"
           elif [[ "${EVENT_NAME}" == workflow_dispatch || "${GITHUB_REF}" == refs/heads/main ]]; then
             bash ./scripts/ci/changed-surfaces.sh --all | tee -a "${GITHUB_OUTPUT}" >>"${GITHUB_STEP_SUMMARY}"
@@ -90,9 +95,10 @@ jobs:
       needs.changes.outputs.sqlc == 'true' ||
       needs.changes.outputs.module_initializer == 'true' ||
       needs.changes.outputs.integration_initializer == 'true' ||
+      needs.changes.outputs.integration_records == 'true' ||
       needs.changes.outputs.agent_instructions == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     env:
       GOMODCACHE: ${{ github.workspace }}/.cache/gomod/quality
     steps:
@@ -109,7 +115,8 @@ jobs:
           needs.changes.outputs.protobuf == 'true' ||
           needs.changes.outputs.sqlc == 'true' ||
           needs.changes.outputs.module_initializer == 'true' ||
-          needs.changes.outputs.integration_initializer == 'true'
+          needs.changes.outputs.integration_initializer == 'true' ||
+          needs.changes.outputs.integration_records == 'true'
         id: setup-go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -131,7 +138,8 @@ jobs:
           needs.changes.outputs.protobuf == 'true' ||
           needs.changes.outputs.sqlc == 'true' ||
           needs.changes.outputs.module_initializer == 'true' ||
-          needs.changes.outputs.integration_initializer == 'true'
+          needs.changes.outputs.integration_initializer == 'true' ||
+          needs.changes.outputs.integration_records == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
@@ -208,6 +216,9 @@ jobs:
           else
             make integration-init-check
           fi
+      - name: Integration record parity
+        if: needs.changes.outputs.integration_records == 'true'
+        run: make integration-record-check
       - name: Instruction ownership
         if: needs.changes.outputs.agent_instructions == 'true'
         run: make check-instructions
@@ -281,6 +292,7 @@ jobs:
 
   secrets:
     needs: changes
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -428,9 +440,37 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
 
+  security-refresh:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Restore Go modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-security-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-security-${{ runner.os }}-${{ runner.arch }}-
+      - name: Reachable Go vulnerabilities
+        run: make govulncheck
+      - name: Production image
+        env:
+          APP_VERSION: sha-${{ github.sha }}
+          VCS_REF: ${{ github.sha }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: make runtime-image-build RUNTIME_IMAGE=service:security-refresh
+      - name: Image vulnerabilities
+        run: make container-security CONTAINER_IMAGE=service:security-refresh
+
   required:
     if: always()
-    needs: [changes, quality, security, secrets, delivery, integration]
+    needs: [changes, quality, security, secrets, delivery, integration, security-refresh]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

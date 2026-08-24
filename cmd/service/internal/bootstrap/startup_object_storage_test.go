@@ -40,22 +40,6 @@ func TestInitObjectStorageMapsConfig(t *testing.T) {
 	}
 }
 
-func TestObjectStorageConstructionFollowsMemoryPublication(t *testing.T) {
-	resetShutdownConfigEnv(t)
-	stopServing := errors.New("stop serving")
-	wiring := objectStorageTestWiring(&countingObjectStorageRuntime{})
-	var events []runtimeLifecycleStage
-	wiring.lifecycle = func(stage runtimeLifecycleStage) { events = append(events, stage) }
-	wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error { return stopServing }
-
-	if err := runWithRuntime(nil, wiring); !errors.Is(err, stopServing) {
-		t.Fatalf("runWithRuntime() error = %v, want %v", err, stopServing)
-	}
-	if len(events) < 2 || events[0] != runtimeLifecycleMemoryPublished || events[1] != runtimeLifecycleObjectStorageConstructed {
-		t.Fatalf("startup lifecycle events = %v", events)
-	}
-}
-
 func TestObjectStorageOutageDoesNotChangeReadiness(t *testing.T) {
 	resetShutdownConfigEnv(t)
 	runtime := &scriptedObjectStorageRuntime{outcomes: []error{errors.New("provider unavailable"), nil}}
@@ -79,14 +63,16 @@ func TestObjectStorageOutageDoesNotChangeReadiness(t *testing.T) {
 	}
 }
 
-func TestObjectStorageRuntimeCloseOrder(t *testing.T) {
+func TestObjectStorageRuntimeClosesAfterServing(t *testing.T) {
 	resetShutdownConfigEnv(t)
-	closed := &countingObjectStorageRuntime{}
+	var events []string
+	closed := &countingObjectStorageRuntime{onClose: func() { events = append(events, "closed") }}
 	stopServing := errors.New("stop serving")
 	wiring := objectStorageTestWiring(closed)
-	var events []runtimeLifecycleStage
-	wiring.lifecycle = func(stage runtimeLifecycleStage) { events = append(events, stage) }
-	wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error { return stopServing }
+	wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error {
+		events = append(events, "serve")
+		return stopServing
+	}
 
 	if err := runWithRuntime(nil, wiring); !errors.Is(err, stopServing) {
 		t.Fatalf("runWithRuntime() error = %v, want %v", err, stopServing)
@@ -94,14 +80,9 @@ func TestObjectStorageRuntimeCloseOrder(t *testing.T) {
 	if closed.calls != 1 {
 		t.Fatalf("object storage Close calls = %d, want 1", closed.calls)
 	}
-	want := []runtimeLifecycleStage{
-		runtimeLifecycleMemoryPublished, runtimeLifecycleObjectStorageConstructed,
-		runtimeLifecycleHTTPDrained, runtimeLifecycleBackgroundJoined,
-		runtimeLifecycleObjectStorageClosed, runtimeLifecycleDependenciesClosed,
-		runtimeLifecycleTelemetryFlushed,
-	}
+	want := []string{"serve", "closed"}
 	if !slices.Equal(events, want) {
-		t.Fatalf("startup lifecycle events = %v, want %v", events, want)
+		t.Fatalf("events = %v, want %v", events, want)
 	}
 }
 
@@ -122,10 +103,16 @@ func objectStorageTestWiring(runtime objectStorageRuntime) runtimeWiring {
 type countingObjectStorageRuntime struct {
 	noOpObjectStorageStore
 
-	calls int
+	calls   int
+	onClose func()
 }
 
-func (r *countingObjectStorageRuntime) Close() { r.calls++ }
+func (r *countingObjectStorageRuntime) Close() {
+	r.calls++
+	if r.onClose != nil {
+		r.onClose()
+	}
+}
 
 type scriptedObjectStorageRuntime struct {
 	countingObjectStorageRuntime

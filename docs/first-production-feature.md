@@ -323,9 +323,8 @@ reachable. Each operation still owns its deadline, retry eligibility, and
 provider-error mapping.
 
 ```go
-clientConfig := grpcclient.DefaultConfig("dns:///orders.railway.internal:9000")
 connection, err := grpcclient.New(
-    clientConfig,
+	"dns:///orders.railway.internal:9000",
     grpcclient.Options{
         TransportCredentials: credentials.NewTLS(tlsConfig),
     },

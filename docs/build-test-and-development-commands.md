@@ -40,12 +40,14 @@ individual choices and dependency combinations documented in the README:
 Other cross-products are not a supported preset merely because the initializer
 can mechanically resolve their markers.
 
-`init-module.sh` validates selections and identity before mutation, rewrites
-module/CODEOWNERS/service identity, physically removes unselected profiles,
-regenerates retained outputs, tidies modules, writes `template.lock`, and is
-idempotent for the same selection. The contract check uses invalid synthetic
-inputs and one default generated checkout; profile-owned Go tests retain their
-own behavior.
+`init-module.sh` validates selections and identity before mutation, records an
+`initializing` journal, rewrites module/CODEOWNERS/service identity, physically
+removes unselected profiles, regenerates retained outputs, tidies modules, and
+marks `template.lock` complete only after postconditions pass. A same-selection
+rerun resumes or returns without drift; another identity or profile fails
+unchanged. The contract check captures the exact current working tree, clears
+ambient profile variables, and exercises the smallest representative profile
+rows plus partial-failure recovery.
 
 ## Add an outbound integration
 
@@ -55,7 +57,7 @@ make integration-init NAME=billing TRANSPORT=http \
 ```
 
 While changing the initializer harness, select one named row and keep the
-25-row default for final acceptance:
+current complete matrix for final acceptance:
 
 ```bash
 bash scripts/ci/integration-init-check.sh --list

@@ -25,19 +25,16 @@ type VerifiedDelivery struct {
 	ReceivedAt time.Time
 }
 
-type decodeHandle struct {
-	decode func(json.RawMessage) (any, error)
-	handle func(context.Context, VerifiedDelivery, any) error
-}
+type dispatchHandle func(context.Context, VerifiedDelivery) error
 
 // Registry holds exactly one typed decoder/handler per endpoint.
 type Registry struct {
-	bindings map[string]decodeHandle
+	bindings map[string]dispatchHandle
 }
 
 // NewRegistry returns an empty typed binding registry.
 func NewRegistry() *Registry {
-	return &Registry{bindings: make(map[string]decodeHandle)}
+	return &Registry{bindings: make(map[string]dispatchHandle)}
 }
 
 // Bind registers one non-nil decoder and handler for endpointID.
@@ -53,17 +50,15 @@ func Bind[T any](
 	if _, exists := reg.bindings[endpointID]; exists {
 		return ErrDuplicateBinding
 	}
-	reg.bindings[endpointID] = decodeHandle{
-		decode: func(raw json.RawMessage) (any, error) {
-			return decode(raw)
-		},
-		handle: func(ctx context.Context, delivery VerifiedDelivery, value any) error {
-			typed, ok := value.(T)
-			if !ok {
-				return ErrInvalidBinding
-			}
-			return handle(ctx, delivery, typed)
-		},
+	reg.bindings[endpointID] = func(ctx context.Context, delivery VerifiedDelivery) error {
+		value, err := decode(json.RawMessage(bytes.Clone(delivery.Body)))
+		if err != nil {
+			return decodeError{err: err}
+		}
+		if err := handle(ctx, delivery, value); err != nil {
+			return handleError{err: err}
+		}
+		return nil
 	}
 	return nil
 }
@@ -78,6 +73,15 @@ func (r *Registry) EndpointIDs() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// HasBinding reports whether endpointID has a decoder and handler.
+func (r *Registry) HasBinding(endpointID string) bool {
+	if r == nil {
+		return false
+	}
+	_, ok := r.bindings[endpointID]
+	return ok
 }
 
 // RequireExact requires the registered set to equal configured.
@@ -105,15 +109,7 @@ func (r *Registry) Dispatch(ctx context.Context, delivery VerifiedDelivery) erro
 	if !ok {
 		return ErrUnknownBinding
 	}
-	raw := bytes.Clone(delivery.Body)
-	value, err := binding.decode(json.RawMessage(raw))
-	if err != nil {
-		return decodeError{err: err}
-	}
-	if err := binding.handle(ctx, delivery, value); err != nil {
-		return handleError{err: err}
-	}
-	return nil
+	return binding(ctx, delivery)
 }
 
 type decodeError struct{ err error }

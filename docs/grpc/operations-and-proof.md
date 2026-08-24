@@ -26,8 +26,10 @@ messages, metadata values, and handler error text are not telemetry fields.
 
 Shutdown marks readiness and gRPC health unavailable, waits the configured
 propagation delay, and drains HTTP and gRPC concurrently under the shared
-process budget. gRPC tries `GracefulStop` and uses `Stop` when the budget
-expires. Handlers must release work when their RPC context is canceled.
+process budget. The gRPC adapter rejects new business RPCs, waits for pre-drain
+RPCs to publish their terminal status, then calls `GracefulStop`; an expired
+budget uses `Stop`. Handlers must release work when their RPC context is
+canceled.
 
 Focused proof:
 

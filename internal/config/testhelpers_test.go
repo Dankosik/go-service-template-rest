@@ -64,9 +64,6 @@ func resetConfigEnv(t *testing.T) {
 	t.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_SECRET", "rs-secret")
 	// profile:authn-oidc-introspection:end
 	// profile:authn-bearer:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	setOutboundAuthTestEnv(t)
-	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:object-storage:start
 	setObjectStorageTestEnv(t)
 	// profile:object-storage:end
@@ -86,23 +83,6 @@ func clearConfigEnv(t *testing.T) {
 	}
 }
 
-// profile:outbound-auth-oauth2-client-credentials:start
-//
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func setOutboundAuthTestEnv(t *testing.T) {
-	t.Helper()
-	for key, value := range map[string]string{
-		"APP__OUTBOUND_AUTH__TOKEN_URL":     "https://auth.example.com/oauth/token",
-		"APP__OUTBOUND_AUTH__CLIENT_ID":     "test-client",
-		"APP__OUTBOUND_AUTH__CLIENT_SECRET": "test-client-secret",
-		"APP__OUTBOUND_AUTH__SCOPES":        "payments.read payments.write",
-		"APP__OUTBOUND_AUTH__RESOURCE":      "https://payments.example.com",
-	} {
-		t.Setenv(key, value)
-	}
-}
-
-// profile:outbound-auth-oauth2-client-credentials:end
 // profile:object-storage:start
 //
 //nolint:paralleltest // This test mutates process-global environment or working directory.

@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"sync/atomic"
@@ -36,7 +37,15 @@ func init() {
 				}, func(_ context.Context, delivery inboundwebhook.VerifiedDelivery, _ json.RawMessage) error {
 					inboundTestCalls.Add(1)
 					if marker := os.Getenv("INBOUND_WEBHOOK_TEST_MARKER"); marker != "" {
-						return os.WriteFile(marker, delivery.Body, 0o600)
+						file, err := os.OpenFile(marker, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+						if err != nil {
+							return err
+						}
+						if _, err := fmt.Fprintln(file, delivery.DeliveryID); err != nil {
+							_ = file.Close()
+							return err
+						}
+						return file.Close()
 					}
 					return nil
 				}); err != nil {

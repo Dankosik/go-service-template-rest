@@ -62,7 +62,6 @@ type Receiver struct {
 	trust *TrustManifest
 	store receiptStore
 	now   func() time.Time
-	hash  func([]byte) [sha256.Size]byte
 	telem telemetry
 }
 
@@ -76,20 +75,6 @@ func WithClock(now func() time.Time) ReceiverOption {
 			r.now = now
 		}
 	}
-}
-
-// WithHash injects the post-verification hash.
-func WithHash(hash func([]byte) [sha256.Size]byte) ReceiverOption {
-	return func(r *Receiver) {
-		if hash != nil {
-			r.hash = hash
-		}
-	}
-}
-
-// WithStore injects a receipt store. Production uses the PostgreSQL store.
-func WithStore(store *ReceiptStore) ReceiverOption {
-	return withStore(store)
 }
 
 func withStore(store receiptStore) ReceiverOption {
@@ -115,7 +100,6 @@ func NewReceiver(pool *pgxpool.Pool, trust *TrustManifest, opts ...ReceiverOptio
 	receiver := &Receiver{
 		trust: trust,
 		now:   func() time.Time { return time.Now().UTC() },
-		hash:  sha256.Sum256,
 		telem: newTelemetry(nil, nil),
 	}
 	for _, opt := range opts {
@@ -160,7 +144,7 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
 		return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeRejected}, nil
 	}
-	digest := r.hash(delivery.Body)
+	digest := sha256.Sum256(delivery.Body)
 	outcome, err := r.store.Accept(ctx, receiptRecord{
 		ReceiptID:  rand.Text(),
 		EndpointID: delivery.EndpointID,
@@ -193,21 +177,18 @@ func (r *Receiver) signatureOK(delivery inboundwebhook.Delivery) bool {
 	headers.Set(standardwebhooks.HeaderWebhookID, delivery.DeliveryID)
 	headers.Set(standardwebhooks.HeaderWebhookTimestamp, delivery.Timestamp)
 	headers.Set(standardwebhooks.HeaderWebhookSignature, delivery.Signature)
-	if verifyWith(secrets.active, delivery.Body, headers) == nil {
+	if verifyWith(secrets.active, delivery.Body, headers) {
 		return true
 	}
-	return len(secrets.predecessor) > 0 && verifyWith(secrets.predecessor, delivery.Body, headers) == nil
+	return len(secrets.predecessor) > 0 && verifyWith(secrets.predecessor, delivery.Body, headers)
 }
 
-func verifyWith(key, body []byte, headers http.Header) error {
+func verifyWith(key, body []byte, headers http.Header) bool {
 	webhook, err := standardwebhooks.NewWebhookRaw(key)
 	if err != nil {
-		return inboundwebhook.ErrRejected
+		return false
 	}
-	if err := webhook.VerifyIgnoringTimestamp(body, headers); err != nil {
-		return inboundwebhook.ErrRejected
-	}
-	return nil
+	return webhook.VerifyIgnoringTimestamp(body, headers) == nil
 }
 
 func parseSignedTimestamp(raw string) (time.Time, bool) {
@@ -223,18 +204,13 @@ func timestampInTolerance(signedAt, now time.Time) bool {
 	return delta <= signatureTolerance && delta >= -signatureTolerance
 }
 
-type ReceiptStore struct {
+type postgresStore struct {
 	pool *pgxpool.Pool
 	inTx func(context.Context, *pgxpool.Pool, pgx.TxOptions, func(pgx.Tx) error) error
 	jobs *river.Client[pgx.Tx]
 }
 
-// NewReceiptStore builds the PostgreSQL/River receipt store.
-func NewReceiptStore(pool *pgxpool.Pool) (*ReceiptStore, error) {
-	return newPostgresStore(pool)
-}
-
-func newPostgresStore(pool *pgxpool.Pool) (*ReceiptStore, error) {
+func newPostgresStore(pool *pgxpool.Pool) (*postgresStore, error) {
 	client, err := river.NewClient(riverpgxv5.New(nil), &river.Config{
 		Plugins: []rivertype.Plugin{
 			otelriver.NewMiddleware(&otelriver.MiddlewareConfig{EnableTracePropagation: true}),
@@ -243,16 +219,10 @@ func newPostgresStore(pool *pgxpool.Pool) (*ReceiptStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("initialize inbound webhook River producer: %w", err)
 	}
-	return &ReceiptStore{pool: pool, inTx: postgres.InTx, jobs: client}, nil
+	return &postgresStore{pool: pool, inTx: postgres.InTx, jobs: client}, nil
 }
 
-// WithInTx replaces the transaction seam for deterministic commit-unknown proof.
-func (s *ReceiptStore) WithInTx(inTx func(context.Context, *pgxpool.Pool, pgx.TxOptions, func(pgx.Tx) error) error) *ReceiptStore {
-	s.inTx = inTx
-	return s
-}
-
-func (s *ReceiptStore) Accept(ctx context.Context, record receiptRecord) (inboundwebhook.Outcome, error) {
+func (s *postgresStore) Accept(ctx context.Context, record receiptRecord) (inboundwebhook.Outcome, error) {
 	var outcome inboundwebhook.Outcome
 	err := s.inTx(ctx, s.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		queries := sqlcgen.New(tx)
@@ -296,7 +266,7 @@ func (s *ReceiptStore) Accept(ctx context.Context, record receiptRecord) (inboun
 	return outcome, nil
 }
 
-func (s *ReceiptStore) loadByID(ctx context.Context, receiptID string) (storedReceipt, error) {
+func (s *postgresStore) loadByID(ctx context.Context, receiptID string) (storedReceipt, error) {
 	row, err := sqlcgen.New(s.pool).GetInboundWebhookReceiptByID(ctx, receiptID)
 	if err != nil {
 		return storedReceipt{}, fmt.Errorf("load inbound webhook receipt: %w", err)
@@ -312,7 +282,7 @@ func (s *ReceiptStore) loadByID(ctx context.Context, receiptID string) (storedRe
 	}, nil
 }
 
-func (s *ReceiptStore) MarkHandled(ctx context.Context, receiptID string) (bool, error) {
+func (s *postgresStore) MarkHandled(ctx context.Context, receiptID string) (bool, error) {
 	n, err := sqlcgen.New(s.pool).MarkInboundWebhookHandled(ctx, receiptID)
 	if err != nil {
 		return false, fmt.Errorf("mark inbound webhook handled: %w", err)
@@ -320,7 +290,7 @@ func (s *ReceiptStore) MarkHandled(ctx context.Context, receiptID string) (bool,
 	return n == 1, nil
 }
 
-func (s *ReceiptStore) MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error) {
+func (s *postgresStore) MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error) {
 	n, err := sqlcgen.New(s.pool).MarkInboundWebhookQuarantined(ctx, sqlcgen.MarkInboundWebhookQuarantinedParams{
 		ReceiptID:      receiptID,
 		TerminalReason: &reason,
@@ -331,7 +301,7 @@ func (s *ReceiptStore) MarkQuarantined(ctx context.Context, receiptID, reason st
 	return n == 1, nil
 }
 
-func (s *ReceiptStore) MarkFailed(ctx context.Context, receiptID string) (bool, error) {
+func (s *postgresStore) MarkFailed(ctx context.Context, receiptID string) (bool, error) {
 	n, err := sqlcgen.New(s.pool).MarkInboundWebhookFailed(ctx, receiptID)
 	if err != nil {
 		return false, fmt.Errorf("mark inbound webhook failed: %w", err)

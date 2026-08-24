@@ -2,6 +2,7 @@ package natsjs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -33,6 +34,25 @@ func NewRegistry(routes ...Route) (*Registry, error) {
 	return &Registry{routes: subjects, handlers: make(map[routeKey]func(context.Context, domainevent.Event) error)}, nil
 }
 
+// Handle registers a typed handler without exposing subjects, headers,
+// delivery attempts, or acknowledgements to business code.
+func Handle[T any](registry *Registry, kind domainevent.Kind[T], handler func(context.Context, domainevent.Typed[T]) error) error {
+	if handler == nil {
+		return fmt.Errorf("%w: event handler is required", ErrRejected)
+	}
+	err := registry.Register(kind.Type, kind.Version, func(ctx context.Context, event domainevent.Event) error {
+		var payload T
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			return Permanent(fmt.Errorf("decode %s v%d: %w", event.Type, event.Version, err))
+		}
+		return handler(ctx, domainevent.Typed[T]{ID: event.ID, OccurredAt: event.OccurredAt, Payload: payload})
+	})
+	if err != nil {
+		return fmt.Errorf("register typed event handler: %w", err)
+	}
+	return nil
+}
+
 func (r *Registry) Register(eventType string, version uint16, handler func(context.Context, domainevent.Event) error) error {
 	if r == nil || r.routes == nil {
 		return fmt.Errorf("%w: event registry is required", ErrRejected)
@@ -58,11 +78,18 @@ func (r *Registry) Handler() (Handler, error) {
 	return func(ctx context.Context, message Message) error {
 		version, err := schemaVersion(message.Schema())
 		if err != nil {
-			return domainevent.Permanent(err)
+			return Permanent(err)
 		}
-		handler, ok := r.handlers[routeKey{typeName: message.Type(), version: version}]
+		key := routeKey{typeName: message.Type(), version: version}
+		handler, ok := r.handlers[key]
 		if !ok {
-			return domainevent.Permanent(fmt.Errorf("no handler for %s v%d", message.Type(), version))
+			return Permanent(fmt.Errorf("no handler for %s v%d", message.Type(), version))
+		}
+		if subject := r.routes[key]; message.Subject() != subject {
+			return Permanent(fmt.Errorf(
+				"unexpected subject %q for %s v%d, want %q",
+				message.Subject(), message.Type(), version, subject,
+			))
 		}
 		return handler(ctx, domainevent.Event{
 			ID: message.MessageID(), Type: message.Type(), Version: version,
@@ -130,7 +157,7 @@ func schemaVersion(schema string) (uint16, error) {
 		return 0, fmt.Errorf("invalid event schema %q", schema)
 	}
 	version, err := strconv.ParseUint(schema[1:], 10, 16)
-	if err != nil || version == 0 {
+	if err != nil || version == 0 || schema != "v"+strconv.FormatUint(version, 10) {
 		return 0, fmt.Errorf("invalid event schema %q", schema)
 	}
 	return uint16(version), nil

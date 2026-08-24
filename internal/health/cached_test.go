@@ -47,6 +47,33 @@ func TestCachedServesWithoutTouchingProbes(t *testing.T) {
 	}
 }
 
+func TestWatchReusesReadinessSeededByStartupAdmission(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		probe := &countingProbe{name: "db"}
+		svc := New(probe)
+		if err := svc.Refresh(t.Context(), testRefreshInterval, 1); err != nil {
+			t.Fatalf("Refresh() error = %v", err)
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error, 1)
+		go func() {
+			done <- svc.Watch(ctx, time.Hour, testRefreshInterval, 1, nil)
+		}()
+		synctest.Wait()
+		if got := probe.calls.Load(); got != 1 {
+			t.Fatalf("probe calls before first tick = %d, want seeded evaluation only", got)
+		}
+
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatalf("Watch() error = %v", err)
+		}
+	})
+}
+
 func TestCachedHoldsHealthyUntilFailureThreshold(t *testing.T) {
 	t.Parallel()
 

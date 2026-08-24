@@ -28,11 +28,10 @@ type BufconnServer interface {
 // ServeBufconn serves server over an in-memory listener and returns a client
 // connected to it. Both are released when the test finishes.
 //
-// The teardown order is why this is shared rather than retyped. Close only
-// starts the transport stop, and that stop is what closes the listener, so the
-// client goes first, then the server, and only then is Serve joined. Closing the
-// listener before that join races the stop and surfaces as an Accept failure
-// rather than a clean one — a shutdown bug that belongs to the test.
+// The teardown order is why this is shared rather than retyped. The client goes
+// first, then the server stops its transport, and only then is Serve joined.
+// Closing the listener before that join races the stop and surfaces as an Accept
+// failure rather than a clean one — a shutdown bug that belongs to the test.
 //
 // The connection is insecure because the listener is in memory and has no
 // transport to secure. A test proving transport trust needs a real socket.

@@ -23,16 +23,3 @@ type authnRuntime interface {
 	StreamInterceptor() grpc.StreamServerInterceptor
 	// profile:grpc:end
 }
-
-// authnBootstrapStage names one point in startup that authentication must
-// already be established at. runWithRuntime reports each through
-// runtimeWiring.authnStage, which production leaves empty and
-// authn_bootstrap_test.go substitutes to prove the order.
-type authnBootstrapStage string
-
-const (
-	authnStageTrustEstablished authnBootstrapStage = "trust_established"
-	authnStageHTTPRouterBuilt  authnBootstrapStage = "http_router_built"
-	authnStageHTTPServerBuilt  authnBootstrapStage = "http_server_built"
-	authnStageGRPCServerBuilt  authnBootstrapStage = "grpc_server_built"
-)

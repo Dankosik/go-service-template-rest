@@ -7,6 +7,7 @@ names=(
 	agent_instructions shell github_workflows dependency_automation
 	db_integration messaging_integration process_integration integration_race
 	performance_harness migrations runtime_image image_security documentation
+	integration_records
 )
 
 reset() {
@@ -52,8 +53,18 @@ classify() {
 				;;
 		esac
 		case "${file}" in
+			api/external/*/openapi.yaml|internal/infra/*/internal/openapi/*)
+				mark integration_records
+				;;
+		esac
+		case "${file}" in
 			buf.yaml|buf.gen.yaml|api/proto/*|examples/grpc-reference-service/buf.yaml|examples/grpc-reference-service/buf.gen.yaml|examples/grpc-reference-service/api/proto/*|examples/grpc-reference-service/internal/gen/proto/*|internal/gen/proto/*)
 				mark protobuf
+				;;
+		esac
+		case "${file}" in
+			api/proto/external/*|internal/gen/proto/external/*)
+				mark integration_records
 				;;
 		esac
 		case "${file}" in
@@ -67,7 +78,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			scripts/integration-init.sh|scripts/ci/integration-init-check.sh)
+			scripts/integration-init.sh|scripts/openapi-ref-check.go|scripts/ci/integration-init-check.sh)
 				mark integration_initializer
 				;;
 		esac
@@ -82,12 +93,12 @@ classify() {
 			.github/dependabot.yml) mark dependency_automation ;;
 		esac
 		case "${file}" in
-			AGENTS.md|CLAUDE.md|Grok.md|QWEN.md|.agents/*|.claude/*|.codex/*|.cursor/*|.grok/*|.opencode/*|.qwen/*|docs/agent-harness/*|docs/spec-first-workflow/*|docs/prompt-*|docs/skill-authoring.md|docs/validation/*|scripts/agent-roles-sync.sh|scripts/harness-skills-sync.sh|scripts/codex-agents-sync.sh|scripts/template-sync.sh|scripts/ci/template-owned-purity-check.sh)
+			AGENTS.md|CLAUDE.md|Grok.md|QWEN.md|.agents/*|.claude/*|.codex/*|.cursor/*|.grok/*|.opencode/*|.qwen/*|docs/agent-harness/*|docs/spec-first-workflow/*|docs/prompt-*|docs/skill-authoring.md|docs/validation/*|scripts/agent-roles-sync.sh|scripts/harness-skills-sync.sh|scripts/codex-agents-sync.sh|scripts/template-sync.sh|scripts/ci/template-owned-purity-check.sh|scripts/ci/template-sync-behavior-check.sh)
 				mark agent_instructions
 				;;
 		esac
 		case "${file}" in
-			cmd/migrate/*|internal/infra/postgres/*|internal/infra/postgresidempotency/*|internal/infra/postgresjobs/*|internal/infra/postgresmigrate/*|internal/infra/postgreswebhook/*|internal/inboundwebhook/*|migrations/*|test/postgres*|test/inbound_webhook*|test/webhook*)
+			cmd/jobs-worker/*|cmd/migrate/*|examples/reference-service/*|internal/infra/postgres/*|internal/infra/postgresidempotency/*|internal/infra/postgresjobs/*|internal/infra/postgresmigrate/*|internal/infra/postgreswebhook/*|internal/inboundwebhook/*|migrations/*|test/postgres*|test/inbound_webhook*|test/webhook*)
 				mark db_integration
 				;;
 		esac
@@ -97,7 +108,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			cmd/*/main.go|cmd/*/internal/bootstrap/*|cmd/internal/runtimeopts/*|test/*process*|test/current_repository_fixture*)
+			cmd/jobs-worker/*|cmd/*/main.go|cmd/*/internal/bootstrap/*|cmd/internal/runtimeopts/*|test/*process*|test/current_repository_fixture*)
 				mark process_integration
 				;;
 		esac
@@ -112,8 +123,18 @@ classify() {
 				;;
 		esac
 		case "${file}" in
+			integrations/*.toml|scripts/ci/integration-record-check.sh|scripts/ci/integration-record-constructor-check.go|scripts/ci/integration-record-bootstrap-check.go|scripts/ci/integration-record-grpc-check.go)
+				mark integration_records
+				;;
+		esac
+		case "${file}" in
 			.dockerignore|build/docker/*|env/docker-compose.yml|scripts/ci/runtime-image-build.sh|.github/actions/publish-image/*)
 				mark runtime_image image_security
+				;;
+		esac
+		case "${file}" in
+			internal/infra/*/client.go|internal/config/*_integration_config.go|cmd/service/internal/bootstrap/startup_*.go|docs/integrations/*)
+				mark integration_records
 				;;
 		esac
 		case "${file}" in
@@ -185,6 +206,27 @@ self_test() {
 	output="$(printf '%s\n' scripts/ci/changed-surfaces.sh | classify)"
 	for name in "${names[@]}"; do
 		grep -qx "${name}=true" <<<"${output}"
+	done
+
+	output="$(printf '%s\n' scripts/ci/template-sync-behavior-check.sh | classify)"
+	grep -qx 'agent_instructions=true' <<<"${output}"
+	grep -qx 'shell=true' <<<"${output}"
+
+	output="$(printf '%s\n' scripts/integration-init.sh | classify)"
+	grep -qx 'integration_initializer=true' <<<"${output}"
+
+	for file in \
+		integrations/billing.toml \
+		api/external/billing/openapi.yaml \
+		internal/infra/billing/internal/openapi/client.gen.go \
+		internal/infra/billing/client.go \
+		internal/config/billing_integration_config.go \
+		cmd/service/internal/bootstrap/startup_billing.go \
+		docs/integrations/billing.md \
+		api/proto/external/identity/v1/identity.proto \
+		internal/gen/proto/external/identity/v1/identity.pb.go; do
+		output="$(printf '%s\n' "${file}" | classify)"
+		grep -qx 'integration_records=true' <<<"${output}"
 	done
 	output="$(bash "$0" --release)"
 	for name in "${names[@]}"; do

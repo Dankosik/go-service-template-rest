@@ -24,8 +24,9 @@ import (
 
 func TestNATSOversizedSourceIsRetained(t *testing.T) {
 	f := newNATSFixture(t)
+	unexpectedHandler := make(chan struct{}, 1)
 	client, _, errCh := f.worker(t, func(context.Context, natsjs.Message) error {
-		t.Fatal("oversized source reached handler")
+		unexpectedHandler <- struct{}{}
 		return nil
 	}, func(cfg *natsjs.WorkerConfig) { cfg.Consumer = "oversized-worker" })
 	payload := make([]byte, testMaxPayloadBytes+1)
@@ -33,8 +34,16 @@ func TestNATSOversizedSourceIsRetained(t *testing.T) {
 	if err != nil {
 		t.Fatalf("publish oversized source: %v", err)
 	}
-	if err := waittest.Receive(t, errCh, 5*time.Second, "worker rejecting oversized source"); !errors.Is(err, natsjs.ErrTerminal) {
-		t.Fatalf("worker error = %v, want ErrTerminal", err)
+	var workerErr error
+	select {
+	case <-unexpectedHandler:
+		t.Fatal("oversized source reached handler")
+	case workerErr = <-errCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for worker rejecting oversized source")
+	}
+	if !errors.Is(workerErr, natsjs.ErrTerminal) {
+		t.Fatalf("worker error = %v, want ErrTerminal", workerErr)
 	}
 	if client.Ready() {
 		t.Fatal("client remained ready after terminal oversized delivery")
@@ -95,12 +104,12 @@ func TestNATSOversizedHeadersAreDeadLettered(t *testing.T) {
 		t.Fatalf("publish oversized headers: %v", err)
 	}
 	var deadLetter *jetstream.RawStreamMsg
-	waittest.Until(t, 5*time.Second, func() bool {
-		stream, streamErr := f.js.Stream(t.Context(), deadLetterStream)
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		stream, streamErr := f.js.Stream(ctx, deadLetterStream)
 		if streamErr != nil {
 			return false
 		}
-		deadLetter, streamErr = stream.GetLastMsgForSubject(t.Context(), deadLetterSubject)
+		deadLetter, streamErr = stream.GetLastMsgForSubject(ctx, deadLetterSubject)
 		return streamErr == nil
 	}, "oversized headers dead-letter transfer")
 	if handlerCalls.Load() != 0 {
@@ -175,7 +184,7 @@ func TestNATSTraceCorrelation(t *testing.T) {
 		t.Fatalf("handler correlation = %+v, want trace %s and no baggage", got, parent.SpanContext().TraceID())
 	}
 	parent.End()
-	waittest.Until(t, 5*time.Second, func() bool { return len(recorder.Ended()) >= 3 }, "producer, consumer, and parent spans")
+	waittest.Until(t, 5*time.Second, func(context.Context) bool { return len(recorder.Ended()) >= 3 }, "producer, consumer, and parent spans")
 	spansByName := make(map[string]sdktrace.ReadOnlySpan)
 	for _, span := range recorder.Ended() {
 		if _, duplicate := spansByName[span.Name()]; duplicate {
