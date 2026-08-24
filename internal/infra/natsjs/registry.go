@@ -86,7 +86,7 @@ func (r *Registry) Handler() (Handler, error) {
 			return Permanent(fmt.Errorf("no handler for %s v%d", message.Type(), version))
 		}
 		if subject := r.routes[key]; message.Subject() != subject {
-			return domainevent.Permanent(fmt.Errorf(
+			return Permanent(fmt.Errorf(
 				"unexpected subject %q for %s v%d, want %q",
 				message.Subject(), message.Type(), version, subject,
 			))

@@ -45,7 +45,7 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 		subject: "events.other", messageID: "event-2", eventType: kind.Type, schema: "v1", createdAt: createdAt,
 		payload: []byte(`{"value":"wrong route"}`),
 	})
-	if !domainevent.IsPermanent(err) {
+	if !IsPermanent(err) {
 		t.Fatalf("wrong-subject error = %v, want permanent", err)
 	}
 	select {
