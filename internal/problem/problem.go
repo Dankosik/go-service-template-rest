@@ -34,9 +34,9 @@ const (
 	CodeConflict              Code = "conflict"
 	CodeAlreadyExists         Code = Code(failure.CodeAlreadyExists)
 	CodeRequestEntityTooLarge Code = Code(failure.CodeRequestEntityTooLarge)
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	CodeRequestHeaderFieldsTooLarge Code = Code(failure.CodeRequestHeaderFieldsTooLarge)
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	CodeUnprocessableContent Code = Code(failure.CodeUnprocessableContent)
 	CodeTooManyRequests      Code = Code(failure.CodeTooManyRequests)
 	// profile:http-idempotency-postgres:start
@@ -57,12 +57,7 @@ type Definition struct {
 	Status  int
 }
 
-// catalog is the single source of the envelope, and both lookups below resolve
-// against it.
-//
-// It is a slice rather than a map so the reverse lookup stays deterministic: two
-// entries sharing a status would make a map-based For answer whichever iteration
-// reached first, which is a wrong answer that looks right.
+// catalog is the single source of the envelope.
 //
 // 409, 422, and 429 are here because a domain layer produces them and no fallback
 // path in internal/infra/http does. A code with no matching
@@ -116,14 +111,14 @@ var catalog = []Definition{
 		Title:   "request entity too large",
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.14",
 	},
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	{
 		Code:    CodeRequestHeaderFieldsTooLarge,
 		Status:  http.StatusRequestHeaderFieldsTooLarge,
 		Title:   "request header fields too large",
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc6585#section-5",
 	},
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	{
 		Code:    CodeUnprocessableContent,
 		Status:  http.StatusUnprocessableEntity,
@@ -177,16 +172,6 @@ var catalog = []Definition{
 	},
 }
 
-// For returns the definition published for status, and false for a status this
-// repository describes no problem class for.
-//
-// The boolean is the point: returning the internal-error type for an
-// uncatalogued status is a plausible wrong answer. A caller holding a status this
-// repository does not describe must publish its own type for it.
-func For(status int) (Definition, bool) {
-	return lo.Find(catalog, func(definition Definition) bool { return definition.Status == status })
-}
-
 // ForCode returns the definition published for code, and false for a code this
 // repository does not publish.
 func ForCode(code Code) (Definition, bool) {
@@ -199,9 +184,7 @@ func ForCode(code Code) (Definition, bool) {
 // This is the lookup for a caller passing a constant from this catalog, where an
 // unpublished code is a defect in that caller rather than a runtime condition.
 // The internal-error envelope is then the only honest answer left: it must not
-// claim a code nothing describes. A caller resolving a status it was handed uses
-// For, which refuses instead — see its documentation for why a plausible wrong
-// answer is the worse failure.
+// claim a code nothing describes.
 func ForCodeOrInternal(code Code) Definition {
 	if definition, ok := ForCode(code); ok {
 		return definition

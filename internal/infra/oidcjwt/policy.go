@@ -7,8 +7,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/authntrust"
 )
 
-// Policy is the immutable trust configuration shared by both transports. The
-// capability limits no deployment may change are in trust_envelope.go.
+// Policy is the immutable JWT trust configuration. The capability limits no
+// deployment may change are in trust_envelope.go.
 type Policy struct {
 	issuer       string
 	audience     string
@@ -19,7 +19,7 @@ type Policy struct {
 // "Adding a configured trust value" owns the full list of what a new field
 // touches.
 //
-// The exhaustruct include entry for this type in .golangci.yml is load-bearing: a
+// The exhaustruct_v5 enforce pattern for this type in .golangci.yml is load-bearing: a
 // field added here fails lint at every production call site that does not set it.
 // Remove this type from that entry and a forgotten call site becomes a zero value
 // at an authentication boundary instead of a failed build.

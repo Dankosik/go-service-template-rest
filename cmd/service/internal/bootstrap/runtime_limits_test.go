@@ -1,13 +1,4 @@
-package //nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// TestApplyMemoryLimitDefersToPlatform keeps the template from overriding a limit
-// the deployment already chose.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// TestApplyMemoryLimitReportsItsDecision is what makes this debuggable: an
-// operator seeing exit 137 needs the resolved number in the boot log, not an
-// inference from a restart count.
-bootstrap
+package bootstrap
 
 import (
 	"bytes"
@@ -28,6 +19,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
+//nolint:paralleltest // Mutates the process-wide GC memory limit.
 func TestApplyMemoryLimitSkipsWhenDisabled(t *testing.T) {
 	restoreMemoryLimit(t)
 
@@ -42,6 +34,10 @@ func TestApplyMemoryLimitSkipsWhenDisabled(t *testing.T) {
 	}
 }
 
+// TestApplyMemoryLimitDefersToPlatform keeps the template from overriding a limit
+// the deployment already chose.
+//
+//nolint:paralleltest // Mutates process-wide environment and GC memory limit.
 func TestApplyMemoryLimitDefersToPlatform(t *testing.T) {
 	restoreMemoryLimit(t)
 	t.Setenv(memoryLimitEnv, "512MiB")
@@ -57,6 +53,10 @@ func TestApplyMemoryLimitDefersToPlatform(t *testing.T) {
 	}
 }
 
+// TestApplyMemoryLimitReportsItsDecision makes exit 137 diagnosable from the
+// resolved limit in the startup log.
+//
+//nolint:paralleltest // Mutates process-wide environment and GC memory limit.
 func TestApplyMemoryLimitReportsItsDecision(t *testing.T) {
 	restoreMemoryLimit(t)
 	t.Setenv(memoryLimitEnv, "")
@@ -162,6 +162,16 @@ func TestReportRequestBufferBudget(t *testing.T) {
 				t.Fatalf("reported = %v, want %v; log = %s", got, tc.want, logged.String())
 			}
 		})
+	}
+
+	var logged bytes.Buffer
+	reportRequestBufferBudget(
+		slog.New(slog.NewJSONHandler(&logged, nil)),
+		budgetConfig(100_000, math.MaxInt64),
+		gibibyte,
+	)
+	if !strings.Contains(logged.String(), `"request_buffers.worst_case_bytes":9223372036854775807`) {
+		t.Fatalf("overflowing request-buffer product was not saturated: %s", logged.String())
 	}
 }
 

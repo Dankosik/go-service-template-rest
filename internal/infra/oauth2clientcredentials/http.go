@@ -7,16 +7,12 @@ import (
 	"net/http"
 
 	"github.com/example/go-service-template-rest/internal/infra/httpclient"
+	"golang.org/x/oauth2"
 )
 
 // HTTPClient is an authenticated fixed-target client. It exposes no credential API.
 type HTTPClient struct {
-	client *Client
-	base   resourceDoer
-}
-
-type resourceDoer interface {
-	Do(request *http.Request) (*http.Response, error)
+	client *http.Client
 }
 
 // HTTP binds this credential owner to one fixed-authority client.
@@ -24,23 +20,19 @@ func (c *Client) HTTP(base *httpclient.Client) (*HTTPClient, error) {
 	if !c.available() || base == nil {
 		return nil, ErrInvalidConfiguration
 	}
-	return &HTTPClient{client: c, base: base}, nil
+	return &HTTPClient{client: &http.Client{Transport: &oauth2.Transport{
+		Source: clientTokenSource{client: c},
+		Base:   doerRoundTripper{client: base},
+	}}}, nil
 }
 
 // Do authenticates one request copy with the current valid token.
 func (c *HTTPClient) Do(request *http.Request) (*http.Response, error) {
-	if c == nil || c.client == nil || c.base == nil || request == nil || request.URL == nil ||
-		hasAuthorization(request.Header) {
+	if c == nil || c.client == nil || request == nil || request.URL == nil || hasAuthorization(request.Header) {
 		return nil, ErrInvalidConfiguration
 	}
-	token, err := c.client.resolve(request.Context())
-	if err != nil {
-		return nil, err
-	}
-	attempt := request.Clone(request.Context())
-	attempt.Header = request.Header.Clone()
-	token.SetAuthHeader(attempt)
-	response, err := c.base.Do(attempt)
+	// #nosec G704 -- the OAuth transport delegates to httpclient.Client, which pins authority and checks the resolved address.
+	response, err := c.client.Do(request)
 	if err != nil {
 		return response, fmt.Errorf("send authenticated resource request: %w", err)
 	}

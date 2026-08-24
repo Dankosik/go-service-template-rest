@@ -287,6 +287,9 @@ func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *tes
 	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
 		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s default", cfg.HTTP.ReadinessTimeout)
 	}
+	if got := readinessProbeBudget(cfg); got != cfg.HTTP.ReadinessTimeout {
+		t.Fatalf("readinessProbeBudget() = %s, want aggregate budget %s", got, cfg.HTTP.ReadinessTimeout)
+	}
 	if err := validateStartupBudgetCompatibility(cfg); err != nil {
 		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for default Postgres readiness headroom", err)
 	}
@@ -329,7 +332,7 @@ func resetBootstrapConfigEnv(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if !strings.HasPrefix(key, "APP__") && key != "APP_CONFIG_ALLOWED_ROOTS" {
+		if !strings.HasPrefix(key, "APP__") {
 			continue
 		}
 		t.Setenv(key, value)
@@ -337,15 +340,12 @@ func resetBootstrapConfigEnv(t *testing.T) {
 			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
 		}
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	// These tests own dependency/startup budgets; supply the unrelated required
 	// authentication policy without introducing executable defaults.
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
-	// profile:authn-oidc-jwt:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	setOutboundAuthBootstrapTestEnv(t)
-	// profile:outbound-auth-oauth2-client-credentials:end
+	// profile:authn-bearer:end
 	// profile:object-storage:start
 	setObjectStorageBootstrapTestEnv(t)
 	// profile:object-storage:end

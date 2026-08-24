@@ -1,20 +1,21 @@
 # Outbound machine authentication
 
-`OUTBOUND_AUTH=oauth2-client-credentials` retains a client factory for one
-OAuth 2.0 client-credentials dependency. Its HTTP adapter is retained by
-default; `GRPC=enabled` additionally retains the gRPC adapter.
+`OUTBOUND_AUTH=oauth2-client-credentials` retains the credential package but
+adds no root runtime configuration. Each `make integration-init` invocation
+with OAuth owns one disjoint `integrations.<name>.oauth.*` tuple; HTTP is
+retained by default and `GRPC=enabled` additionally retains the gRPC adapter.
 
 ## Configuration
 
-Supply `token_url`, `client_id`, and `client_secret`; `scopes` is optional.
-Some providers additionally require exactly one of `audience` or `resource`.
-The secret is supplied only through `APP__OUTBOUND_AUTH__CLIENT_SECRET` and
-remains empty in file-backed configuration.
+Each named integration supplies `token_url`, `client_id`, and
+`client_secret`; `scopes` is optional. The secret uses only
+`APP__INTEGRATIONS__<NAME>__OAUTH__CLIENT_SECRET` and stays empty in
+file-backed configuration.
 
-The default token path is fixed external HTTPS with Basic client
-authentication, no proxy, redirect, retry, or general outbound
-instrumentation, a five-second acquisition bound, and finite response limits.
-A private HTTPS token endpoint is a dependency-specific code decision.
+The token path is fixed external HTTPS with Basic client authentication, no
+proxy, redirect, retry, or general outbound instrumentation, a five-second
+acquisition bound, and finite response limits. A private HTTPS token endpoint
+is a dependency-specific code decision.
 
 ## Composition
 
@@ -24,12 +25,10 @@ never receives the owner, a token source, or a token.
 
 ```go
 owner, err := oauth2clientcredentials.New(oauth2clientcredentials.Config{
-	TokenURL:     cfg.OutboundAuth.TokenURL,
-	ClientID:     cfg.OutboundAuth.ClientID,
-	ClientSecret: cfg.OutboundAuth.ClientSecret,
-	Scopes:       strings.Fields(cfg.OutboundAuth.Scopes),
-	Audience:     cfg.OutboundAuth.Audience,
-	Resource:     cfg.OutboundAuth.Resource,
+	TokenURL:     integration.OAuth.TokenURL,
+	ClientID:     integration.OAuth.ClientID,
+	ClientSecret: integration.OAuth.ClientSecret,
+	Scopes:       strings.Fields(integration.OAuth.Scopes),
 })
 
 authenticatedHTTP, err := owner.HTTP(resourceHTTP)
@@ -40,13 +39,14 @@ authenticatedGRPC, err := owner.GRPC(resourceGRPCConfig, resourceGRPCOptions)
 providerGRPC := providerv1.NewProviderClient(authenticatedGRPC)
 ```
 
-Token acquisition uses `golang.org/x/oauth2/clientcredentials`. The local owner
-keeps only one usable expiring Bearer token, shares one provider request, lets
-each caller cancel its own wait, and joins provider work during `Close`.
-Provider response bodies, refresh tokens, extra fields, and raw retrieval
-errors never cross the package boundary. Resource `401`/`403` and gRPC auth
-statuses pass through without token invalidation or replay.
+Token acquisition uses `golang.org/x/oauth2/clientcredentials`.
+`oauth2.ReuseTokenSourceWithExpiry` owns process-local cache, ten-second
+early expiry, and concurrent refresh serialization. The local owner adds only
+the bounded provider context, safe Bearer projection, retirement, and transport
+cleanup. Provider response bodies, refresh tokens, extra fields, and raw
+retrieval errors never cross the package boundary. Resource `401`/`403` and
+gRPC auth statuses pass through without token invalidation or replay.
 
-Provider registration, credentials, scopes/audience/resource, resource
-endpoint and TLS, network policy, rotation, criticality, capacity, and live
-compatibility remain deployment- or dependency-owner work.
+Provider registration, credentials, scopes, resource endpoint and TLS, network
+policy, rotation, criticality, capacity, and live compatibility remain
+deployment- or dependency-owner work.

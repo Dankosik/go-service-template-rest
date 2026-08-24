@@ -4,11 +4,11 @@ package natsjs
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	dockerclient "github.com/moby/moby/client"
@@ -18,7 +18,16 @@ import (
 
 func newPackageNATSFixture(t *testing.T) *natsjstest.Server {
 	t.Helper()
-	return natsjstest.Start(t, natsjstest.WithFixedHostPort(), natsjstest.WithStreams(
+	return packageNATSPool.Start(t, packageNATSStreams())
+}
+
+func newIsolatedPackageNATSFixture(t *testing.T, options ...natsjstest.Option) *natsjstest.Server {
+	t.Helper()
+	return natsjstest.Start(t, append(options, packageNATSStreams())...)
+}
+
+func packageNATSStreams() natsjstest.Option {
+	return natsjstest.WithStreams(
 		jetstream.StreamConfig{
 			Name: "EVENTS", Subjects: []string{"events.>"},
 			Storage: jetstream.FileStorage, MaxMsgSize: testMaxDeliveryBytes,
@@ -27,18 +36,17 @@ func newPackageNATSFixture(t *testing.T) *natsjstest.Server {
 			Name: "EVENTS_DLQ", Subjects: []string{"dead.>"},
 			Storage: jetstream.FileStorage, MaxMsgSize: 2 * testMaxDeliveryBytes,
 		},
-	))
+	)
 }
 
-func packageClient(t *testing.T, f *natsjstest.Server, pending int) *Client {
+func packageClient(t *testing.T, f *natsjstest.Server) *Client {
 	t.Helper()
 	cfg := testConfig()
 	cfg.URLs = []string{f.URL}
 	cfg.AllowPlaintext = true
 	cfg.AllowUnauthenticated = true
 	cfg.Stream = "EVENTS"
-	_ = pending
-	client, err := Connect(t.Context(), cfg, RoleWorker, Observability{})
+	client, err := Connect(t.Context(), cfg, Observability{})
 	if err != nil {
 		t.Fatalf("connect messaging client: %v", err)
 	}
@@ -48,7 +56,7 @@ func packageClient(t *testing.T, f *natsjstest.Server, pending int) *Client {
 
 func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "singleton-first"
 	cfg.FilterSubject = "events.test"
@@ -65,7 +73,7 @@ func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 		t.Fatalf("second consumer lookup error = %v, want no broker mutation", err)
 	}
 
-	concurrentClient := packageClient(t, f, testMaxPending)
+	concurrentClient := packageClient(t, f)
 	concurrent := cfg
 	concurrent.Consumer = "singleton-concurrent"
 	start := make(chan struct{})
@@ -96,7 +104,7 @@ func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 
 func TestNATSReadinessProbeRestoresStateAfterReconnect(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	client.ready.Store(false) // The reconnect callback leaves readiness false until the cached probe succeeds.
 	if err := client.Check(t.Context()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -107,8 +115,8 @@ func TestNATSReadinessProbeRestoresStateAfterReconnect(t *testing.T) {
 }
 
 func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
-	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	f := newIsolatedPackageNATSFixture(t, natsjstest.WithFixedHostPort())
+	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "restart-worker"
 	cfg.FilterSubject = "events.test"
@@ -128,11 +136,11 @@ func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 	if err := f.Container.Stop(t.Context(), &stopTimeout); err != nil {
 		t.Fatalf("stop NATS container: %v", err)
 	}
-	waittest.Until(t, 10*time.Second, func() bool { return !client.Ready() }, "worker disconnect")
+	waittest.Until(t, 10*time.Second, func(context.Context) bool { return !client.Ready() }, "worker disconnect")
 	if err := f.Container.Start(t.Context()); err != nil {
 		t.Fatalf("restart NATS container: %v", err)
 	}
-	waittest.Until(t, 10*time.Second, func() bool {
+	waittest.Until(t, 10*time.Second, func(context.Context) bool {
 		fresh, connectErr := nats.Connect(f.URL, nats.Timeout(250*time.Millisecond), nats.NoReconnect())
 		if connectErr != nil {
 			return false
@@ -140,18 +148,18 @@ func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 		fresh.Close()
 		return true
 	}, "restarted NATS listener")
-	waittest.Until(t, 20*time.Second, func() bool {
+	waittest.Until(t, 20*time.Second, func(ctx context.Context) bool {
 		select {
 		case err := <-runErr:
 			t.Fatalf("worker stopped during broker transition: %v", err)
 		default:
 		}
-		probeCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+		probeCtx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 		return client.Check(probeCtx) == nil
 	}, "worker reconnect")
 	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "restart.test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("after restart"),
 	}); err != nil {
 		t.Fatalf("Publish(after reconnect) error = %v", err)
@@ -166,12 +174,12 @@ func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 }
 
 func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
-	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, 2)
+	f := newIsolatedPackageNATSFixture(t)
+	client := packageClient(t, f)
 
 	before := client.nc.Stats().OutMsgs
 	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "unmatched.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "unmatched.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("one attempt"),
 	}); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Publish(no responder) error = %v, want ErrRejected", err)
@@ -201,7 +209,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 	})
 	dispatchedBefore := client.nc.Stats().OutMsgs
 	canceledEvent := Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("cancel after dispatch"),
 	}
 	publishCtx, cancelPublish := context.WithCancel(t.Context())
@@ -211,7 +219,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		canceledErr <- err
 	}()
 	deadlineEvent := Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("deadline after dispatch"),
 	}
 	deadlineCtx, cancelDeadline := context.WithTimeout(t.Context(), 2*time.Second)
@@ -221,7 +229,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		_, err := client.Producer().Publish(deadlineCtx, deadlineEvent)
 		deadlineErr <- err
 	}()
-	waittest.Until(t, 3*time.Second, func() bool { return client.nc.Stats().OutMsgs >= dispatchedBefore+2 }, "publish dispatches")
+	waittest.Until(t, 3*time.Second, func(context.Context) bool { return client.nc.Stats().OutMsgs >= dispatchedBefore+2 }, "publish dispatches")
 	cancelPublish()
 	if err := <-canceledErr; !errors.Is(err, ErrAmbiguous) {
 		t.Fatalf("Publish(canceled after dispatch) error = %v, want ErrAmbiguous", err)
@@ -236,7 +244,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		t.Fatalf("resume NATS: %v", err)
 	}
 	fresh := Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("capacity released"),
 	}
 	accepted, err := client.Producer().Publish(t.Context(), fresh)
@@ -262,7 +270,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 
 func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "ack-ambiguity"
 	cfg.FilterSubject = "events.test"
@@ -281,7 +289,7 @@ func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 	defer cancelRun()
 	go func() { _ = worker.Run(runCtx) }()
 	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("ack ambiguity"),
 	}); err != nil {
 		t.Fatalf("Publish() error = %v", err)
@@ -296,7 +304,7 @@ func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 
 func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "dlq-ack-ambiguity"
 	cfg.FilterSubject = "events.test"
@@ -307,7 +315,7 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	doubleAcks := make(chan struct{}, 2)
 	worker, err := client.NewWorker(t.Context(), cfg, func(_ context.Context, msg Message) error {
 		deliveries <- msg.Metadata().NumDelivered
-		return domainevent.Permanent(errors.New("poison"))
+		return Permanent(errors.New("poison"))
 	})
 	if err != nil {
 		t.Fatalf("create worker: %v", err)
@@ -317,7 +325,7 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	defer cancelRun()
 	go func() { _ = worker.Run(runCtx) }()
 	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("dlq ack ambiguity"),
 	}); err != nil {
 		t.Fatalf("Publish() error = %v", err)
@@ -328,8 +336,8 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	if second := waittest.Receive(t, deliveries, 15*time.Second, "DLQ source-ack redelivery"); second != 2 {
 		t.Fatalf("second NumDelivered = %d, want 2", second)
 	}
-	waittest.Receive(t, doubleAcks, 5*time.Second, "first DLQ source ACK attempt")
-	waittest.Receive(t, doubleAcks, 5*time.Second, "second DLQ source ACK attempt")
+	waittest.ReceiveSignal(t, doubleAcks, 5*time.Second, "first DLQ source ACK attempt")
+	waittest.ReceiveSignal(t, doubleAcks, 5*time.Second, "second DLQ source ACK attempt")
 	dlq, err := f.JS.Stream(t.Context(), "EVENTS_DLQ")
 	if err != nil {
 		t.Fatalf("lookup DLQ stream: %v", err)

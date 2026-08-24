@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +29,6 @@ const (
 	sourceSubject        = "events.test"
 	deadLetterSubject    = "dead.events.test"
 	testMaxPayloadBytes  = 256 << 10
-	testMaxPending       = 64
 	testMaxConcurrency   = 8
 	testMaxDeliveryBytes = 1 << 20
 	testOperationTimeout = 5 * time.Second
@@ -63,11 +63,22 @@ type testNATSAccount struct {
 	credentials []byte
 }
 
+var sharedNATSPool natsjstest.Pool
+
 func newNATSFixture(t *testing.T) *natsFixture {
 	t.Helper()
-	// The fixed host port is required because reconnect cases stop and restart
-	// this exact container while clients retain the admitted URL.
-	server := natsjstest.Start(t, natsjstest.WithFixedHostPort(), natsjstest.WithStreams(
+	server := sharedNATSPool.Start(t, natsStreams())
+	return &natsFixture{container: server.Container, url: server.URL, raw: server.Conn, js: server.JS}
+}
+
+func newIsolatedNATSFixture(t *testing.T) *natsFixture {
+	t.Helper()
+	server := natsjstest.Start(t, natsStreams())
+	return &natsFixture{container: server.Container, url: server.URL, raw: server.Conn, js: server.JS}
+}
+
+func natsStreams() natsjstest.Option {
+	return natsjstest.WithStreams(
 		jetstream.StreamConfig{
 			Name:       sourceStream,
 			Subjects:   []string{"events.>"},
@@ -80,12 +91,12 @@ func newNATSFixture(t *testing.T) *natsFixture {
 			Storage:    jetstream.FileStorage,
 			MaxMsgSize: 2 * testMaxDeliveryBytes,
 		},
-	))
-	return &natsFixture{container: server.Container, url: server.URL, raw: server.Conn, js: server.JS}
+	)
 }
 
 func newAuthenticatedNATSFixture(t *testing.T) *authenticatedNATSFixture {
 	t.Helper()
+	natsjstest.SkipWithoutDocker(t)
 	operatorKey, err := nkeys.CreateOperator()
 	if err != nil {
 		t.Fatalf("create NATS test operator key: %v", err)
@@ -207,7 +218,7 @@ func newTestNATSAccount(t *testing.T, operatorKey nkeys.KeyPair, enableJetStream
 	return testNATSAccount{public: accountPublic, claim: accountClaim, credentials: credentials}
 }
 
-func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*natsjs.Config)) *natsjs.Client {
+func (f *natsFixture) client(t *testing.T, configure ...func(*natsjs.Config)) *natsjs.Client {
 	t.Helper()
 	cfg := testClientConfig()
 	cfg.URLs = []string{f.url}
@@ -217,7 +228,7 @@ func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*
 	for _, apply := range configure {
 		apply(&cfg)
 	}
-	client, err := natsjs.Connect(t.Context(), cfg, role, natsjs.Observability{})
+	client, err := natsjs.Connect(t.Context(), cfg, natsjs.Observability{})
 	if err != nil {
 		t.Fatalf("connect messaging client: %v", err)
 	}
@@ -227,7 +238,7 @@ func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*
 
 func (f *natsFixture) worker(t *testing.T, handler natsjs.Handler, configure ...func(*natsjs.WorkerConfig)) (*natsjs.Client, *natsjs.Worker, <-chan error) {
 	t.Helper()
-	client := f.client(t, natsjs.RoleWorker)
+	client := f.client(t)
 	cfg := testWorkerConfig()
 	cfg.Consumer = fmt.Sprintf("worker-%d", time.Now().UnixNano())
 	cfg.FilterSubject = sourceSubject
@@ -267,8 +278,8 @@ func stopWorker(worker *natsjs.Worker) {
 func testEvent(payload string) natsjs.Event {
 	return natsjs.Event{
 		Subject:       sourceSubject,
-		MessageID:     natsjs.NewID(),
-		PublicationID: natsjs.NewID(),
+		MessageID:     rand.Text(),
+		PublicationID: rand.Text(),
 		Type:          "test.event",
 		Schema:        "v1",
 		CreatedAt:     time.Now().UTC(),
@@ -278,12 +289,12 @@ func testEvent(payload string) natsjs.Event {
 
 func waitConsumerSettled(t *testing.T, fixture *natsFixture, consumerName string) {
 	t.Helper()
-	waittest.Until(t, 5*time.Second, func() bool {
-		consumer, err := fixture.js.Consumer(t.Context(), sourceStream, consumerName)
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		consumer, err := fixture.js.Consumer(ctx, sourceStream, consumerName)
 		if err != nil {
 			return false
 		}
-		info, err := consumer.Info(t.Context())
+		info, err := consumer.Info(ctx)
 		return err == nil && info.NumAckPending == 0 && info.NumPending == 0
 	}, consumerName+" settlement")
 }

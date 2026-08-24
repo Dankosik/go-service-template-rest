@@ -323,9 +323,8 @@ reachable. Each operation still owns its deadline, retry eligibility, and
 provider-error mapping.
 
 ```go
-clientConfig := grpcclient.DefaultConfig("dns:///orders.railway.internal:9000")
 connection, err := grpcclient.New(
-    clientConfig,
+	"dns:///orders.railway.internal:9000",
     grpcclient.Options{
         TransportCredentials: credentials.NewTLS(tlsConfig),
     },
@@ -364,9 +363,11 @@ Use focused tests while iterating, then run:
 
 ```bash
 go test ./internal/<feature> ./internal/infra/http
-make fmt-check
-make lint
+make unit-check PKG=./internal/<feature> FILES='internal/<feature>/*.go'
 ```
+
+On the integrated candidate review `make plan`, then run `make verify` once.
+Use `make check` only when the intended claim spans the full repository.
 
 Run the matching container, PostgreSQL, migration, or deployment leaf when the
 change touches it. Before merge, inspect the generated diff and

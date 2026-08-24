@@ -1,6 +1,6 @@
 ---
 name: go-performance
-description: "Performance: Use for latency, throughput, allocs, contention, capacity, complexity, scaling, benchmarks. Own policy; Skip correctness."
+description: "Measured performance decisions. Use when a workload or budget can change the mechanism, or when an optimization claim needs a comparable baseline, attribution, and delta."
 metadata:
   invocation: model
   kind: method
@@ -16,10 +16,11 @@ Performance decisions and optimizations use different evidence loops:
 
 A budget without a unit, percentile, and owner is a mood. Before implementation, reject mechanisms whose amplification or ceiling cannot satisfy the accepted envelope. After implementation, claim an improvement only from comparable measurements under that workload.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
-budgets and hot paths from accepted workloads, SLOs, execution paths,
-measurements, and rollout constraints. Bind every budget to a unit, percentile
-or capacity measure, protocol, and owner.
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For every changed mechanism or claim, build `PerformancePath{workload, budget,
+unit, percentile_or_capacity, multiplier, mechanism, baseline, attribution,
+delta, owner, proof}` from accepted workloads, SLOs, execution paths,
+measurements, and rollout constraints.
 
 [Benchmarking](../../../docs/benchmarking.md) owns proof level, workload
 identity, comparable evidence, and completion policy. Load one matching leaf
@@ -36,6 +37,7 @@ decisions.
 - **Review** — load the [review selector](references/review/index.md) for the
   measured risk and place every affected hot path in the finding envelope.
 
-Hand concurrency correctness to `go-concurrency`, data access to `go-db-cache`,
-overload to `go-reliability`, and a PostgreSQL-shaped risk or measurement to
-[PostgreSQL performance](../../../docs/universal-disciplines/postgres-performance/SKILL.md).
+Complete when every mechanism fits the accepted ceiling and every optimization
+claim has comparable workload identity, baseline, attribution, and delta. Use
+[PostgreSQL performance](../../../docs/universal-disciplines/postgres-performance/SKILL.md)
+for a PostgreSQL-shaped risk or measurement.

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"io"
 
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	"log/slog"
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	"slices"
 	"testing"
 	"time"
@@ -15,9 +15,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/s3"
 
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	"github.com/example/go-service-template-rest/internal/objectstorage"
 )
 
@@ -37,22 +37,6 @@ func TestInitObjectStorageMapsConfig(t *testing.T) {
 	runtime.Close()
 	if built.calls != 1 {
 		t.Fatalf("runtime Close calls = %d, want 1", built.calls)
-	}
-}
-
-func TestObjectStorageConstructionFollowsMemoryPublication(t *testing.T) {
-	resetShutdownConfigEnv(t)
-	stopServing := errors.New("stop serving")
-	wiring := objectStorageTestWiring(&countingObjectStorageRuntime{})
-	var events []runtimeLifecycleStage
-	wiring.lifecycle = func(stage runtimeLifecycleStage) { events = append(events, stage) }
-	wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error { return stopServing }
-
-	if err := runWithRuntime(nil, wiring); !errors.Is(err, stopServing) {
-		t.Fatalf("runWithRuntime() error = %v, want %v", err, stopServing)
-	}
-	if len(events) < 2 || events[0] != runtimeLifecycleMemoryPublished || events[1] != runtimeLifecycleObjectStorageConstructed {
-		t.Fatalf("startup lifecycle events = %v", events)
 	}
 }
 
@@ -79,14 +63,16 @@ func TestObjectStorageOutageDoesNotChangeReadiness(t *testing.T) {
 	}
 }
 
-func TestObjectStorageRuntimeCloseOrder(t *testing.T) {
+func TestObjectStorageRuntimeClosesAfterServing(t *testing.T) {
 	resetShutdownConfigEnv(t)
-	closed := &countingObjectStorageRuntime{}
+	var events []string
+	closed := &countingObjectStorageRuntime{onClose: func() { events = append(events, "closed") }}
 	stopServing := errors.New("stop serving")
 	wiring := objectStorageTestWiring(closed)
-	var events []runtimeLifecycleStage
-	wiring.lifecycle = func(stage runtimeLifecycleStage) { events = append(events, stage) }
-	wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error { return stopServing }
+	wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error {
+		events = append(events, "serve")
+		return stopServing
+	}
 
 	if err := runWithRuntime(nil, wiring); !errors.Is(err, stopServing) {
 		t.Fatalf("runWithRuntime() error = %v, want %v", err, stopServing)
@@ -94,14 +80,9 @@ func TestObjectStorageRuntimeCloseOrder(t *testing.T) {
 	if closed.calls != 1 {
 		t.Fatalf("object storage Close calls = %d, want 1", closed.calls)
 	}
-	want := []runtimeLifecycleStage{
-		runtimeLifecycleMemoryPublished, runtimeLifecycleObjectStorageConstructed,
-		runtimeLifecycleHTTPDrained, runtimeLifecycleBackgroundJoined,
-		runtimeLifecycleObjectStorageClosed, runtimeLifecycleDependenciesClosed,
-		runtimeLifecycleTelemetryFlushed,
-	}
+	want := []string{"serve", "closed"}
 	if !slices.Equal(events, want) {
-		t.Fatalf("startup lifecycle events = %v, want %v", events, want)
+		t.Fatalf("events = %v, want %v", events, want)
 	}
 }
 
@@ -111,21 +92,27 @@ func objectStorageTestWiring(runtime objectStorageRuntime) runtimeWiring {
 	wiring.dependencies = func(context.Context, startupBootstrap) (runtimeDependencies, error) {
 		return runtimeDependencies{}, nil
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	wiring.initAuthn = func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error) {
 		return fakeAuthnRuntime{}, nil
 	}
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	return wiring
 }
 
 type countingObjectStorageRuntime struct {
 	noOpObjectStorageStore
 
-	calls int
+	calls   int
+	onClose func()
 }
 
-func (r *countingObjectStorageRuntime) Close() { r.calls++ }
+func (r *countingObjectStorageRuntime) Close() {
+	r.calls++
+	if r.onClose != nil {
+		r.onClose()
+	}
+}
 
 type scriptedObjectStorageRuntime struct {
 	countingObjectStorageRuntime

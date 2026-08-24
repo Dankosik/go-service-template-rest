@@ -51,10 +51,13 @@ func TestWorkerConfigBoundsAndConsumerPolicy(t *testing.T) {
 	if want := valid.HandlerTimeout + 2*operationTimeout + settlementSchedulingSlack; desired.AckWait != want {
 		t.Fatalf("AckWait = %v, want %v", desired.AckWait, want)
 	}
+	if desired.MaxWaiting != 0 || desired.MaxRequestBatch != 0 || desired.MaxRequestMaxBytes != 0 {
+		t.Fatalf("consumer retained client pull policy: %#v", desired)
+	}
 }
 
 func TestNewWorkerRejectsBeforeBrokerMutation(t *testing.T) {
-	client := unitClient(t, &recordingJetStream{}, RoleWorker)
+	client := unitClient(t, &recordingJetStream{})
 	if _, err := client.NewWorker(t.Context(), testWorkerConfig(), nil); !errors.Is(err, ErrRejected) {
 		t.Fatalf("NewWorker(nil handler) error = %v", err)
 	}

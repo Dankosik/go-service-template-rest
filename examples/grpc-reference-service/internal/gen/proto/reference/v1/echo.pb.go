@@ -9,6 +9,7 @@ package referencev1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	_ "google.golang.org/protobuf/types/gofeaturespb"
 	reflect "reflect"
 	unsafe "unsafe"
 )
@@ -706,7 +707,7 @@ var File_reference_v1_echo_proto protoreflect.FileDescriptor
 
 const file_reference_v1_echo_proto_rawDesc = "" +
 	"\n" +
-	"\x17reference/v1/echo.proto\x12\freference.v1\"$\n" +
+	"\x17reference/v1/echo.proto\x12\freference.v1\x1a!google/protobuf/go_features.proto\"$\n" +
 	"\fUnaryRequest\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\"%\n" +
 	"\rUnaryResponse\x12\x14\n" +
@@ -730,7 +731,7 @@ const file_reference_v1_echo_proto_rawDesc = "" +
 	"\fServerStream\x12!.reference.v1.ServerStreamRequest\x1a\".reference.v1.ServerStreamResponse0\x01\x12W\n" +
 	"\fClientStream\x12!.reference.v1.ClientStreamRequest\x1a\".reference.v1.ClientStreamResponse(\x01\x12S\n" +
 	"\n" +
-	"BidiStream\x12\x1f.reference.v1.BidiStreamRequest\x1a .reference.v1.BidiStreamResponse(\x010\x01ByZwgithub.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1;referencev1b\beditionsp\xe8\a"
+	"BidiStream\x12\x1f.reference.v1.BidiStreamRequest\x1a .reference.v1.BidiStreamResponse(\x010\x01B\x81\x01Zwgithub.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1;referencev1\x92\x03\x05\xd2>\x02\x10\x03b\beditionsp\xe8\a"
 
 var file_reference_v1_echo_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_reference_v1_echo_proto_goTypes = []any{

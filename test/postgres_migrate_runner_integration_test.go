@@ -135,21 +135,7 @@ func TestPostgresMigrateRepositorySourceRehearsal(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencySchemaReplacementIsFailClosed(t *testing.T) {
-	legacyMigration, err := os.ReadFile("../migrations/000003_postgres_http_idempotency.sql")
-	if err != nil {
-		t.Fatalf("read legacy HTTP idempotency migration: %v", err)
-	}
-	replacementMigration, err := os.ReadFile("../migrations/000009_postgres_http_idempotency_simplify.sql")
-	if err != nil {
-		t.Fatalf("read replacement HTTP idempotency migration: %v", err)
-	}
-	legacySource := fstest.MapFS{
-		"migrations/000003_postgres_http_idempotency.sql": {Data: legacyMigration},
-	}
-	replacementSource := fstest.MapFS{
-		"migrations/000003_postgres_http_idempotency.sql":          {Data: legacyMigration},
-		"migrations/000009_postgres_http_idempotency_simplify.sql": {Data: replacementMigration},
-	}
+	legacySource, replacementSource := httpIDMigrationSources(t)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
@@ -221,6 +207,88 @@ func TestPostgresHTTPIdempotencySchemaReplacementIsFailClosed(t *testing.T) {
 	}
 	if relationExists(t, ctx, pool, "postgres_http_idempotency") {
 		t.Fatal("HTTP idempotency table exists after complete rollback")
+	}
+}
+
+func TestPostgresHTTPIdempotencySchemaReplacementBlocksConcurrentWriter(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	legacySource, replacementSource := httpIDMigrationSources(t)
+	dsn := pgtest.DSN(t)
+	if _, err := postgresmigrate.MigrateUp(ctx, migrationOptions(dsn, legacySource)); err != nil {
+		t.Fatalf("apply published legacy migration: %v", err)
+	}
+	pool := openVerificationPool(t, ctx, dsn)
+	blocker, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin migration blocker: %v", err)
+	}
+	blockerReleased := false
+	defer func() {
+		if !blockerReleased {
+			_ = blocker.Rollback(ctx)
+		}
+	}()
+	if _, err := blocker.Exec(ctx, "LOCK TABLE postgres_http_idempotency IN ACCESS SHARE MODE"); err != nil {
+		t.Fatalf("lock legacy table: %v", err)
+	}
+
+	type migrationRun struct {
+		result postgresmigrate.RunResult
+		err    error
+	}
+	options := migrationOptions(dsn, replacementSource)
+	options.StatementTimeout = 10 * time.Second
+	options.LockTimeout = 10 * time.Second
+	options.CleanupTimeout = 10 * time.Second
+	migrationResult := make(chan migrationRun, 1)
+	go func() {
+		result, runErr := postgresmigrate.MigrateUp(ctx, options)
+		migrationResult <- migrationRun{result: result, err: runErr}
+	}()
+	waitForMigrationQuery(t, pool, "LOCK TABLE postgres_http_idempotency IN ACCESS EXCLUSIVE MODE")
+
+	writerResult := make(chan error, 1)
+	go func() {
+		_, writerErr := pool.Exec(ctx, `
+			INSERT INTO postgres_http_idempotency (
+				identity_token, generation, phase, provisional_fingerprint_version,
+				provisional_fingerprint, recover_after
+			) VALUES (
+				decode(repeat('01', 32), 'hex'),
+				nextval('postgres_http_idempotency_generation_seq'),
+				'reserved', 'v1', decode(repeat('02', 32), 'hex'), clock_timestamp() + interval '1 hour'
+			)`)
+		writerResult <- writerErr
+	}()
+	waittest.Until(t, migrationQueryWait, func(waitCtx context.Context) bool {
+		var waiting int
+		err := pool.QueryRow(waitCtx, `
+			SELECT count(*)
+			FROM pg_locks
+			WHERE relation = 'postgres_http_idempotency'::regclass
+			  AND mode = 'RowExclusiveLock'
+			  AND NOT granted`).Scan(&waiting)
+		if err != nil {
+			t.Fatalf("observe queued legacy writer: %v", err)
+		}
+		return waiting == 1
+	}, "legacy writer to queue behind schema replacement")
+
+	if err := blocker.Rollback(ctx); err != nil {
+		t.Fatalf("release migration blocker: %v", err)
+	}
+	blockerReleased = true
+	migrated := waittest.Receive(t, migrationResult, migrationQueryWait, "schema replacement result")
+	if migrated.err != nil || migrated.result.After != 9 {
+		t.Fatalf("schema replacement = %+v, error %v", migrated.result, migrated.err)
+	}
+	if err := waittest.Receive(t, writerResult, migrationQueryWait, "queued legacy writer result"); err == nil {
+		t.Fatal("legacy writer committed across schema replacement")
+	}
+	var rows int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil || rows != 0 {
+		t.Fatalf("replacement rows = %d, error %v", rows, err)
 	}
 }
 
@@ -379,40 +447,69 @@ func TestPostgresMigrateSessionLockSerializesConcurrentRunners(t *testing.T) {
 	defer cancel()
 
 	dsn := pgtest.DSN(t)
+	pool := openVerificationPool(t, ctx, dsn)
+	if _, err := pool.Exec(ctx, "CREATE TABLE migration_serialization_gate (id bigint)"); err != nil {
+		t.Fatalf("create serialization gate: %v", err)
+	}
+	blocker, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin serialization blocker: %v", err)
+	}
+	blockerReleased := false
+	defer func() {
+		if !blockerReleased {
+			_ = blocker.Rollback(ctx)
+		}
+	}()
+	if _, err := blocker.Exec(ctx, "LOCK TABLE migration_serialization_gate IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatalf("lock serialization gate: %v", err)
+	}
 	source := fstest.MapFS{
 		"migrations/000001_once.sql": {
 			Data: migrationFile(
-				"SELECT pg_sleep(0.2); CREATE TABLE migration_once (id bigint);",
-				"DROP TABLE migration_once;",
+				"ALTER TABLE migration_serialization_gate ADD COLUMN migrated boolean;",
+				"ALTER TABLE migration_serialization_gate DROP COLUMN migrated;",
 			),
 		},
 	}
 	options := migrationOptions(dsn, source)
-	options.LockTimeout = 3 * time.Second
-	options.CleanupTimeout = 3 * time.Second
+	options.LockTimeout = 10 * time.Second
+	options.CleanupTimeout = 10 * time.Second
 
-	start := make(chan struct{})
-	results := make(chan postgresmigrate.RunResult, 2)
-	errs := make(chan error, 2)
-	for range 2 {
-		go func() {
-			<-start
-			result, err := postgresmigrate.MigrateUp(ctx, options)
-			results <- result
-			errs <- err
-		}()
+	type migrationRun struct {
+		result postgresmigrate.RunResult
+		err    error
 	}
-	close(start)
+	run := func(result chan<- migrationRun) {
+		migrationResult, runErr := postgresmigrate.MigrateUp(ctx, options)
+		result <- migrationRun{result: migrationResult, err: runErr}
+	}
+	firstResult := make(chan migrationRun, 1)
+	go run(firstResult)
+	waitForMigrationQuery(t, pool, "ALTER TABLE migration_serialization_gate")
 
-	totalApplied := 0
-	for range 2 {
-		if err := <-errs; err != nil {
-			t.Fatalf("concurrent MigrateUp() error: %v", err)
-		}
-		totalApplied += (<-results).AppliedCount
+	secondResult := make(chan migrationRun, 1)
+	go run(secondResult)
+	waitForMigrationConnections(t, pool, 2)
+
+	if err := blocker.Rollback(ctx); err != nil {
+		t.Fatalf("release serialization gate: %v", err)
 	}
-	if totalApplied != 1 {
-		t.Fatalf("concurrent applied count = %d, want exactly one", totalApplied)
+	blockerReleased = true
+
+	first := <-firstResult
+	if first.err != nil {
+		t.Fatalf("first MigrateUp() error: %v", first.err)
+	}
+	if first.result.Before != 0 || first.result.After != 1 || first.result.AppliedCount != 1 {
+		t.Fatalf("first MigrateUp() result = %+v, want 0 -> 1 with one applied", first.result)
+	}
+	second := <-secondResult
+	if second.err != nil {
+		t.Fatalf("second MigrateUp() error: %v", second.err)
+	}
+	if second.result.Before != 1 || second.result.After != 1 || second.result.AppliedCount != 0 {
+		t.Fatalf("second MigrateUp() result = %+v, want coherent no-change at 1", second.result)
 	}
 }
 
@@ -474,7 +571,7 @@ func TestPostgresMigrateCancellationStopsLaterMigration(t *testing.T) {
 	}()
 
 	pool := openVerificationPool(t, outer, dsn)
-	waitForMigrationQuery(t, outer, pool, "pg_sleep")
+	waitForMigrationQuery(t, pool, "pg_sleep")
 	cancelRun()
 
 	result := <-resultCh
@@ -500,6 +597,26 @@ func migrationOptions(dsn string, source fstest.MapFS) postgresmigrate.Migration
 		LockTimeout:      time.Second,
 		CleanupTimeout:   time.Second,
 	}
+}
+
+func httpIDMigrationSources(t *testing.T) (fstest.MapFS, fstest.MapFS) {
+	t.Helper()
+	legacyMigration, err := os.ReadFile("../migrations/000003_postgres_http_idempotency.sql")
+	if err != nil {
+		t.Fatalf("read legacy HTTP idempotency migration: %v", err)
+	}
+	replacementMigration, err := os.ReadFile("../migrations/000009_postgres_http_idempotency_simplify.sql")
+	if err != nil {
+		t.Fatalf("read replacement HTTP idempotency migration: %v", err)
+	}
+	legacySource := fstest.MapFS{
+		"migrations/000003_postgres_http_idempotency.sql": {Data: legacyMigration},
+	}
+	replacementSource := fstest.MapFS{
+		"migrations/000003_postgres_http_idempotency.sql":          {Data: legacyMigration},
+		"migrations/000009_postgres_http_idempotency_simplify.sql": {Data: replacementMigration},
+	}
+	return legacySource, replacementSource
 }
 
 func migrationFile(up, down string) []byte {
@@ -545,16 +662,12 @@ func columnExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, table, 
 
 func waitForMigrationQuery(
 	t *testing.T,
-	ctx context.Context,
 	pool *pgxpool.Pool,
 	queryFragment string,
 ) {
 	t.Helper()
 
-	// ctx still bounds the observation itself: when the caller's deadline passes
-	// first, the query below fails and names that, rather than this wait running
-	// on past the test that owns it.
-	waittest.Until(t, migrationQueryWait, func() bool {
+	waittest.Until(t, migrationQueryWait, func(ctx context.Context) bool {
 		var count int
 		err := pool.QueryRow(
 			ctx,
@@ -573,9 +686,31 @@ func waitForMigrationQuery(
 	}, "an active migration query matching "+queryFragment)
 }
 
-// migrationQueryWait bounds the wait above. It sits under the 20s budget each
-// caller gives its context, so a broken wait fails here with what it was looking
-// for rather than as an expired context somewhere further along.
+func waitForMigrationConnections(
+	t *testing.T,
+	pool *pgxpool.Pool,
+	want int,
+) {
+	t.Helper()
+
+	waittest.Until(t, migrationQueryWait, func(ctx context.Context) bool {
+		var count int
+		err := pool.QueryRow(
+			ctx,
+			`SELECT count(*)
+			   FROM pg_stat_activity
+			  WHERE datname = current_database()
+			    AND application_name = 'goose-migrate'`,
+		).Scan(&count)
+		if err != nil {
+			t.Fatalf("observe migration connections: %v", err)
+		}
+		return count >= want
+	}, fmt.Sprintf("at least %d migration connections", want))
+}
+
+// migrationQueryWait is passed through the predicates to their database calls,
+// so a broken wait fails here with what it was looking for.
 const migrationQueryWait = 10 * time.Second
 
 func TestPostgresMigrateFailureDoesNotCreateDirtyState(t *testing.T) {

@@ -1,42 +1,4 @@
-package //nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// A platform that injects only the standard endpoint variable must still get
-// traces: this is the deployment where ignoring it looks healthy and exports
-// nothing.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// An unconfigured exporter with ambient variables present is reachable when
-// configured headers pin the destination and there is no configured endpoint:
-// nothing was honored, so everything injected is reported.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// An injected endpoint no longer disables this service's own trace export, so
-// the operator needs to learn that their collector is not the destination. The
-// warning names the variable and the config key that won.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// The variable that supplied the endpoint was honored, so reporting it as
-// ignored would send an operator looking for a problem that does not exist.
-// Everything else injected alongside it is still reported.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// Metrics resolve their own endpoint, and a variable that supplied it was
-// honored exactly as the trace one would be. Reporting it as ignored while
-// reportMetricExporterState names the same variable as the active
-// endpoint_source puts two contradicting lines in one startup log, and an
-// operator has no way to tell which is right.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// The metrics half of the conflict rule. A credential this service refused is
-// reported as degraded telemetry by the metrics exporter itself, so listing it
-// here as merely ignored contradicts that record for the same reason the trace
-// case does.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// A credential or trust variable fails exporter setup and is reported as
-// degraded telemetry. Listing it here as merely "ignored" would contradict that
-// record, so this path stays silent for it.
-bootstrap
+package bootstrap
 
 import (
 	"bytes"
@@ -65,6 +27,7 @@ func TestTelemetryInitFailureReason(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // Installs process-wide telemetry providers.
 func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
@@ -84,6 +47,10 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	t.Cleanup(func() { stage.cleanup(context.Background()) })
 }
 
+// A platform that injects only the standard endpoint variable must still get
+// traces: ignoring it looks healthy and exports nothing.
+//
+//nolint:paralleltest // Mutates process-wide environment and telemetry providers.
 func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
@@ -104,6 +71,7 @@ func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	t.Cleanup(func() { stage.cleanup(context.Background()) })
 }
 
+//nolint:paralleltest // Mutates process-wide environment and telemetry providers.
 func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
@@ -130,13 +98,17 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) {
+// An unconfigured exporter with ambient variables reports everything injected
+// because none of it was honored.
+//
+//nolint:paralleltest // Mutates process-wide exporter environment.
+func TestReportAdditionalAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{},
@@ -144,7 +116,7 @@ func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) 
 	)
 
 	logged := buf.String()
-	if !strings.Contains(logged, "telemetry_ambient_env_ignored") {
+	if !strings.Contains(logged, "telemetry_ambient_env_present") {
 		t.Fatalf("log = %q, want ambient env warning", logged)
 	}
 	for _, want := range []string{
@@ -163,12 +135,16 @@ func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) 
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *testing.T) {
+// An injected endpoint overridden by service config must be named with the
+// config key that won.
+//
+//nolint:paralleltest // Mutates process-wide exporter environment.
+func TestReportAdditionalAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		configuredTestTraceEndpoint(),
@@ -177,7 +153,7 @@ func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *t
 
 	logged := buf.String()
 	for _, want := range []string{
-		"telemetry_ambient_env_ignored",
+		"telemetry_ambient_env_present",
 		"OTEL_EXPORTER_OTLP_ENDPOINT",
 		startupDependencyModeConfigured,
 		"observability.otel.exporter.otlp_endpoint",
@@ -188,13 +164,17 @@ func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *t
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T) {
+// The endpoint variable that supplied the destination was honored and must not
+// be reported as ignored.
+//
+//nolint:paralleltest // Mutates process-wide exporter environment.
+func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{
@@ -213,13 +193,16 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *testing.T) {
+// The metrics endpoint variable follows the same honored-versus-ignored rule.
+//
+//nolint:paralleltest // Mutates process-wide exporter environment.
+func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://injected-collector.example:4318/v1/metrics")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{},
@@ -238,32 +221,42 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *te
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *testing.T) {
+// A rejected metrics credential is already reported as degraded setup, not as
+// an ignored variable.
+//
+//nolint:paralleltest // Mutates process-wide exporter environment.
+func TestReportAdditionalAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer secret-value")
 
-	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
-		context.Background(),
-		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{},
-		telemetry.ExporterEndpoint{
-			URL:    "https://collector.example/v1/metrics",
-			Source: telemetry.MetricExporterConfigKey,
-		},
-	)
+	for _, source := range []string{telemetry.MetricExporterConfigKey, telemetry.TraceExporterConfigKey} {
+		var buf bytes.Buffer
+		reportAdditionalAmbientOTLPEnv(
+			context.Background(),
+			slog.New(slog.NewJSONHandler(&buf, nil)),
+			telemetry.TraceExporterEndpoint{},
+			telemetry.ExporterEndpoint{
+				URL:    "https://collector.example/v1/metrics",
+				Source: source,
+			},
+		)
 
-	if buf.Len() != 0 {
-		t.Fatalf("log = %q, want no warning for a variable that fails metrics exporter setup", buf.String())
+		if buf.Len() != 0 {
+			t.Fatalf("source %q log = %q, want no warning for a variable that fails metrics exporter setup", source, buf.String())
+		}
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T) {
+// A rejected trace credential is already reported as degraded setup, not as an
+// ignored variable.
+//
+//nolint:paralleltest // Mutates process-wide exporter environment.
+func TestReportAdditionalAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		configuredTestTraceEndpoint(),
@@ -275,11 +268,12 @@ func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T)
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
+//nolint:paralleltest // Clears process-wide exporter environment.
+func TestReportAdditionalAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{},
@@ -311,23 +305,23 @@ func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
 		want     []string
 	}{
 		{
-			name:     "active from configuration",
+			name:     "initialized from configuration",
 			endpoint: configuredTestTraceEndpoint(),
 			want: []string{
-				`"tracing.exporter":"active"`,
+				`"tracing.exporter":"initialized"`,
 				`"tracing.endpoint_source":"observability.otel.exporter.otlp_endpoint"`,
 			},
 		},
 		{
 			// An operator debugging where traces went needs to see that the
 			// destination came from the platform, not from this service.
-			name: "active from the ambient endpoint variable",
+			name: "initialized from the ambient endpoint variable",
 			endpoint: telemetry.TraceExporterEndpoint{
 				URL:    "http://collector.example:4318/v1/traces",
 				Source: "OTEL_EXPORTER_OTLP_ENDPOINT",
 			},
 			want: []string{
-				`"tracing.exporter":"active"`,
+				`"tracing.exporter":"initialized"`,
 				`"tracing.endpoint_source":"OTEL_EXPORTER_OTLP_ENDPOINT"`,
 			},
 		},
@@ -399,6 +393,8 @@ func TestBootstrapReportStageLogsTelemetryFailureCause(t *testing.T) {
 // fail-closed. The service then started, reported healthy, and exported no metric
 // and no span — while every log record lost trace_id and span_id, because logctx
 // reads them off the span context a real provider produces.
+//
+//nolint:paralleltest // Installs process-wide telemetry providers.
 func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
@@ -435,8 +431,8 @@ func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing
 	// The meter provider survives too, so the gauge that reports degraded trace
 	// export can still be recorded — it was unreachable when metrics setup failed
 	// as a unit.
-	if err := metrics.RecordTraceExporterState(context.Background(), true); err != nil {
-		t.Fatalf("RecordTraceExporterState() error = %v, want a usable meter provider", err)
+	if err := metrics.RecordTraceExporterInitialization(context.Background(), true); err != nil {
+		t.Fatalf("RecordTraceExporterInitialization() error = %v, want a usable meter provider", err)
 	}
 }
 

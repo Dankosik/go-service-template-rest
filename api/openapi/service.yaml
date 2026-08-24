@@ -12,12 +12,16 @@ security: [{bearerAuth: []}]
 tags:
   - name: system
     description: Operational endpoints for liveness and readiness.
+  # profile:inbound-webhooks-standard:start
+  - name: inbound-webhooks
+    description: Durable Standard Webhooks ingress.
+  # profile:inbound-webhooks-standard:end
 paths:
   /health/live:
     get:
-      # profile:authn-oidc-jwt:start
+      # profile:authn-bearer:start
       security: []
-      # profile:authn-oidc-jwt:end
+      # profile:authn-bearer:end
       tags: [system]
       summary: Liveness probe
       operationId: healthLive
@@ -40,9 +44,9 @@ paths:
           $ref: "#/components/responses/InternalServerError"
   /health/ready:
     get:
-      # profile:authn-oidc-jwt:start
+      # profile:authn-bearer:start
       security: []
-      # profile:authn-oidc-jwt:end
+      # profile:authn-bearer:end
       tags: [system]
       summary: Readiness probe
       operationId: healthReady
@@ -70,18 +74,80 @@ paths:
               schema:
                 type: string
                 example: not ready
+  # profile:inbound-webhooks-standard:start
+  /webhooks/{endpoint_id}:
+    post:
+      security: []
+      tags: [inbound-webhooks]
+      summary: Receive a Standard Webhooks delivery
+      operationId: receiveWebhook
+      x-security-decision:
+        exposure: public
+        rationale: >-
+          sender authenticates the exact raw body with Standard Webhooks
+          signatures; this is not a browser API and adds no CORS allowance
+      parameters:
+        - name: endpoint_id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{1,64}$'
+        - name: Webhook-Id
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 256
+        - name: Webhook-Timestamp
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: Webhook-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json: {}
+      responses:
+        "204":
+          description: signed delivery is durably owned for asynchronous processing
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/RequestEntityTooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "431":
+          $ref: "#/components/responses/RequestHeaderFieldsTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "504":
+          $ref: "#/components/responses/GatewayTimeout"
+  # profile:inbound-webhooks-standard:end
 components:
-  # profile:authn-oidc-jwt:start
+  # profile:authn-bearer:start
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
-      description: JWT access token issued by the configured OIDC issuer for this API audience.
-  # profile:authn-oidc-jwt:end
+      description: Bearer access token issued for this API audience.
+  # profile:authn-bearer:end
   schemas:
     Problem:
       type: object
+      additionalProperties: false
       required:
         - code
         - type
@@ -124,6 +190,7 @@ components:
             $ref: "#/components/schemas/InvalidParam"
     InvalidParam:
       type: object
+      additionalProperties: false
       required:
         - name
         - reason
@@ -163,3 +230,59 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    # profile:inbound-webhooks-standard:start
+    NotFound:
+      description: endpoint is unknown
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: delivery identity conflicts with another body
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: caller exceeded the configured rate limit
+      headers:
+        Retry-After:
+          required: true
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    RequestHeaderFieldsTooLarge:
+      description: >-
+        request headers exceed either the listener bound or an
+        application-level credential bound; listener rejections happen before
+        routing and use text/plain, while application rejections use Problem
+        Details
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+        text/plain:
+          schema:
+            type: string
+            example: 431 Request Header Fields Too Large
+    ServiceUnavailable:
+      description: durable acceptance is unavailable
+      headers:
+        Retry-After:
+          required: true
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    GatewayTimeout:
+      description: request budget expired before a response could be committed
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    # profile:inbound-webhooks-standard:end

@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -26,10 +25,9 @@ const (
 	maxDNSAddresses        = 64
 	responseHeaderTimeout  = 15 * time.Second
 	maxResponseHeaderBytes = 32 << 10
-	maxResponseBodyBytes   = 64 << 10
 )
 
-type DeliveryAttempt struct {
+type deliveryAttempt struct {
 	ID                   string
 	OwnerScope           string
 	ReceiverID           string
@@ -41,63 +39,61 @@ type DeliveryAttempt struct {
 	PredecessorReference string
 }
 
-type PreparedSend struct {
-	Attempt         DeliveryAttempt
+type preparedSend struct {
+	Attempt         deliveryAttempt
 	URL             *url.URL
 	Addresses       []netip.Addr
 	SelectedAddress netip.Addr
 	Signature       string
 }
 
-type SendResult struct {
-	Evidence            TransportEvidence
-	ResponseHeaderBytes int
-	ResponseBodyBytes   int
-	RetryAfter          string
-	ResponseDate        string
+type sendResult struct {
+	Evidence     transportEvidence
+	RetryAfter   string
+	ResponseDate string
 }
 
-func PrepareSend(ctx context.Context, resolver *net.Resolver, attempt DeliveryAttempt, manifest *SecretManifest) (PreparedSend, error) {
+func prepareSend(ctx context.Context, resolver *net.Resolver, attempt deliveryAttempt, manifest *SecretManifest) (preparedSend, error) {
 	if resolver == nil || manifest == nil || !attemptContextBounded(ctx, attempt.Deadline) {
-		return PreparedSend{}, fmt.Errorf("%w: resolver, secret manifest, and bounded attempt deadline are required", ErrConfig)
+		return preparedSend{}, fmt.Errorf("%w: resolver, secret manifest, and bounded attempt deadline are required", ErrConfig)
 	}
 	parsed, err := parseWebhookURL(attempt.URL)
 	if err != nil {
-		return PreparedSend{}, err
+		return preparedSend{}, err
 	}
 	addresses, err := resolver.LookupNetIP(ctx, "ip", parsed.Hostname())
 	if err != nil {
-		return PreparedSend{}, fmt.Errorf("resolve webhook destination: %w", err)
+		return preparedSend{}, fmt.Errorf("resolve webhook destination: %w", err)
 	}
 	if len(addresses) == 0 || len(addresses) > maxDNSAddresses {
-		return PreparedSend{}, fmt.Errorf("%w: destination returned an invalid address count", ErrDestinationDenied)
+		return preparedSend{}, fmt.Errorf("%w: destination returned an invalid address count", errDestinationDenied)
 	}
 	for i := range addresses {
 		addresses[i] = addresses[i].Unmap()
 		if !outboundtrust.PublicAddress(addresses[i]) {
-			return PreparedSend{}, fmt.Errorf("%w: destination answer contains a non-public address", ErrDestinationDenied)
+			return preparedSend{}, fmt.Errorf("%w: destination answer contains a non-public address", errDestinationDenied)
 		}
 	}
 	slices.SortFunc(addresses, func(a, b netip.Addr) int { return bytes.Compare(a.AsSlice(), b.AsSlice()) })
 	addresses = slices.Compact(addresses)
 
-	active, err := manifest.Resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.KeyReference)
+	active, err := manifest.resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.KeyReference)
 	if err != nil {
-		return PreparedSend{}, err
+		return preparedSend{}, err
 	}
-	keys := []SigningKey{active}
+	keys := [][]byte{active}
 	if attempt.PredecessorReference != "" {
-		predecessor, err := manifest.Resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.PredecessorReference)
+		predecessor, err := manifest.resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.PredecessorReference)
 		if err != nil {
-			return PreparedSend{}, err
+			return preparedSend{}, err
 		}
 		keys = append(keys, predecessor)
 	}
-	signature, err := SignV1(attempt.ID, attempt.AttemptedAt, attempt.Body, keys)
+	signature, err := signV1(attempt.ID, attempt.AttemptedAt, attempt.Body, keys)
 	if err != nil {
-		return PreparedSend{}, err
+		return preparedSend{}, err
 	}
-	return PreparedSend{
+	return preparedSend{
 		Attempt: attempt, URL: parsed, Addresses: slices.Clone(addresses),
 		SelectedAddress: addresses[0], Signature: signature,
 	}, nil
@@ -105,13 +101,13 @@ func PrepareSend(ctx context.Context, resolver *net.Resolver, attempt DeliveryAt
 
 func tryPreparedAddresses(
 	ctx context.Context,
-	prepared PreparedSend,
-	send func(context.Context, PreparedSend) (SendResult, error),
-) (SendResult, error) {
+	prepared preparedSend,
+	send func(context.Context, preparedSend) (sendResult, error),
+) (sendResult, error) {
 	if len(prepared.Addresses) == 0 || send == nil {
-		return SendResult{Evidence: TransportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, ErrConfig
+		return sendResult{Evidence: transportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, ErrConfig
 	}
-	var result SendResult
+	var result sendResult
 	var err error
 	for _, address := range prepared.Addresses {
 		prepared.SelectedAddress = address
@@ -123,9 +119,9 @@ func tryPreparedAddresses(
 	return result, err
 }
 
-func Send(ctx context.Context, prepared PreparedSend) (SendResult, error) {
+func send(ctx context.Context, prepared preparedSend) (sendResult, error) {
 	if prepared.URL == nil || !prepared.SelectedAddress.IsValid() || !attemptContextBounded(ctx, prepared.Attempt.Deadline) {
-		return SendResult{Evidence: TransportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, fmt.Errorf("%w: prepared send is invalid", ErrConfig)
+		return sendResult{Evidence: transportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, fmt.Errorf("%w: prepared send is invalid", ErrConfig)
 	}
 	wroteRequest := false
 	trace := &httptrace.ClientTrace{WroteRequest: func(httptrace.WroteRequestInfo) { wroteRequest = true }}
@@ -140,44 +136,27 @@ func attemptContextBounded(ctx context.Context, attemptDeadline time.Time) bool 
 	return ok && !attemptDeadline.IsZero() && !deadline.After(attemptDeadline)
 }
 
-func sendWithTransport(ctx context.Context, prepared PreparedSend, transport *http.Transport, wroteRequest *bool) (SendResult, error) {
+func sendWithTransport(ctx context.Context, prepared preparedSend, transport *http.Transport, wroteRequest *bool) (sendResult, error) {
 	request, err := webhookRequest(ctx, prepared)
 	if err != nil {
-		return SendResult{Evidence: TransportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, err
+		return sendResult{Evidence: transportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, err
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(request)
 	if err != nil {
 		wrote := wroteRequest != nil && *wroteRequest
 		if errors.Is(err, http.ErrLineTooLong) || strings.Contains(err.Error(), "server response headers exceeded") {
-			err = ErrResponseLimit
+			err = errResponseLimit
 		}
-		return SendResult{Evidence: TransportEvidence{
+		return sendResult{Evidence: transportEvidence{
 			DefinitelyNotSent: !wrote, MayHaveSent: wrote,
 			LocalDenial: !wrote && permanentTLSValidationError(err),
 		}}, fmt.Errorf("send webhook request: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	result := SendResult{
-		Evidence:   TransportEvidence{StatusCode: response.StatusCode, MayHaveSent: true},
+	result := sendResult{
+		Evidence:   transportEvidence{StatusCode: response.StatusCode, MayHaveSent: true},
 		RetryAfter: response.Header.Get("Retry-After"), ResponseDate: response.Header.Get("Date"),
-		ResponseHeaderBytes: responseHeaderBytes(response.Header),
-	}
-	if result.ResponseHeaderBytes > maxResponseHeaderBytes {
-		result.ResponseHeaderBytes = maxResponseHeaderBytes
-		return result, ErrResponseLimit
-	}
-	if response.StatusCode >= 200 && response.StatusCode <= 299 {
-		return result, nil
-	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBodyBytes+1))
-	result.ResponseBodyBytes = len(body)
-	if err != nil {
-		return result, fmt.Errorf("receive webhook response body: %w", err)
-	}
-	if len(body) > maxResponseBodyBytes {
-		result.ResponseBodyBytes = maxResponseBodyBytes
-		return result, ErrResponseLimit
 	}
 	return result, nil
 }
@@ -191,13 +170,11 @@ func permanentTLSValidationError(err error) bool {
 		errors.As(err, &hostname) || errors.As(err, &invalidCertificate)
 }
 
-func webhookRequest(ctx context.Context, prepared PreparedSend) (*http.Request, error) {
-	body := io.NopCloser(bytes.NewReader(prepared.Attempt.Body))
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, prepared.URL.String(), body)
+func webhookRequest(ctx context.Context, prepared preparedSend) (*http.Request, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, prepared.URL.String(), bytes.NewReader(prepared.Attempt.Body))
 	if err != nil {
 		return nil, fmt.Errorf("build webhook request: %w", err)
 	}
-	request.ContentLength = int64(len(prepared.Attempt.Body))
 	request.Header = http.Header{
 		"Content-Type":      []string{"application/json"},
 		"Accept-Encoding":   []string{"identity"},
@@ -220,7 +197,7 @@ func newAttemptTransport(serverName string, address netip.Addr) *http.Transport 
 		TLSNextProto:           map[string]func(string, *tls.Conn) http.RoundTripper{},
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
 			if !outboundtrust.PublicAddress(address) {
-				return nil, ErrDestinationDenied
+				return nil, errDestinationDenied
 			}
 			return dialer.DialContext(ctx, network, net.JoinHostPort(address.String(), "443"))
 		},
@@ -230,21 +207,11 @@ func newAttemptTransport(serverName string, address netip.Addr) *http.Transport 
 func parseWebhookURL(raw string) (*url.URL, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil ||
-		parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Port() != "" && parsed.Port() != "443" || len(raw) > 2048 {
-		return nil, fmt.Errorf("%w: destination URL must be absolute HTTPS on port 443", ErrDestinationDenied)
+		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.Port() != "" && parsed.Port() != "443" || len(raw) > 2048 {
+		return nil, fmt.Errorf("%w: destination URL must be absolute HTTPS on port 443", errDestinationDenied)
 	}
 	if parsed.Port() == "" {
 		parsed.Host = net.JoinHostPort(parsed.Hostname(), "443")
 	}
 	return parsed, nil
-}
-
-func responseHeaderBytes(headers http.Header) int {
-	total := 0
-	for name, values := range headers {
-		for _, value := range values {
-			total += len(name) + len(value) + 4
-		}
-	}
-	return total
 }

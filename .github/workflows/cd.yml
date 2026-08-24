@@ -38,15 +38,37 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - name: Require exact-SHA CI for release tag
-        if: github.event_name == 'push'
+      - name: Wait for exact-SHA admission workflows
         env:
           GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          CANDIDATE_REF: ${{ github.event_name == 'workflow_run' && github.event.repository.default_branch || github.ref_name }}
         run: |
-          gh api --paginate --slurp \
-            "/repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?event=push&head_sha=${GITHUB_SHA}&status=completed&per_page=100" |
-            jq -e --arg sha "${GITHUB_SHA}" \
-              'any(.[] | .workflow_runs[]?; .head_sha == $sha and .conclusion == "success")'
+          set -euo pipefail
+          workflows=(codeql.yml)
+          if [[ "${{ github.event_name }}" == push ]]; then
+            workflows=(ci.yml codeql.yml)
+          fi
+          for workflow in "${workflows[@]}"; do
+            run_id=""
+            for _ in {1..12}; do
+              run_id="$(gh run list \
+                --workflow "${workflow}" \
+                --event push \
+                --branch "${CANDIDATE_REF}" \
+                --commit "${CANDIDATE_SHA}" \
+                --limit 1 \
+                --json databaseId \
+                --jq '.[0].databaseId // empty')"
+              [[ -z "${run_id}" ]] || break
+              sleep 5
+            done
+            [[ -n "${run_id}" ]] || {
+              echo "no ${workflow} run found for ${CANDIDATE_REF}@${CANDIDATE_SHA}" >&2
+              exit 1
+            }
+            gh run watch "${run_id}" --exit-status
+          done
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}

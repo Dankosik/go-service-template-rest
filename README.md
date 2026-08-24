@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/go-service-template-hero.png" alt="Built for Go. Ready for agents. AI-native Go REST API and microservice template" width="100%" />
+  <img src=".github/assets/go-service-template-hero.png" alt="Go Gopher conductor coordinating a robot agent orchestra" width="360" />
 </p>
 
 <h1 align="center">Go REST API &amp; Microservice Template</h1>
@@ -22,9 +22,30 @@
   <a href="#documentation">Documentation</a>
 </p>
 
+## What this repository is
+
+This repository is a starting point for a Go HTTP API or microservice. It
+already connects the pieces most services need: an OpenAPI contract,
+configuration, health checks, graceful shutdown, telemetry, tests, Docker, CI,
+and repository instructions for coding agents.
+
+The initialized service is small by default. It has no database, broker, or
+external provider dependency. You select the capabilities the service owns,
+and the initializer removes everything else instead of leaving dormant code
+behind.
+
+## Why use it
+
+- Start with a runnable service and spend the first commit on domain behavior.
+- Keep the API contract, generated bindings, runtime wiring, and checks in one
+  repository.
+- Add PostgreSQL, jobs, messaging, gRPC, authentication, webhooks, or object
+  storage through supported profiles when the service needs them.
+- Give people and coding agents the same ownership rules and validation paths.
+
 ## Quickstart
 
-Create a repository from the template and start the service:
+Create a repository from the template, initialize its identity, and run it:
 
 ```bash
 gh repo create my-service \
@@ -35,339 +56,143 @@ gh repo create my-service \
 cd my-service
 make template-init \
   MODULE=github.com/your-org/my-service \
-  CODEOWNER=@your-org/backend \
-  DATABASE=none \
-  HTTP_IDEMPOTENCY=none \
-  JOBS=none \
-  WEBHOOKS=none \
-  OUTBOX=none \
-  GRPC=none \
-  AUTHN=none \
-  OBJECT_STORAGE=none \
-  OUTBOUND_AUTH=none \
-  MESSAGING=none
-make fmt-check
-make lint
-make test
+  CODEOWNER=@your-org/backend
+make check
 make run
 ```
 
-The defaults create a service with no database dependency. The complete agent
-workflow is always retained. Choose `DATABASE=postgres` when the service owns
-PostgreSQL. The fixed-authority HTTP client is always retained so feature code
-only supplies its dependency target.
-<!-- profile:object-storage:start -->
-Choose `OBJECT_STORAGE=s3` only when this service needs the S3-compatible
-capability. It requires a complete static tuple supplied by deployment and
-does not certify a provider or configure a bucket; see
-[S3-compatible object storage](docs/s3-compatible-object-storage.md).
-<!-- profile:object-storage:end -->
-<!-- profile:http-idempotency-postgres:start -->
-Choose `HTTP_IDEMPOTENCY=postgres` only with `DATABASE=postgres`. It retains the
-one-transaction PostgreSQL idempotency executor; an operation opts in with one
-OpenAPI declaration and supplies only its authorized business effect. See
-[PostgreSQL HTTP idempotency](docs/postgres-http-idempotency.md).
-<!-- profile:http-idempotency-postgres:end -->
-<!-- profile:jobs-postgres:start -->
-Choose `DATABASE=postgres JOBS=postgres` for typed River jobs inserted in the
-business transaction and executed by the separate jobs worker; see
-[PostgreSQL background jobs](docs/postgres-durable-background-jobs.md).
-<!-- profile:jobs-postgres:end -->
-<!-- profile:outbound-auth-oauth2-client-credentials:start -->
-Choose `OUTBOUND_AUTH=oauth2-client-credentials` to retain the small factory
-that gives a concrete dependency adapter authenticated clients without exposing
-tokens. See [outbound machine authentication](docs/outbound-machine-authentication.md).
-<!-- profile:outbound-auth-oauth2-client-credentials:end -->
-<!-- profile:outbox-postgres:start -->
-Choose `DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream` when a
-request transaction must durably record a typed outbound event for the
-separately deployed River relay. Publication is at-least-once, so consumers
-must tolerate duplicate event IDs; see the
-[PostgreSQL transactional outbox](docs/postgres-transactional-outbox.md).
-<!-- profile:outbox-postgres:end -->
-<!-- profile:webhooks-durable:start -->
-Choose `DATABASE=postgres JOBS=postgres WEBHOOKS=durable` when a feature
-transaction must stage an immutable per-receiver webhook fan-out for the shared
-jobs worker. Receiver processing is at-least-once; see
-[outbound webhook delivery](docs/outbound-webhook-delivery.md).
-<!-- profile:webhooks-durable:end -->
-<!-- profile:authn-oidc-jwt:start -->
-Choose `AUTHN=oidc-jwt` for OIDC discovery and signed JWT access-token
-authentication; see [OIDC/JWT authentication](docs/authentication.md).
-<!-- profile:authn-oidc-jwt:end -->
-<!-- profile:grpc:start -->
-Choose `GRPC=enabled`
-when the service publishes or consumes native gRPC; see the
-[gRPC guide](docs/grpc.md).
-<!-- profile:grpc:end -->
-<!-- profile:messaging-nats-jetstream:start -->
-Choose `MESSAGING=nats-jetstream` for typed event publishing and handler
-registration over a separate durable worker; see [durable messaging](docs/durable-messaging.md).
-Together with `DATABASE=postgres OUTBOX=postgres`, it supplies the outbox
-relay's concrete NATS producer and W3C trace continuity. The generator rejects
-outbox without messaging.
-<!-- profile:messaging-nats-jetstream:end -->
+This creates the minimal profile. `make template-init` rewrites the module,
+service name, and CODEOWNERS; removes unused profiles; regenerates derived
+code; and records the selection in `template.lock`.
 
-`examples/reference-service` is a worked feature slice kept in this template for
-reference; initialization removes it so a generated service does not inherit a
-second OpenAPI contract to maintain. Pass `REFERENCE_EXAMPLE=keep` to retain
-it, and read it here or in
-[first production feature](docs/first-production-feature.md) either way.
-
-## What You Get
+## What stays in every service
 
 | Area | Included |
 | --- | --- |
-| Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
-| API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
-| Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
-<!-- profile:jobs-postgres:start -->
-| Background jobs | Optional River-backed typed jobs with transactional insertion and a separate worker process |
-<!-- profile:jobs-postgres:end -->
-<!-- profile:outbox-postgres:start -->
-| Transactional outbox | Optional River-backed PostgreSQL job appended inside the business transaction and published by a separate NATS worker |
-<!-- profile:outbox-postgres:end -->
-<!-- profile:webhooks-durable:start -->
-| Outbound webhooks | Optional Standard Webhooks job kind with atomic fan-out staging and public-HTTPS enforcement through the shared jobs worker |
-<!-- profile:webhooks-durable:end -->
-| Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
-<!-- profile:messaging-nats-jetstream:start -->
-| Messaging | Optional direct NATS JetStream producer and separate bounded durable pull-consumer worker |
-<!-- profile:messaging-nats-jetstream:end -->
-<!-- profile:authn-oidc-jwt:start -->
-| Authentication | Optional OIDC discovery and RS256 JWT access-token verification for HTTP and native gRPC, with an explicit RFC 9068 profile |
-<!-- profile:authn-oidc-jwt:end -->
-| Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
-| Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
-| Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign, CycloneDX, and durable migration-history enforcement |
-| Agent workflow | The complete Codex, Claude Code, Qwen, Grok Build, Cursor, and OpenCode workflow, always retained ([what that costs](#what-the-agent-workflow-costs)) |
+| HTTP API | OpenAPI 3.0 as the client contract, with generated request bindings and typed responses |
+| Runtime | `chi`, layered configuration, health and readiness, graceful shutdown with limits |
+| Observability | OpenTelemetry traces and metrics, Prometheus export, structured logs |
+| Validation | Focused Go tests, generated-code checks, race and goroutine leak coverage, CI matched to the change |
+| Delivery | Dockerfile and GitHub Actions, with optional signed GHCR publication |
+| Agent workflow | Shared repository rules and focused instructions, plus the selected tool adapter |
 
-<!-- profile:grpc:start -->
-The optional native gRPC profile adds gRPC-Go client/server support, Buf v2,
-Edition 2023 Opaque messages, all four RPC cardinalities, standard health, and
-bounded drain.
-<!-- profile:grpc:end -->
+[`go.mod`](go.mod) owns runtime and test dependencies. [`tools/go.mod`](tools/go.mod)
+owns development tools.
 
-Major versions describe the supported stack. [`go.mod`](go.mod) owns runtime
-and test dependencies; [`tools/go.mod`](tools/go.mod) owns development tools.
+## Add only what the service needs
 
-### What the agent workflow costs
+Pass profile options to `make template-init`. Unset options use the minimal
+`none` or `core` default.
 
-Initialization keeps the workflow byte-for-byte; there is no option to decline
-it. A generated service inherits the repository contract, conditional domain
-methods, five generic capability roles, and their generated Codex, Claude,
-Qwen, Grok, Cursor, and OpenCode carriers. If your team will not use those harnesses, keep
-[`AGENTS.md`](AGENTS.md) and `docs/`, and drop `.agents/`, `.codex/`,
-`.claude/`, `.cursor/`, `.qwen/`, `.grok/`, `.opencode/`, and `opencode.json`.
+| Need | Option | Adds |
+| --- | --- | --- |
+| PostgreSQL | `DATABASE=postgres` | `pgx`, Goose migrations, `sqlc`, and database lifecycle |
+| Idempotent HTTP effects | `DATABASE=postgres HTTP_IDEMPOTENCY=postgres` | The request effect and idempotency record in one transaction ([guide](docs/postgres-http-idempotency.md)) |
+| Background jobs | `DATABASE=postgres JOBS=postgres` | Typed River jobs and a separate worker ([guide](docs/postgres-durable-background-jobs.md)) |
+| Outbound webhooks | `DATABASE=postgres JOBS=postgres WEBHOOKS=durable` | Delivery jobs staged in the business transaction ([guide](docs/outbound-webhook-delivery.md)) |
+| Inbound webhooks | `DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks` | Durable Standard Webhooks receipt and processing ([guide](docs/inbound-webhook-receipt.md)) |
+| NATS events | `MESSAGING=nats-jetstream` | Typed publishing and a separate durable consumer worker ([guide](docs/durable-messaging.md)) |
+| Transactional outbox | `DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream` | Transactional event recording and a separate relay ([guide](docs/postgres-transactional-outbox.md)) |
+| Native gRPC | `GRPC=enabled` | Generated clients and servers, health checks, streaming, and bounded drain ([guide](docs/grpc.md)) |
+| Authentication | `AUTHN=oidc-jwt` or `AUTHN=oidc-introspection` | HTTP and gRPC bearer-token verification ([guide](docs/authentication.md)) |
+| Bounded outbound HTTP | `OUTBOUND_HTTP=bounded` | An HTTP client locked to one upstream, with response-size limits |
+| Machine authentication | `OUTBOUND_AUTH=oauth2-client-credentials` | OAuth 2.0 client-credentials adapters ([guide](docs/outbound-machine-authentication.md)) |
+| Object storage | `OBJECT_STORAGE=s3` | An S3-compatible client locked to one configured endpoint ([guide](docs/s3-compatible-object-storage.md)) |
+| Worked example | `REFERENCE_EXAMPLE=keep` | A complete feature slice under `examples/reference-service` |
 
-`specs/` is not in that table because initialization deletes it. Those bundles
-record decisions about building this template, and a generated service that kept
-them would be handing its agents authoritative-looking records for a repository
-it does not have.
+Profiles add code and validation, not infrastructure. Deployment still owns
+databases, streams, buckets, endpoints, and credentials. The initializer
+rejects unsupported profile combinations before it changes the repository.
 
-This is a working service scaffold, not only a prompt collection. The code,
-generated sources, database lifecycle, CI, and agent instructions share one
-ownership model.
-
-## Why This Template
-
-Generic agent prompts often miss the constraints that make a Go service safe
-to change: package ownership, `context`, error identity, generated sources,
-migrations, partial failure, shutdown, and current proof.
-
-Traditional Go templates provide code and commands but rarely tell an agent
-how to make a non-trivial change without inventing architecture or declaring
-success from an unrelated test.
-
-This template connects both sides:
-
-- one repository contract instead of a heavyweight prompt in every request;
-- direct handling for small changes and durable artifacts only when decisions
-  must survive;
-- OpenAPI, PostgreSQL, telemetry, tests, security, and delivery already wired;
-- completion claims tied to fresh evidence of the same scope.
-
-Before adding the first production feature, use the maintained
-[first production feature guide](docs/first-production-feature.md).
-
-## How It Works
+## How it works
 
 ```mermaid
 flowchart LR
-    A["Codex / Claude Code / Qwen / Grok Build / Cursor / OpenCode"] --> B["Shared repository contract"]
-    B --> C{"Risk-proportional path"}
-    C -->|Direct| D["Small local change"]
-    C -->|Structured| E["Spec + design + tasks"]
-    C -->|Orchestrated| F["Multi-owner coordination"]
-    D --> G["Go service change"]
-    E --> G
-    F --> G
-    G --> H["Claim-scoped proof"]
+    A["Create from template"] --> B["Keep required profiles"]
+    B --> C["Define the OpenAPI contract"]
+    C --> D["Add domain behavior"]
+    D --> E["Run focused checks"]
+    E --> F["CI and release"]
 ```
 
-The workflow keeps three paths:
+1. `make template-init` turns the template into one service and removes unused
+   code.
+2. `api/openapi/service.yaml` owns the HTTP contract. Generated code carries
+   requests and responses into handwritten handlers.
+3. `internal/<feature>` owns business behavior. Transport, database, and
+   provider details stay under `internal/infra`.
+4. Package tests give fast feedback. `make unit-check` validates one
+   package-sized change; `make check` validates the whole repository before
+   delivery.
+5. CI selects its checks from the changed files. Image publication is opt-in
+   and happens only after the matching checks pass.
 
-- **Direct** — clear, local, reversible work with one owner and bounded proof.
-- **Structured** — non-trivial work whose decisions need a `spec.md`,
-  `tasks.md`, and only the design or test artifacts that add value.
-- **Orchestrated** — broad, multi-owner, hard-to-reverse, or multi-session work.
+Start the first real vertical slice with the
+[first production feature guide](docs/first-production-feature.md).
 
-Public contracts, persisted data, security, money, concurrency, deployment,
-and cross-service ownership receive explicit decisions and matching proof
-without forcing every task through the heaviest process.
+## Working with coding agents
 
-### Autonomous implementation tree
+`AGENTS.md` gives every supported agent the repository rules. `.agents/skills`
+contains focused instructions for API contracts, architecture, data, security,
+reliability, testing, delivery, and Go maintenance. Small local edits stay
+direct. Bigger changes can record decisions under `specs/` so another session
+can continue without guessing.
 
-Once Planning has produced a ready implementation ledger, a person launches
-orchestration once. The system then runs autonomously until the ledger is
-exhausted or it reaches an exact user-owned, external, or unrecoverable native
-boundary.
-
-```mermaid
-flowchart TD
-    user["User<br/>one orchestration launch"]
-    orchestrator["LEDGER_ORCHESTRATOR<br/>fills independent ready frontier"]
-    lead["ACCEPTANCE_UNIT_LEAD<br/>owns one unit end to end"]
-    strategy{"Lead chooses the fastest safe strategy"}
-    direct["Lead implements directly"]
-    delegated["worker-agent<br/>implement · investigate · verify"]
-    fanin["Lead fan-in<br/>integration · focused proof"]
-    review{"Independent review required?"}
-    reviewer["reviewer-agent<br/>independent falsification"]
-    receipt["Acceptance Result"]
-    done["Ledger exhausted"]
-
-    user --> orchestrator
-    orchestrator -->|"dispatches independent ready frontier"| lead
-    lead --> strategy
-    strategy -->|"handoff costs more"| direct
-    strategy -->|"bounded useful work"| delegated
-    direct --> fanin
-    delegated --> fanin
-    fanin --> review
-    review -->|"yes"| reviewer
-    review -->|"no"| receipt
-    reviewer --> receipt
-    receipt -->|"land candidate; record verdict; refill frontier"| orchestrator
-    orchestrator -->|"no ready unit or owner-held recovery"| done
-```
-
-The orchestrator does not implement or review units. It computes the ready
-frontier and dispatches every mutually independent unit before waiting, within
-capacity, then immediately refills as units complete. Each fresh Lead chooses
-the smallest reliable workflow, may write directly or fan out internal
-execution lanes, and owns integration, review, and the acceptance verdict of
-that unit. The orchestrator lands candidates serially and records that verdict
-without re-adjudicating it. Only units with disjoint mutable owners and
-exclusive locks run concurrently. Recoverable problems may change the route,
-reuse a useful agent context, start fresh, or repair the smallest invalid
-upstream decision without creating another semantic role.
-
-The detailed contracts live in [Implementation](docs/spec-first-workflow/phases/implementation.md),
-[Review](docs/spec-first-workflow/shared/review.md), and the selected [Agent
-Harness](docs/agent-harness.md) adapter.
-
-## Agent Support
-
-| Harness | Entry point | Project-native support |
-| --- | --- | --- |
-| Codex | `AGENTS.md`, `$orchestrator` | `.codex/agents`, `.agents/skills` |
-| Claude Code | `CLAUDE.md`, `/orchestrator` | `.claude/agents`, `.claude/skills` |
-| Qwen Code | `QWEN.md`, `/orchestrator` | `.qwen/agents`, `.qwen/skills` |
-| Grok Build | `Grok.md` | `.grok/agents`, `.grok/roles`, `.agents/skills` |
-| Cursor | `AGENTS.md`, Grok 4.6, `/orchestrator` | `.cursor/agents`, `.cursor/rules`, `.agents/skills` |
-| OpenCode | `AGENTS.md`, Grok 4.6, `/orchestrator` | `.opencode/agents`, `.opencode/commands`, `.opencode/rules`, `opencode.json`, `.agents/skills` |
-
-Five generic capability roles provide evidence, specialist judgment, mutable
-work, independent review, and adjudication. Domain skills cover API contracts,
-architecture, data, security, reliability, concurrency, testing, delivery, and
-Go maintainability only when the current pressure needs them.
-
-See [Agent Harness](docs/agent-harness.md) and
+`AGENT_HARNESS=core` keeps the shared contract without a generated adapter.
+Pass `codex`, `claude`, `cursor`, `qwen`, `grok`, `opencode`, or `all` to keep
+the matching adapter. See [Agent Harness](docs/agent-harness.md) and the
 [Spec-First Workflow](docs/spec-first-workflow.md) for the complete routing
-contract.
+rules.
 
-## Repository Layout
+## Repository map
 
 ```text
-cmd/service/                     service entrypoint and bootstrap lifecycle
-cmd/migrate/                     migration entrypoint (PostgreSQL profile)
-internal/<feature>/              feature-owned business behavior (when added)
-internal/config/                 runtime configuration
-internal/health/                 readiness and drain behavior
-internal/infra/http/             HTTP transport and middleware
-internal/infra/httpclient/       fixed-authority outbound HTTP transport
-internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
-api/openapi/service.yaml         API source of truth
-internal/openapi/                generated OpenAPI artifacts
-examples/reference-service/      worked feature-slice example (upstream only)
-migrations/                      SQL migrations (PostgreSQL profile)
-specs/                           durable task decisions (upstream only)
-.agents/skills/                  reusable domain methods
-.codex/agents/                   generated Codex capability roles
-.cursor/agents/                  generated Cursor capability roles
-.cursor/rules/                   Cursor harness bootstrap
-.grok/agents/                    Grok primary sessions and generated roles
-.opencode/agents/                OpenCode session agents and generated roles
-.opencode/commands/              OpenCode `/orchestrator` entry
-.opencode/plugins/               OpenCode Task subagent catalog
-.opencode/rules/                 OpenCode harness bootstrap
-.opencode/.gitignore             OpenCode plugin runtime ignore
-opencode.json                    OpenCode project model, depth, and skill denies
+api/openapi/service.yaml    HTTP API source of truth
+cmd/service/                service entrypoint and runtime assembly
+internal/<feature>/         business behavior
+internal/infra/             HTTP, database, messaging, and provider adapters
+internal/config/            runtime configuration
+migrations/                 PostgreSQL migrations when selected
+test/                       cross-package and process integration tests
+docs/                       architecture, operations, and development guides
+.agents/skills/             reusable methods for coding agents
+scripts/init-module.sh      profile selection and repository initialization
 ```
 
-<!-- profile:grpc:start -->
-With `GRPC=enabled`, `api/proto/` owns protobuf contracts,
-`internal/gen/proto/` is generated, `internal/infra/grpc/` owns server policy
-and lifecycle, and `internal/infra/grpcclient/` constructs shared bounded
-client connections.
-<!-- profile:grpc:end -->
-
 Use the [placement guide](docs/project-structure-and-module-organization.md)
-before choosing packages or tests.
+before adding a package. After initialization, `make integration-init`
+scaffolds one outbound HTTP or gRPC integration from a committed local
+contract; see the [integration initializer](docs/external-integration-initializer.md).
 
-## Quality Gates
+## Everyday commands
 
-| Command | Purpose |
+| Command | Use it for |
 | --- | --- |
-| `make fmt-check` | Go formatting drift |
-| `make lint` | Mandatory static analysis |
-| `make test` | Ordinary unit tests |
-| `make openapi-check` | OpenAPI generation, drift, runtime, lint, and schema checks |
-| `make sqlc-check` | SQL generation drift (PostgreSQL profile) |
-| `make migration-check` | Goose validation and append-only review history (PostgreSQL profile) |
-| `make migration-validate` | Migration rehearsal (PostgreSQL profile) |
-| `make test-integration` | Container-backed integration tests when present |
-| `make govulncheck` / `make gosec` | Go vulnerability and static security checks |
+| `make run` | Start the HTTP service locally |
+| `go test -vet=off ./internal/<package>` | Fast feedback for one changed package |
+| `make unit-check PKG=./pkg FILES='...'` | Format, test, and lint one package-sized change |
+| `make plan` / `make verify` | Explain and run the minimal integrated surface plan |
+| `make check` | Run the full-repository aggregate once before delivery |
+| `make test-integration` | Run the container-backed integration tests |
 
-<!-- profile:grpc:start -->
-`make proto-check` owns protobuf format, contract documentation, lint, and
-generated-code drift. Use `BASE_REF=origin/main make proto-breaking` for
-compatibility.
-<!-- profile:grpc:end -->
+Use the narrowest check that can catch a problem in the change. The full command
+catalog and routing rules live in
+[Build, test, and development commands](docs/build-test-and-development-commands.md)
+and [Validation routing](docs/validation-routing.md).
 
-Performance work uses the narrowest matching standard benchmark command. See
+Performance work uses `make benchmark-capture`, `benchmark-compare`, or
+`benchmark-http` with an accepted workload, budget, and response owner. See
 [Benchmarking](docs/benchmarking.md).
 
 ## Documentation
 
-- [Repository Architecture](docs/repo-architecture.md)
-- [Project Structure and Module Organization](docs/project-structure-and-module-organization.md)
-- [Build, Test, and Development Commands](docs/build-test-and-development-commands.md)
-- [Spec-First Workflow](docs/spec-first-workflow.md)
-- [Agent Harness](docs/agent-harness.md)
-- [Benchmarking](docs/benchmarking.md)
-- [Railway Deployment Profile](docs/railway-deployment-profile.md)
-
-<!-- profile:authn-oidc-jwt:start -->
-For trust configuration, token policy, rotation, local testing, and operational
-signals, see [OIDC/JWT Authentication](docs/authentication.md).
-<!-- profile:authn-oidc-jwt:end -->
-
-<!-- profile:grpc:start -->
-For schema, server, client, streaming, lifecycle, and deployment guidance, see
-[Native gRPC](docs/grpc.md).
-<!-- profile:grpc:end -->
+- Build the first feature: [First production feature](docs/first-production-feature.md)
+- Understand ownership: [Repository architecture](docs/repo-architecture.md)
+- Choose packages: [Project structure and module organization](docs/project-structure-and-module-organization.md)
+- Work with agents: [Agent harness](docs/agent-harness.md) and [Spec-first workflow](docs/spec-first-workflow.md)
+- Understand CI and releases: [CI/CD production readiness](docs/ci-cd-production-ready.md)
+- Measure performance: [Benchmarking](docs/benchmarking.md)
+- Deploy on Railway: [Railway deployment profile](docs/railway-deployment-profile.md)
 
 ## Community
 

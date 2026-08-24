@@ -23,13 +23,8 @@ const (
 	testPayloadFullMethod = "/grpcx.test.PayloadService/Call"
 )
 
-// testServerConfig is the bounded default every test starts from. Its liveness
-// bounds are far enough out that none of them fires during a test, and rotation
-// and both RPC timeouts are left off, so a test that cares about one sets it
-// rather than inheriting a cut it did not ask for.
-//
-// The liveness values are not decoration: config_parity_test.go runs this
-// fixture through validateConfig, which refuses a zero there.
+// testServerConfig starts from production bounds and lowers concurrency limits
+// so focused tests can saturate them cheaply.
 func testServerConfig() serverConfig {
 	cfg := defaultServerConfig()
 	cfg.maxConcurrentRPCs = 4

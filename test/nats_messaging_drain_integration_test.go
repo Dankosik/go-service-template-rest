@@ -35,7 +35,7 @@ func TestNATSForcedShutdownRedelivers(t *testing.T) {
 	}
 
 	redelivered := make(chan struct{}, 1)
-	secondClient := f.client(t, natsjs.RoleWorker)
+	secondClient := f.client(t)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "forced-worker"
 	cfg.FilterSubject = sourceSubject
@@ -56,7 +56,7 @@ func TestNATSForcedShutdownRedelivers(t *testing.T) {
 
 func TestNATSHandlerPanicIsSupervised(t *testing.T) {
 	f := newNATSFixture(t)
-	producer := f.client(t, natsjs.RoleProducer)
+	producer := f.client(t)
 	blockEntered := make(chan struct{})
 	panicEntered := make(chan struct{})
 	startedAfterFailure := make(chan string, 1)
@@ -97,23 +97,28 @@ func TestNATSHandlerPanicIsSupervised(t *testing.T) {
 		t.Fatalf("publish panic fixture: %v", err)
 	}
 	waittest.ReceiveSignal(t, panicEntered, 5*time.Second, "panicking handler")
-	waittest.Until(t, 5*time.Second, func() bool { return !client.Ready() }, "terminal fail-closed readiness")
+	waittest.Until(t, 5*time.Second, func(context.Context) bool { return !client.Ready() }, "terminal fail-closed readiness")
 	if err := client.Check(t.Context()); err == nil || client.Ready() {
 		t.Fatalf("client recovered after terminal handler failure: check error = %v, ready = %t", err, client.Ready())
 	}
 	if _, err := client.Producer().Publish(t.Context(), testEvent("worker publication")); !errors.Is(err, natsjs.ErrDraining) {
 		t.Fatalf("worker Publish(after terminal failure) error = %v, want ErrDraining", err)
 	}
+	consumer, err := f.js.Consumer(t.Context(), sourceStream, "panic-worker")
+	if err != nil {
+		t.Fatalf("lookup panic consumer: %v", err)
+	}
+	info, err := consumer.Info(t.Context())
+	if err != nil {
+		t.Fatalf("read panic consumer before external publication: %v", err)
+	}
+	ownedBefore := info.NumPending + uint64(info.NumAckPending)
 	if _, err := producer.Producer().Publish(t.Context(), testEvent("external publication")); err != nil {
 		t.Fatalf("publish external post-failure fixture: %v", err)
 	}
-	waittest.Until(t, 5*time.Second, func() bool {
-		consumer, lookupErr := f.js.Consumer(t.Context(), sourceStream, "panic-worker")
-		if lookupErr != nil {
-			return false
-		}
-		info, infoErr := consumer.Info(t.Context())
-		return infoErr == nil && (info.NumPending >= 1 || info.NumAckPending >= 1)
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		info, infoErr := consumer.Info(ctx)
+		return infoErr == nil && info.NumPending+uint64(info.NumAckPending) > ownedBefore
 	}, "post-failure message to remain broker-owned")
 	select {
 	case payload := <-startedAfterFailure:
@@ -126,23 +131,19 @@ func TestNATSHandlerPanicIsSupervised(t *testing.T) {
 	default:
 	}
 	close(release)
-	err := waittest.Receive(t, errCh, 5*time.Second, "handler panic reaching worker supervision")
+	err = waittest.Receive(t, errCh, 5*time.Second, "handler panic reaching worker supervision")
 	if !errors.Is(err, natsjs.ErrTerminal) || strings.Contains(err.Error(), "feature panic canary") {
 		t.Fatalf("worker panic supervision error = %v, want sanitized ErrTerminal", err)
 	}
 	if client.Ready() {
 		t.Fatal("client remained ready after handler panic")
 	}
-	consumer, err := f.js.Consumer(t.Context(), sourceStream, "panic-worker")
-	if err != nil {
-		t.Fatalf("lookup panic consumer: %v", err)
-	}
-	info, err := consumer.Info(t.Context())
+	info, err = consumer.Info(t.Context())
 	if err != nil {
 		t.Fatalf("read panic consumer: %v", err)
 	}
-	if info.NumAckPending != 1 {
-		t.Fatalf("panic consumer ack pending = %d, want source retained", info.NumAckPending)
+	if info.NumAckPending < 1 || info.NumPending+uint64(info.NumAckPending) < 2 {
+		t.Fatalf("panic consumer state = ack_pending:%d pending:%d, want panic source and external message retained", info.NumAckPending, info.NumPending)
 	}
 }
 
@@ -167,7 +168,7 @@ func TestNATSGracefulDrain(t *testing.T) {
 		t.Fatalf("publish in-flight message: %v", err)
 	}
 	waittest.ReceiveSignal(t, entered, 5*time.Second, "in-flight handler")
-	producer := f.client(t, natsjs.RoleProducer)
+	producer := f.client(t)
 	if _, err := producer.Producer().Publish(t.Context(), testEvent("pending")); err != nil {
 		t.Fatalf("publish pending message: %v", err)
 	}
@@ -195,7 +196,7 @@ func TestNATSGracefulDrain(t *testing.T) {
 	default:
 	}
 
-	recoveryClient := f.client(t, natsjs.RoleWorker)
+	recoveryClient := f.client(t)
 	recoveryCfg := testWorkerConfig()
 	recoveryCfg.Consumer = "graceful-worker"
 	recoveryCfg.FilterSubject = sourceSubject

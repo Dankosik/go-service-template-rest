@@ -63,6 +63,17 @@ func TestIdempotentOperationRejectsAnonymousSecurityAlternative(t *testing.T) {
 	}
 }
 
+func TestIdempotentOperationRejectsUnsafeSuccessHeader(t *testing.T) {
+	t.Parallel()
+
+	spec := idempotencySpec()
+	success := spec.Paths.Value("/widgets").Post.Responses.Value("201").Value
+	success.Headers["Set-Cookie"] = &openapi3.HeaderRef{Value: &openapi3.Header{}}
+	if _, err := validateIdempotentOperations(spec); err == nil || !strings.Contains(err.Error(), "not replayable") {
+		t.Fatalf("unsafe success header error = %v", err)
+	}
+}
+
 func TestCaptureIdempotencyKeyPreservesWireMultiplicity(t *testing.T) {
 	t.Parallel()
 
@@ -70,6 +81,7 @@ func TestCaptureIdempotencyKeyPreservesWireMultiplicity(t *testing.T) {
 		_, err := httpidempotency.NewRequestFromContext(
 			r.Context(),
 			httpidempotency.Scope{Caller: "caller", Operation: "create"},
+			1,
 			struct{}{},
 		)
 		if err != nil {
@@ -90,6 +102,9 @@ func TestCaptureIdempotencyKeyPreservesWireMultiplicity(t *testing.T) {
 
 func idempotencySpec() *openapi3.T {
 	decimalResponses := openapi3.NewResponses()
+	created := openapi3.NewResponse().WithDescription("created")
+	created.Headers = openapi3.Headers{"Location": &openapi3.HeaderRef{Value: &openapi3.Header{}}}
+	decimalResponses.Set("201", &openapi3.ResponseRef{Value: created})
 	for _, status := range []string{"400", "401", "403", "409", "422", "500", "503", "504"} {
 		decimalResponses.Set(status, &openapi3.ResponseRef{Value: openapi3.NewResponse().WithDescription("problem")})
 	}

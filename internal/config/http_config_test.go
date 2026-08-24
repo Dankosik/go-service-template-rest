@@ -64,7 +64,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 	t.Run("greater readiness timeout rejects", func(t *testing.T) {
 		resetConfigEnv(t)
 		t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
-		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "5s")
+		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "4s")
 		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
 
 		_, _, err := LoadDetailed(LoadOptions{})
@@ -90,7 +90,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv("APP__HTTP__READINESS_TIMEOUT", tc.readinessTimeout)
-			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.writeTimeout)
+			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "4s")
 			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
 
 			_, _, err := LoadDetailed(LoadOptions{})
@@ -104,35 +104,46 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 // The readiness/health-check relationship is owned by
 // bootstrap.validateStartupBudgetCompatibility, which enforces it with the
 // startup headroom this package cannot see. It is proved there.
-// The request budget must expire while the connection can still carry the 504
-// that reports it, so it may not outlast the response write deadline.
+// The request budget must expire while the connection still has enough write
+// budget to carry the 504 that reports it.
 //
 //nolint:paralleltest // This test mutates process-global environment or working directory.
-func TestRequestTimeoutMustNotExceedWriteTimeout(t *testing.T) {
-	t.Run("greater request timeout rejects", func(t *testing.T) {
-		resetConfigEnv(t)
-		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "6s")
-		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
+func TestRequestTimeoutLeavesTerminalResponseReserve(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		requestTimeout string
+		writeTimeout   string
+	}{
+		{name: "request outlasts writer", requestTimeout: "6s", writeTimeout: "5s"},
+		{name: "equal deadlines", requestTimeout: "5s", writeTimeout: "5s"},
+		{name: "subsecond reserve", requestTimeout: "4500ms", writeTimeout: "5s"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__HTTP__READINESS_TIMEOUT", "1s")
+			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.requestTimeout)
+			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
 
-		_, _, err := LoadDetailed(LoadOptions{})
-		if err == nil {
-			t.Fatal("LoadDetailed() expected validation error for request timeout beyond write timeout")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-		if !strings.Contains(err.Error(), "http.request_timeout must be <= http.write_timeout") {
-			t.Fatalf("error = %v, want request/write timeout compatibility policy", err)
-		}
-	})
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err == nil {
+				t.Fatal("LoadDetailed() expected terminal response reserve validation error")
+			}
+			if !errors.Is(err, ErrValidate) {
+				t.Fatalf("error = %v, want ErrValidate", err)
+			}
+			if !strings.Contains(err.Error(), "must leave at least 1s") {
+				t.Fatalf("error = %v, want terminal response reserve policy", err)
+			}
+		})
+	}
 
 	for _, tc := range []struct {
 		name           string
 		requestTimeout string
 		writeTimeout   string
 	}{
-		{name: "equal timeout allows", requestTimeout: "5s", writeTimeout: "5s"},
-		{name: "lower request timeout allows", requestTimeout: "4s", writeTimeout: "5s"},
+		{name: "exact reserve", requestTimeout: "4s", writeTimeout: "5s"},
+		{name: "default headroom", requestTimeout: "8s", writeTimeout: "10s"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resetConfigEnv(t)
@@ -184,9 +195,9 @@ func TestMaxInFlightBounds(t *testing.T) {
 		{
 			name:  "zero disables shedding",
 			value: "0",
-			// profile:authn-oidc-jwt:start
+			// profile:authn-bearer:start
 			wantErr: true,
-			// profile:authn-oidc-jwt:end
+			// profile:authn-bearer:end
 			//nolint:paralleltest // This test mutates process-global environment or working directory.
 
 			// TestMaxConnectionsBounds covers the accept ceiling, which bounds what

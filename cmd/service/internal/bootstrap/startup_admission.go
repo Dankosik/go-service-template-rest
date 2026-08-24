@@ -112,6 +112,9 @@ func waitForStartupAdmission(
 			}
 			// profile:grpc:end
 			args.admission.MarkReady()
+			if args.onReady != nil {
+				args.onReady()
+			}
 			return true, false, nil
 		}
 	case <-signalCtx.Done():

@@ -1,8 +1,10 @@
 bin/
+/jobs-worker
+*.test
 .artifacts/test/
 .artifacts/bench/
-.artifacts/skill-evals/
-.artifacts/instruction-evals/
+*.pprof
+*.pprof.meta
 .env
 .env.bench
 .cache/

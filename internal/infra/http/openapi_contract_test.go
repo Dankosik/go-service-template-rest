@@ -174,11 +174,8 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
 			},
-			handlers: Handlers{
-				API:           unimplementedAPI{},
-				ReadinessGate: func(context.Context) error { return nil },
-			},
-			wantErr: "health service is required",
+			handlers: Handlers{ReadinessGate: func(context.Context) error { return nil }},
+			wantErr:  "health service is required",
 		},
 		{
 			name:    "missing readiness gate",
@@ -188,18 +185,14 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
 			},
-			handlers: Handlers{
-				API:    unimplementedAPI{},
-				Health: health.New(),
-			},
-			wantErr: "readiness gate is required",
+			handlers: Handlers{Health: health.New()},
+			wantErr:  "readiness gate is required",
 		},
 		{
 			name: "missing metrics",
 			log:  log,
 			cfg:  RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			handlers: Handlers{
-				API:           unimplementedAPI{},
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
@@ -215,7 +208,6 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 				MaxInFlight:    -1,
 			},
 			handlers: Handlers{
-				API:           unimplementedAPI{},
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
@@ -227,7 +219,6 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			metrics: telemetry.New(),
 			cfg:     RouterConfig{RequestTimeout: time.Second},
 			handlers: Handlers{
-				API:           unimplementedAPI{},
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
@@ -239,7 +230,6 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			metrics: telemetry.New(),
 			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			handlers: Handlers{
-				API:           unimplementedAPI{},
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
@@ -302,6 +292,22 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 					t.Fatalf("exposure = %q, want one of %q, %q, %q", decision.exposure, securityExposurePublic, securityExposureProtected, securityExposureBlocked)
 				}
 			})
+		}
+	}
+}
+
+func TestOpenAPIProblemSchemasAreClosed(t *testing.T) {
+	t.Parallel()
+
+	swagger := mustOpenAPISwagger(t)
+	for _, name := range []string{"Problem", "InvalidParam"} {
+		schema, ok := swagger.Components.Schemas[name]
+		if !ok || schema == nil || schema.Value == nil {
+			t.Fatalf("components.schemas.%s is missing", name)
+		}
+		closed := schema.Value.AdditionalProperties.Has
+		if closed == nil || *closed {
+			t.Fatalf("components.schemas.%s additionalProperties = %v, want false", name, closed)
 		}
 	}
 }
@@ -444,6 +450,16 @@ func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
 			body:       "ab",
 			wantStatus: http.StatusRequestEntityTooLarge,
 		},
+		// profile:inbound-webhooks-standard:start
+		{
+			name:       "inbound webhook 400 missing headers",
+			handler:    ready,
+			method:     http.MethodPost,
+			target:     "/webhooks/orders",
+			body:       "{}",
+			wantStatus: http.StatusBadRequest,
+		},
+		// profile:inbound-webhooks-standard:end
 	}
 
 	for _, tc := range testCases {

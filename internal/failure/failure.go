@@ -21,9 +21,9 @@ const (
 	CodeMethodNotAllowed      Code = "method_not_allowed"
 	CodeAlreadyExists         Code = "already_exists"
 	CodeRequestEntityTooLarge Code = "request_entity_too_large"
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	CodeRequestHeaderFieldsTooLarge Code = "request_header_fields_too_large"
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	CodeUnprocessableContent Code = "unprocessable_content"
 	CodeTooManyRequests      Code = "too_many_requests"
 	// profile:http-idempotency-postgres:start
@@ -42,10 +42,8 @@ const (
 // internal/infra/http, which turns a classified 429 into a server fault.
 //
 // The list is maintained beside the constants above because Go cannot enumerate
-// a named string type. That leaves one seam this list cannot close on its own — a
-// constant added above and not added here — and internal/infra/grpc's
-// TestEveryFailureCodeRendersAConformingReason is what covers it, by walking the
-// constant block itself rather than any list.
+// a named string type. TestAllCodesEnumeratesEveryDeclaredConstant walks the
+// constant block and closes the one seam this list cannot close on its own.
 func AllCodes() []Code {
 	return []Code{
 		CodeBadRequest,
@@ -55,9 +53,9 @@ func AllCodes() []Code {
 		CodeMethodNotAllowed,
 		CodeAlreadyExists,
 		CodeRequestEntityTooLarge,
-		// profile:authn-oidc-jwt:start
+		// profile:authn-bearer:start
 		CodeRequestHeaderFieldsTooLarge,
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 		CodeUnprocessableContent,
 		CodeTooManyRequests,
 		// profile:http-idempotency-postgres:start

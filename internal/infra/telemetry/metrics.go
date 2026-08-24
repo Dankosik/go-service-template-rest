@@ -18,136 +18,17 @@ type Metrics struct {
 }
 
 const (
-	// serverMeterName owns the instruments the HTTP chain records itself, as
-	// opposed to the ones otelhttp derives from the request.
-	serverMeterName = "service.http.server"
-
-	activeRequestsInstrument = "http.server.active_requests"
-	shedRequestsInstrument   = "http.server.shed_requests"
-
 	startupMeterName = "service.startup"
 
+	// Kept for dashboard compatibility: within the service.startup scope,
+	// active means initialized at startup, not continuous collector delivery.
 	traceExporterStateInstrument = "service.startup.trace_exporter.active"
 )
 
-// The gRPC admission signals are exported because two other builds emit or
-// assert on the same series and must not spell them again: the local benchmark
-// server in examples/grpc-reference-service, which stands in for this package,
-// and internal/infra/grpc's benchmark composition proof. A renamed series is a
-// broken dashboard, and a copy renamed on one side alone is one nobody notices.
-const (
-	GRPCServerMeterName = "service.grpc.server"
-
-	ActiveRPCsInstrument     = "rpc.server.active_requests"
-	ShedRPCsInstrument       = "rpc.server.shed_requests"
-	HealthShedRPCsInstrument = "rpc.server.health.shed_requests"
-
-	ActiveRPCsDescription     = "RPCs currently executing a handler, against the grpc.server.max_concurrent_rpcs limit."
-	ShedRPCsDescription       = "RPCs rejected before running a handler because the process RPC limit was reached."
-	HealthShedRPCsDescription = "Standard health RPCs rejected before running a handler because the health admission limit was reached."
-	RPCsUnit                  = "{rpc}"
-)
-
-// ServerLoad is what the request path records about its own admission control.
-//
-// otelhttp supplies none of this: its instruments are all keyed on the request,
-// so a shed request appears only as one more 503, indistinguishable from a
-// saturated connection pool answering 503 on the same route — and none of them
-// report how close the service runs to the limit http.max_in_flight sets.
-type ServerLoad struct {
-	active     metric.Int64UpDownCounter
-	shed       metric.Int64Counter
-	healthShed metric.Int64Counter
-}
-
-// ServerLoad builds the admission-control instruments. Errors are folded into
-// no-op instruments rather than returned: a metric that cannot be created must
-// not stop the service from serving, and the OpenTelemetry API guarantees a
-// usable instrument alongside the error.
-func (m *Metrics) ServerLoad() ServerLoad {
-	return m.serverLoad(
-		serverMeterName,
-		activeRequestsInstrument,
-		shedRequestsInstrument,
-		"Requests currently executing a handler, against the http.max_in_flight limit.",
-		"Requests rejected without running a handler because the in-flight limit was reached.",
-		"{request}",
-	)
-}
-
-// GRPCServerLoad builds the admission-control instruments for business RPCs.
-func (m *Metrics) GRPCServerLoad() ServerLoad {
-	load := m.serverLoad(
-		GRPCServerMeterName,
-		ActiveRPCsInstrument,
-		ShedRPCsInstrument,
-		ActiveRPCsDescription,
-		ShedRPCsDescription,
-		RPCsUnit,
-	)
-	load.healthShed, _ = m.MeterProvider().Meter(GRPCServerMeterName).Int64Counter(
-		HealthShedRPCsInstrument,
-		metric.WithDescription(HealthShedRPCsDescription),
-		metric.WithUnit(RPCsUnit),
-	)
-	return load
-}
-
-func (m *Metrics) serverLoad(
-	meterName string,
-	activeName string,
-	shedName string,
-	activeDescription string,
-	shedDescription string,
-	unit string,
-) ServerLoad {
-	meter := m.MeterProvider().Meter(meterName)
-	active, _ := meter.Int64UpDownCounter(
-		activeName,
-		metric.WithDescription(activeDescription),
-		metric.WithUnit(unit),
-	)
-	shed, _ := meter.Int64Counter(
-		shedName,
-		metric.WithDescription(shedDescription),
-		metric.WithUnit(unit),
-	)
-	return ServerLoad{active: active, shed: shed}
-}
-
-// Admitted reports a request entering a handler, and returns the release that
-// reports it leaving. A nil-safe zero value keeps callers that were built without
-// a registry working.
-func (l ServerLoad) Admitted(ctx context.Context) func() {
-	if l.active == nil {
-		return func() {}
-	}
-	l.active.Add(ctx, 1)
-	return func() { l.active.Add(ctx, -1) }
-}
-
-// Shed reports a request rejected at the door.
-func (l ServerLoad) Shed(ctx context.Context) {
-	if l.shed == nil {
-		return
-	}
-	l.shed.Add(ctx, 1)
-}
-
-// HealthShed reports a standard health RPC rejected by its own admission limit.
-func (l ServerLoad) HealthShed(ctx context.Context) {
-	if l.healthShed == nil {
-		return
-	}
-	l.healthShed.Add(ctx, 1)
-}
-
-// RecordTraceExporterState publishes whether the trace exporter is exporting.
-// Metrics setup succeeds independently of tracing setup, so this value stays
-// observable when tracing is degraded — which is the case an operator must be
-// able to alert on, because a service with no trace export still reports
-// healthy and answers every request.
-func (m *Metrics) RecordTraceExporterState(ctx context.Context, active bool) error {
+// RecordTraceExporterInitialization publishes whether the trace exporter was
+// configured and initialized during startup. Runtime export failures are
+// reported by the OpenTelemetry SDK error handler.
+func (m *Metrics) RecordTraceExporterInitialization(ctx context.Context, initialized bool) error {
 	// No unit: the Prometheus translation turns unit "1" into a `_ratio` suffix,
 	// which would misname a boolean state.
 	gauge, err := m.MeterProvider().Meter(startupMeterName).Int64Gauge(
@@ -159,7 +40,7 @@ func (m *Metrics) RecordTraceExporterState(ctx context.Context, active bool) err
 	}
 
 	state := int64(0)
-	if active {
+	if initialized {
 		state = 1
 	}
 	gauge.Record(ctx, state)

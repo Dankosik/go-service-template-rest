@@ -3,7 +3,12 @@ package failure_test
 import (
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -23,9 +28,9 @@ func TestCodesAreStableAndTransportNeutral(t *testing.T) {
 		"method_not_allowed",
 		"already_exists",
 		"request_entity_too_large",
-		// profile:authn-oidc-jwt:start
+		// profile:authn-bearer:start
 		"request_header_fields_too_large",
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 		"unprocessable_content",
 		"too_many_requests",
 		// profile:http-idempotency-postgres:start
@@ -46,6 +51,42 @@ func TestCodesAreStableAndTransportNeutral(t *testing.T) {
 	}
 	if slices.Contains(got, "conflict") {
 		t.Fatal("generic conflict became a transport-neutral domain identity")
+	}
+}
+
+func TestAllCodesEnumeratesEveryDeclaredConstant(t *testing.T) {
+	t.Parallel()
+
+	_, testFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test source location")
+	}
+	syntax, err := parser.ParseFile(token.NewFileSet(), filepath.Join(filepath.Dir(testFile), "failure.go"), nil, 0)
+	if err != nil {
+		t.Fatalf("parse failure.go: %v", err)
+	}
+
+	declared := 0
+	for _, declaration := range syntax.Decls {
+		constants, ok := declaration.(*ast.GenDecl)
+		if !ok || constants.Tok != token.CONST {
+			continue
+		}
+		for _, specification := range constants.Specs {
+			values, ok := specification.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for _, name := range values.Names {
+				if strings.HasPrefix(name.Name, "Code") {
+					declared++
+				}
+			}
+		}
+	}
+
+	if enumerated := len(failure.AllCodes()); enumerated != declared {
+		t.Fatalf("AllCodes() enumerates %d codes, failure.go declares %d", enumerated, declared)
 	}
 }
 
@@ -166,6 +207,16 @@ func TestOpNamesTheStepWithoutPublishingText(t *testing.T) {
 		}
 		if !utf8.ValidString(name) {
 			t.Fatalf("rendered name = %q, want valid UTF-8", name)
+		}
+	})
+
+	t.Run("keeps a multibyte name shorter than the rune limit", func(t *testing.T) {
+		t.Parallel()
+
+		name := strings.Repeat("界", 22) // 66 bytes, 22 runes.
+		got := failure.ClassChain(failure.Op(name, errors.New("root")))
+		if want := name + " -> *errors.errorString"; got != want {
+			t.Fatalf("ClassChain() = %q, want %q", got, want)
 		}
 	})
 }

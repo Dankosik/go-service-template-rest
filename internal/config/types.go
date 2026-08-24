@@ -17,12 +17,9 @@ import (
 type Config struct {
 	App  AppConfig  `koanf:"app"`
 	HTTP HTTPConfig `koanf:"http"`
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	Authn AuthnConfig `koanf:"authn"`
-	// profile:authn-oidc-jwt:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	OutboundAuth OutboundAuthConfig `koanf:"outbound_auth"`
-	// profile:outbound-auth-oauth2-client-credentials:end
+	// profile:authn-bearer:end
 	// profile:grpc:start
 	GRPC GRPCConfig `koanf:"grpc"`
 	// profile:grpc:end
@@ -45,6 +42,9 @@ type Config struct {
 	// profile:webhooks-durable:start
 	Webhooks WebhooksConfig `koanf:"webhooks"`
 	// profile:webhooks-durable:end
+	// profile:inbound-webhooks-standard:start
+	InboundWebhooks InboundWebhooksConfig `koanf:"inbound_webhooks"`
+	// profile:inbound-webhooks-standard:end
 	// profile:object-storage:start
 	ObjectStorage ObjectStorageConfig `koanf:"object_storage"`
 	// profile:object-storage:end

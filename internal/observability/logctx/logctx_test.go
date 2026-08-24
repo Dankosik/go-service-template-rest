@@ -29,11 +29,16 @@ func decodeRecord(t *testing.T, out *bytes.Buffer) map[string]any {
 	return record
 }
 
+func acceptedRequestIDContext(requestID string) context.Context {
+	ctx, _ := reqctx.ContextWithAcceptedRequestID(context.Background(), requestID)
+	return ctx
+}
+
 func TestHandlerAddsRequestID(t *testing.T) {
 	t.Parallel()
 
 	log, out := newTestLogger(t)
-	ctx := reqctx.ContextWithRequestID(context.Background(), "req-1")
+	ctx := acceptedRequestIDContext("req-1")
 
 	log.InfoContext(ctx, "handled")
 
@@ -77,7 +82,7 @@ func TestHandlerSurvivesWith(t *testing.T) {
 	t.Parallel()
 
 	log, out := newTestLogger(t)
-	ctx := reqctx.ContextWithRequestID(context.Background(), "req-2")
+	ctx := acceptedRequestIDContext("req-2")
 
 	log.With("component", "orders").InfoContext(ctx, "queried")
 
@@ -99,7 +104,7 @@ func TestHandlerKeepsCorrelationOutsideGroups(t *testing.T) {
 	t.Parallel()
 
 	log, out := newTestLogger(t)
-	ctx := reqctx.ContextWithRequestID(context.Background(), "req-3")
+	ctx := acceptedRequestIDContext("req-3")
 
 	log.With("component", "orders").WithGroup("db").InfoContext(ctx, "queried", "table", "orders")
 
@@ -129,7 +134,7 @@ func TestHandlerNestsGroupsInOrder(t *testing.T) {
 	t.Parallel()
 
 	log, out := newTestLogger(t)
-	ctx := reqctx.ContextWithRequestID(context.Background(), "req-4")
+	ctx := acceptedRequestIDContext("req-4")
 
 	log.WithGroup("outer").With("a", 1).WithGroup("inner").InfoContext(ctx, "nested", "b", 2)
 
@@ -162,7 +167,7 @@ func TestHandlerRespectsLevel(t *testing.T) {
 	var out bytes.Buffer
 	log := slog.New(logctx.New(slog.NewJSONHandler(&out, &slog.HandlerOptions{Level: slog.LevelWarn})))
 
-	log.InfoContext(reqctx.ContextWithRequestID(context.Background(), "req-5"), "below level")
+	log.InfoContext(acceptedRequestIDContext("req-5"), "below level")
 
 	if out.Len() != 0 {
 		t.Fatalf("record below the configured level was written: %q", out.String())

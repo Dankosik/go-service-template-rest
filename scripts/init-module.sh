@@ -6,8 +6,13 @@ TEMPLATE_SOURCE="github.com/Dankosik/go-service-template-rest"
 TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
+PROFILE_ROOTS=(
+	README.md Makefile railway.toml .gitleaks.toml .golangci.yml
+	api build cmd docs env internal migrations test .github scripts/dev scripts/ci
+)
+
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable INBOUND_WEBHOOKS=none|standard-webhooks OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt|oidc-introspection OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep AGENT_HARNESS=core|cursor|claude|qwen|grok|opencode|codex|all $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -46,6 +51,27 @@ detect_module_from_origin() {
 	printf '%s/%s\n' "${host}" "${path}"
 }
 
+rewrite_temp_for() {
+	local file="$1"
+	local temporary
+
+	temporary="$(mktemp "${file}.init-module.XXXXXX")"
+	cp -p "${file}" "${temporary}"
+	printf '%s\n' "${temporary}"
+}
+
+service_name_from_module() {
+	local module="$1"
+	local service_name="${module##*/}"
+
+	if [[ "${service_name}" =~ ^v([2-9]|[1-9][0-9]+)$ ]]; then
+		module="${module%/*}"
+		service_name="${module##*/}"
+	fi
+	[[ -n "${service_name}" ]] || return 1
+	printf '%s\n' "${service_name}"
+}
+
 replace_literal() {
 	local file="$1"
 	local old="$2"
@@ -54,7 +80,7 @@ replace_literal() {
 
 	[[ "${old}" != "${new}" ]] || return 0
 
-	temporary="$(mktemp)"
+	temporary="$(rewrite_temp_for "${file}")"
 	awk -v old="${old}" -v new="${new}" '{
 		line = $0
 		while ((index_at = index(line, old)) != 0) {
@@ -62,8 +88,7 @@ replace_literal() {
 		}
 		print line
 	}' "${file}" >"${temporary}"
-	cat "${temporary}" >"${file}"
-	rm -f "${temporary}"
+	mv "${temporary}" "${file}"
 }
 
 # replace_required_literal is replace_literal for a rewrite whose absence is a
@@ -77,12 +102,15 @@ replace_required_literal() {
 	local old="$2"
 	local new="$3"
 
-	if ! grep -qF -- "${old}" "${file}"; then
+	if grep -qF -- "${old}" "${file}"; then
+		replace_literal "${file}" "${old}" "${new}"
+		return
+	fi
+	if ! grep -qF -- "${new}" "${file}"; then
 		printf 'init-module: %s no longer contains "%s"; that rewrite would be a silent no-op\n' \
 			"${file}" "${old}" >&2
 		return 1
 	fi
-	replace_literal "${file}" "${old}" "${new}"
 }
 
 # replace_go_map_value rewrites one key's value in a Go map literal without
@@ -102,20 +130,42 @@ replace_go_map_value() {
 		return 1
 	fi
 
-	temporary="$(mktemp)"
+	temporary="$(rewrite_temp_for "${file}")"
 	awk -v key="\"${key}\":" -v new="\"${new}\"" '
 		!replaced && index($0, key) {
 			cut = index($0, key) + length(key)
 			head = substr($0, 1, cut - 1)
 			tail = substr($0, cut)
-			sub(/"[^"]*"/, new, tail)
+			if (!sub(/"[^"]*"/, new, tail)) exit 2
 			$0 = head tail
 			replaced = 1
 		}
 		{ print }
-	' "${file}" >"${temporary}"
-	cat "${temporary}" >"${file}"
-	rm -f "${temporary}"
+		END { if (!replaced) exit 2 }
+	' "${file}" >"${temporary}" || {
+		rm -f "${temporary}"
+		printf 'init-module: %s no longer has a quoted value for "%s"\n' "${file}" "${key}" >&2
+		return 1
+	}
+	mv "${temporary}" "${file}"
+}
+
+validate_profile_markers() {
+	local file="$1"
+	local profile="$2"
+
+	awk -v start="profile:${profile}:start" -v finish="profile:${profile}:end" '
+		index($0, start) {
+			if (skip) exit 2
+			skip = 1
+			next
+		}
+		index($0, finish) {
+			if (!skip) exit 2
+			skip = 0
+		}
+		END { if (skip) exit 2 }
+	' "${file}"
 }
 
 remove_profile_blocks() {
@@ -124,7 +174,7 @@ remove_profile_blocks() {
 	local temporary
 
 	[[ -f "${file}" ]] || return 0
-	temporary="$(mktemp)"
+	temporary="$(rewrite_temp_for "${file}")"
 	# The sentinel carries no comment prefix so the same markers work in shell,
 	# YAML, Make, Dockerfile, and Go sources.
 	if ! awk -v start="profile:${profile}:start" -v finish="profile:${profile}:end" '
@@ -160,7 +210,7 @@ remove_profile_markers() {
 	local temporary
 
 	[[ -f "${file}" ]] || return 0
-	temporary="$(mktemp)"
+	temporary="$(rewrite_temp_for "${file}")"
 	awk -v start="profile:${profile}:start" -v finish="profile:${profile}:end" '
 		index($0, start) { next }
 		index($0, finish) { next }
@@ -209,9 +259,26 @@ strip_profile() {
 	local profile="$1"
 	local mode="$2"
 	local profile_file
-	local stripped_go_files=()
+	local stripped_go_files=("")
+	local profile_files=("")
 
 	while IFS= read -r profile_file; do
+		[[ -n "${profile_file}" ]] || continue
+		profile_files+=("${profile_file}")
+	done < <(grep -rl \
+		-e "profile:${profile}:start" \
+		-e "profile:${profile}:end" \
+		"${PROFILE_ROOTS[@]}" 2>/dev/null || true)
+
+	for profile_file in "${profile_files[@]}"; do
+		[[ -n "${profile_file}" ]] || continue
+		if ! validate_profile_markers "${profile_file}" "${profile}"; then
+			echo "invalid ${profile} profile markers in ${profile_file}"
+			exit 1
+		fi
+	done
+
+	for profile_file in "${profile_files[@]}"; do
 		[[ -n "${profile_file}" ]] || continue
 		if [[ "${mode}" == "remove" ]]; then
 			remove_profile_blocks "${profile_file}" "${profile}"
@@ -221,11 +288,10 @@ strip_profile() {
 		if [[ "${profile_file}" == *.go ]]; then
 			stripped_go_files+=("${profile_file}")
 		fi
-	done < <(grep -rl "profile:${profile}:start" \
-		README.md Makefile railway.toml .gitleaks.toml .golangci.yml api build cmd docs env internal test .github scripts/dev scripts/ci 2>/dev/null || true)
+	done
 
-	if ((${#stripped_go_files[@]} > 0)); then
-		gofmt -w "${stripped_go_files[@]}"
+	if ((${#stripped_go_files[@]} > 1)); then
+		gofmt -w "${stripped_go_files[@]:1}"
 	fi
 }
 
@@ -233,73 +299,208 @@ strip_profile() {
 # directive; the profile-off output is below the cyclomatic ceiling.
 remove_http_idempotency_profile_lint() {
 	local temporary
-	temporary="$(mktemp)"
+	temporary="$(rewrite_temp_for cmd/service/internal/bootstrap/run.go)"
 	awk '/nolint:cyclop/ { next } { print }' cmd/service/internal/bootstrap/run.go >"${temporary}"
 	mv "${temporary}" cmd/service/internal/bootstrap/run.go
 }
 
-# write_template_lock records where this service came from. Initialization
-# rewrites the module path, deletes packages, and resolves profiles in place, so
-# without this there is no way to tell which upstream commit a service forked
-# from — and therefore no way to review or pull a later upstream fix.
+lock_value() {
+	local key="$1"
+	local line
+
+	line="$(grep -E "^${key} = \"" template.lock | head -n1 || true)"
+	[[ -n "${line}" ]] || return 1
+	line="${line#*\"}"
+	printf '%s\n' "${line%%\"*}"
+}
+
+# template.lock is a resumable state journal. checkout_revision is deliberately
+# the derived checkout's revision, not an unverified upstream template commit.
 write_template_lock() {
-	local database="$1"
-	local http_idempotency="$2"
-	local outbox="$3"
-	local grpc="$4"
-	local authn="$5"
-	local outbound_auth="$6"
-	local messaging="$7"
-	local reference_example="$8"
-	local object_storage="$9"
-	local jobs="${10}"
-	local webhooks="${11}"
-	local source_revision
+	local state="$1"
+	local checkout_revision temporary
 
-	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
-	[[ -n "${source_revision}" ]] || source_revision="unknown"
+	checkout_revision="$(git rev-parse HEAD 2>/dev/null || true)"
+	[[ -n "${checkout_revision}" ]] || checkout_revision="unknown"
+	if [[ -f template.lock ]]; then
+		temporary="$(rewrite_temp_for template.lock)"
+	else
+		temporary="$(mktemp template.lock.init-module.XXXXXX)"
+	fi
 
-	cat >template.lock <<EOF
-# Generated by scripts/init-module.sh. Records the template revision this
-# service was derived from, so upstream fixes can be reviewed against it:
-#
-#   git remote add template https://github.com/Dankosik/go-service-template-rest.git
-#   git fetch template
-#   git log ${source_revision}..template/main -- cmd internal build Makefile
+	cat >"${temporary}" <<EOF
+# Generated by scripts/init-module.sh. checkout_revision identifies the local
+# repository state that was initialized; template sync verifies its upstream
+# revision independently.
+state = "${state}"
 source = "${TEMPLATE_SOURCE}"
-source_revision = "${source_revision}"
+checkout_revision = "${checkout_revision}"
+module = "${new_module}"
+original_module = "${initial_module}"
+service_name = "${service_name}"
+codeowner = "${codeowner}"
 database = "${database}"
 http_idempotency = "${http_idempotency}"
 outbox = "${outbox}"
 grpc = "${grpc}"
 authn = "${authn}"
+outbound_http = "${outbound_http}"
 outbound_auth = "${outbound_auth}"
 messaging = "${messaging}"
 reference_example = "${reference_example}"
 object_storage = "${object_storage}"
 jobs = "${jobs}"
 webhooks = "${webhooks}"
+inbound_webhooks = "${inbound_webhooks}"
+agent_harness = "${agent_harness}"
 EOF
+	mv "${temporary}" template.lock
+}
+
+validate_lock_selection() {
+	local expected
+
+	for expected in \
+		"module = \"${new_module}\"" \
+		"service_name = \"${service_name}\"" \
+		"codeowner = \"${codeowner}\"" \
+		"database = \"${database}\"" \
+		"http_idempotency = \"${http_idempotency}\"" \
+		"jobs = \"${jobs}\"" \
+		"webhooks = \"${webhooks}\"" \
+		"inbound_webhooks = \"${inbound_webhooks}\"" \
+		"outbox = \"${outbox}\"" \
+		"grpc = \"${grpc}\"" \
+		"authn = \"${authn}\"" \
+		"outbound_http = \"${outbound_http}\"" \
+		"outbound_auth = \"${outbound_auth}\"" \
+		"messaging = \"${messaging}\"" \
+		"reference_example = \"${reference_example}\"" \
+		"object_storage = \"${object_storage}\"" \
+		"agent_harness = \"${agent_harness}\""; do
+		grep -Fqx "${expected}" template.lock || {
+			echo "repository is already initialized with different identity or profile choices"
+			return 1
+		}
+	done
+}
+
+assert_no_profile_markers() {
+	if grep -R -E 'profile:[a-z0-9-]+:(start|end)' "${PROFILE_ROOTS[@]}" 2>/dev/null; then
+		echo "init-module: unresolved profile marker"
+		return 1
+	fi
+}
+
+verify_identity_postconditions() {
+	grep -Fxq "module ${new_module}" go.mod
+	grep -Fxq "module ${new_module}/tools" tools/go.mod
+	awk -v owner="${codeowner}" -v old="${TEMPLATE_OWNER}" '
+		/^[[:space:]]*#/ { next }
+		index($0, owner) { found = 1 }
+		old != owner && index($0, old) { stale = 1 }
+		END { exit !(found && !stale) }
+	' .github/CODEOWNERS
+	grep -Fxq "SERVICE_NAME := ${service_name}" Makefile
+	awk -v key='"observability.otel.service_name":' -v value="\"${service_name}\"" '
+		index($0, key) && index($0, value) { found = 1 }
+		END { exit !found }
+	' internal/config/observability_config.go
+	grep -Fq "\"service.name\", \"${service_name}\"" cmd/service/internal/bootstrap/run.go
+	grep -Fxq "APP__OBSERVABILITY__OTEL__SERVICE_NAME=${service_name}" env/.env.example
+	grep -Fq "title: \"${service_name}\"" api/openapi/service.yaml
+	grep -Fxq "# ${service_name}" README.md
+	grep -Fxq "Module: \`${new_module}\`" README.md
+	assert_no_profile_markers
+}
+
+print_summary() {
+	local message="$1"
+
+	echo "${message}"
+	echo "  module: ${new_module}"
+	echo "  database: ${database}"
+	echo "  HTTP idempotency: ${http_idempotency}"
+	echo "  jobs: ${jobs}"
+	echo "  webhooks: ${webhooks}"
+	echo "  inbound webhooks: ${inbound_webhooks}"
+	echo "  outbox: ${outbox}"
+	echo "  gRPC: ${grpc}"
+	echo "  authentication: ${authn}"
+	echo "  outbound HTTP: ${outbound_http}"
+	echo "  object storage: ${object_storage}"
+	echo "  outbound authentication: ${outbound_auth}"
+	echo "  messaging: ${messaging}"
+	echo "  reference example: ${reference_example}"
+	echo "  agent harness: ${agent_harness}"
+	echo "  codeowner: ${codeowner}"
+}
+
+# strip_unselected_harness removes unused harness adapters from a derived service.
+strip_unselected_harness() {
+	local harness="$1"
+
+	rm -f -- \
+		scripts/ci/template-owned-purity-check.sh \
+		scripts/ci/template-sync-behavior-check.sh
+
+	if [[ "${harness}" == "all" ]]; then
+		return 0
+	fi
+
+	if [[ "${harness}" != "claude" ]]; then
+		rm -rf -- .claude
+	fi
+	if [[ "${harness}" != "qwen" ]]; then
+		rm -rf -- .qwen
+	fi
+	if [[ "${harness}" != "codex" ]]; then
+		rm -rf -- .codex
+	fi
+	if [[ "${harness}" != "cursor" ]]; then
+		rm -rf -- .cursor/agents
+		if [[ "${harness}" != "core" ]]; then
+			rm -rf -- .cursor
+		fi
+	fi
+	if [[ "${harness}" != "grok" ]]; then
+		rm -rf -- .grok
+	fi
+	if [[ "${harness}" != "opencode" ]]; then
+		rm -rf -- .opencode
+		rm -f -- opencode.json
+	fi
 }
 
 replace_codeowner_rules() {
 	local owner="$1"
 	local temporary
 
-	temporary="$(mktemp)"
+	if awk -v owner="${owner}" -v old="${TEMPLATE_OWNER}" '
+		/^[[:space:]]*#/ { next }
+		index($0, owner) { found = 1 }
+		old != owner && index($0, old) { stale = 1 }
+		END { exit !(found && !stale) }
+	' .github/CODEOWNERS; then
+		return
+	fi
+
+	temporary="$(rewrite_temp_for .github/CODEOWNERS)"
 	awk -v old="${TEMPLATE_OWNER}" -v new="${owner}" '
 		/^[[:space:]]*#/ { print; next }
-		{ gsub(old, new); print }
+		{ replaced += gsub(old, new); print }
+		END { if (!replaced) exit 2 }
 	' .github/CODEOWNERS >"${temporary}"
-	cat "${temporary}" >.github/CODEOWNERS
-	rm -f "${temporary}"
+	mv "${temporary}" .github/CODEOWNERS
 }
 
 write_derived_readme() {
 	local service_name="$1"
 	local module="$2"
+	local temporary
 
-	cat >README.md <<EOF
+	temporary="$(rewrite_temp_for README.md)"
+	cat >"${temporary}" <<EOF
 # ${service_name}
 
 Go HTTP service initialized from
@@ -312,9 +513,7 @@ Module: \`${module}\`
 \`\`\`bash
 cp env/.env.example .env
 make run
-make fmt-check
-make lint
-make test
+make check
 \`\`\`
 
 The client API contract is \`api/openapi/service.yaml\`. Start with
@@ -325,6 +524,10 @@ The client API contract is \`api/openapi/service.yaml\`. Start with
 Authentication uses OIDC discovery and signed JWT access tokens. Configure it
 using \`docs/authentication.md\` before starting the service.
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:authn-oidc-introspection:start -->
+Authentication uses uncached RFC 7662 token introspection. Configure it using
+\`docs/authentication.md\` before starting the service.
+<!-- profile:authn-oidc-introspection:end -->
 <!-- profile:messaging-nats-jetstream:start -->
 This service includes typed events over NATS JetStream. Configure operator-owned
 streams, composition-owned routes, and the separate consumer worker using
@@ -340,6 +543,7 @@ This service stages one durable job per webhook receiver and delivers it from
 the shared jobs worker; see \`docs/outbound-webhook-delivery.md\`.
 <!-- profile:webhooks-durable:end -->
 EOF
+	mv "${temporary}" README.md
 }
 
 if [[ $# -gt 1 ]]; then
@@ -429,6 +633,27 @@ if [[ "${webhooks}" == "durable" && ( "${database}" != "postgres" || "${jobs}" !
 	exit 1
 fi
 
+if [[ "${INBOUND_WEBHOOKS+x}" == "x" && -z "${INBOUND_WEBHOOKS-}" ]]; then
+	echo "INBOUND_WEBHOOKS must be one of: none, standard-webhooks"
+	exit 1
+fi
+inbound_webhooks="${INBOUND_WEBHOOKS:-none}"
+case "${inbound_webhooks}" in
+none | standard-webhooks) ;;
+*)
+	echo "INBOUND_WEBHOOKS must be one of: none, standard-webhooks"
+	exit 1
+	;;
+esac
+if [[ "${inbound_webhooks}" == "standard-webhooks" && ( "${database}" != "postgres" || "${jobs}" != "postgres" ) ]]; then
+	echo "INBOUND_WEBHOOKS=standard-webhooks requires DATABASE=postgres JOBS=postgres"
+	exit 1
+fi
+
+if [[ "${GRPC+x}" == "x" && -z "${GRPC-}" ]]; then
+	echo "GRPC must be one of: none, enabled"
+	exit 1
+fi
 grpc="${GRPC:-none}"
 case "${grpc}" in
 none | enabled) ;;
@@ -439,14 +664,27 @@ none | enabled) ;;
 esac
 
 if [[ "${AUTHN+x}" == "x" && -z "${AUTHN-}" ]]; then
-	echo "AUTHN must be one of: none, oidc-jwt"
+	echo "AUTHN must be one of: none, oidc-jwt, oidc-introspection"
 	exit 1
 fi
 authn="${AUTHN:-none}"
 case "${authn}" in
-none | oidc-jwt) ;;
+none | oidc-jwt | oidc-introspection) ;;
 *)
-	echo "AUTHN must be one of: none, oidc-jwt"
+	echo "AUTHN must be one of: none, oidc-jwt, oidc-introspection"
+	exit 1
+	;;
+esac
+
+if [[ "${OUTBOUND_HTTP+x}" == "x" && -z "${OUTBOUND_HTTP-}" ]]; then
+	echo "OUTBOUND_HTTP must be one of: none, bounded"
+	exit 1
+fi
+outbound_http="${OUTBOUND_HTTP:-none}"
+case "${outbound_http}" in
+none | bounded) ;;
+*)
+	echo "OUTBOUND_HTTP must be one of: none, bounded"
 	exit 1
 	;;
 esac
@@ -494,13 +732,26 @@ if [[ "${outbox}" == "postgres" && "${messaging}" != "nats-jetstream" ]]; then
 fi
 
 # The reference example is upstream teaching material. Keeping it would make a
-# generated service own five extra packages, a second OpenAPI contract, and a
-# second main() that it must lint, test, and regenerate forever.
+# generated service own extra packages and a second OpenAPI contract that it
+# must lint, test, and regenerate forever.
 reference_example="${REFERENCE_EXAMPLE:-remove}"
 case "${reference_example}" in
 remove | keep) ;;
 *)
 	echo "REFERENCE_EXAMPLE must be one of: remove, keep"
+	exit 1
+	;;
+esac
+
+if [[ "${AGENT_HARNESS+x}" == "x" && -z "${AGENT_HARNESS-}" ]]; then
+	echo "AGENT_HARNESS must be one of: core, cursor, claude, qwen, grok, opencode, codex, all"
+	exit 1
+fi
+agent_harness="${AGENT_HARNESS:-core}"
+case "${agent_harness}" in
+core | cursor | claude | qwen | grok | opencode | codex | all) ;;
+*)
+	echo "AGENT_HARNESS must be one of: core, cursor, claude, qwen, grok, opencode, codex, all"
 	exit 1
 	;;
 esac
@@ -522,18 +773,27 @@ detected_module="$(detect_module_from_origin || true)"
 new_module="${1:-}"
 source_checkout=false
 
+if [[ "${detected_module}" == "${TEMPLATE_SOURCE}" && "${current_module}" == "${TEMPLATE_MODULE}" ]]; then
+	if [[ -n "${new_module}" ]]; then
+		echo "refusing to initialize the canonical template source checkout"
+		exit 1
+	fi
+	echo "template source checkout; initialization not required"
+	exit 0
+fi
+
 if [[ -z "${new_module}" ]]; then
 	[[ -n "${detected_module}" ]] || {
 		echo "module path is required when git remote origin cannot be derived"
 		usage
 		exit 1
 	}
-	if [[ "${detected_module}" == "${TEMPLATE_SOURCE}" && "${current_module}" == "${TEMPLATE_MODULE}" ]]; then
-		new_module="${current_module}"
-		source_checkout=true
-	else
-		new_module="${detected_module}"
-	fi
+	new_module="${detected_module}"
+fi
+
+if [[ "${new_module}" == "${TEMPLATE_MODULE}" ]]; then
+	echo "derived repositories must replace the template module path"
+	exit 1
 fi
 
 validation_mod="$(mktemp)"
@@ -545,63 +805,67 @@ if ! go mod edit -module="${new_module}" "${validation_mod}" >/dev/null 2>&1; th
 fi
 
 codeowner="${CODEOWNER:-}"
-if [[ "${source_checkout}" != true ]]; then
-	[[ -n "${codeowner}" ]] || {
-		echo "CODEOWNER is required when initializing a repository derived from the template"
-		exit 1
-	}
-	if [[ ! "${codeowner}" =~ ^@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(/[A-Za-z0-9]([A-Za-z0-9_-]*[A-Za-z0-9])?)?$ ]]; then
-		echo "CODEOWNER must be one @username or @org/team-name token"
-		exit 1
-	fi
+if [[ -z "${codeowner}" && -f template.lock ]]; then
+	codeowner="$(lock_value codeowner || true)"
+fi
+[[ -n "${codeowner}" ]] || {
+	echo "CODEOWNER is required when initializing a repository derived from the template"
+	exit 1
+}
+if [[ ! "${codeowner}" =~ ^@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(/[A-Za-z0-9]([A-Za-z0-9_-]*[A-Za-z0-9])?)?$ ]]; then
+	echo "CODEOWNER must be one @username or @org/team-name token"
+	exit 1
 fi
 
-if [[ "${new_module}" != "${current_module}" ]] && ! grep -Fq "${current_module}" .golangci.yml; then
-	echo ".golangci.yml does not contain the current module path; refusing to disable depguard during initialization"
+service_name="$(service_name_from_module "${new_module}")" || {
+	echo "failed to derive service name from module path: ${new_module}"
+	exit 1
+}
+
+initial_module="${current_module}"
+if [[ -f template.lock ]]; then
+	initial_module="$(lock_value original_module || true)"
+	[[ -n "${initial_module}" ]] || {
+		echo "template.lock has no original module for safe resume"
+		exit 1
+	}
+fi
+
+if [[ "${new_module}" != "${current_module}" ]] && ! grep -Fq "${initial_module}" .golangci.yml; then
+	echo ".golangci.yml does not contain the original module path; refusing to disable depguard during initialization"
 	exit 1
 fi
 
 if [[ -f template.lock ]]; then
-	if [[ -d scripts/profiles ]]; then
-		echo "template.lock exists while unresolved profile sources remain"
+	lock_state="$(lock_value state || true)"
+	case "${lock_state}" in
+	initializing | complete) ;;
+	*)
+		echo "template.lock has no supported initialization state"
 		exit 1
+		;;
+	esac
+	validate_lock_selection
+	if [[ "${lock_state}" == "complete" ]]; then
+		rm -rf -- scripts/profiles
+		verify_identity_postconditions
+		print_summary "template initialization already complete"
+		exit 0
 	fi
-	for expected in \
-		"database = \"${database}\"" \
-		"http_idempotency = \"${http_idempotency}\"" \
-		"jobs = \"${jobs}\"" \
-		"webhooks = \"${webhooks}\"" \
-		"outbox = \"${outbox}\"" \
-		"grpc = \"${grpc}\"" \
-		"authn = \"${authn}\"" \
-		"outbound_auth = \"${outbound_auth}\"" \
-		"messaging = \"${messaging}\"" \
-		"reference_example = \"${reference_example}\"" \
-		"object_storage = \"${object_storage}\""; do
-		grep -Fqx "${expected}" template.lock || {
-			echo "repository is already initialized with different profile choices"
-			exit 1
-		}
-	done
-	echo "template initialization already complete"
-	echo "  module: ${new_module}"
-	echo "  database: ${database}"
-	echo "  jobs: ${jobs}"
-	echo "  webhooks: ${webhooks}"
-	echo "  outbox: ${outbox}"
-	echo "  gRPC: ${grpc}"
-	echo "  authentication: ${authn}"
-	echo "  object storage: ${object_storage}"
-	echo "  outbound authentication: ${outbound_auth}"
-	echo "  messaging: ${messaging}"
-	echo "  reference example: ${reference_example}"
-	exit 0
+else
+	write_template_lock initializing
 fi
 
 if [[ "${new_module}" != "${current_module}" ]]; then
 	go mod edit -module="${new_module}"
+	current_module="${new_module}"
+fi
+tools_module="$(awk '/^module / { print $2; exit }' tools/go.mod)"
+if [[ "${tools_module}" != "${new_module}/tools" ]]; then
 	go -C tools mod edit -module="${new_module}/tools"
+fi
 
+if [[ "${initial_module}" != "${new_module}" ]]; then
 	while IFS= read -r file; do
 		[[ -f "${file}" ]] || continue
 		# Generated protobuf descriptors embed the go_package value as encoded
@@ -610,17 +874,16 @@ if [[ "${new_module}" != "${current_module}" ]]; then
 		if [[ "${file}" == internal/gen/proto/* || "${file}" == */internal/gen/proto/* ]]; then
 			continue
 		fi
-		if grep -Fq "${current_module}" "${file}"; then
-			replace_literal "${file}" "${current_module}" "${new_module}"
+		if grep -Fq "${initial_module}" "${file}"; then
+			replace_literal "${file}" "${initial_module}" "${new_module}"
 		fi
 	done < <(git ls-files --cached --others --exclude-standard -- '*.go' '*.proto')
 
-	replace_literal .golangci.yml "${current_module}" "${new_module}"
+	replace_literal .golangci.yml "${initial_module}" "${new_module}"
 fi
 
 if [[ "${source_checkout}" != true ]]; then
 	replace_codeowner_rules "${codeowner}"
-	service_name="${new_module##*/}"
 	if [[ -f Makefile ]]; then
 		replace_required_literal Makefile "SERVICE_NAME := service" "SERVICE_NAME := ${service_name}"
 	fi
@@ -655,6 +918,8 @@ if [[ "${source_checkout}" != true ]]; then
 		remove_outbox_migrations
 		strip_profile outbox-postgres remove
 	else
+		# Existing adopters retain 000001 for rollback; a new service starts on River.
+		rm -f -- migrations/000001_postgres_outbox.sql
 		strip_profile outbox-postgres keep
 	fi
 
@@ -699,22 +964,61 @@ if [[ "${source_checkout}" != true ]]; then
 		if [[ "${webhooks}" == "none" ]]; then
 			rm -rf -- internal/infra/postgreswebhook
 			rm -f -- \
-				cmd/jobs-worker/builder_webhooks.go \
-				cmd/jobs-worker/builder_webhooks_test.go \
 				docs/outbound-webhook-delivery.md \
 				internal/config/webhooks_config.go \
 				internal/config/webhooks_config_test.go \
 				migrations/000005_postgres_webhooks.sql \
 				migrations/000006_postgres_webhook_reference_repairs.sql \
 				migrations/000007_postgres_webhooks_retire.sql \
-				test/postgres_webhook_*_test.go \
-				test/webhook_network_integration_test.go
+				test/postgres_webhook_*_test.go
+			if [[ "${inbound_webhooks}" == "none" ]]; then
+				rm -f -- \
+					cmd/jobs-worker/builder_webhooks.go \
+					cmd/jobs-worker/builder_webhooks_test.go
+			else
+				rm -f -- cmd/jobs-worker/builder_webhooks_test.go
+			fi
 			strip_profile webhooks-durable remove
 		else
 			strip_profile webhooks-durable keep
 		fi
 
-	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" ]]; then
+		if [[ "${inbound_webhooks}" == "none" ]]; then
+			rm -rf -- internal/inboundwebhook internal/infra/postgresinboundwebhook
+			rm -f -- \
+				cmd/jobs-worker/inbound_webhook_bindings.go \
+				cmd/jobs-worker/builder_inbound_testworker.go \
+				cmd/jobs-worker/builder_webhooks_inbound_test.go \
+				cmd/jobs-worker/internal/bootstrap/run_inbound_test.go \
+				cmd/service/internal/bootstrap/startup_inbound_webhooks.go \
+				cmd/service/internal/bootstrap/startup_inbound_webhooks_test.go \
+				cmd/service/internal/bootstrap/service_api.go \
+				internal/config/inbound_webhooks_config.go \
+				internal/config/inbound_webhooks_config_test.go \
+				internal/infra/http/inbound_webhook.go \
+				internal/infra/http/inbound_webhook_test.go \
+				migrations/000010_postgres_inbound_webhooks.sql \
+				internal/infra/postgres/queries/postgres_inbound_webhooks.sql \
+				internal/infra/postgres/sqlcgen/postgres_inbound_webhooks.sql.go \
+				docs/inbound-webhook-receipt.md \
+				test/postgres_inbound_webhook_integration_test.go \
+				test/inbound_webhook_process_integration_test.go
+			if [[ "${webhooks}" == "none" ]]; then
+				rm -f -- \
+					cmd/jobs-worker/builder_webhooks.go \
+					cmd/jobs-worker/builder_webhooks_test.go
+			fi
+			strip_profile inbound-webhooks-standard remove
+			if [[ -f cmd/jobs-worker/builder_webhooks.go ]]; then
+				temporary="$(rewrite_temp_for cmd/jobs-worker/builder_webhooks.go)"
+				sed 's/ && !inbound_webhook_test_worker//' cmd/jobs-worker/builder_webhooks.go >"${temporary}"
+				mv "${temporary}" cmd/jobs-worker/builder_webhooks.go
+			fi
+		else
+			strip_profile inbound-webhooks-standard keep
+		fi
+
+	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" && "${inbound_webhooks}" == "none" ]]; then
 		rm -f -- migrations/000008_river.sql
 	fi
 
@@ -745,19 +1049,18 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/infra/telemetry/telemetrytest/metrics.go \
 			scripts/ci/migration-history-check.sh \
 			scripts/ci/migration-image-history-check.sh \
+			scripts/ci/migration-validate.sh \
 			env/docker-compose.yml
 		cp \
 			scripts/profiles/database-none/startup_dependencies.go.tmpl \
 			cmd/service/internal/bootstrap/startup_dependencies.go
 		replace_literal \
 			cmd/service/internal/bootstrap/startup_dependencies.go \
-			"${current_module}" \
+			"${TEMPLATE_MODULE}" \
 			"${new_module}"
 		strip_profile database-postgres remove
 		go -C tools mod edit -droptool=github.com/sqlc-dev/sqlc/cmd/sqlc
 		go -C tools mod edit -droptool=github.com/pressly/goose/v3/cmd/goose
-		go mod tidy
-		go -C tools mod tidy
 	else
 		strip_profile database-postgres keep
 	fi
@@ -766,21 +1069,45 @@ if [[ "${source_checkout}" != true ]]; then
 		# authntrust exists only to be shared by the verifier and internal/config's
 		# authn validation. With the profile off it has no caller at all, so it
 		# leaves with them rather than becoming an unreferenced leaf.
-		rm -rf -- internal/infra/oidcjwt internal/authntrust
+		rm -rf -- internal/infra/bearerauthn internal/infra/oidcjwt internal/infra/oauthintrospection internal/authntrust
 		rm -f -- \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
+			cmd/service/internal/bootstrap/startup_authn_profile.go \
 			internal/config/authn_config.go \
 			internal/config/authn_config_test.go \
 			internal/infra/http/authn_router_test.go \
+			internal/infra/http/introspection_disclosure_test.go \
 			internal/infra/httpclient/authn_policy_test.go \
 			docs/authentication.md
 		replace_literal api/openapi/service.yaml \
 			'security: [{bearerAuth: []}]' \
 			'security: []'
+		strip_profile authn-bearer remove
 		strip_profile authn-oidc-jwt remove
+		strip_profile authn-oidc-introspection remove
+	elif [[ "${authn}" == "oidc-introspection" ]]; then
+		cp \
+			scripts/profiles/authn-oidc-introspection/startup_authn_profile.go.tmpl \
+			cmd/service/internal/bootstrap/startup_authn_profile.go
+		replace_literal cmd/service/internal/bootstrap/startup_authn_profile.go \
+			"${TEMPLATE_MODULE}" \
+			"${new_module}"
+		rm -rf -- internal/infra/oidcjwt
+		rm -f -- \
+			internal/authntrust/token_profile.go \
+			internal/authntrust/token_profile_test.go
+		strip_profile authn-bearer keep
+		strip_profile authn-oidc-jwt remove
+		strip_profile authn-oidc-introspection keep
 	else
+		rm -rf -- internal/infra/oauthintrospection
+		rm -f -- \
+			internal/authntrust/introspection.go \
+			internal/authntrust/introspection_test.go
+		strip_profile authn-bearer keep
 		strip_profile authn-oidc-jwt keep
+		strip_profile authn-oidc-introspection remove
 	fi
 
 	if [[ "${outbound_auth}" == "none" ]]; then
@@ -845,7 +1172,6 @@ fi
 			test/nats_messaging_*_test.go \
 			test/postgres_outbox_natsjs_integration_test.go
 		strip_profile messaging-nats-jetstream remove
-		go mod tidy
 	else
 		strip_profile messaging-nats-jetstream keep
 	fi
@@ -860,7 +1186,6 @@ fi
 		rm -f -- \
 			buf.yaml \
 			buf.gen.yaml \
-			examples/reference-service/grpc_failure_mapping_contract_test.go \
 			cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls.go \
@@ -869,9 +1194,9 @@ fi
 			docs/grpc.md \
 			internal/config/grpc_config.go \
 			internal/config/grpc_config_test.go \
-			internal/infra/oidcjwt/grpc.go \
-			internal/infra/oidcjwt/grpc_test.go \
-			internal/infra/oidcjwt/grpc_tls_contract_test.go \
+			internal/infra/bearerauthn/grpc.go \
+			internal/infra/bearerauthn/grpc_test.go \
+			internal/infra/bearerauthn/grpc_tls_contract_test.go \
 			test/grpc_process_integration_test.go
 		strip_profile grpc remove
 		go -C tools mod edit -droptool=github.com/bufbuild/buf/cmd/buf
@@ -903,10 +1228,6 @@ fi
 	# profile. A package with an unconditional importer is not an unreferenced
 	# leaf, so removing it would break the minimal service rather than trim it.
 
-	# Profile sources are the generator's own inputs. Every profile has consumed
-	# what it needs by now, so no generated service keeps them.
-	rm -rf -- scripts/profiles
-
 	# The template's own closed spec bundles are decisions about developing the
 	# template, not about this service. specs/README.md already says a completed
 	# bundle is deleted rather than kept as an example, and AGENTS.md tells every
@@ -915,10 +1236,16 @@ fi
 	# repository it does not have. They stay readable upstream.
 	rm -rf -- specs
 
+	strip_unselected_harness "${agent_harness}"
+
 	# Upstream project furniture. The hero image is referenced only by the README
 	# initialization overwrites, and the issue forms route bug reports for the
 	# template rather than for this service.
 	rm -rf -- .github/assets .github/ISSUE_TEMPLATE
+
+	if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" ]]; then
+		rm -rf -- internal/infra/httpclient
+	fi
 
 	if [[ "${reference_example}" == "remove" ]]; then
 		rm -rf -- examples
@@ -931,8 +1258,6 @@ fi
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
-
 fi
 
 go mod tidy
@@ -943,19 +1268,10 @@ if [[ ! -f .env ]]; then
 	echo "created .env from env/.env.example"
 fi
 
-echo "template initialization complete"
-echo "  module: ${new_module}"
-echo "  database: ${database}"
-echo "  HTTP idempotency: ${http_idempotency}"
-echo "  jobs: ${jobs}"
-echo "  webhooks: ${webhooks}"
-echo "  outbox: ${outbox}"
-echo "  gRPC: ${grpc}"
-echo "  authentication: ${authn}"
-echo "  object storage: ${object_storage}"
-echo "  outbound authentication: ${outbound_auth}"
-echo "  messaging: ${messaging}"
-echo "  reference example: ${reference_example}"
-if [[ -n "${codeowner}" ]]; then
-	echo "  codeowner: ${codeowner}"
-fi
+verify_identity_postconditions
+write_template_lock complete
+
+# This is the only fallible cleanup after the complete journal write. A rerun
+# retries it before reporting success if the process stopped here.
+rm -rf -- scripts/profiles
+print_summary "template initialization complete"

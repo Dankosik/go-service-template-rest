@@ -3,6 +3,8 @@ package httpx
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,6 +14,14 @@ import (
 )
 
 const idempotencyExtension = "x-idempotent"
+
+var idempotencyReplayHeaders = []string{
+	"Content-Disposition",
+	"Content-Encoding",
+	"Content-Language",
+	"Content-Type",
+	"Location",
+}
 
 // HasIdempotentOperations reports whether the generated contract activates the
 // PostgreSQL component and rejects incomplete declarations before startup.
@@ -60,9 +70,38 @@ func validateIdempotentOperation(spec *openapi3.T, operation *openapi3.Operation
 	if !operationHasRequiredKey(operation) {
 		return fmt.Errorf("http idempotency: operation %q lacks required %s", operation.OperationID, httpidempotency.Header)
 	}
+	if err := validateIdempotentResponseHeaders(operation); err != nil {
+		return err
+	}
 	for _, status := range []int{400, 401, 403, 422, 500, 503, 504} {
 		if operation.Responses == nil || operation.Responses.Value(strconv.Itoa(status)) == nil {
 			return fmt.Errorf("http idempotency: operation %q lacks %d response", operation.OperationID, status)
+		}
+	}
+	return nil
+}
+
+func validateIdempotentResponseHeaders(operation *openapi3.Operation) error {
+	if operation.Responses == nil {
+		return nil
+	}
+	for status, reference := range operation.Responses.Map() {
+		success := strings.EqualFold(status, "2XX")
+		code, err := strconv.Atoi(status)
+		if err == nil {
+			success = code >= 200 && code < 300
+		}
+		if !success {
+			continue
+		}
+		if reference == nil || reference.Value == nil {
+			continue
+		}
+		for name := range reference.Value.Headers {
+			canonical := http.CanonicalHeaderKey(name)
+			if !slices.Contains(idempotencyReplayHeaders, canonical) {
+				return fmt.Errorf("http idempotency: operation %q success response header %q is not replayable", operation.OperationID, canonical)
+			}
 		}
 	}
 	return nil

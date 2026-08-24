@@ -15,15 +15,32 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+
+	// profile:inbound-webhooks-standard:start
+	"github.com/jackc/pgx/v5/pgxpool"
+	// profile:inbound-webhooks-standard:end
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivertype"
 	"github.com/riverqueue/rivercontrib/otelriver"
+
+	// profile:inbound-webhooks-standard:start
+	"go.opentelemetry.io/otel/metric"
+	// profile:inbound-webhooks-standard:end
 )
+
+// WorkersRuntime is the builder result: validated workers and an optional
+// post-pool binder.
+type WorkersRuntime struct {
+	Workers *river.Workers
+	// profile:inbound-webhooks-standard:start
+	Bind func(context.Context, *pgxpool.Pool, metric.MeterProvider) error
+	// profile:inbound-webhooks-standard:end
+}
 
 // WorkersBuilder is binary-local business composition. Derived services add
 // their typed River workers here; the reusable binary has no default job kind.
-type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (*river.Workers, func(context.Context), error)
+type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (WorkersRuntime, error)
 
 func Run(args []string, buildWorkers WorkersBuilder) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -53,34 +70,26 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "jobs_worker")
 	metrics := telemetry.New()
 	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "jobs_worker")
-	if err != nil {
-		return err
-	}
 	cleanupSafe := true
 	var cleanupDeadline time.Time
 	defer func() {
 		if cleanupSafe {
 			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 			defer cleanupCancel()
-			telemetryCleanup(cleanupCtx)
+			_ = telemetryCleanup(cleanupCtx)
 		}
 	}()
+	if err != nil {
+		return err
+	}
 
-	workers, cleanup, err := buildWorkers(startupCtx, cfg, log)
+	runtime, err := buildWorkers(startupCtx, cfg, log)
 	if err != nil {
 		return fmt.Errorf("build jobs workers: %w", err)
 	}
-	if workers == nil {
+	if runtime.Workers == nil {
 		return errors.New("jobs workers are not registered")
 	}
-	defer func() {
-		if cleanup != nil && cleanupSafe {
-			cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
-			defer cancel()
-			cleanup(cleanupCtx)
-		}
-	}()
-
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("initialize jobs worker postgres: %w", err)
@@ -90,6 +99,13 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 			pool.Close()
 		}
 	}()
+	// profile:inbound-webhooks-standard:start
+	if runtime.Bind != nil {
+		if err := runtime.Bind(startupCtx, pool, metrics.MeterProvider()); err != nil {
+			return fmt.Errorf("bind jobs workers: %w", err)
+		}
+	}
+	// profile:inbound-webhooks-standard:end
 
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		CancelledJobRetentionPeriod: 24 * time.Hour,
@@ -99,23 +115,40 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		Logger:                      log,
 		MaxAttempts:                 river.MaxAttemptsDefault,
 		PollOnly:                    true,
-		SoftStopTimeout:             cfg.HTTP.ShutdownTimeout,
 		Plugins: []rivertype.Plugin{
 			otelriver.NewMiddleware(&otelriver.MiddlewareConfig{EnableTracePropagation: true}),
 		},
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: cfg.Jobs.MaxWorkers},
 		},
-		Workers: workers,
+		Workers: runtime.Workers,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize River client: %w", err)
 	}
+	stopStartedRiver := func(trigger error) error {
+		processCtx, cancelProcess, deadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+		defer cancelProcess()
+		cleanupDeadline = deadline
+		stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
+		defer cancelStop()
+		stopErr := client.StopAndCancel(stopCtx)
+		cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+		if !cleanupSafe {
+			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", stopCtx.Err()))
+		}
+		return errors.Join(trigger, stopErr)
+	}
 
 	runCtx, cancelRun := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer cancelRun()
-	if err := client.Start(runCtx); err != nil {
-		return fmt.Errorf("start River client: %w", err)
+	started, err := runtimeopts.StartRuntime(startupCtx, runCtx, cancelRun, client.Start)
+	if err != nil {
+		startErr := fmt.Errorf("start River client: %w", err)
+		if started {
+			return stopStartedRiver(startErr)
+		}
+		return startErr
 	}
 
 	var ready atomic.Bool
@@ -128,9 +161,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		metrics,
 	)
 	if err != nil {
-		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), cfg.HTTP.ShutdownTimeout)
-		defer cancel()
-		return errors.Join(err, client.StopAndCancel(stopCtx))
+		return stopStartedRiver(err)
 	}
 
 	var trigger error
@@ -146,16 +177,39 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	processCtx, cancelProcess, deadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
 	cleanupDeadline = deadline
-	stopErr := client.Stop(processCtx)
-	select {
-	case <-client.Stopped():
-	case <-processCtx.Done():
-		cleanupSafe = false
-		stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", processCtx.Err()))
+	stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, cfg.HTTP.ShutdownTimeout)
+	stopErr := client.Stop(stopCtx)
+	cancelStop()
+	cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+	if !cleanupSafe {
+		hardStopCtx, cancelHardStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
+		stopErr = client.StopAndCancel(hardStopCtx)
+		cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+		if !cleanupSafe {
+			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", hardStopCtx.Err()))
+		} else if errors.Is(stopErr, context.DeadlineExceeded) {
+			stopErr = nil
+		}
+		cancelHardStop()
+	} else if errors.Is(stopErr, context.DeadlineExceeded) {
+		stopErr = nil
 	}
 	if cleanupSafe {
 		cancelRun()
 	}
 	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
 	return errors.Join(trigger, stopErr, diagnosticsErr)
+}
+
+func riverStoppedBeforeReturn(stopErr error, stopped <-chan struct{}) bool {
+	if stopErr == nil {
+		<-stopped
+		return true
+	}
+	select {
+	case <-stopped:
+		return true
+	default:
+		return false
+	}
 }

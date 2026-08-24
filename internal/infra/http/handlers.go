@@ -7,28 +7,30 @@ import (
 	"reflect"
 
 	"github.com/example/go-service-template-rest/internal/health"
+	// profile:inbound-webhooks-standard:start
+	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	// profile:inbound-webhooks-standard:end
 	"github.com/example/go-service-template-rest/internal/openapi"
 )
 
-// probeOperationCount is how many generated operations this package implements
-// itself: HealthLive and HealthReady. It exists so a contract that grows past
-// the platform probes without a Handlers.API is rejected at startup instead of
-// panicking on a nil embedded interface once per request.
+// probeOperationCount is the always-present generated surface this package owns.
 const probeOperationCount = 2
 
 type Handlers struct {
 	Health        *health.Service
 	ReadinessGate func(context.Context) error
-	// API implements every generated operation other than the platform probes.
-	// It is the seam a service composes through: adding an operation means
-	// implementing it here, not editing this package.
+	// API implements every generated operation not owned by this transport. It is
+	// the seam a service composes through: adding a business operation means
+	// implementing it in the feature package, not editing this package.
 	API openapi.StrictServerInterface
+	// profile:inbound-webhooks-standard:start
+	InboundWebhook inboundwebhook.Receiver
+	// profile:inbound-webhooks-standard:end
 }
 
 type strictHandlers struct {
-	// The embedded interface promotes the service's own operations. The explicit
-	// HealthLive and HealthReady methods in health_handlers.go shadow whatever it
-	// supplies for those two, so platform probe behavior stays owned here.
+	// The embedded interface promotes the service's own operations. Explicit
+	// transport-owned methods shadow it.
 	openapi.StrictServerInterface
 
 	health        *health.Service
@@ -42,11 +44,15 @@ func newStrictHandlers(h Handlers) (strictHandlers, error) {
 	if h.ReadinessGate == nil {
 		return strictHandlers{}, errors.New("http router: readiness gate is required")
 	}
-	if declared := reflect.TypeFor[openapi.StrictServerInterface]().NumMethod(); h.API == nil && declared > probeOperationCount {
+	ownedOperations := probeOperationCount
+	// profile:inbound-webhooks-standard:start
+	ownedOperations++
+	// profile:inbound-webhooks-standard:end
+	if declared := reflect.TypeFor[openapi.StrictServerInterface]().NumMethod(); h.API == nil && declared > ownedOperations {
 		return strictHandlers{}, fmt.Errorf(
 			"http router: handlers API is required: the OpenAPI contract declares %d operations and this package implements %d",
 			declared,
-			probeOperationCount,
+			ownedOperations,
 		)
 	}
 

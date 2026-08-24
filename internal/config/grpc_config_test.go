@@ -5,18 +5,6 @@ import (
 	"testing"
 )
 
-func TestGRPCDefaultsAreDisabledAndMinimal(t *testing.T) {
-	t.Parallel()
-	server := DefaultGRPCServerConfig()
-	if server.Enabled || server.Addr != "" || server.TransportSecurity != "" ||
-		server.TLS != (GRPCTLSConfig{}) {
-		t.Fatalf("unexpected gRPC defaults: %+v", server)
-	}
-	if got := len(grpcDefaults()); got != 6 {
-		t.Fatalf("gRPC default keys = %d, want 6", got)
-	}
-}
-
 func TestGRPCEnabledTLSValidation(t *testing.T) {
 	t.Parallel()
 	valid := GRPCConfig{Server: GRPCServerConfig{

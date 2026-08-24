@@ -1,3 +1,4 @@
+// profile:authn-oidc-jwt:start
 package authntrust_test
 
 import (
@@ -23,3 +24,5 @@ func TestValidTokenProfile(t *testing.T) {
 		}
 	}
 }
+
+// profile:authn-oidc-jwt:end

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/outbox-relay/outboxworker"
 	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
@@ -40,10 +41,10 @@ func TestPostgresOutboxPublishesThroughRiverWithOriginalIdentityAndTrace(t *test
 		config.Consumer = "river-outbox-conformance"
 	})
 
-	producerClient := fixture.client(t, natsjs.RoleProducer)
-	outboxWorker, err := natsjs.NewOutboxWorker(producerClient.Producer())
+	producerClient := fixture.client(t)
+	outboxWorker, err := outboxworker.New(producerClient.Producer())
 	if err != nil {
-		t.Fatalf("natsjs.NewOutboxWorker(): %v", err)
+		t.Fatalf("outboxworker.New(): %v", err)
 	}
 	workers := river.NewWorkers()
 	if err := river.AddWorkerSafely(workers, outboxWorker); err != nil {
@@ -118,9 +119,9 @@ func TestPostgresOutboxPublishesThroughRiverWithOriginalIdentityAndTrace(t *test
 	if delivered.traceID != origin.TraceID() {
 		t.Fatalf("consumer trace = %s, want producing trace %s", delivered.traceID, origin.TraceID())
 	}
-	waittest.Until(t, 10*time.Second, func() bool {
+	waittest.Until(t, 10*time.Second, func(waitCtx context.Context) bool {
 		var state string
-		return pool.QueryRow(ctx, "SELECT state::text FROM river_job WHERE args->>'id' = $1", event.ID).Scan(&state) == nil &&
+		return pool.QueryRow(waitCtx, "SELECT state::text FROM river_job WHERE args->>'id' = $1", event.ID).Scan(&state) == nil &&
 			state == "completed"
 	}, "River job completion")
 }

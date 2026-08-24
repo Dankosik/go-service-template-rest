@@ -42,6 +42,32 @@ func TestPrincipalFromContextWithoutValue(t *testing.T) {
 	}
 }
 
+func TestPrincipalCallerIdentitySeparatesSubjectsAndClients(t *testing.T) {
+	t.Parallel()
+
+	issuer := "https://issuer.example.com"
+	subject, ok := (reqctx.Principal{Issuer: issuer, Subject: "same"}).CallerIdentity()
+	if !ok {
+		t.Fatal("subject CallerIdentity() reported invalid principal")
+	}
+	client, ok := (reqctx.Principal{Issuer: issuer, ClientID: "same"}).CallerIdentity()
+	if !ok {
+		t.Fatal("client CallerIdentity() reported invalid principal")
+	}
+	otherClient, ok := (reqctx.Principal{Issuer: issuer, ClientID: "other"}).CallerIdentity()
+	if !ok {
+		t.Fatal("other client CallerIdentity() reported invalid principal")
+	}
+	if subject == client || client == otherClient {
+		t.Fatalf("caller identities collided: subject=%q client=%q other_client=%q", subject, client, otherClient)
+	}
+	for _, invalid := range []reqctx.Principal{{Subject: "subject"}, {Issuer: issuer}} {
+		if identity, valid := invalid.CallerIdentity(); valid || identity != "" {
+			t.Fatalf("CallerIdentity(%+v) = %q, true; want invalid", invalid, identity)
+		}
+	}
+}
+
 // TestPrincipalScopesAreNotAliased is the reason the carrier clones. Every
 // handler reading the context sees the same value, so a caller that sorts or
 // appends to the slice it was handed would edit the authorization decision the
@@ -74,7 +100,7 @@ func TestPrincipalScopesAreNotAliased(t *testing.T) {
 func TestRequestIDRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	ctx := reqctx.ContextWithRequestID(context.Background(), "caller-id")
+	ctx, _ := reqctx.ContextWithAcceptedRequestID(context.Background(), "caller-id")
 
 	if got := reqctx.RequestID(ctx); got != "caller-id" {
 		t.Fatalf("RequestID() = %q, want %q", got, "caller-id")

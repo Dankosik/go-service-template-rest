@@ -10,7 +10,7 @@ This template is the single source of truth for the workflow instruction set. A 
 
 ## The Ownership Split
 
-`template-owned.paths` is the manifest. Every path it lists is mirrored verbatim into a derived repository, including deletions inside listed directories. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates the listed Codex, Claude, Qwen, Grok, Cursor, and OpenCode carriers. `.grok/agents` also keeps the handwritten `orchestrator` and `acceptance-unit-lead` primary-session agents. `.cursor/agents` keeps the handwritten `acceptance-unit-lead` Task agent. `.opencode/agents` keeps the handwritten `orchestrator` and `acceptance-unit-lead` agents. `.agents/codex-project.toml` owns portable Codex runtime defaults. Three target-local generated views are rebuilt after mirroring: `.claude/skills` and `.qwen/skills` expose the same canonical skill set, while `.codex/config.toml` is generated exactly from the portable runtime and role registry. Cursor, Grok, and OpenCode read `.agents/skills` directly. Machine-specific Codex settings belong only in user or system config.
+`template-owned.paths` is the manifest. Every applicable path it lists is mirrored verbatim into a derived repository, including deletions inside listed directories. A complete target `template.lock` filters harness-specific entries through its durable `agent_harness` choice; repositories without a lock retain the legacy `all` behavior. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates and validates the checked-in Codex, Claude, Qwen, Grok, Cursor, and OpenCode carriers before propagation. `.grok/agents` also keeps the handwritten `orchestrator` and `acceptance-unit-lead` primary-session agents. `.cursor/agents` keeps the handwritten `acceptance-unit-lead` Task agent. `.opencode/agents` keeps the handwritten `orchestrator` and `acceptance-unit-lead` agents. `.agents/codex-project.toml` owns portable Codex runtime defaults. Selected target-local generated views are rebuilt after mirroring: `.claude/skills` and `.qwen/skills` expose the same canonical skill set, while `.codex/config.toml` is generated exactly from the portable runtime and role registry. Cursor, Grok, and OpenCode read `.agents/skills` directly. Machine-specific Codex settings belong only in user or system config.
 
 A path may appear in the manifest only while it carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve. That restriction is what makes mirroring safe — there is nothing in an owned file for a derived repository to lose.
 
@@ -18,9 +18,9 @@ The one target-local exception is a service capability skill under
 `.agents/skills/<name>/` with a `.service-owned` marker. The sync
 preserves that directory, requires a real `SKILL.md`, refuses an ownership
 collision with a template skill of the same name, excludes it from the sync
-write regardless of Git status, and regenerates its Claude and Qwen discovery
-links locally. An unmarked target-only skill remains drift and is deleted by
-apply.
+write regardless of Git status, and regenerates its selected Claude or Qwen
+discovery links locally. Unselected harness views are pruned. An unmarked
+target-only skill remains drift and is deleted by apply.
 
 These documents stay repository-owned and the sync never touches them:
 
@@ -54,17 +54,20 @@ bash ../go-service-template-rest/scripts/template-sync.sh \
   --apply --from ../go-service-template-rest --repo .
 ```
 
-`--check` compares owned content, generated role carriers, Claude skill links,
-and the Codex project runtime and role registry directly, prints drift, and exits non-zero. It also requires every
+`--check` and `--apply` use the same committed `HEAD` snapshot and refuse dirty
+template-owned source. Before inspecting a target, both validate the snapshot's
+canonical skills, roles, role carriers, and Codex project view. `--check`
+compares applicable owned content, selected role carriers and skill views, and
+the selected Codex project runtime directly, prints drift, and exits non-zero. It also requires every
 repository-owned authority listed above except `README.md` and the template-only
 onboarding document; it verifies their presence but never copies their
-service-specific content. `--apply` mirrors the exact committed `HEAD`, rebuilds
-role carriers and target-local generated views through template-owned helpers without depending on the
+service-specific content. `--apply` mirrors the validated role carriers and
+rebuilds only target-local generated views through template-owned helpers without depending on the
 target `Makefile`, and removes the retired `.template-sync` file. Ignored and
 untracked empty content does not enter that snapshot. Generated paths stay out
 of the manifest. The result stays in the target working tree for ordinary
-review and commit. A service-owned skill and its Claude/Qwen links retain their
-existing Git status.
+review and commit. A service-owned skill and links for selected Claude/Qwen
+views retain their existing Git status.
 
 Portable validation invokes the synced helper scripts directly. A derived
 repository's `Makefile` is repository-owned, so template Make targets are
@@ -75,15 +78,17 @@ convenience aliases for the template checkout, not propagated interfaces.
 The sync never commits. Its result remains a normal reviewable working-tree
 change in one target.
 
-**Work outside the manifest and its generated views never blocks a sync and
-is never touched.** A repository can carry any other work in progress and still
-sync. The script never stashes, resets, cleans, stages, or commits.
+**Work outside the applicable manifest, generated views, and harness paths
+selected for pruning never blocks a sync and is never touched.** A repository
+can carry any other work in progress and still sync. The script never stashes,
+resets, cleans, stages, or commits.
 
-**Work inside the manifest, generated `.claude/skills`, `.qwen/skills`, or
-`.codex/config.toml` refuses that target, except a marked service-owned skill
-and its matching harness links.** The sync neither mirrors nor stages those local
-paths. For every other owned path, it cannot safely distinguish a concurrent
-edit from its update, so it stops before writes:
+**Work inside the applicable manifest, generated `.claude/skills`,
+`.qwen/skills`, `.codex/config.toml`, or an unselected harness path refuses that
+target, except a marked service-owned skill and valid matching symlinks.** The
+sync neither mirrors nor stages those local paths. For every other owned path,
+it cannot safely distinguish a concurrent edit from its update, so it stops
+before writes:
 
 ```
    uncommitted changes inside the manifest:
@@ -103,12 +108,14 @@ changes.
 
 | Refusal | Why it matters |
 | --- | --- |
-| Manifest paths hold uncommitted changes | The mirror would destroy them |
+| Manifest, generated, or unselected harness paths hold uncommitted changes | The mirror or profile pruning would destroy them |
 | The template's own manifest is dirty | Targets must receive one committed, reviewable template revision |
+| `template.lock` is incomplete or names an unsupported harness | The sync cannot preserve the target's selected adapter set |
 | A manifest path contains a symlink | The copy could read or write outside the repository |
-| `.claude/skills` or `.qwen/skills` is a symlink or contains a real directory | Generated skill links could overwrite content without a canonical owner |
+| `.claude/skills` or `.qwen/skills` is a symlink or contains a real file or directory | Generated skill links could overwrite content without a canonical owner |
 | `.claude`, `.qwen`, or `.codex` has an unsafe path shape, or the Codex managed markers are malformed | A generated view could fail after manifest writes |
-| Ignored content exists inside the template or target manifest | It could leak into a target or be silently deleted |
+| Ignored content exists inside the template manifest or a target owned, generated, or pruned path | It could leak into a target or be silently deleted |
+| The committed canonical inputs and generated projections disagree | Apply would fail or create drift after target writes |
 | A required repository-owned instruction is missing | Mirrored instructions would point at an absent local authority |
 | A marked service-owned skill is malformed or collides with a template skill | The sync cannot preserve one unambiguous local owner |
 | A manifest path is gitignored in the target | The mirror writes it, git refuses to track it, and drift never clears |

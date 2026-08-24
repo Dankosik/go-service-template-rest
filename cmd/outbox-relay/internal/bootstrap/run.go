@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
+	"github.com/example/go-service-template-rest/cmd/outbox-relay/outboxworker"
 	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
@@ -29,9 +30,11 @@ import (
 const (
 	startupTimeout       = 30 * time.Second
 	defaultOutboxWorkers = 16
+	outboxDrain          = 25 * time.Second
 	diagnosticsClose     = 2 * time.Second
 	backgroundClose      = 5 * time.Second
 	telemetryClose       = 5 * time.Second
+	outboxTailBudget     = diagnosticsClose + backgroundClose + telemetryClose
 )
 
 func Run(args []string) error {
@@ -64,7 +67,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	defer func() {
 		cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 		defer cancel()
-		telemetryCleanup(cleanupCtx)
+		_ = telemetryCleanup(cleanupCtx)
 	}()
 
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
@@ -80,7 +83,6 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	client, err := natsjs.Connect(
 		startupCtx,
 		runtimeopts.Messaging(cfg.Messaging),
-		natsjs.RoleProducer,
 		natsjs.Observability{Logger: log},
 	)
 	if err != nil {
@@ -93,7 +95,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	}()
 
 	workers := river.NewWorkers()
-	outboxWorker, err := natsjs.NewOutboxWorker(client.Producer())
+	outboxWorker, err := outboxworker.New(client.Producer())
 	if err != nil {
 		return fmt.Errorf("initialize NATS outbox worker: %w", err)
 	}
@@ -102,7 +104,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	}
 	riverClient, err := river.NewClient(
 		riverpgxv5.New(pool),
-		riverClientConfig(cfg, workers, log),
+		riverClientConfig(workers, log),
 	)
 	if err != nil {
 		return fmt.Errorf("initialize River outbox worker: %w", err)
@@ -123,10 +125,15 @@ func validateRuntimeConfig(cfg config.Config) error {
 	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
 		return fmt.Errorf("%w: outbox diagnostics address is required", postgresoutbox.ErrConfig)
 	}
-	return nil
+	return runtimeopts.ValidateGracePeriod(
+		cfg.HTTP.GracePeriod,
+		"the code-owned outbox relay drain",
+		outboxDrain,
+		outboxTailBudget,
+	)
 }
 
-func riverClientConfig(cfg config.Config, workers *river.Workers, log *slog.Logger) *river.Config {
+func riverClientConfig(workers *river.Workers, log *slog.Logger) *river.Config {
 	plugin := otelriver.NewMiddleware(&otelriver.MiddlewareConfig{
 		EnableSemanticMetrics:  true,
 		EnableTracePropagation: true,
@@ -140,20 +147,20 @@ func riverClientConfig(cfg config.Config, workers *river.Workers, log *slog.Logg
 		Queues: map[string]river.QueueConfig{
 			postgresoutbox.Queue: {MaxWorkers: defaultOutboxWorkers},
 		},
-		SoftStopTimeout: cfg.HTTP.ShutdownTimeout,
+		SoftStopTimeout: outboxDrain,
 		Workers:         workers,
 	}
 }
 
-func runLifecycle[TTx any](
+func runLifecycle(
 	signalCtx context.Context,
 	startupCtx context.Context,
 	cfg config.Config,
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
 	pool postgresPinger,
-	client *natsjs.Client,
-	riverClient *river.Client[TTx],
+	client messagingRuntime,
+	riverClient riverRuntime,
 ) (cleanupSafe bool, deadline time.Time, result error) {
 	var ready atomic.Bool
 	readiness := health.New(postgresReadinessProbe{pool: pool}, client)
@@ -164,13 +171,14 @@ func runLifecycle[TTx any](
 		startupCtx,
 		cfg.Observability.Metrics.Addr,
 		"outbox",
-		func() bool { return ready.Load() && client.Ready() && readiness.Cached() == nil },
+		func() bool { return relayReady(ready.Load(), client.Ready(), readiness.Cached()) },
 		metrics,
 	)
 	if err != nil {
 		return true, time.Time{}, err
 	}
-	runtimeCtx := context.WithoutCancel(signalCtx)
+	runtimeCtx, cancelRuntime := context.WithCancel(context.WithoutCancel(signalCtx))
+	defer cancelRuntime()
 	supervisor := background.New(runtimeCtx, log)
 	supervisor.Go(background.Task{Name: "messaging_connection", Run: client.Run})
 	supervisor.Go(background.Task{
@@ -185,10 +193,31 @@ func runLifecycle[TTx any](
 			)
 		},
 	})
-	if err := riverClient.Start(runtimeCtx); err != nil {
-		_ = diagnostics.Stop(startupCtx, diagnosticsClose)
-		_ = supervisor.Shutdown(startupCtx)
-		return true, time.Time{}, fmt.Errorf("start River outbox worker: %w", err)
+	started, err := runtimeopts.StartRuntime(startupCtx, runtimeCtx, cancelRuntime, riverClient.Start)
+	if err != nil {
+		processCtx, cancelProcess, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+		defer cancelProcess()
+		var riverErr error
+		if started {
+			riverCtx, cancelRiver := runtimeopts.TeardownStage(
+				processCtx, shutdownDeadline, outboxDrain,
+			)
+			riverErr = riverClient.StopAndCancel(riverCtx)
+			cancelRiver()
+		}
+		diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
+		backgroundCtx, cancelBackground := runtimeopts.TeardownStage(
+			processCtx, shutdownDeadline, backgroundClose,
+		)
+		backgroundErr := supervisor.Shutdown(backgroundCtx)
+		cancelBackground()
+		cleanupSafe := riverErr == nil && !errors.Is(backgroundErr, context.DeadlineExceeded)
+		return cleanupSafe, shutdownDeadline, errors.Join(
+			fmt.Errorf("start River outbox worker: %w", err),
+			riverErr,
+			diagnosticsErr,
+			backgroundErr,
+		)
 	}
 	ready.Store(true)
 
@@ -205,14 +234,26 @@ func runLifecycle[TTx any](
 	readiness.StartDrain()
 	processCtx, cancelProcess, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
-	riverErr := riverClient.Stop(processCtx)
+	riverCtx, cancelRiver := runtimeopts.TeardownStage(
+		processCtx, shutdownDeadline, outboxDrain,
+	)
+	riverErr := riverClient.Stop(riverCtx)
+	cancelRiver()
 	cleanupSafe = riverErr == nil
-	client.StopPublish()
-	messagingErr := client.Shutdown(processCtx)
+	if cleanupSafe {
+		client.StopPublish()
+	}
 	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
-	backgroundCtx, cancelBackground := context.WithTimeout(processCtx, backgroundClose)
+	backgroundCtx, cancelBackground := runtimeopts.TeardownStage(
+		processCtx, shutdownDeadline, backgroundClose,
+	)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
+	var messagingErr error
+	if cleanupSafe {
+		messagingErr = client.Shutdown(backgroundCtx)
+	}
 	cancelBackground()
+	cleanupSafe = cleanupSafe && !errors.Is(backgroundErr, context.DeadlineExceeded)
 	return cleanupSafe, shutdownDeadline, errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
 }
 
@@ -222,6 +263,25 @@ type postgresReadinessProbe struct {
 
 type postgresPinger interface {
 	Ping(ctx context.Context) error
+}
+
+type messagingRuntime interface {
+	health.Probe
+	Ready() bool
+	Run(ctx context.Context) error
+	StopPublish()
+	Shutdown(ctx context.Context) error
+}
+
+func relayReady(started, messagingReady bool, dependencyErr error) bool {
+	return started && messagingReady && dependencyErr == nil
+}
+
+type riverRuntime interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+	StopAndCancel(ctx context.Context) error
+	Stopped() <-chan struct{}
 }
 
 func (postgresReadinessProbe) Name() string { return "postgres" }

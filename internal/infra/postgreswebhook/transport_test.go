@@ -13,8 +13,8 @@ import (
 
 func TestWebhookRequestContractAndAddressFallback(t *testing.T) {
 	deadline := time.Now().Add(time.Minute)
-	prepared := PreparedSend{
-		Attempt: DeliveryAttempt{ID: "whd_test", Body: []byte(`{"ok":true}`), AttemptedAt: time.Unix(1_700_000_000, 0), Deadline: deadline},
+	prepared := preparedSend{
+		Attempt: deliveryAttempt{ID: "whd_test", Body: []byte(`{"ok":true}`), AttemptedAt: time.Unix(1_700_000_000, 0), Deadline: deadline},
 		URL:     mustWebhookURL(t, "https://example.com/hooks"), Signature: "v1,signature",
 		Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("1.1.1.1")},
 	}
@@ -30,12 +30,12 @@ func TestWebhookRequestContractAndAddressFallback(t *testing.T) {
 	}
 
 	visited := make([]netip.Addr, 0, 2)
-	result, err := tryPreparedAddresses(ctx, prepared, func(_ context.Context, candidate PreparedSend) (SendResult, error) {
+	result, err := tryPreparedAddresses(ctx, prepared, func(_ context.Context, candidate preparedSend) (sendResult, error) {
 		visited = append(visited, candidate.SelectedAddress)
 		if len(visited) == 1 {
-			return SendResult{Evidence: TransportEvidence{DefinitelyNotSent: true}}, context.DeadlineExceeded
+			return sendResult{Evidence: transportEvidence{DefinitelyNotSent: true}}, context.DeadlineExceeded
 		}
-		return SendResult{Evidence: TransportEvidence{StatusCode: http.StatusNoContent, MayHaveSent: true}}, nil
+		return sendResult{Evidence: transportEvidence{StatusCode: http.StatusNoContent, MayHaveSent: true}}, nil
 	})
 	if err != nil || result.Evidence.StatusCode != http.StatusNoContent || len(visited) != 2 {
 		t.Fatalf("fallback = %+v, %v, visited=%v", result, err, visited)
@@ -43,7 +43,7 @@ func TestWebhookRequestContractAndAddressFallback(t *testing.T) {
 }
 
 func TestWebhookURLAndDialPolicy(t *testing.T) {
-	for _, raw := range []string{"http://example.com", "https://example.com:8443", "https://user@example.com", "https://example.com/?query=1"} {
+	for _, raw := range []string{"http://example.com", "https://example.com:8443", "https://user@example.com", "https://example.com/?", "https://example.com/?query=1"} {
 		if _, err := parseWebhookURL(raw); err == nil {
 			t.Fatalf("parseWebhookURL(%q) succeeded", raw)
 		}
@@ -51,7 +51,7 @@ func TestWebhookURLAndDialPolicy(t *testing.T) {
 	transport := newAttemptTransport("localhost", netip.MustParseAddr("127.0.0.1"))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if _, err := transport.DialContext(ctx, "tcp", "ignored:443"); err == nil || !strings.Contains(err.Error(), ErrDestinationDenied.Error()) {
+	if _, err := transport.DialContext(ctx, "tcp", "ignored:443"); err == nil || !strings.Contains(err.Error(), errDestinationDenied.Error()) {
 		t.Fatalf("private dial error = %v", err)
 	}
 }

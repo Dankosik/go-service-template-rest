@@ -78,19 +78,50 @@ http:
 http:
   addr: ":8082"
 `)
-
-	t.Setenv("APP__HTTP__ADDR", ":8083")
+	lastOverlayPath := writeTempConfig(t, `
+http:
+  addr: ":8083"
+`)
 
 	cfg, _, err := LoadDetailed(LoadOptions{
 		ConfigPath:     basePath,
-		ConfigOverlays: []string{overlayPath},
+		ConfigOverlays: []string{overlayPath, lastOverlayPath},
 	})
 	if err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
-
 	if cfg.HTTP.Addr != ":8083" {
-		t.Fatalf("HTTP.Addr = %q, want :8083", cfg.HTTP.Addr)
+		t.Fatalf("HTTP.Addr = %q, want last overlay :8083", cfg.HTTP.Addr)
+	}
+
+	t.Setenv("APP__HTTP__ADDR", ":8084")
+	cfg, _, err = LoadDetailed(LoadOptions{
+		ConfigPath:     basePath,
+		ConfigOverlays: []string{overlayPath, lastOverlayPath},
+	})
+	if err != nil {
+		t.Fatalf("LoadDetailed() with namespace override error = %v", err)
+	}
+	if cfg.HTTP.Addr != ":8084" {
+		t.Fatalf("HTTP.Addr = %q, want namespace override :8084", cfg.HTTP.Addr)
+	}
+}
+
+func TestMalformedNamespaceEnvRejectsWithoutDisclosingValue(t *testing.T) {
+	for _, envKey := range []string{"APP__", "APP____HTTP__ADDR", "APP__HTTP____ADDR"} {
+		t.Run(envKey, func(t *testing.T) {
+			resetConfigEnv(t)
+			const canary = "malformed-env-secret-canary"
+			t.Setenv(envKey, canary)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if !errors.Is(err, ErrUnknownKey) || !strings.Contains(err.Error(), envKey) {
+				t.Fatalf("LoadDetailed() error = %v, want malformed environment key rejection", err)
+			}
+			if strings.Contains(err.Error(), canary) {
+				t.Fatalf("LoadDetailed() error disclosed raw environment value: %v", err)
+			}
+		})
 	}
 }
 
@@ -172,12 +203,6 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
 	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
 	// profile:database-postgres:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	clientID := " client:id "
-	clientSecret := " client secret "
-	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_ID", clientID)
-	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_SECRET", clientSecret)
-	// profile:outbound-auth-oauth2-client-credentials:end
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
@@ -191,14 +216,6 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	if cfg.Observability.OTel.Exporter.OTLPHeaders != headers {
 		t.Fatalf("OTLPHeaders = %q, want exact env value %q", cfg.Observability.OTel.Exporter.OTLPHeaders, headers)
 	}
-	// profile:outbound-auth-oauth2-client-credentials:start
-	if cfg.OutboundAuth.ClientID != clientID {
-		t.Fatalf("OutboundAuth.ClientID = %q, want exact env value %q", cfg.OutboundAuth.ClientID, clientID)
-	}
-	if cfg.OutboundAuth.ClientSecret != clientSecret {
-		t.Fatalf("OutboundAuth.ClientSecret = %q, want exact env value %q", cfg.OutboundAuth.ClientSecret, clientSecret)
-	}
-	// profile:outbound-auth-oauth2-client-credentials:end
 }
 
 func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
@@ -251,9 +268,6 @@ func TestEnvExampleIsFailClosedUntilObjectStorageIsConfigured(t *testing.T) {
 	for key, value := range readEnvExample(t, filepath.Join("..", "..", "env", ".env.example")) {
 		t.Setenv(key, value)
 	}
-	// profile:outbound-auth-oauth2-client-credentials:start
-	setOutboundAuthTestEnv(t)
-	// profile:outbound-auth-oauth2-client-credentials:end
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if !errors.Is(err, ErrValidate) {

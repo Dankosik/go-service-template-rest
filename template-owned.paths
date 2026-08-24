@@ -1,8 +1,10 @@
 # Template-owned instruction surface.
 #
-# Every path listed here is mirrored verbatim from this template into a derived
-# repository by `make template-sync`, including deletions inside listed
-# directories. A service may retain a local `.agents/skills/<name>` sibling
+# Every applicable path listed here is mirrored verbatim from this template into
+# a derived repository by `make template-sync`, including deletions inside
+# listed directories. Harness-specific entries are filtered by the complete
+# `agent_harness` choice in the target's `template.lock`. A service may retain
+# a local `.agents/skills/<name>` sibling
 # only with a `.service-owned` marker; the sync preserves that skill regardless
 # of Git status and keeps its Claude/Qwen discovery links out of the sync commit. It
 # still mirrors and deletes every unmarked template-owned skill. A path may
@@ -20,6 +22,10 @@
 # Syntax: one path per line, relative to the repository root. A trailing slash
 # marks a directory, mirrored recursively with deletions. Blank lines and lines
 # starting with `#` are ignored.
+#
+# Eval catalogs, instruction-eval checks, template-purity scripts, and sync
+# behavior fixtures stay in the source template. Generated services do not
+# inherit them.
 
 AGENTS.md
 CLAUDE.md
@@ -41,9 +47,6 @@ docs/spec-first-workflow/
 docs/validation-routing.md
 docs/validation/
 docs/universal-disciplines/
-
-evals/instructions/
-evals/hard-skills/
 
 .agents/codex-project.toml
 .agents/role-classes/
@@ -68,10 +71,8 @@ opencode.json
 template-owned.paths
 scripts/template-sync.sh
 scripts/agent-roles-sync.sh
+scripts/dev/benchmark.sh
 scripts/harness-skills-sync.sh
 scripts/codex-agents-sync.sh
 scripts/lib/manifest.sh
 scripts/lib/sync-cli.sh
-scripts/ci/instruction-evals-check.sh
-scripts/ci/template-owned-purity-check.sh
-scripts/dev/instruction-evals-run.sh

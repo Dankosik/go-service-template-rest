@@ -13,6 +13,7 @@ package //nolint:paralleltest // This test mutates process-global environment or
 config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,6 +71,9 @@ func TestRejectsAnOversizedConfigFile(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exceeds max size limit") {
 		t.Fatalf("error = %v, want the size limit named", err)
+	}
+	if !errors.Is(err, ErrLoad) || ErrorType(err) != ErrorTypeLoad {
+		t.Fatalf("error = %v, type = %q, want ErrLoad", err, ErrorType(err))
 	}
 }
 

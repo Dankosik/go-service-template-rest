@@ -35,6 +35,33 @@ dependencies before adding machinery. Match the surrounding code's naming,
 comment density, idiom, and responsibility boundaries. Preserve unrelated work
 and generated/manual authority.
 
+Make failure and replacement decisions explicit. When an operation cannot
+establish the authority or preconditions required before an effect, reject it
+through the canonical failure path; do not claim success or silently weaken the
+contract. Retain a fallback, compatibility shim, or legacy path only for an
+accepted current requirement with one owner, observable activation, proof, and
+a removal condition; otherwise the replacement removes the superseded path.
+
+## Validation budget
+
+During implementation, run one focused falsifier after a coherent edit batch.
+Do not rerun a successful check unless its candidate, inputs, scope, or
+preconditions changed. Workers must not run repository-wide, race, integration,
+security, container, template, or initializer-matrix checks.
+A worker may run only the changed package's focused proof. The Acceptance-Unit
+Lead runs `make unit-check` once for the integrated unit. The integrated
+delivery owner runs `make verify` once after collapsing all claims into one
+minimal proof plan. Run `make check` only when the claim explicitly spans the
+full repository. `make audit-full-manual` and other heavy targets require an
+explicit claim and `ALLOW_HEAVY=1`. Never run two
+CPU-heavy validation processes concurrently. Do not clear Go or linter caches.
+Do not use `-count=1` unless the claim explicitly requires fresh execution.
+Reuse evidence produced for the same candidate and scope.
+
+[Validation Routing](docs/validation-routing.md) selects the leaf. The
+[Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md) owns
+reuse.
+
 ## Work Selection And Loading
 
 A Markdown link names an owner; it does not load it. Read the current owner

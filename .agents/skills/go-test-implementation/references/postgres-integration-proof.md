@@ -28,7 +28,7 @@ concurrent claims, tenant isolation, or a cache whose backend behavior matters.
   the key string the current implementation builds.
 - A TTL with no injectable clock is an escalation. Sleeping through a real
   expiry buys a slow test and a flaky one.
-- Tag the file `//go:build integration`. `make test-integration` runs
+- Tag the file `//go:build integration`. `ALLOW_HEAVY=1 make test-integration` runs
   `./test/...` plus `./internal/infra/natsjs` and `./cmd/worker/internal/bootstrap`
   with `-p=1 -count=1`, so a package outside that set is not covered by the gate
   a claim of integration proof implies.
@@ -42,7 +42,7 @@ concurrent claims, tenant isolation, or a cache whose backend behavior matters.
 
 ## Prove
 - Repository unit test: focused package command with `-count=1 -vet=off`.
-- Integration test: `make test-integration`, or the tagged package directly while
+- Integration test: `ALLOW_HEAVY=1 make test-integration`, or the tagged package directly while
   iterating.
 - Migration-sensitive change: pair the integration command with the repository's
   migration validation, since `pgtest.Migrated` runs migrations per database and

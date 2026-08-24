@@ -5,12 +5,12 @@ package integration_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/httpidempotency"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/postgresidempotency"
@@ -32,7 +32,7 @@ func TestPostgresHTTPIdempotencyAuthenticatedGeneratedHandlerPath(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NewExecutor(): %v", err)
 	}
-	handler := httpIDAuthenticatedHandler(t, executor)
+	handler := httpIDAuthenticatedHandler(t, executor.Execute)
 
 	first := doHTTPIDRequest(handler, "caller-a", "key-a", "first")
 	if first.Code != http.StatusOK || first.Body.String() != "created:first" {
@@ -54,7 +54,12 @@ func TestPostgresHTTPIdempotencyAuthenticatedGeneratedHandlerPath(t *testing.T) 
 	if unauthorized.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthorized response = %d, want %d", unauthorized.Code, http.StatusUnauthorized)
 	}
-	fixture.assertEffects(t, 2)
+	clientA := doHTTPIDRequest(handler, "client:client-a", "shared-key", "machine")
+	clientB := doHTTPIDRequest(handler, "client:client-b", "shared-key", "machine")
+	if clientA.Code != http.StatusOK || clientB.Code != http.StatusOK {
+		t.Fatalf("client-only responses = %d, %d", clientA.Code, clientB.Code)
+	}
+	fixture.assertEffects(t, 4)
 }
 
 func httpIDAuthenticatedHandler(
@@ -67,25 +72,30 @@ func httpIDAuthenticatedHandler(
 	if err != nil {
 		t.Fatalf("load fixture OpenAPI: %v", err)
 	}
+	reject := httpx.RejectResponse(slog.New(slog.DiscardHandler), httpidempotency.ClassifyError)
 	terminal := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		principal, ok := reqctx.PrincipalFromContext(r.Context())
 		if !ok {
 			http.Error(w, "principal missing", http.StatusInternalServerError)
 			return
 		}
+		caller, ok := principal.CallerIdentity()
+		if !ok {
+			http.Error(w, "principal identity missing", http.StatusInternalServerError)
+			return
+		}
 		value := r.URL.Query().Get("value")
 		request, err := httpidempotency.NewRequestFromContext(
 			r.Context(),
-			httpidempotency.Scope{Caller: principal.Issuer + "\x00" + principal.Subject, Operation: "fixtureCreate"},
-			struct {
-				Value string `json:"value"`
-			}{Value: value},
+			httpidempotency.Scope{Caller: caller, Operation: "fixtureCreate"},
+			1,
+			httpIDSemanticInput{Value: value},
 		)
 		if err != nil {
-			writeHTTPIDError(w, err)
+			reject(w, r, err)
 			return
 		}
-		response, _, err := httpidempotency.Execute(r.Context(), executor, request,
+		response, _, err := executor(r.Context(), request,
 			func(ctx context.Context, effects effectRepository) (openapi.HealthLive200TextResponse, error) {
 				if err := effects.Insert(ctx, value); err != nil {
 					return "", err
@@ -93,7 +103,7 @@ func httpIDAuthenticatedHandler(
 				return openapi.HealthLive200TextResponse("created:" + value), nil
 			})
 		if err != nil {
-			writeHTTPIDError(w, err)
+			reject(w, r, err)
 			return
 		}
 		if err := response.VisitHealthLiveResponse(w); err != nil {
@@ -109,6 +119,9 @@ func httpIDAuthenticatedHandler(
 			value := strings.TrimPrefix(input.RequestValidationInput.Request.Header.Get("Authorization"), "Bearer ")
 			if value == "" {
 				return reqctx.Principal{}, errors.New("fixture credential missing")
+			}
+			if clientID, ok := strings.CutPrefix(value, "client:"); ok {
+				return reqctx.Principal{Issuer: "fixture", ClientID: clientID}, nil
 			}
 			return reqctx.Principal{Issuer: "fixture", Subject: value}, nil
 		})},
@@ -136,22 +149,8 @@ func doHTTPIDRequest(handler http.Handler, caller, key, value string) *httptest.
 	return response
 }
 
-func writeHTTPIDError(w http.ResponseWriter, err error) {
-	classified, ok := httpidempotency.ClassifyError(err)
-	if !ok {
-		http.Error(w, failure.SanitizedDetail, http.StatusInternalServerError)
-		return
-	}
-	switch classified.Code {
-	case failure.CodeBadRequest:
-		http.Error(w, classified.Detail, http.StatusBadRequest)
-	case failure.CodeIdempotencyKeyMismatch:
-		http.Error(w, classified.Detail, http.StatusUnprocessableEntity)
-	case failure.CodeIdempotencyUnavailable, failure.CodeIdempotencyOutcomeUnknown:
-		http.Error(w, classified.Detail, http.StatusServiceUnavailable)
-	default:
-		http.Error(w, failure.SanitizedDetail, http.StatusInternalServerError)
-	}
+type httpIDSemanticInput struct {
+	Value string `json:"value"`
 }
 
 const httpIDOpenAPI = `openapi: 3.0.3
@@ -160,12 +159,20 @@ paths:
   /fixture:
     post:
       operationId: fixtureCreate
+      x-idempotent: true
       security: [{bearerAuth: []}]
       parameters:
         - {in: header, name: Idempotency-Key, required: true, schema: {type: string, maxLength: 255}}
         - {in: query, name: value, required: true, schema: {type: string}}
       responses:
         "200": {description: ok}
+        "400": {description: bad request}
+        "401": {description: unauthorized}
+        "403": {description: forbidden}
+        "422": {description: key mismatch}
+        "500": {description: internal error}
+        "503": {description: unavailable}
+        "504": {description: timeout}
 components:
   securitySchemes:
     bearerAuth: {type: http, scheme: bearer}

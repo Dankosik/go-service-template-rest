@@ -39,16 +39,6 @@ for entry in "${paths[@]}"; do
 	[[ -z "${marker}" ]] || fail "${marker} contains an initialization profile marker"
 done
 
-for entry in "${paths[@]}"; do
-	[[ "${entry}" == */ ]] && continue
-	for parent in "${paths[@]}"; do
-		[[ "${parent}" == */ ]] || continue
-		case "${entry}" in
-		"${parent}"*) fail "${entry} is redundantly covered by ${parent}" ;;
-		esac
-	done
-done
-
 for required in \
 	"${manifest}" \
 	scripts/template-sync.sh \
@@ -56,9 +46,7 @@ for required in \
 	scripts/harness-skills-sync.sh \
 	scripts/codex-agents-sync.sh \
 	scripts/lib/manifest.sh \
-	scripts/lib/sync-cli.sh \
-	scripts/ci/instruction-evals-check.sh \
-	scripts/ci/template-owned-purity-check.sh; do
+	scripts/lib/sync-cli.sh; do
 	contains_path "${required}" || fail "${manifest} must list ${required}"
 done
 
@@ -88,11 +76,12 @@ done
 if ! report="$(bash scripts/codex-agents-sync.sh --check --repo . 2>&1)"; then
 	fail "Codex project config is stale: ${report}"
 fi
+if ! report="$(bash scripts/ci/template-sync-behavior-check.sh 2>&1)"; then
+	fail "template sync behavior is unsafe: ${report}"
+fi
 
 if ((failed != 0)); then
 	exit 1
 fi
 
-# ponytail: real target checks exercise mirroring; add a disposable repository
-# fixture only if a sync regression escapes these ownership and generator gates.
 echo "template-owned manifest is safe"

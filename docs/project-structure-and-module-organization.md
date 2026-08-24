@@ -62,7 +62,8 @@ authority, or operator flow; line count alone is not an owner.
 
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
 `internal/infra/oauth2clientcredentials` owns the fixed token endpoint,
-context-aware cache, and authenticated HTTP/gRPC client factories. Concrete
+safe token projection, and authenticated HTTP/gRPC client factories; `x/oauth2`
+owns cache, expiry skew, and refresh synchronization. Concrete
 provider adapters close the owner and give feature packages only generated
 authenticated clients. It remains one removable outbound-auth pack.
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
@@ -91,6 +92,13 @@ removable durable-webhook pack. The always-retained `internal/outboundtrust`
 predicate is shared with fixed-target HTTP and owns no URL, resolver, dialer,
 HTTP, or config policy.
 <!-- profile:webhooks-durable:end -->
+
+<!-- profile:inbound-webhooks-standard:start -->
+`internal/inboundwebhook/` and `internal/infra/postgresinboundwebhook/` form the
+removable inbound receipt pack. The capability owns verification, receipt
+deduplication, and durable dispatch; feature adapters own provider JSON and
+idempotent effects.
+<!-- profile:inbound-webhooks-standard:end -->
 
 <!-- profile:object-storage:start -->
 `internal/objectstorage/` owns the provider-neutral port and

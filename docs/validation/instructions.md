@@ -9,7 +9,10 @@ Use for instruction, role, skill, mirror, or template-propagation changes.
 | Claude skill discovery | `bash scripts/harness-skills-sync.sh claude --check --repo .` |
 | Qwen skill discovery | `bash scripts/harness-skills-sync.sh qwen --check --repo .` |
 | Template-source ownership and sync behavior | `make template-owned-purity-check` in the template checkout only |
-| Structural workflow and hard-skill behavior catalogs, schema ownership, selectors, and links | `bash scripts/ci/instruction-evals-check.sh` |
+
+Run one matching carrier leaf while iterating. The template-only purity target
+already runs all four carrier checks; it is the final aggregate, not an
+additional command beside those leaves.
 
 After adding or removing canonical skills, run `bash
 scripts/harness-skills-sync.sh claude --apply --repo .` and `bash
@@ -19,5 +22,4 @@ view.
 A derived repository verifies adoption with the source template's
 `scripts/template-sync.sh --check`; it does not run the template-only purity
 gate, which intentionally rejects consumer-local `.service-owned` skills.
-Structural checks prove shape and ownership, not changed model behavior; a
-model claim requires the authorized live eval runbook.
+These checks prove shape and ownership, not changed model behavior.

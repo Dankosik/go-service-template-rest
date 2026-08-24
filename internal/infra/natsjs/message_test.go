@@ -38,9 +38,6 @@ func TestMessageIsImmutable(t *testing.T) {
 		t.Fatalf("decoded accessors returned inconsistent envelope: message=%q publication=%q type=%q schema=%q created=%v",
 			decoded.MessageID(), decoded.PublicationID(), decoded.Type(), decoded.Schema(), decoded.CreatedAt())
 	}
-	if id := NewID(); id == "" {
-		t.Fatal("NewID() returned empty identity")
-	}
 	carrier := headerCarrier(nats.Header{})
 	carrier.Set("test", "value")
 	if carrier.Get("test") != "value" || !slices.Contains(carrier.Keys(), "test") {

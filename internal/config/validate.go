@@ -38,16 +38,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return err
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	if err := validateAuthnConfig(&cfg.Authn); err != nil {
 		return err
 	}
-	// profile:authn-oidc-jwt:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	if err := validateOutboundAuthConfig(&cfg.OutboundAuth); err != nil {
-		return err
-	}
-	// profile:outbound-auth-oauth2-client-credentials:end
+	// profile:authn-bearer:end
 	// profile:grpc:start
 	if err := validateGRPCConfig(&cfg.GRPC); err != nil {
 		return err
@@ -66,7 +61,7 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	// profile:messaging-nats-jetstream:end
 
 	// profile:database-postgres:start
-	if err := validatePostgres(cfg.Postgres, cfg.HTTP); err != nil {
+	if err := validatePostgres(cfg.Postgres); err != nil {
 		return err
 	}
 	// profile:database-postgres:end
@@ -80,6 +75,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:webhooks-durable:end
+	// profile:inbound-webhooks-standard:start
+	if err := validateInboundWebhooks(cfg.InboundWebhooks); err != nil {
+		return err
+	}
+	// profile:inbound-webhooks-standard:end
 	// profile:object-storage:start
 	if err := validateObjectStorage(&cfg.ObjectStorage); err != nil {
 		return err

@@ -4,20 +4,32 @@ app:
 http:
   addr: ":8080"
 
-# profile:authn-oidc-jwt:start
+# profile:authn-bearer:start
 # Replace these with a real local HTTPS issuer and API audience. The reserved
 # example host intentionally cannot provide production trust.
 authn:
+  issuer: "https://issuer.example.com"
+  audience: "https://api.example.com"
+# profile:authn-oidc-jwt:start
+  token_profile: "resource-server"
+# profile:authn-oidc-jwt:end
+# profile:authn-oidc-introspection:start
+# Introspection endpoint and target class are non-secret. The client secret is
+# environment-only. Keep these empty in the source template so JWT-local load
+# still works; generated introspection output requires the complete tuple.
+  introspection_endpoint: ""
+  introspection_target_class: ""
+  introspection_private_host_suffix: ""
+  introspection_client_id: ""
+  introspection_client_secret: ""
+# profile:authn-oidc-introspection:end
+# profile:authn-bearer:end
 # profile:jobs-postgres:start
 # The source template keeps the jobs worker inactive. A selected service enables
 # it with one conservative worker and raises the value only from capacity proof.
 jobs:
   max_workers: 0
 # profile:jobs-postgres:end
-  issuer: "https://issuer.example.com"
-  audience: "https://api.example.com"
-  token_profile: "resource-server"
-# profile:authn-oidc-jwt:end
 
 # profile:http-idempotency-postgres:start
 # This optional pack stays inactive until an adopting operation is registered.
@@ -25,18 +37,6 @@ jobs:
 http_idempotency:
   retention: 0s
 # profile:http-idempotency-postgres:end
-
-# profile:outbound-auth-oauth2-client-credentials:start
-# OAuth client credentials are environment-only. Keep this non-secret shape
-# empty until deployment supplies one complete fixed dependency.
-outbound_auth:
-  token_url: ""
-  client_id: ""
-  client_secret: ""
-  scopes: ""
-  audience: ""
-  resource: ""
-# profile:outbound-auth-oauth2-client-credentials:end
 
 log:
   level: debug
@@ -67,3 +67,11 @@ webhooks:
   endpoints: ""
   static_secrets: ""
 # profile:webhooks-durable:end
+
+# profile:inbound-webhooks-standard:start
+# Deployment supplies endpoint IDs here. Verification secrets stay in
+# APP__INBOUND_WEBHOOKS__STATIC_SECRETS on the service process only.
+inbound_webhooks:
+  endpoints: ""
+  static_secrets: ""
+# profile:inbound-webhooks-standard:end

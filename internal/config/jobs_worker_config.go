@@ -10,6 +10,11 @@ import (
 )
 
 func buildJobsWorkerSnapshot(source *koanf.Koanf) (Config, []string, error) {
+	// profile:inbound-webhooks-standard:start
+	if hasNonEmptyConfigValue(source.Get("inbound_webhooks.static_secrets")) {
+		return Config{}, nil, fmt.Errorf("%w: inbound_webhooks.static_secrets is not allowed in the jobs worker", ErrValidate)
+	}
+	// profile:inbound-webhooks-standard:end
 	values := lo.PickBy(source.All(), func(key string, _ any) bool {
 		return jobsWorkerConfigKey(key)
 	})
@@ -31,6 +36,11 @@ func jobsWorkerConfigKey(key string) bool {
 			return true
 		}
 	}
+	// profile:inbound-webhooks-standard:start
+	if key == "inbound_webhooks.endpoints" {
+		return true
+	}
+	// profile:inbound-webhooks-standard:end
 	return false
 }
 
@@ -44,7 +54,7 @@ func validateJobsWorkerConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return err
 	}
-	if err := validatePostgres(cfg.Postgres, cfg.HTTP); err != nil {
+	if err := validatePostgres(cfg.Postgres); err != nil {
 		return err
 	}
 	if err := validateJobs(cfg.Jobs, cfg.Postgres); err != nil {
@@ -55,5 +65,10 @@ func validateJobsWorkerConfig(cfg *Config, unknownKeys []string) error {
 		return fmt.Errorf("%w: webhooks.static_secrets must be supplied through environment", ErrValidate)
 	}
 	// profile:webhooks-durable:end
+	// profile:inbound-webhooks-standard:start
+	if err := validateInboundWebhooksWorker(cfg.InboundWebhooks); err != nil {
+		return err
+	}
+	// profile:inbound-webhooks-standard:end
 	return validateObservabilityConfig(&cfg.Observability)
 }

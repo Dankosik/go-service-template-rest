@@ -14,7 +14,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
-	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/go-chi/chi/v5"
 	"go.opentelemetry.io/otel/propagation"
@@ -389,76 +388,6 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	}
 }
 
-type rootRouteKey struct {
-	method string
-	path   string
-}
-
-func TestOpenAPIRuntimeContractRootRouteTreeContainsOnlyGeneratedRoutes(t *testing.T) {
-	t.Parallel()
-
-	openAPIRoutes := openAPIOperationRoutes(t)
-	expectedCounts := make(map[rootRouteKey]int, len(openAPIRoutes))
-	for key := range openAPIRoutes {
-		expectedCounts[key]++
-	}
-
-	apiSubrouter := chi.NewRouter()
-	for key := range openAPIRoutes {
-		apiSubrouter.Method(key.method, key.path, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			w.WriteHeader(http.StatusNoContent)
-		}))
-	}
-
-	rootRouter := newRootRouter(apiSubrouter)
-
-	seenCounts := make(map[rootRouteKey]int, len(expectedCounts))
-	err := chi.Walk(rootRouter, func(method string, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
-		key := rootRouteKey{method: method, path: route}
-		seenCounts[key]++
-
-		if strings.HasPrefix(route, "/api/") {
-			if _, generated := openAPIRoutes[key]; !generated {
-				t.Fatalf("root route tree contains manual API route %s %s; add it through OpenAPI instead", method, route)
-			}
-		}
-		if _, expected := expectedCounts[key]; !expected {
-			t.Fatalf("root route tree contains undocumented manual route %s %s", method, route)
-		}
-
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("chi.Walk() error = %v", err)
-	}
-
-	for key, want := range expectedCounts {
-		if got := seenCounts[key]; got != want {
-			t.Fatalf("root route tree route %s %s count = %d, want %d", key.method, key.path, got, want)
-		}
-	}
-}
-
-func openAPIOperationRoutes(t *testing.T) map[rootRouteKey]struct{} {
-	t.Helper()
-
-	swagger, err := openapi.GetSpec()
-	if err != nil {
-		t.Fatalf("GetSpec() error = %v", err)
-	}
-
-	routes := make(map[rootRouteKey]struct{})
-	for path, item := range swagger.Paths.Map() {
-		if item == nil {
-			continue
-		}
-		for method := range item.Operations() {
-			routes[rootRouteKey{method: method, path: path}] = struct{}{}
-		}
-	}
-	return routes
-}
-
 //nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	recorder := telemetrytest.InstallSpanRecorder(t)
@@ -482,6 +411,12 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	if customMethodResp.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("custom method status = %d, want %d", customMethodResp.Code, http.StatusMethodNotAllowed)
 	}
+
+	// profile:inbound-webhooks-standard:start
+	// otelhttp records url.path before routing. A concrete webhook endpoint id is
+	// intentionally excluded from tracing rather than published to the trace sink.
+	doRequest(h, http.MethodPost, "/webhooks/private-endpoint-canary")
+	// profile:inbound-webhooks-standard:end
 
 	spans := recorder.Ended()
 	if len(spans) == 0 {

@@ -1,11 +1,8 @@
 package config
 
 import (
-	"maps"
 	"os"
 	"path/filepath"
-	"reflect"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -20,7 +17,6 @@ func writeTempConfig(t *testing.T, content string) string {
 	return path
 }
 
-// profile:object-storage:start
 func readEnvExample(t *testing.T, path string) map[string]string {
 	t.Helper()
 
@@ -53,58 +49,40 @@ func readEnvExample(t *testing.T, path string) map[string]string {
 	return values
 }
 
-// profile:object-storage:end
-
 func resetConfigEnv(t *testing.T) {
 	t.Helper()
 
-	previousValues := make(map[string]string)
-	for _, key := range configEnvResetKeys(t) {
-		if value, ok := os.LookupEnv(key); ok {
-			previousValues[key] = value
-			t.Setenv(key, value)
-		}
-		if err := os.Unsetenv(key); err != nil {
-			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
-		}
-	}
-	t.Cleanup(func() {
-		for _, key := range configEnvResetKeys(t) {
-			if _, ok := previousValues[key]; !ok {
-				_ = os.Unsetenv(key)
-			}
-		}
-	})
+	clearConfigEnv(t)
 	t.Setenv("APP__APP__ENV", "local")
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
-	// profile:authn-oidc-jwt:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	setOutboundAuthTestEnv(t)
-	// profile:outbound-auth-oauth2-client-credentials:end
+	// profile:authn-oidc-introspection:start
+	t.Setenv("APP__AUTHN__INTROSPECTION_ENDPOINT", "https://idp.example.com/oauth/introspect")
+	t.Setenv("APP__AUTHN__INTROSPECTION_TARGET_CLASS", "external-https")
+	t.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_ID", "rs-client")
+	t.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_SECRET", "rs-secret")
+	// profile:authn-oidc-introspection:end
+	// profile:authn-bearer:end
 	// profile:object-storage:start
 	setObjectStorageTestEnv(t)
 	// profile:object-storage:end
 }
 
-// profile:outbound-auth-oauth2-client-credentials:start
-//
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func setOutboundAuthTestEnv(t *testing.T) {
+func clearConfigEnv(t *testing.T) {
 	t.Helper()
-	for key, value := range map[string]string{
-		"APP__OUTBOUND_AUTH__TOKEN_URL":     "https://auth.example.com/oauth/token",
-		"APP__OUTBOUND_AUTH__CLIENT_ID":     "test-client",
-		"APP__OUTBOUND_AUTH__CLIENT_SECRET": "test-client-secret",
-		"APP__OUTBOUND_AUTH__SCOPES":        "payments.read payments.write",
-		"APP__OUTBOUND_AUTH__RESOURCE":      "https://payments.example.com",
-	} {
+	for _, entry := range os.Environ() {
+		key, value, found := strings.Cut(entry, "=")
+		if !found || !strings.HasPrefix(key, namespacePrefix) {
+			continue
+		}
 		t.Setenv(key, value)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
+		}
 	}
 }
 
-// profile:outbound-auth-oauth2-client-credentials:end
 // profile:object-storage:start
 //
 //nolint:paralleltest // This test mutates process-global environment or working directory.
@@ -119,19 +97,3 @@ func setObjectStorageTestEnv(t *testing.T) {
 }
 
 // profile:object-storage:end
-
-func configEnvResetKeys(t *testing.T) []string {
-	t.Helper()
-
-	knownKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
-	knownSections := knownConfigSections()
-	keySet := make(map[string]struct{}, len(knownKeys)+len(knownSections))
-	for _, key := range knownKeys {
-		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
-	}
-	for key := range knownSections {
-		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
-	}
-
-	return slices.Sorted(maps.Keys(keySet))
-}

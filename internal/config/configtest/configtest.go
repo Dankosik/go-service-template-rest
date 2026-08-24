@@ -38,22 +38,16 @@ func IsolateEnv(tb testing.TB) {
 		}
 	}
 	tb.Setenv("APP__APP__ENV", "local")
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	tb.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	tb.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
-	// profile:authn-oidc-jwt:end
-	// profile:outbound-auth-oauth2-client-credentials:start
-	// #nosec G101 -- Deterministic test-only placeholders are installed only through testing.TB.Setenv.
-	for key, value := range map[string]string{
-		"APP__OUTBOUND_AUTH__TOKEN_URL":     "https://auth.example.com/oauth/token",
-		"APP__OUTBOUND_AUTH__CLIENT_ID":     "test-client",
-		"APP__OUTBOUND_AUTH__CLIENT_SECRET": "test-client-secret",
-		"APP__OUTBOUND_AUTH__SCOPES":        "payments.read payments.write",
-		"APP__OUTBOUND_AUTH__RESOURCE":      "https://payments.example.com",
-	} {
-		tb.Setenv(key, value)
-	}
-	// profile:outbound-auth-oauth2-client-credentials:end
+	// profile:authn-oidc-introspection:start
+	tb.Setenv("APP__AUTHN__INTROSPECTION_ENDPOINT", "https://idp.example.com/oauth/introspect")
+	tb.Setenv("APP__AUTHN__INTROSPECTION_TARGET_CLASS", "external-https")
+	tb.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_ID", "rs-client")
+	tb.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_SECRET", "rs-secret")
+	// profile:authn-oidc-introspection:end
+	// profile:authn-bearer:end
 	// profile:object-storage:start
 	for key, value := range map[string]string{
 		"APP__OBJECT_STORAGE__PROVIDER":              "amazon_s3",

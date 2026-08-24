@@ -13,7 +13,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/authntrust"
 	"github.com/example/go-service-template-rest/internal/infra/httpclient"
-	"go.opentelemetry.io/otel/metric"
 )
 
 type discoveryDocument struct {
@@ -21,7 +20,7 @@ type discoveryDocument struct {
 	JWKSURI string `json:"jwks_uri"`
 }
 
-func discoverJWKSURI(ctx context.Context, policy Policy, _ metric.MeterProvider) (string, error) {
+func discoverJWKSURI(ctx context.Context, policy Policy) (string, error) {
 	issuerURL, err := url.Parse(policy.issuer)
 	if err != nil || issuerURL == nil {
 		return "", errors.New("OIDC startup failed at issuer validation")
@@ -52,7 +51,7 @@ func validateDiscovery(body []byte, policy Policy) (string, error) {
 	return document.JWKSURI, nil
 }
 
-func newJWKSClient(jwksURI string, _ metric.MeterProvider) (*http.Client, func(), error) {
+func newJWKSClient(jwksURI string) (*http.Client, func(), error) {
 	parsed, err := url.Parse(jwksURI)
 	if err != nil || parsed == nil {
 		return nil, nil, errors.New("OIDC startup failed at JWKS URL validation")

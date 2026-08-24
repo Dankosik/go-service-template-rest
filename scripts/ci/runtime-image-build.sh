@@ -18,7 +18,7 @@ if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	(
 		cd "${ROOT_DIR}"
 		git ls-files --cached --others --exclude-standard |
-			awk '!/^(\.artifacts|\.cache|bin)\// && $0 != "jobs-worker" && $0 != "s3.test"' |
+			awk '!/^(\.artifacts|\.cache|bin)\//' |
 			while IFS= read -r file; do
 				[[ -f "${file}" || -L "${file}" ]] && printf '%s\n' "${file}"
 			done |
@@ -29,18 +29,20 @@ if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	git -C "${context}" add -A
 	git -C "${context}" -c user.name=runtime-image -c user.email=runtime-image@example.invalid commit -qm baseline
 	(cd "${context}" && CODEOWNER=@acme/platform DATABASE=postgres bash ./scripts/init-module.sh)
+	TZ=UTC find "${context}" -path "${context}/.git" -prune -o -exec touch -h -t 197001010000 {} +
 fi
 
-fingerprint="$({
-	cd "${context}"
-	find . -type f -not -path './.git/*' -exec shasum -a 256 {} +
-} | LC_ALL=C sort | shasum -a 256 | awk '{print $1}')"
+build=(docker build)
+if [[ -n ${RUNTIME_IMAGE_CACHE_FROM:-}${RUNTIME_IMAGE_CACHE_TO:-} ]]; then
+	build=(docker buildx build --load)
+	[[ -z ${RUNTIME_IMAGE_CACHE_FROM:-} ]] || build+=(--cache-from "${RUNTIME_IMAGE_CACHE_FROM}")
+	[[ -z ${RUNTIME_IMAGE_CACHE_TO:-} ]] || build+=(--cache-to "${RUNTIME_IMAGE_CACHE_TO}")
+fi
 
-docker build \
+"${build[@]}" \
 	--build-arg "APP_VERSION=${APP_VERSION:-dev}" \
 	--build-arg "VCS_REF=${VCS_REF:-unknown}" \
 	--build-arg "SOURCE_URL=${SOURCE_URL:-}" \
-	--build-arg "WORKTREE_FINGERPRINT=${fingerprint}" \
 	-f "${context}/build/docker/Dockerfile" \
 	-t "${IMAGE}" \
 	"${context}"

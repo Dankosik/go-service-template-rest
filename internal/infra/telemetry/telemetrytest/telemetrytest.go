@@ -57,18 +57,20 @@ func NewRecordingTracerProvider(tb testing.TB) (*tracetest.SpanRecorder, *sdktra
 }
 
 // RestoreGlobals snapshots the process-wide tracer provider, meter provider,
-// and text-map propagator, and restores them when the test finishes. Use it
-// when production setup code installs global telemetry during the test.
+// text-map propagator, and SDK error handler, and restores them when the test
+// finishes. Use it when production setup code installs global telemetry.
 func RestoreGlobals(tb testing.TB) {
 	tb.Helper()
 
 	previousTracerProvider := otel.GetTracerProvider()
 	previousMeterProvider := otel.GetMeterProvider()
 	previousPropagator := otel.GetTextMapPropagator()
+	previousErrorHandler := otel.GetErrorHandler()
 	tb.Cleanup(func() {
 		otel.SetTracerProvider(previousTracerProvider)
 		otel.SetMeterProvider(previousMeterProvider)
 		otel.SetTextMapPropagator(previousPropagator)
+		otel.SetErrorHandler(previousErrorHandler)
 	})
 }
 

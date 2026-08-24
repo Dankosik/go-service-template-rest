@@ -251,20 +251,20 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
 
+		// profile:authn-bearer:start
+		"authn.issuer":   "https://issuer.snapshot.example",
+		"authn.audience": "snapshot-api",
 		// profile:authn-oidc-jwt:start
-		"authn.issuer":        "https://issuer.snapshot.example",
-		"authn.audience":      "snapshot-api",
 		"authn.token_profile": "resource-server",
 		// profile:authn-oidc-jwt:end
-
-		// profile:outbound-auth-oauth2-client-credentials:start
-		"outbound_auth.token_url":     "https://auth.snapshot.example/oauth/token",
-		"outbound_auth.client_id":     " snapshot-client:id ",
-		"outbound_auth.client_secret": " snapshot-client-secret ",
-		"outbound_auth.scopes":        "snapshot.read snapshot.write",
-		"outbound_auth.resource":      "https://resource.snapshot.example",
-		"outbound_auth.audience":      "",
-		// profile:outbound-auth-oauth2-client-credentials:end
+		// profile:authn-oidc-introspection:start
+		"authn.introspection_endpoint":            "https://idp.snapshot.example/oauth/introspect",
+		"authn.introspection_target_class":        "external-https",
+		"authn.introspection_private_host_suffix": "",
+		"authn.introspection_client_id":           "snapshot-rs",
+		"authn.introspection_client_secret":       " snapshot-introspection-secret ",
+		// profile:authn-oidc-introspection:end
+		// profile:authn-bearer:end
 
 		// profile:grpc:start
 		"grpc.server.enabled":            true,
@@ -315,6 +315,10 @@ func sentinelConfigSourceValues() map[string]any {
 		"webhooks.endpoints":      `{"endpoints":[]}`,
 		"webhooks.static_secrets": `{"entries":[]}`,
 		// profile:webhooks-durable:end
+		// profile:inbound-webhooks-standard:start
+		"inbound_webhooks.endpoints":      `{"endpoints":[]}`,
+		"inbound_webhooks.static_secrets": `{"entries":[]}`,
+		// profile:inbound-webhooks-standard:end
 
 		// profile:object-storage:start
 		"object_storage.provider":              "amazon_s3",
@@ -360,20 +364,20 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
 
+		// profile:authn-bearer:start
+		"authn.issuer":   "https://issuer.snapshot.example",
+		"authn.audience": "snapshot-api",
 		// profile:authn-oidc-jwt:start
-		"authn.issuer":        "https://issuer.snapshot.example",
-		"authn.audience":      "snapshot-api",
 		"authn.token_profile": "resource-server",
 		// profile:authn-oidc-jwt:end
-
-		// profile:outbound-auth-oauth2-client-credentials:start
-		"outbound_auth.token_url":     "https://auth.snapshot.example/oauth/token",
-		"outbound_auth.client_id":     " snapshot-client:id ",
-		"outbound_auth.client_secret": " snapshot-client-secret ",
-		"outbound_auth.scopes":        "snapshot.read snapshot.write",
-		"outbound_auth.resource":      "https://resource.snapshot.example",
-		"outbound_auth.audience":      "",
-		// profile:outbound-auth-oauth2-client-credentials:end
+		// profile:authn-oidc-introspection:start
+		"authn.introspection_endpoint":            "https://idp.snapshot.example/oauth/introspect",
+		"authn.introspection_target_class":        "external-https",
+		"authn.introspection_private_host_suffix": "",
+		"authn.introspection_client_id":           "snapshot-rs",
+		"authn.introspection_client_secret":       " snapshot-introspection-secret ",
+		// profile:authn-oidc-introspection:end
+		// profile:authn-bearer:end
 
 		// profile:grpc:start
 		"grpc.server.enabled":            true,
@@ -424,6 +428,10 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"webhooks.endpoints":      `{"endpoints":[]}`,
 		"webhooks.static_secrets": `{"entries":[]}`,
 		// profile:webhooks-durable:end
+		// profile:inbound-webhooks-standard:start
+		"inbound_webhooks.endpoints":      `{"endpoints":[]}`,
+		"inbound_webhooks.static_secrets": `{"entries":[]}`,
+		// profile:inbound-webhooks-standard:end
 
 		// profile:object-storage:start
 		"object_storage.provider":              "amazon_s3",

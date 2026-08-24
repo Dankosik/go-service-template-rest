@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,11 +12,63 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/waittest"
 
 	"github.com/example/go-service-template-rest/internal/problem"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 )
+
+type failingMeterProvider struct{ metric.MeterProvider }
+
+func (failingMeterProvider) Meter(string, ...metric.MeterOption) metric.Meter { //nolint:ireturn // Test provider seam.
+	return failingMeter{}
+}
+
+type failingMeter struct{ metric.Meter }
+
+func (failingMeter) Int64UpDownCounter(string, ...metric.Int64UpDownCounterOption) (metric.Int64UpDownCounter, error) { //nolint:ireturn // Test failure seam.
+	return nil, errors.New("instrument failed")
+}
+
+func (failingMeter) Int64Counter(string, ...metric.Int64CounterOption) (metric.Int64Counter, error) { //nolint:ireturn // Test failure seam.
+	return nil, errors.New("instrument failed")
+}
+
+func TestServerLoadPublishesAdmissionMetrics(t *testing.T) {
+	t.Parallel()
+
+	reader, provider := telemetrytest.NewManualMeterProvider(t)
+	load := newServerLoad(provider)
+	release := load.Admitted(t.Context())
+	load.Shed(t.Context())
+
+	if got := telemetrytest.Int64SumValue(t, reader, activeRequestsInstrument); got != 1 {
+		t.Fatalf("%s = %d, want 1", activeRequestsInstrument, got)
+	}
+	if got := telemetrytest.Int64SumValue(t, reader, shedRequestsInstrument); got != 1 {
+		t.Fatalf("%s = %d, want 1", shedRequestsInstrument, got)
+	}
+	release()
+	if got := telemetrytest.Int64SumValue(t, reader, activeRequestsInstrument); got != 0 {
+		t.Fatalf("%s after release = %d, want 0", activeRequestsInstrument, got)
+	}
+}
+
+func TestServerLoadReportsInstrumentFailures(t *testing.T) {
+	previous := otel.GetErrorHandler()
+	t.Cleanup(func() { otel.SetErrorHandler(previous) })
+	var reported atomic.Int32
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(error) { reported.Add(1) }))
+
+	load := newServerLoad(failingMeterProvider{})
+	load.Admitted(t.Context())()
+	load.Shed(t.Context())
+	if got := reported.Load(); got != 2 {
+		t.Fatalf("reported instrument failures = %d, want 2", got)
+	}
+}
 
 // TestMaxInFlightShedsPastLimitWithoutQueueing is the property the middleware
 // exists for: excess load is refused immediately rather than queued until every
@@ -25,7 +78,7 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 
 	release := make(chan struct{})
 	entered := make(chan struct{}, 1)
-	handler := MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := MaxInFlight(1, ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		entered <- struct{}{}
 		<-release
 		w.WriteHeader(http.StatusNoContent)
@@ -60,7 +113,7 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 func TestMaxInFlightReleasesCapacity(t *testing.T) {
 	t.Parallel()
 
-	handler := MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := MaxInFlight(1, ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -78,7 +131,7 @@ func TestMaxInFlightReleasesCapacity(t *testing.T) {
 func TestMaxInFlightReleasesCapacityAfterPanic(t *testing.T) {
 	t.Parallel()
 
-	handler := MaxInFlight(1, telemetry.ServerLoad{}, Recover(slog.New(slog.DiscardHandler), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := MaxInFlight(1, ServerLoad{}, Recover(slog.New(slog.DiscardHandler), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("boom")
 	})))
 
@@ -100,7 +153,7 @@ func TestMaxInFlightExemptsHealthProbes(t *testing.T) {
 	entered := make(chan struct{}, 1)
 
 	var probes atomic.Int64
-	handler := MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := MaxInFlight(1, ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isHealthProbeRequest(r) {
 			probes.Add(1)
 			w.WriteHeader(http.StatusOK)
@@ -132,7 +185,7 @@ func TestMaxInFlightOnlyExemptsProbeReads(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
 	entered := make(chan struct{}, 1)
-	handler := MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+	handler := MaxInFlight(1, ServerLoad{}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		entered <- struct{}{}
 		<-release
 	}))
@@ -153,7 +206,7 @@ func TestMaxInFlightDisabledWhenNotPositive(t *testing.T) {
 		inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
-		handler := MaxInFlight(limit, telemetry.ServerLoad{}, inner)
+		handler := MaxInFlight(limit, ServerLoad{}, inner)
 
 		resp := doRequest(handler, http.MethodGet, "/work")
 		if resp.Code != http.StatusTeapot {
@@ -183,7 +236,7 @@ func TestShedResponseIsCorrelatedAndLogged(t *testing.T) {
 	chain := RequestCorrelation(
 		AccessLog(log, false,
 			RequestTimeout(time.Minute,
-				MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				MaxInFlight(1, ServerLoad{}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 					entered <- struct{}{}
 					<-release
 				})),

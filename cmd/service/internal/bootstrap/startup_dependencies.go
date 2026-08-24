@@ -10,7 +10,6 @@ import (
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -67,20 +66,16 @@ func (d runtimeDependencies) ReadinessProbes() []health.Probe {
 }
 
 // readinessProbeBudget is how long one steady-state readiness evaluation may
-// take, and is profile-owned because the dependency being probed is.
+// take. It covers the complete serial probe set, so the configured aggregate
+// budget remains the owner when optional probes are added.
 //
 // It is passed to health.Watch separately from the refresh interval. The two used
 // to be one argument, which clamped this budget to the interval: with the shipped
-// defaults a 3s PostgreSQL probe became 2s in steady state while
-// startup admission still granted the full 3s, so a database answering in between
-// passed admission and then flapped out of rotation. Configuration validation
-// keeps health.refresh_interval above this value.
-func readinessProbeBudget(config.Config) time.Duration {
-	return postgres.DefaultHealthcheckTimeout
-}
-
-func (d runtimeDependencies) DomainErrors() []failure.Mapper {
-	return nil
+// defaults a 3s PostgreSQL probe became 2s in steady state while startup
+// admission still granted the full budget, so a database answering in between
+// passed admission and then flapped out of rotation.
+func readinessProbeBudget(cfg config.Config) time.Duration {
+	return cfg.HTTP.ReadinessTimeout
 }
 
 // Close releases pooled dependencies, bounded by ctx, and is safe to call twice.
@@ -95,11 +90,6 @@ func (d runtimeDependencies) Close(ctx context.Context) {
 	if d.postgres == nil {
 		return
 	}
-	if d.closed == nil {
-		d.postgres.Close()
-		return
-	}
-
 	d.closed.Do(func() {
 		done := make(chan struct{})
 		go func() {

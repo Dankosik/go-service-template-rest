@@ -96,7 +96,7 @@ func bootstrapReportStage(
 
 	log.InfoContext(
 		bootstrapCtx,
-		"startup config summary",
+		"startup_config_summary",
 		startupLogArgs(
 			"config_loader",
 			"startup_summary",

@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 )
@@ -19,6 +18,17 @@ func TestJobsConfigWorkerLoaderIgnoresForeignProfiles(t *testing.T) {
 	_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
 	if err != nil {
 		t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v", err)
+	}
+}
+
+//nolint:paralleltest // This test mutates process-global environment.
+func TestJobsConfigWorkerLoaderRejectsUnknownRetainedKey(t *testing.T) {
+	setJobsWorkerConfigEnv(t)
+	t.Setenv("APP__POSTGRES__UNKNOWN", "value")
+
+	_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
+	if !errors.Is(err, ErrUnknownKey) || !strings.Contains(err.Error(), "postgres.unknown") {
+		t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v, want retained-section unknown key", err)
 	}
 }
 
@@ -67,14 +77,7 @@ func TestJobsWorkerRequiresWebhookSecretsWhenEnabled(t *testing.T) {
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func setJobsWorkerConfigEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range configEnvResetKeys(t) {
-		if value, ok := os.LookupEnv(key); ok {
-			t.Setenv(key, value)
-		}
-		if err := os.Unsetenv(key); err != nil {
-			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
-		}
-	}
+	clearConfigEnv(t)
 	for key, value := range map[string]string{
 		"APP__APP__ENV":                 "local",
 		"APP__POSTGRES__ENABLED":        "true",

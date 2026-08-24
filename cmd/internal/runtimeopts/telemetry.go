@@ -2,6 +2,7 @@ package runtimeopts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -12,7 +13,7 @@ import (
 // TelemetryFlush releases both signal providers. It takes its bound from the
 // context it is called with, because what the flush may spend is whatever the
 // caller's shutdown budget has left — a number only that caller holds.
-type TelemetryFlush func(context.Context)
+type TelemetryFlush func(context.Context) error
 
 // InstallTelemetry installs both OpenTelemetry signals for a background binary
 // and returns the flush its shutdown owes them.
@@ -38,7 +39,7 @@ type TelemetryFlush func(context.Context)
 // reported here.
 //
 // cmd/service does not use this. Its telemetry stage carries per-signal startup
-// budgets, the ignored-ambient-endpoint report, and the trace-exporter state
+// budgets, the additional ambient-environment report, and trace-exporter initialization
 // metric, none of which a background binary publishes; see
 // bootstrapTelemetryStage in cmd/service/internal/bootstrap.
 func InstallTelemetry(
@@ -48,6 +49,8 @@ func InstallTelemetry(
 	log *slog.Logger,
 	component string,
 ) (TelemetryFlush, error) {
+	telemetry.InstallErrorHandler(ctx, log)
+
 	// Resolved once and shared by both signals, so a span and a metric from the
 	// same replica carry the same resource identity.
 	instanceID := telemetry.ResolveInstanceID(cfg.App.InstanceID)
@@ -67,14 +70,29 @@ func InstallTelemetry(
 		logDegradedSignal(ctx, log, component+"_metrics_export_degraded", metricsResult.ExportErr)
 	}
 
-	return func(shutdownCtx context.Context) {
-		if tracingShutdown != nil {
-			_ = tracingShutdown(shutdownCtx)
+	return newTelemetryFlush(log, component, tracingShutdown, metricsResult.Shutdown), metricsErr
+}
+
+func newTelemetryFlush(log *slog.Logger, component string, shutdowns ...func(context.Context) error) TelemetryFlush {
+	return func(shutdownCtx context.Context) error {
+		var flushErr error
+		for _, shutdown := range shutdowns {
+			if shutdown != nil {
+				flushErr = errors.Join(flushErr, shutdown(shutdownCtx))
+			}
 		}
-		if metricsResult.Shutdown != nil {
-			_ = metricsResult.Shutdown(shutdownCtx)
+		if flushErr != nil {
+			log.ErrorContext(
+				shutdownCtx,
+				"telemetry_flush_failed",
+				"component", component,
+				"operation", "telemetry_flush",
+				"outcome", "error",
+				"err", flushErr,
+			)
 		}
-	}, metricsErr
+		return flushErr
+	}
 }
 
 func logDegradedSignal(ctx context.Context, log *slog.Logger, event string, err error) {

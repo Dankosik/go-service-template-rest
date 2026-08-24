@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -23,7 +24,7 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGTERM process lifecycle is Unix-specific")
 	}
-	f := newNATSFixture(t)
+	f := newIsolatedNATSFixture(t)
 	repositoryRoot, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatalf("resolve repository root: %v", err)
@@ -47,9 +48,8 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 			"APP__HTTP__ADDR="+httpAddress,
 			"APP__HTTP__READINESS_PROPAGATION_DELAY=0s",
 			"APP__HEALTH__REFRESH_INTERVAL=1s",
-			// A high cached-health threshold proves that messaging's immediate
-			// readiness gate, rather than a completed background probe, returns 503.
-			"APP__HEALTH__FAILURE_THRESHOLD=100",
+			// Messaging follows the same cached threshold as every other dependency.
+			"APP__HEALTH__FAILURE_THRESHOLD=3",
 			"APP__OBSERVABILITY__METRICS__ADDR=",
 			"APP__MESSAGING__URLS="+f.url,
 			"APP__MESSAGING__ALLOW_PLAINTEXT=true",
@@ -128,6 +128,10 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 			accepted <- struct{}{}
 		}
 	}()
+	t.Cleanup(func() {
+		_ = listener.Close()
+		<-acceptDone
+	})
 
 	workingDirectory, err := os.Getwd()
 	if err != nil {
@@ -157,7 +161,7 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 		"APP__MESSAGING__WORKER__CONSUMER=unregistered-worker",
 		"APP__MESSAGING__WORKER__FILTER_SUBJECT=events.test",
 		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT=dead.events.test",
-		"APP__OBSERVABILITY__METRICS__ADDR=127.0.0.1:19090",
+		"APP__OBSERVABILITY__METRICS__ADDR="+waittest.FreeTCPAddr(t, "worker diagnostics"),
 	)
 	output, runErr := run.CombinedOutput()
 	if runErr == nil || !strings.Contains(string(output), "worker feature handler builder is not registered") {
@@ -229,8 +233,12 @@ func cleanMessagingEnvironment(environment []string) []string {
 func waitHTTPStatus(t *testing.T, address string, want int) {
 	t.Helper()
 	client := &http.Client{Timeout: 500 * time.Millisecond}
-	waittest.Until(t, 10*time.Second, func() bool {
-		response, err := client.Get("http://" + address + "/health/ready")
+	waittest.Until(t, 10*time.Second, func(ctx context.Context) bool {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/health/ready", http.NoBody)
+		if err != nil {
+			return false
+		}
+		response, err := client.Do(request)
 		if err != nil {
 			return false
 		}

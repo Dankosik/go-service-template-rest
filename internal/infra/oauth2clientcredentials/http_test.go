@@ -11,13 +11,26 @@ import (
 	"golang.org/x/oauth2"
 )
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
 type recordingResourceClient struct {
 	authorization string
 }
 
-func (c *recordingResourceClient) Do(request *http.Request) (*http.Response, error) {
+func (c *recordingResourceClient) RoundTrip(request *http.Request) (*http.Response, error) {
 	c.authorization = request.Header.Get("Authorization")
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: request}, nil
+}
+
+func newTestHTTPClient(owner *Client, base http.RoundTripper) *HTTPClient {
+	return &HTTPClient{client: &http.Client{Transport: &oauth2.Transport{
+		Source: clientTokenSource{client: owner},
+		Base:   base,
+	}}}
 }
 
 func TestHTTPClientAttachesLibraryTokenToRequestCopy(t *testing.T) {
@@ -26,8 +39,9 @@ func TestHTTPClientAttachesLibraryTokenToRequestCopy(t *testing.T) {
 		calls.Add(1)
 		return validTestToken("opaque"), nil
 	}, nil)
-	base := &recordingResourceClient{}
-	client := &HTTPClient{client: owner, base: base}
+	t.Cleanup(owner.Close)
+	base := new(recordingResourceClient)
+	client := newTestHTTPClient(owner, base)
 	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://resource.example.com/items", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
@@ -57,33 +71,21 @@ func TestHTTPClientAttachesLibraryTokenToRequestCopy(t *testing.T) {
 	}
 }
 
-func TestHTTPClientCallerCancellationStopsOnlyItsWait(t *testing.T) {
-	entered := make(chan struct{})
-	release := make(chan struct{})
+func TestHTTPClientRejectsUseAfterOwnerClose(t *testing.T) {
 	owner := newClient(func(context.Context) (*oauth2.Token, error) {
-		close(entered)
-		<-release
 		return validTestToken("opaque"), nil
 	}, nil)
-	client := &HTTPClient{client: owner, base: &recordingResourceClient{}}
-	ctx, cancel := context.WithCancel(context.Background())
-	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://resource.example.com/items", http.NoBody)
-	done := make(chan error, 1)
-	go func() {
-		response, err := client.Do(request)
-		if response != nil {
-			_ = response.Body.Close()
-		}
-		done <- err
-	}()
-	<-entered
-	cancel()
-	if err := <-done; !errors.Is(err, context.Canceled) {
-		t.Fatalf("Do() error = %v, want context.Canceled", err)
+	client := newTestHTTPClient(owner, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: request}, nil
+	}))
+	owner.Close()
+	request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://resource.example.com/items", http.NoBody)
+	response, err := client.Do(request)
+	if response != nil {
+		_ = response.Body.Close()
 	}
-	close(release)
-	if err := owner.Close(t.Context()); err != nil {
-		t.Fatalf("Close() error = %v", err)
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Do() error = %v, want ErrUnavailable", err)
 	}
 }
 
@@ -91,6 +93,7 @@ func TestHTTPClientConstructionRequiresBothOwners(t *testing.T) {
 	owner := newClient(func(context.Context) (*oauth2.Token, error) {
 		return validTestToken("opaque"), nil
 	}, nil)
+	t.Cleanup(owner.Close)
 	base, err := httpclient.NewExternalHTTPS("https://resource.example.com")
 	if err != nil {
 		t.Fatalf("NewExternalHTTPS() error = %v", err)
