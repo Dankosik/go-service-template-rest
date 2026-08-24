@@ -15,6 +15,8 @@ JOBS_WORKER_BINARY := bin/$(SERVICE_NAME)-jobs-worker
 # profile:jobs-postgres:end
 GO ?= go
 PGO_PROFILE ?= off
+PGO_MANIFEST ?= $(PGO_PROFILE).meta
+PGO_BINARY ?= bin/$(SERVICE_NAME)-pgo
 OPENAPI_FILE := api/openapi/service.yaml
 REFERENCE_OPENAPI_FILE := $(wildcard examples/reference-service/api/openapi.yaml)
 REFERENCE_OPENAPI_PACKAGE := $(if $(REFERENCE_OPENAPI_FILE),./examples/reference-service/internal/openapi)
@@ -80,6 +82,7 @@ INTEGRATION_INIT_SCRIPT := bash ./scripts/integration-init.sh
 INTEGRATION_INIT_CHECK_SCRIPT := bash ./scripts/ci/integration-init-check.sh
 VERIFY_SCRIPT := bash ./scripts/ci/verify.sh
 RUNTIME_IMAGE_CHECK_SCRIPT := bash ./scripts/ci/runtime-image-check.sh
+PERFORMANCE_SCRIPT := bash ./scripts/dev/benchmark.sh
 # profile:object-storage:start
 S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
 # profile:object-storage:end
@@ -104,7 +107,7 @@ TEMPLATE ?= ../go-service-template-rest
 	actionlint actionlint-fast shellcheck shellcheck-fast dockerfile-check \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check check-proto \
-	sqlc-check runtime-image-build runtime-image-check container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
+	sqlc-check runtime-image-build runtime-image-check container-security benchmark-capture benchmark-compare benchmark-http performance-harness-check pgo-manifest run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-owned-purity-check
 # profile:object-storage:start
 .PHONY: test-s3-conformance-amazon test-s3-conformance-r2
@@ -139,7 +142,8 @@ help:
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt committed template instructions"
 	@echo "  make run"
-	@echo "  make build | build-pgo PGO_PROFILE=<cpu.pprof>"
+	@echo "  make benchmark-capture | benchmark-compare | benchmark-http"
+	@echo "  make pgo-manifest | build-pgo PGO_PROFILE=<cpu.pprof>"
 # profile:messaging-nats-jetstream:start
 	@echo "  make run-worker | build-worker"
 	@echo "  make test-messaging-race"
@@ -721,6 +725,22 @@ run:
 	set +a; \
 	go run $(SERVICE_CMD)
 
+benchmark-capture:
+	$(PERFORMANCE_SCRIPT) capture
+
+benchmark-compare:
+	$(PERFORMANCE_SCRIPT) compare
+
+benchmark-http:
+	$(PERFORMANCE_SCRIPT) http
+
+performance-harness-check:
+	$(PERFORMANCE_SCRIPT) self-test
+	$(PERFORMANCE_SCRIPT) inspect-http
+
+pgo-manifest:
+	GO="$(GO)" $(PERFORMANCE_SCRIPT) pgo-manifest
+
 # profile:messaging-nats-jetstream:start
 run-worker:
 	@set -a; \
@@ -737,18 +757,8 @@ build-outbox-relay:
 
 build:
 	@if [ "$(PGO_PROFILE)" != "off" ]; then \
-		if [ -z "$(PGO_PROFILE)" ] || [ "$(PGO_PROFILE)" = "auto" ]; then \
-			echo "PGO_PROFILE must be off or name an explicit representative CPU profile" >&2; \
-			exit 2; \
-		fi; \
-		if [ ! -f "$(PGO_PROFILE)" ]; then \
-			echo "PGO profile does not exist: $(PGO_PROFILE)" >&2; \
-			exit 2; \
-		fi; \
-		if ! $(GO) tool pprof -raw "$(PGO_PROFILE)" >/dev/null; then \
-			echo "PGO profile is not a valid CPU profile: $(PGO_PROFILE)" >&2; \
-			exit 2; \
-		fi; \
+		if [ -z "$(PGO_PROFILE)" ] || [ "$(PGO_PROFILE)" = "auto" ]; then echo "PGO_PROFILE must name an explicit CPU profile" >&2; exit 2; fi; \
+		GO="$(GO)" $(PERFORMANCE_SCRIPT) verify-pgo "$(PGO_PROFILE)" "$(PGO_MANIFEST)"; \
 	fi
 	mkdir -p bin
 	CGO_ENABLED=0 $(GO) build -pgo="$(PGO_PROFILE)" -trimpath -ldflags='-s -w' -o $(BINARY) $(SERVICE_CMD)
@@ -764,10 +774,16 @@ build-pgo:
 		echo "PGO_PROFILE must name an explicit representative CPU profile" >&2; \
 		exit 2; \
 	fi
-	$(MAKE) build GO="$(GO)" PGO_PROFILE="$(PGO_PROFILE)"
+	$(MAKE) build GO="$(GO)" BINARY="$(PGO_BINARY)" PGO_PROFILE="$(PGO_PROFILE)" PGO_MANIFEST="$(PGO_MANIFEST)"
 
 docker-build:
-	docker build --build-arg PGO_PROFILE="$(PGO_PROFILE)" -f build/docker/Dockerfile -t $(SERVICE_NAME):local .
+	@fingerprint=""; \
+	if [ "$(PGO_PROFILE)" != "off" ]; then fingerprint="$$( $(PERFORMANCE_SCRIPT) pgo-fingerprint )"; fi; \
+	docker build \
+		--build-arg PGO_PROFILE="$(PGO_PROFILE)" \
+		--build-arg PGO_MANIFEST="$(PGO_MANIFEST)" \
+		--build-arg PGO_ACCEPTED_BUILD_FINGERPRINT="$$fingerprint" \
+		-f build/docker/Dockerfile -t $(SERVICE_NAME):local .
 
 docker-run:
 	docker run --rm --stop-timeout 45 -p 8080:8080 --env-file .env $(SERVICE_NAME):local

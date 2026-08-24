@@ -30,8 +30,9 @@ separate Docker-backed leaves. A host-only result does not prove them.
 
 [ci.yml](../.github/workflows/ci.yml) classifies the exact diff once and starts
 only applicable leaves. Runtime Go, root/tool dependencies, lint config,
-initializers, workflows, dependency automation, database, messaging, process,
-race, migrations, runtime image, and image security are separate surfaces.
+initializers, workflows, dependency automation, performance harness, database,
+messaging, process, race, migrations, runtime image, and image security are
+separate surfaces.
 Instruction-only quality does not install Go. Gitleaks uses a checksum-pinned
 binary and range scans pull requests, merge groups, and main pushes; tags and
 manual runs retain full-history proof. Integration builds one image only when a
@@ -40,6 +41,10 @@ and vulnerability gates. The always-reported `required` job fails when any
 applicable leaf fails or is cancelled and accepts deliberate path skips.
 Pull requests and merge groups are path-aware; main pushes, tags, and manual
 runs deliberately select the full surface set.
+
+Performance-harness changes run a pinned k6 `inspect` and evidence-owner
+self-test. That gate makes broken scenario wiring fail without starting a
+service or turning noisy benchmark thresholds into merge admission.
 
 GitHub Rulesets or organization policy own merge admission. Require `required`
 and `codeql-required`; the repository does not rewrite its own protection

@@ -371,7 +371,8 @@ generated-code drift. Use `BASE_REF=origin/main make proto-breaking` for
 compatibility.
 <!-- profile:grpc:end -->
 
-Performance work uses the narrowest matching standard benchmark command. See
+Performance work uses `make benchmark-capture`, `benchmark-compare`, or
+`benchmark-http` with an accepted workload, budget, and response owner. See
 [Benchmarking](docs/benchmarking.md).
 
 ## Documentation

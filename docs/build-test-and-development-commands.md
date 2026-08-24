@@ -268,13 +268,15 @@ migration rehearsal and vulnerability scanning.
 ```bash
 make run
 make build
-make build-pgo PGO_PROFILE=<representative-cpu.pprof>
+make pgo-manifest PGO_PROFILE=<representative-cpu.pprof> # requires provenance env; see Benchmarking
+make build-pgo PGO_PROFILE=<representative-cpu.pprof> PGO_MANIFEST=<representative-cpu.pprof.meta>
 make docker-build
 make docker-run
 ```
 
-`run` sources `.env` when present. PGO accepts only an explicit readable CPU
-profile; `off` is the default and rollback.
+`run` sources `.env` when present. PGO requires an explicit CPU profile and its
+provenance manifest; `off` is the default and rollback. Off and PGO local
+binaries have distinct paths, `bin/service` and `bin/service-pgo`.
 
 <!-- profile:messaging-nats-jetstream:start -->
 `make run-worker` and `make build-worker` own the messaging worker.
@@ -288,9 +290,11 @@ profile; `off` is the default and rollback.
 
 ## Benchmarking
 
-Use direct `go test -bench`, `benchstat`, profile, integration-tagged
-PostgreSQL, or pinned k6 commands from [Benchmarking](benchmarking.md).
-Benchmarks are explicit evidence, not default CI gates.
+Use `make benchmark-capture`, `benchmark-compare`, `benchmark-http`, and the
+profile commands from [Benchmarking](benchmarking.md). The capture owner records
+comparability metadata and rejects mismatched inputs before `benchstat`.
+Benchmarks are explicit evidence, not default CI gates; CI only runs the
+non-load `performance-harness-check` when its harness changes.
 
 ## CI and publication
 
