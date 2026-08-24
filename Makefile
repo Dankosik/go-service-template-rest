@@ -30,8 +30,9 @@ INTEGRATION_INIT_VARS := NAME TRANSPORT CONTRACT TARGET AUTH
 SHELL_FILES = $(shell git ls-files --cached --others --exclude-standard -- '*.sh' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 REDOCLY_CLI_VERSION := 2.40.0
 REDOCLY_CLI ?= npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION)
-GO_TOOL := go tool -modfile=tools/go.mod
-GOLANGCI_LINT ?= $(GO_TOOL) golangci-lint
+TOOL_GOMODCACHE ?= $(shell go env GOMODCACHE)
+GO_TOOL := env GOMODCACHE=$(TOOL_GOMODCACHE) go tool -modfile=tools/go.mod
+GOLANGCI_LINT ?= bash ./scripts/ci/golangci-lint.sh
 GO_REQUIRED_VERSION = $(shell awk '/^go / {print $$2; exit}' go.mod)
 REFERENCE_INTEGRATION_PACKAGE := $(if $(wildcard examples/reference-service/*_integration_test.go),./examples/reference-service)
 INTEGRATION_PACKAGES := ./test/... $(REFERENCE_INTEGRATION_PACKAGE)
@@ -57,13 +58,20 @@ WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./test
 # profile:webhooks-durable:end
 INTEGRATION_RACE_PACKAGES := $(sort $(MESSAGING_RACE_PACKAGES) $(OUTBOX_RACE_PACKAGES) $(WEBHOOK_RACE_PACKAGES))
 LINT_BASE_REF ?= origin/main
-LINT_CONCURRENCY ?= 2
+VALIDATION_MODE ?= polite
+VALIDATION_JOBS ?= 2
+VALIDATION_PARALLEL_TESTS ?= 2
+GOMAXPROCS ?= $(VALIDATION_JOBS)
+export GOMAXPROCS
+LINT_CONCURRENCY ?= $(VALIDATION_JOBS)
 PKG ?=
+PKGS ?=
+LINT_PKGS = $(if $(strip $(PKGS)),$(PKGS),$(PKG))
 FILES ?=
 ALLOW_HEAVY ?=
 export ALLOW_HEAVY
 LINT_PACKAGE_LINTERS := govet,errcheck,staticcheck,ineffassign,unused,bodyclose,nilerr,errorlint,forcetypeassert,noctx
-LINT_PR_LINTERS := $(LINT_PACKAGE_LINTERS),depguard,sqlclosecheck,exhaustive,containedctx,contextcheck,iface,interfacebloat,ireturn,rowserrcheck,wrapcheck
+LINT_PR_LINTERS := $(LINT_PACKAGE_LINTERS),depguard,sqlclosecheck,exhaustive,containedctx,contextcheck,iface,interfacebloat,ireturn,rowserrcheck,wrapcheck,gosec
 PR_LINT_TARGET ?= lint-pr
 SECRET_SCAN_BASE_REF ?= $(if $(strip $(BASE_REF)),$(BASE_REF),origin/main)
 GITLEAKS_FLAGS := --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml --baseline-path .gitleaks.baseline.json
@@ -75,7 +83,9 @@ VERIFY_RUNTIME_IMAGE ?= $(SERVICE_NAME):verify
 # GitHub Actions and other CI systems set CI=true, which is enough.
 HEAVY_GUARD = @if [ "$(ALLOW_HEAVY)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_HEAVY=1 (CI sets CI=true)\n' "$@"; exit 2; fi
 REQUIRE_PKG = @if [ -z "$(strip $(PKG))" ]; then printf '%s requires PKG=./path/to/package (use %s for the full module)\n' "$@" "test-all/lint-all/check"; exit 2; fi
+REQUIRE_LINT_PKGS = @if [ -z "$(strip $(LINT_PKGS))" ]; then printf '%s requires PKG=./path or PKGS="./path ./other"\n' "$@"; exit 2; fi
 REQUIRE_FILES = @if [ -z "$(strip $(FILES))" ]; then printf '%s requires FILES="file.go ..."\n' "$@"; exit 2; fi
+VALIDATION_LOCK := bash ./scripts/ci/validation-lock.sh --
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 TRIVY_CACHE_VOLUME ?= trivy-cache
@@ -110,7 +120,7 @@ TEMPLATE ?= ../go-service-template-rest
 .NOTPARALLEL: check check-go check-go-pr unit-check tools-dependencies-check mod-check openapi-check proto-check
 
 .PHONY: help template-init template-init-check integration-init integration-init-check integration-record-check integration-routing-check \
-	tidy fmt mod-check root-mod-check tools-mod-check tools-smoke tools-dependencies-check mod-tidy-check mod-verify fmt-check fmt-files-check unit-check plan verify verify-check check check-go check-go-pr check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check \
+	tidy fmt mod-check root-mod-check tools-mod-check tools-resolution-check tools-dependencies-check mod-tidy-check mod-verify fmt-check fmt-files-check unit-check plan verify verify-check check check-go check-go-pr check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check integration-routing-self-test validation-lock-self-test compose-environment-check \
 	test test-package test-all test-watch test-race test-integration test-integration-db test-integration-messaging test-integration-process test-integration-race \
 	lint lint-package lint-changed lint-pr lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
 	govulncheck gosec secret-scan secret-scan-history \
@@ -273,10 +283,10 @@ tools-mod-check:
 		exit 1; \
 	}
 
-tools-smoke:
-	bash ./scripts/ci/tools-smoke.sh
+tools-resolution-check:
+	bash ./scripts/ci/tools-resolution-check.sh
 
-tools-dependencies-check: tools-mod-check tools-smoke
+tools-dependencies-check: tools-mod-check tools-resolution-check
 
 mod-tidy-check:
 	GOFLAGS= go mod tidy -diff
@@ -310,12 +320,12 @@ fmt-files-check:
 	if [ -n "$$gofumpt_unformatted" ]; then echo "gofumpt required for:"; echo "$$gofumpt_unformatted"; echo "run 'make fmt'"; exit 1; fi
 
 lint-changed:
-	$(REQUIRE_PKG)
+	$(REQUIRE_LINT_PKGS)
 	@new_from=""; \
 	if git rev-parse --verify "$(LINT_BASE_REF)" >/dev/null 2>&1; then \
 		new_from="--new-from-merge-base=$(LINT_BASE_REF)"; \
 	fi; \
-	$(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PACKAGE_LINTERS) $$new_from --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
+	$(VALIDATION_LOCK) $(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PACKAGE_LINTERS) $$new_from --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(LINT_PKGS)
 
 unit-check: fmt-files-check test-package lint-changed
 
@@ -335,7 +345,7 @@ check-sqlc: sqlc-check
 
 check-instructions: template-owned-purity-check
 
-check-delivery: actionlint shellcheck dockerfile-check publish-image-metadata-check integration-routing-check
+check-delivery: actionlint shellcheck dockerfile-check publish-image-metadata-check integration-routing-check integration-routing-self-test validation-lock-self-test
 
 check-security-go: govulncheck gosec
 
@@ -357,6 +367,15 @@ verify-check:
 integration-routing-check:
 	INTEGRATION_PACKAGES='$(INTEGRATION_PACKAGES)' WEBHOOK_RACE_PACKAGES='$(WEBHOOK_RACE_PACKAGES)' bash ./scripts/ci/integration-routing-check.sh
 
+integration-routing-self-test:
+	bash ./scripts/ci/integration-routing-check.sh --self-test
+
+validation-lock-self-test:
+	bash ./scripts/ci/validation-lock.sh --self-test
+
+compose-environment-check:
+	docker compose -f env/docker-compose.yml config --quiet
+
 check: check-go check-openapi check-proto check-sqlc integration-record-check
 
 audit-full-manual:
@@ -376,34 +395,34 @@ audit-full-manual:
 
 test test-package:
 	$(REQUIRE_PKG)
-	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off $(PKG)
+	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off -p=$(VALIDATION_JOBS) -parallel=$(VALIDATION_PARALLEL_TESTS) $(PKG)
 
 test-all:
-	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off ./...
+	$(VALIDATION_LOCK) $(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off -p=$(VALIDATION_JOBS) -parallel=$(VALIDATION_PARALLEL_TESTS) ./...
 
 test-watch:
 	$(GO_TOOL) gotestsum --watch --format=pkgname-and-test-fails -- -vet=off
 
 test-race:
 	$(HEAVY_GUARD)
-	go test -vet=off -race ./...
+	$(VALIDATION_LOCK) go test -vet=off -p=$(VALIDATION_JOBS) -parallel=$(VALIDATION_PARALLEL_TESTS) -race ./...
 
 # profile:messaging-nats-jetstream:start
 test-messaging-race:
 	$(HEAVY_GUARD)
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
+	$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
 # profile:messaging-nats-jetstream:end
 
 # profile:outbox-postgres:start
 test-outbox-race:
 	$(HEAVY_GUARD)
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^TestPostgresOutbox'
+	$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^TestPostgresOutbox'
 # profile:outbox-postgres:end
 
 # profile:webhooks-durable:start
 test-webhook-race: integration-routing-check
 	$(HEAVY_GUARD)
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhookAcceptance|WebhookNetwork)'
+	$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhookAcceptance|WebhookNetwork)'
 # profile:webhooks-durable:end
 
 test-integration-race: integration-routing-check
@@ -411,20 +430,20 @@ test-integration-race: integration-routing-check
 	@if [ -z "$(strip $(INTEGRATION_RACE_PACKAGES))" ]; then \
 		echo "not applicable: no focused integration race packages"; \
 	else \
-		go test -vet=off -p=1 -count=1 -race -tags=integration $(INTEGRATION_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain|TestPostgresOutbox.*|TestPostgresWebhookAcceptance.*|TestWebhookNetwork.*)$$'; \
+		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -race -tags=integration $(INTEGRATION_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain|TestPostgresOutbox.*|TestPostgresWebhookAcceptance.*|TestWebhookNetwork.*)$$'; \
 	fi
 
 test-integration: integration-routing-check
 	$(HEAVY_GUARD)
-	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
+	$(VALIDATION_LOCK) go test -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration $(INTEGRATION_PACKAGES)
 
 test-integration-db:
 	$(HEAVY_GUARD)
 	@if [ ! -d internal/infra/postgresidempotency ] && ! find test -maxdepth 1 -type f -name 'postgres*integration_test.go' -print -quit 2>/dev/null | grep -q .; then \
 		echo "not applicable: no database integration surface"; \
 	else \
-		if [ -d internal/infra/postgresidempotency ]; then go test -vet=off -p=1 -count=1 -tags=integration ./internal/infra/postgresidempotency; fi; \
-		go test -vet=off -p=1 -count=1 -tags=integration ./test -run '^Test(Postgres|InboundWebhook|Webhook)'; \
+		if [ -d internal/infra/postgresidempotency ]; then $(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./internal/infra/postgresidempotency; fi; \
+		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./test -run '^Test(Postgres|InboundWebhook|Webhook)'; \
 	fi
 
 test-integration-messaging:
@@ -432,8 +451,8 @@ test-integration-messaging:
 	@if [ ! -d internal/infra/natsjs ]; then \
 		echo "not applicable: no messaging integration surface"; \
 	else \
-		go test -vet=off -p=1 -count=1 -tags=integration ./internal/infra/natsjs ./cmd/worker/internal/bootstrap; \
-		go test -vet=off -p=1 -count=1 -tags=integration ./test -run '^Test(NATS|PostgresOutbox)'; \
+		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./internal/infra/natsjs ./cmd/worker/internal/bootstrap; \
+		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./test -run '^Test(NATS|PostgresOutbox)'; \
 	fi
 
 test-integration-process:
@@ -441,7 +460,7 @@ test-integration-process:
 	@if ! find test -maxdepth 1 -type f -name '*process_integration_test.go' -print -quit 2>/dev/null | grep -q .; then \
 		echo "not applicable: no process integration surface"; \
 	else \
-		go test -vet=off -p=1 -count=1 -tags=integration ./test -run '^Test(GRPCProcessLifecycle|NATS.*Process|NATSWorkerMain|PostgresJobsWorkerProcess|InboundWebhookProcess)'; \
+		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./test -run '^Test(GRPCProcessLifecycle|NATS.*Process|NATSWorkerMain|PostgresJobsWorkerProcess|InboundWebhookProcess)'; \
 	fi
 
 # profile:jobs-postgres:start
@@ -467,10 +486,10 @@ run-outbox-relay:
 lint lint-package: lint-changed
 
 lint-all:
-	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+	$(VALIDATION_LOCK) $(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
 
 lint-pr:
-	$(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PR_LINTERS) --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
+	$(VALIDATION_LOCK) $(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PR_LINTERS) --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
 
 lint-deep:
 	$(HEAVY_GUARD)
@@ -479,7 +498,7 @@ lint-deep:
 
 lint-fast:
 	$(REQUIRE_PKG)
-	$(GOLANGCI_LINT) run --allow-serial-runners --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
+	$(VALIDATION_LOCK) $(GOLANGCI_LINT) run --allow-serial-runners --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
 
 deadcode:
 	$(HEAVY_GUARD)
@@ -495,13 +514,14 @@ modernize-check:
 	go fix -diff ./...
 
 test-parallelism-check:
-	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
+	$(VALIDATION_LOCK) $(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
 
 actionlint:
-	docker run --rm --read-only --network none \
-		-v "$(CURDIR):/src:ro" \
-		-w /src \
-		"$(ACTIONLINT_IMAGE)"
+	@if [ "$(CI)" = "true" ]; then \
+		docker run --rm --read-only --network none -v "$(CURDIR):/src:ro" -w /src "$(ACTIONLINT_IMAGE)"; \
+	else \
+		tool="$$(bash ./scripts/ci/native-validation-tool.sh actionlint)"; "$$tool"; \
+	fi
 
 actionlint-fast:
 	@test -z "$${CI:-}" || { echo "actionlint-fast is local-only; run make actionlint in CI"; exit 2; }
@@ -512,12 +532,11 @@ actionlint-fast:
 
 shellcheck:
 	@test -n "$(SHELL_FILES)" || { echo "no shell scripts found; skipping ShellCheck"; exit 0; }
-	docker run --rm --read-only --network none \
-		-v "$(CURDIR):/src:ro" \
-		-w /src \
-		"$(SHELLCHECK_IMAGE)" \
-		-x \
-		-- $(SHELL_FILES)
+	@if [ "$(CI)" = "true" ]; then \
+		docker run --rm --read-only --network none -v "$(CURDIR):/src:ro" -w /src "$(SHELLCHECK_IMAGE)" -x -- $(SHELL_FILES); \
+	else \
+		tool="$$(bash ./scripts/ci/native-validation-tool.sh shellcheck)"; "$$tool" -x -- $(SHELL_FILES); \
+	fi
 
 shellcheck-fast:
 	@test -z "$${CI:-}" || { echo "shellcheck-fast is local-only; run make shellcheck in CI"; exit 2; }
@@ -527,15 +546,15 @@ shellcheck-fast:
 	shellcheck -x -- $(SHELL_FILES)
 
 dockerfile-check:
-	docker buildx build --check -f build/docker/Dockerfile .
+	$(VALIDATION_LOCK) docker buildx build --check -f build/docker/Dockerfile .
 
 govulncheck:
 	$(HEAVY_GUARD)
-	$(GO_TOOL) govulncheck ./...
+	$(VALIDATION_LOCK) $(GO_TOOL) govulncheck ./...
 
 gosec:
 	$(HEAVY_GUARD)
-	GOSECGOVERSION=go$(GO_REQUIRED_VERSION) $(GO_TOOL) gosec $(if $(strip $(GOMAXPROCS)),-concurrency=$(GOMAXPROCS)) -quiet -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
+	$(VALIDATION_LOCK) env GOSECGOVERSION=go$(GO_REQUIRED_VERSION) $(GO_TOOL) gosec -concurrency=$(VALIDATION_JOBS) -quiet -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
 
 secret-scan:
 	@if [ "$(CI)" != "true" ]; then $(GITLEAKS) dir $(GITLEAKS_FLAGS) .; fi
@@ -656,12 +675,12 @@ check-proto: proto-check
 # profile:database-postgres:start
 migration-validate:
 	$(HEAVY_GUARD)
-	GO="$(GO)" $(MIGRATION_VALIDATE_SCRIPT) "$(RUNTIME_IMAGE)" "$(RUNTIME_EXPECTED_VERSION)" "$(SERVICE_NAME)"
+	$(VALIDATION_LOCK) env GO="$(GO)" $(MIGRATION_VALIDATE_SCRIPT) "$(RUNTIME_IMAGE)" "$(RUNTIME_EXPECTED_VERSION)" "$(SERVICE_NAME)"
 # profile:database-postgres:end
 
 container-security:
 	$(HEAVY_GUARD)
-	@image="$(CONTAINER_IMAGE)"; \
+	@$(VALIDATION_LOCK) bash -c 'image="$$1"; service="$$2"; shift 2; \
 	if [ -z "$$image" ]; then image="$(SERVICE_NAME):ci"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
 	docker run --rm \
 		-v /var/run/docker.sock:/var/run/docker.sock \
@@ -676,14 +695,15 @@ container-security:
 		--ignore-unfixed \
 		--exit-code 1 \
 		--format table \
-		"$$image"
+		"$$image"' -- "$(CONTAINER_IMAGE)" "$(SERVICE_NAME)"
 
 runtime-image-build:
-	bash ./scripts/ci/runtime-image-build.sh "$(RUNTIME_IMAGE)"
+	$(HEAVY_GUARD)
+	$(VALIDATION_LOCK) bash ./scripts/ci/runtime-image-build.sh "$(RUNTIME_IMAGE)"
 
 runtime-image-check:
 	$(HEAVY_GUARD)
-	$(RUNTIME_IMAGE_CHECK_SCRIPT) "$(if $(RUNTIME_IMAGE),$(RUNTIME_IMAGE),$(VERIFY_RUNTIME_IMAGE))" "$(RUNTIME_EXPECTED_VERSION)"
+	$(VALIDATION_LOCK) $(RUNTIME_IMAGE_CHECK_SCRIPT) "$(if $(RUNTIME_IMAGE),$(RUNTIME_IMAGE),$(VERIFY_RUNTIME_IMAGE))" "$(RUNTIME_EXPECTED_VERSION)"
 
 # profile:object-storage:start
 test-s3-conformance-amazon:

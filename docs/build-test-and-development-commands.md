@@ -107,8 +107,12 @@ make verify
 
 `plan` collects base-branch, staged, unstaged, and untracked changes, explains
 their surfaces and not-applicable gates, and prints the minimal command set.
-`verify` runs that set sequentially, reports durations and scope, and reuses an
-exact passing receipt from the Git worktree metadata.
+`verify` rejects missing heavy authorization, Docker, or required binaries before
+the first check. It batches changed Go formatting and lint packages, runs one
+`test-all`, and serializes CPU/Docker work through the Git-common validation
+lock. Its exact passing receipt is shared by related worktrees and binds the
+resolved base, merge base, plan, execution inputs, tool versions, and candidate;
+a candidate change during execution invalidates the run.
 
 The explicit full-repository owner remains available when the claim spans it:
 
@@ -125,6 +129,7 @@ Package-scoped names refuse a missing `PKG`; they do not default to `./...`:
 ```bash
 make test-package PKG=./internal/<package>
 make lint-changed PKG=./internal/<package>
+make lint-changed PKGS='./internal/one ./internal/two'
 make lint-pr
 make test-all
 make lint-all
@@ -306,11 +311,13 @@ non-load `performance-harness-check` when its harness changes.
 
 ## CI and publication
 
-`ci.yml` classifies the changed surface once, runs only the matching quality,
-security, delivery, contract, instruction, and integration leaves, and exposes
-one always-reported `required` context. Go module and build caches use separate
-quality, security, secret-scan, and integration keys; Node is set up only for
-OpenAPI work. `codeql.yml` uses the same classifier for pull requests and runs
-both languages on main, tags, schedule, and manual dispatch. `cd.yml` waits for
+`ci.yml` classifies the exact PR, merge-group, or main-push diff once, rejects
+unclassified paths, runs only matching leaves, and exposes one always-reported
+`required` context. PR jobs restore but do not save the separate root-module,
+tool-module, build, and lint caches; the main quality owner refreshes them.
+Generated Go, compose, publication metadata, and the messaging/outbox/webhook
+race owners route independently, and image-only work skips Go setup.
+`codeql.yml` uses the same exact-diff classifier and restores downloaded modules
+without restoring the build cache CodeQL must observe. `cd.yml` waits for
 exact-SHA CI and CodeQL before publishing through the digest-bound
 `publish-image` action. GitHub Rulesets remain external repository policy.

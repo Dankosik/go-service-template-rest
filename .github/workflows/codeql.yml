@@ -22,6 +22,7 @@ permissions:
 
 env:
   GOTOOLCHAIN: local
+  GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
 
 jobs:
   changes:
@@ -29,6 +30,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       go_source: ${{ steps.surfaces.outputs.go_source }}
+      go_handwritten: ${{ steps.surfaces.outputs.go_handwritten }}
       go_root_dependencies: ${{ steps.surfaces.outputs.go_root_dependencies }}
       github_workflows: ${{ steps.surfaces.outputs.github_workflows }}
     steps:
@@ -40,12 +42,14 @@ jobs:
         id: surfaces
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: |
           set -euo pipefail
-          if [[ "${EVENT_NAME}" == pull_request || "${EVENT_NAME}" == merge_group ]]; then
+          if [[ "${EVENT_NAME}" == schedule || "${EVENT_NAME}" == workflow_dispatch || "${GITHUB_REF}" == refs/tags/* ]]; then
+            bash ./scripts/ci/changed-surfaces.sh --all >>"${GITHUB_OUTPUT}"
+          elif [[ -n "${BASE_SHA}" && "${BASE_SHA}" != 0000000000000000000000000000000000000000 ]]; then
             git fetch --no-tags --depth=1 origin "${BASE_SHA}"
-            git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/changed-surfaces.sh >>"${GITHUB_OUTPUT}"
+            git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/changed-surfaces.sh --union "${BASE_SHA}" >>"${GITHUB_OUTPUT}"
           else
             bash ./scripts/ci/changed-surfaces.sh --all >>"${GITHUB_OUTPUT}"
           fi
@@ -72,7 +76,7 @@ jobs:
 
   analyze-go:
     needs: changes
-    if: needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_root_dependencies == 'true'
+    if: needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.go_root_dependencies == 'true'
     name: Analyze (go)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -86,6 +90,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Restore downloaded Go modules
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.GOMODCACHE }}
+          key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
@@ -95,7 +105,7 @@ jobs:
       - name: Build Go packages
         env:
           GOFLAGS: -mod=readonly
-        run: go build ./...
+        run: bash ./scripts/ci/measure.sh codeql-go-build -- go build ./...
       - name: Analyze
         uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
 

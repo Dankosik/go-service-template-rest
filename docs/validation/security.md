@@ -14,3 +14,7 @@ Security validation supplements the negative-path behavior proof at the trust
 boundary; it does not replace it. Full-history proof applies only when the
 intended claim explicitly spans repository history, such as main or release
 validation.
+
+PR lint includes `gosec` in the shared golangci-lint package load. The standalone
+PR scan remains non-blocking parity telemetry until enough runs establish equal
+findings; main, schedule, and release keep the standalone blocking scan.

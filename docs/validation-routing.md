@@ -23,7 +23,10 @@ become a passing skip.
 
 `make plan` explains the current worktree's selected surfaces, commands, and
 not-applicable gates. `make verify` runs that non-overlapping plan and reuses an
-exact passing receipt while candidate, plan, and environment remain unchanged.
+exact Git-common passing receipt while resolved base, merge base, candidate,
+plan, execution inputs, and environment remain unchanged. Heavy authorization,
+Docker, and binary checks happen before execution; selected integration leaves
+force `REQUIRE_DOCKER=1`, and a changed candidate cannot produce a receipt.
 `make check` remains the explicit deterministic full-repository gate.
 
 `*-fast` targets are local iteration signals. They refuse CI and local tool

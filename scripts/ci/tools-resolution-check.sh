@@ -27,32 +27,33 @@ registered=$(registered_tool_paths)
 	exit 1
 }
 
-smoke_registered_tools() {
+resolve_registered_tools() {
 	while IFS= read -r owner; do
 		tool=$(tool_name "${owner}")
 		go tool -modfile=tools/go.mod -n "${tool}" >/dev/null
-		echo "tool smoke passed: ${tool}"
+		echo "tool resolution passed: ${tool}"
 	done <<<"${registered}"
 }
 
-if [[ ${TOOLS_SMOKE_ALL:-} == 1 ]]; then
-	smoke_registered_tools
+if [[ ${TOOLS_RESOLUTION_ALL:-} == 1 ]]; then
+	resolve_registered_tools
 	exit
 fi
 
 base_ref=${BASE_REF:-origin/main}
-git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1 || {
-	echo "tools smoke base is unavailable: ${base_ref}; set BASE_REF to a readable commit" >&2
-	exit 2
-}
+if ! git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1; then
+	echo "tools resolution base is unavailable: ${base_ref}; resolving every registered tool"
+	resolve_registered_tools
+	exit
+fi
 tmp=$(mktemp -d)
 trap 'rm -rf -- "${tmp}"' EXIT
 diff_file=${tmp}/tools.diff
 
-if ! git diff --quiet "${base_ref}" HEAD -- scripts/ci/tools-smoke.sh ||
-	! git diff --quiet -- scripts/ci/tools-smoke.sh ||
-	! git diff --cached --quiet -- scripts/ci/tools-smoke.sh; then
-	smoke_registered_tools
+if ! git diff --quiet "${base_ref}" HEAD -- scripts/ci/tools-resolution-check.sh ||
+	! git diff --quiet -- scripts/ci/tools-resolution-check.sh ||
+	! git diff --cached --quiet -- scripts/ci/tools-resolution-check.sh; then
+	resolve_registered_tools
 	exit
 fi
 
@@ -88,7 +89,7 @@ while IFS= read -r candidate; do
 		owner=$(grep -Fxf <(printf '%s\n' "${registered}") <<<"${why}" | head -n 1 || true)
 	fi
 	if [[ -z ${owner} ]]; then
-		echo "tools smoke: no registered tool owner found for ${candidate}; tidy remains the proof" >&2
+		echo "tools resolution: no registered tool owner found for ${candidate}; tidy remains the proof" >&2
 		continue
 	fi
 	tool=$(tool_name "${owner}")
@@ -103,5 +104,5 @@ fi
 while IFS= read -r tool; do
 	[[ -n ${tool} ]] || continue
 	go tool -modfile=tools/go.mod -n "${tool}" >/dev/null
-	echo "tool smoke passed: ${tool}"
+	echo "tool resolution passed: ${tool}"
 done <<<"${tools}"
