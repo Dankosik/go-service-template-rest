@@ -75,7 +75,7 @@ self_test() {
 	grep -q 'make test-all' <<<"${output}"
 	grep -q 'make root-mod-check' <<<"${output}"
 
-	if ALLOW_HEAVY='' bash "$0" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-heavy.$$"; then
+	if CI='' ALLOW_HEAVY='' bash "$0" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-heavy.$$"; then
 		echo "verify self-test accepted a heavy route without ALLOW_HEAVY=1" >&2
 		return 1
 	fi
@@ -104,16 +104,22 @@ trap 'rm -rf -- "${tmp}"' EXIT
 files_path=${tmp}/files
 base_ref=${BASE_REF:-origin/main}
 
-git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1 || {
-	echo "verification base is unavailable: ${base_ref}; set BASE_REF to a readable commit" >&2
-	exit 2
-}
-resolved_base_sha=$(git rev-parse "${base_ref}^{commit}")
-merge_base_sha=$(git merge-base HEAD "${resolved_base_sha}")
-
 if ((${#provided_files[@]})); then
 	printf '%s\n' "${provided_files[@]}" >"${files_path}"
+	if git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1; then
+		resolved_base_sha=$(git rev-parse "${base_ref}^{commit}")
+		merge_base_sha=$(git merge-base HEAD "${resolved_base_sha}")
+	else
+		resolved_base_sha=$(git rev-parse HEAD)
+		merge_base_sha=${resolved_base_sha}
+	fi
 else
+	git rev-parse --verify "${base_ref}^{commit}" >/dev/null 2>&1 || {
+		echo "verification base is unavailable: ${base_ref}; set BASE_REF to a readable commit" >&2
+		exit 2
+	}
+	resolved_base_sha=$(git rev-parse "${base_ref}^{commit}")
+	merge_base_sha=$(git merge-base HEAD "${resolved_base_sha}")
 	{
 		git diff --name-only "${base_ref}...HEAD"
 		git diff --name-only
@@ -348,12 +354,10 @@ if [[ ${requires_docker} == true ]]; then
 fi
 
 fingerprint_candidate() {
-	local current_base current_merge file mode
-	current_base=$(git rev-parse "${base_ref}^{commit}")
-	current_merge=$(git merge-base HEAD "${current_base}")
+	local file mode
 	{
 		printf 'head=%s\n' "$(git rev-parse HEAD)"
-		printf 'base_ref=%s\nresolved_base_sha=%s\nmerge_base_sha=%s\n' "${base_ref}" "${current_base}" "${current_merge}"
+		printf 'base_ref=%s\nresolved_base_sha=%s\nmerge_base_sha=%s\n' "${base_ref}" "${resolved_base_sha}" "${merge_base_sha}"
 		while IFS= read -r file; do
 			if [[ -L ${file} ]]; then mode=120000; elif [[ -x ${file} ]]; then mode=100755; else mode=100644; fi
 			if [[ -f ${file} || -L ${file} ]]; then printf 'mode %s  %s\n' "${mode}" "${file}"; shasum -a 256 "${file}"; else printf 'deleted  %s\n' "${file}"; fi
