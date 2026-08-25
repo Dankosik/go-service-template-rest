@@ -71,7 +71,7 @@ ALLOW_HEAVY ?=
 export ALLOW_HEAVY
 ALLOW_FULL ?=
 export ALLOW_FULL
-LINT_PACKAGE_LINTERS := govet,errcheck,staticcheck,ineffassign,unused,bodyclose,nilerr,errorlint,forcetypeassert,noctx
+LINT_PACKAGE_LINTERS := govet,errcheck,staticcheck,modernize,ineffassign,unused,bodyclose,nilerr,errorlint,forcetypeassert,noctx
 LINT_PR_LINTERS := $(LINT_PACKAGE_LINTERS),depguard,sqlclosecheck,exhaustive,containedctx,contextcheck,iface,interfacebloat,ireturn,rowserrcheck,wrapcheck,gosec
 SECRET_SCAN_BASE_REF ?= $(if $(strip $(BASE_REF)),$(BASE_REF),origin/main)
 GITLEAKS_FLAGS := --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml --baseline-path .gitleaks.baseline.json
