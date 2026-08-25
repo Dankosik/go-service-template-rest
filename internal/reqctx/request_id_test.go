@@ -9,10 +9,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/reqctx"
 )
 
-// TestRequestIDWireNamesAreOneName holds the invariant that lets four transport
-// adapters derive their spelling from this package instead of restating it: the
-// HTTP and gRPC forms must stay the same name, each in the casing its protocol
-// requires.
 func TestContextWithAcceptedRequestID(t *testing.T) {
 	t.Parallel()
 	safeRequestID := regexp.MustCompile(`^[A-Za-z0-9._~-]+$`)

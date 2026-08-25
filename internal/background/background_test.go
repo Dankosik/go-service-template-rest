@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync/atomic"
@@ -207,11 +208,27 @@ func TestCancellationIsNotATaskFailure(t *testing.T) {
 	sup := New(context.Background(), discardLogger())
 	sup.Go(Task{Name: "worker", Run: func(ctx context.Context) error {
 		<-ctx.Done()
-		return ctx.Err()
+		return fmt.Errorf("worker stopped: %w", ctx.Err())
 	}})
 
 	if err := sup.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown() error = %v, want nil", err)
+	}
+}
+
+func TestCancellationDoesNotHideAnotherTaskFailure(t *testing.T) {
+	t.Parallel()
+
+	cleanupErr := errors.New("flush failed")
+	sup := New(context.Background(), discardLogger())
+	sup.Go(Task{Name: "worker", Run: func(ctx context.Context) error {
+		<-ctx.Done()
+		return errors.Join(ctx.Err(), cleanupErr)
+	}})
+
+	err := sup.Shutdown(context.Background())
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, cleanupErr) {
+		t.Fatalf("Shutdown() error = %v, want cancellation and %v", err, cleanupErr)
 	}
 }
 
@@ -298,6 +315,34 @@ func TestShutdownIsIdempotent(t *testing.T) {
 	if !errors.Is(first, taskErr) || !errors.Is(second, taskErr) {
 		t.Fatalf("Shutdown() results = %v / %v, want both to wrap %v", first, second, taskErr)
 	}
+}
+
+func TestGoAfterShutdownDoesNotStartTask(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		var logged bytes.Buffer
+		sup := New(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)))
+		if err := sup.Shutdown(context.Background()); err != nil {
+			t.Fatalf("Shutdown() error = %v, want nil", err)
+		}
+
+		started := make(chan struct{})
+		sup.Go(Task{Name: "late", Run: func(context.Context) error {
+			close(started)
+			return nil
+		}})
+		synctest.Wait()
+
+		select {
+		case <-started:
+			t.Fatal("Go() started a task after Shutdown() completed")
+		default:
+		}
+		if !strings.Contains(logged.String(), "background_task_invalid") {
+			t.Fatalf("log = %q, want an invalid-task record", logged.String())
+		}
+	})
 }
 
 func TestNilRunIsRejectedWithoutStarting(t *testing.T) {

@@ -63,9 +63,8 @@ func TestForCodeRefusesUnpublishedCode(t *testing.T) {
 	}
 }
 
-// TestCatalogPublishesStableEnvelopes pins the strings a client keys off. The
-// other catalog tests hold the shape; these are the literal values, so changing
-// one is a published-contract decision rather than an edit nothing reports.
+// TestCatalogPublishesStableEnvelopes pins the remaining strings a client keys
+// off. Conflict equivalence and the idempotency profile have focused tests.
 func TestCatalogPublishesStableEnvelopes(t *testing.T) {
 	t.Parallel()
 
@@ -76,10 +75,19 @@ func TestCatalogPublishesStableEnvelopes(t *testing.T) {
 		typeURI string
 	}{
 		{code: problem.CodeBadRequest, status: http.StatusBadRequest, title: "bad request", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1"},
+		{code: problem.CodeUnauthorized, status: http.StatusUnauthorized, title: "unauthorized", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2"},
+		{code: problem.CodeForbidden, status: http.StatusForbidden, title: "forbidden", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.4"},
 		{code: problem.CodeNotFound, status: http.StatusNotFound, title: "not found", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.5"},
 		{code: problem.CodeMethodNotAllowed, status: http.StatusMethodNotAllowed, title: "method not allowed", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6"},
 		{code: problem.CodeRequestEntityTooLarge, status: http.StatusRequestEntityTooLarge, title: "request entity too large", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.14"},
+		// profile:authn-bearer:start
+		{code: problem.CodeRequestHeaderFieldsTooLarge, status: http.StatusRequestHeaderFieldsTooLarge, title: "request header fields too large", typeURI: "https://www.rfc-editor.org/rfc/rfc6585#section-5"},
+		// profile:authn-bearer:end
+		{code: problem.CodeUnprocessableContent, status: http.StatusUnprocessableEntity, title: "unprocessable content", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.21"},
+		{code: problem.CodeTooManyRequests, status: http.StatusTooManyRequests, title: "too many requests", typeURI: "https://www.rfc-editor.org/rfc/rfc6585#section-4"},
 		{code: problem.CodeInternalError, status: http.StatusInternalServerError, title: "internal server error", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1"},
+		{code: problem.CodeServiceUnavailable, status: http.StatusServiceUnavailable, title: "service unavailable", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4"},
+		{code: problem.CodeGatewayTimeout, status: http.StatusGatewayTimeout, title: "gateway timeout", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.5"},
 	} {
 		definition := problem.ForCodeOrInternal(tt.code)
 		if definition.Code != tt.code {

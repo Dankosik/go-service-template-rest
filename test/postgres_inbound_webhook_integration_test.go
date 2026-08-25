@@ -84,7 +84,7 @@ func TestPostgresInboundWebhookAtomicAcceptance(t *testing.T) {
 	receiver := inboundReceiver(t, dsn)
 	ctx := t.Context()
 	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
-	if err != nil || result.Outcome != inboundwebhook.OutcomeAccepted {
+	if err != nil || result != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 2})
@@ -144,7 +144,7 @@ func TestPostgresInboundWebhookAtomicAcceptanceRollsBackOnJobFailure(t *testing.
 
 	receiver := inboundReceiver(t, dsn)
 	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
-	if result.Outcome != inboundwebhook.OutcomeUnavailable || !errors.Is(err, inboundwebhook.ErrUnavailable) {
+	if result != inboundwebhook.OutcomeUnavailable || !errors.Is(err, inboundwebhook.ErrUnavailable) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	var receipts, jobs int
@@ -176,7 +176,7 @@ func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 				t.Errorf("receive: %v", err)
 				return
 			}
-			outcomes <- result.Outcome
+			outcomes <- result
 		}()
 	}
 	close(start)
@@ -222,7 +222,7 @@ func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 		t.Fatal(err)
 	}
 	conflict, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, otherBody, sig))
-	if err != nil || conflict.Outcome != inboundwebhook.OutcomeConflict {
+	if err != nil || conflict != inboundwebhook.OutcomeConflict {
 		t.Fatalf("conflict=%+v err=%v", conflict, err)
 	}
 
@@ -236,7 +236,7 @@ func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 		t.Fatal(err)
 	}
 	other, err := receiver.Receive(ctx, inboundDelivery("other", inboundVectorID, inboundVectorBody, otherSig))
-	if err != nil || other.Outcome != inboundwebhook.OutcomeAccepted {
+	if err != nil || other != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("other endpoint=%+v err=%v", other, err)
 	}
 }

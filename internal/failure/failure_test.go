@@ -7,8 +7,6 @@ import (
 	"go/parser"
 	"go/token"
 	"net"
-	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -57,11 +55,7 @@ func TestCodesAreStableAndTransportNeutral(t *testing.T) {
 func TestAllCodesEnumeratesEveryDeclaredConstant(t *testing.T) {
 	t.Parallel()
 
-	_, testFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("resolve test source location")
-	}
-	syntax, err := parser.ParseFile(token.NewFileSet(), filepath.Join(filepath.Dir(testFile), "failure.go"), nil, 0)
+	syntax, err := parser.ParseFile(token.NewFileSet(), "failure.go", nil, 0)
 	if err != nil {
 		t.Fatalf("parse failure.go: %v", err)
 	}
@@ -254,5 +248,20 @@ func TestClassifyRefusesUnknownError(t *testing.T) {
 	got, ok := failure.Classify(errors.New("unknown"), []failure.Mapper{nil})
 	if ok || got != (failure.Classification{}) {
 		t.Fatalf("Classify() = (%+v, %t), want (zero, false)", got, ok)
+	}
+}
+
+func TestClassifyRefusesUnpublishedClassification(t *testing.T) {
+	t.Parallel()
+
+	invalid := func(error) (failure.Classification, bool) {
+		return failure.Classification{Code: "not_published", Detail: "must not escape"}, true
+	}
+	broad := func(error) (failure.Classification, bool) {
+		return failure.Classification{Code: failure.CodeInternalError}, true
+	}
+	got, ok := failure.Classify(errors.New("unknown"), []failure.Mapper{invalid, broad})
+	if ok || got != (failure.Classification{}) {
+		t.Fatalf("Classify() = (%+v, %t), want unpublished code rejected", got, ok)
 	}
 }

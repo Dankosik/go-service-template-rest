@@ -29,7 +29,7 @@ import (
 // through: slog's JSON handler wrapped in this package's correlating handler.
 //
 // Correlation is the whole reason it is one constructor. A logger built without
-// New here still logs, and silently drops request_id, trace_id, and span_id from
+// it still logs, and silently drops request_id, trace_id, and span_id from
 // every record for the life of the process — a loss no test of the surrounding
 // code would notice.
 //
@@ -37,7 +37,8 @@ import (
 // binary uses before its configuration loads must state that it does not know the
 // version yet, so the With call belongs at each composition root.
 func NewProcessLogger(out io.Writer, level slog.Level) *slog.Logger {
-	return slog.New(New(slog.NewJSONHandler(out, &slog.HandlerOptions{Level: level})))
+	next := slog.NewJSONHandler(out, &slog.HandlerOptions{Level: level})
+	return slog.New(handler{base: next, derived: next})
 }
 
 // Attribute keys published on every record that has them available. They match
@@ -70,18 +71,6 @@ type handler struct {
 	// grouped reports whether any operation opened a group, which is the only
 	// case that cannot use derived directly.
 	grouped bool
-}
-
-// New wraps next so every record it handles carries the request identifier and
-// trace identifiers of the context it was logged with.
-//
-// A nil next returns nil, so a caller cannot accidentally build a logger around
-// nothing.
-func New(next slog.Handler) slog.Handler {
-	if next == nil {
-		return nil
-	}
-	return handler{base: next, derived: next}
 }
 
 func (h handler) Enabled(ctx context.Context, level slog.Level) bool {
@@ -129,8 +118,8 @@ func (h handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	}
 	return handler{
 		base:    h.base,
-		derived: h.derived.WithAttrs(attrs),
-		ops:     append(slices.Clone(h.ops), operation{attrs: slices.Clone(attrs)}),
+		derived: h.derived.WithAttrs(slices.Clone(attrs)),
+		ops:     append(slices.Clone(h.ops), operation{attrs: attrs}),
 		grouped: h.grouped,
 	}
 }
@@ -155,7 +144,7 @@ func (h handler) replay(attrs []slog.Attr) slog.Handler {
 			target = target.WithGroup(op.group)
 			continue
 		}
-		target = target.WithAttrs(op.attrs)
+		target = target.WithAttrs(slices.Clone(op.attrs))
 	}
 	return target
 }

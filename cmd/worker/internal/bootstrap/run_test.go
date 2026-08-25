@@ -45,6 +45,24 @@ func TestMessagingCompositionRejectsDisabledTransportWithRegisteredHandler(t *te
 	}
 }
 
+func TestMessagingCompositionRejectsShutdownBudgetWithoutCleanupTail(t *testing.T) {
+	configtest.IsolateEnv(t)
+	// profile:authn-oidc-jwt:start
+	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
+	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
+	// profile:authn-oidc-jwt:end
+	t.Setenv("APP__HTTP__GRACE_PERIOD", "25s")
+	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "25s")
+	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "0s")
+
+	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
+		return nil, nil, nil
+	})
+	if !errors.Is(err, config.ErrValidate) || !strings.Contains(err.Error(), "post-drain teardown budget") {
+		t.Fatalf("run(unreserved shutdown budget) error = %v, want ErrValidate naming the cleanup tail", err)
+	}
+}
+
 func TestMessagingCompositionParsesWorkerBounds(t *testing.T) {
 	cfg := config.MessagingConfig{
 		MaxPayloadBytes: 256 << 10,

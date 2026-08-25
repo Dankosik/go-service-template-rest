@@ -81,15 +81,14 @@ func TestPostgresOutboxPublishesThroughRiverWithOriginalIdentityAndTrace(t *test
 
 	producing, span := otel.GetTracerProvider().Tracer("integration").Start(ctx, "change example")
 	origin := trace.SpanContextFromContext(producing)
-	event, err := domainevent.New(
+	kind := domainevent.Define[map[string]string]("example.changed", 1)
+	event, err := kind.New(
 		"event-river-nats",
-		"example.changed",
-		1,
 		time.Now().UTC(),
 		map[string]string{"id": "domain-1"},
 	)
 	if err != nil {
-		t.Fatalf("domainevent.New(): %v", err)
+		t.Fatalf("Kind.New(): %v", err)
 	}
 	if err := postgres.InTx(producing, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return appender.Append(producing, tx, event)

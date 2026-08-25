@@ -18,6 +18,9 @@ func NewOutboxAppender(maxPayloadBytes int, routes ...Route) (*postgresoutbox.Ap
 		return nil, err
 	}
 	appender, err := postgresoutbox.NewAppender(maxPayloadBytes, func(event domainevent.Event) (string, error) {
+		if err := validateRequiredValue("message ID", event.ID); err != nil {
+			return "", err
+		}
 		subject, ok := subjects[routeKey{typeName: event.Type, version: event.Version}]
 		if !ok {
 			return "", fmt.Errorf("no outbox route for %s v%d", event.Type, event.Version)
