@@ -2,12 +2,15 @@ package httpx
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -95,21 +98,29 @@ func TestRateLimitExemptsHealthProbes(t *testing.T) {
 	}
 }
 
-func TestRateLimitIsOmittedWithoutALimiterOrKey(t *testing.T) {
+func TestRateLimitIsOmittedWithoutALimiter(t *testing.T) {
 	t.Parallel()
 
 	// Asserted by behavior rather than by identity: http.HandlerFunc is a func
 	// type and therefore uncomparable.
-	for name, handler := range map[string]http.Handler{
-		"nil limiter": RateLimit(nil, HeaderRateLimitKey(rateLimitTestHeader), okHandler()),
-		"nil key":     RateLimit(mustNewKeyedRateLimiter(t, 1, 1, 8), nil, okHandler()),
-	} {
-		for attempt := range 5 {
-			if got := doRateLimitedRequest(handler, "caller-a"); got.Code != http.StatusOK {
-				t.Fatalf("%s: request %d status = %d, want the middleware left out of the chain", name, attempt+1, got.Code)
-			}
+	handler := RateLimit(nil, HeaderRateLimitKey(rateLimitTestHeader), okHandler())
+	for attempt := range 5 {
+		if got := doRateLimitedRequest(handler, "caller-a"); got.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, want the middleware left out of the chain", attempt+1, got.Code)
 		}
 	}
+}
+
+func TestRateLimitPanicsForLimiterWithoutKey(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if recovered := recover(); recovered == nil {
+			t.Fatal("RateLimit() panic = nil, want a limiter without a key to fail during construction")
+		}
+	}()
+
+	RateLimit(mustNewKeyedRateLimiter(t, 1, 1, 8), nil, okHandler())
 }
 
 // TestHeaderRateLimitKeyDoesNotLeakTheCredential keeps the value that identifies
@@ -213,6 +224,9 @@ func TestNewKeyedRateLimiterRejectsUnusableSettings(t *testing.T) {
 	if _, err := NewKeyedRateLimiter(0, 1, 8); err == nil {
 		t.Fatal("NewKeyedRateLimiter(perSecond=0) error = nil, want a rejection")
 	}
+	if _, err := NewKeyedRateLimiter(math.NaN(), 1, 8); err == nil {
+		t.Fatal("NewKeyedRateLimiter(perSecond=NaN) error = nil, want a rejection")
+	}
 	if _, err := NewKeyedRateLimiter(1, 0, 8); err == nil {
 		t.Fatal("NewKeyedRateLimiter(burst=0) error = nil, want a rejection")
 	}
@@ -249,6 +263,45 @@ func TestKeyedRateLimiterIsSafeUnderConcurrentKeys(t *testing.T) {
 		})
 	}
 	waitGroup.Wait()
+}
+
+func TestKeyedRateLimiterConcurrentRejectionsDoNotConsumeBudget(t *testing.T) {
+	previousMaxProcs := runtime.GOMAXPROCS(16)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previousMaxProcs) })
+
+	synctest.Test(t, func(t *testing.T) {
+		limiter := mustNewKeyedRateLimiter(t, 1, 1, 8)
+		if allowed, _ := limiter.Allow(t.Context(), "caller"); !allowed {
+			t.Fatal("first request was refused")
+		}
+
+		start := make(chan struct{})
+		results := make(chan bool, 64)
+		var waitGroup sync.WaitGroup
+		for range cap(results) {
+			waitGroup.Go(func() {
+				<-start
+				allowed, _ := limiter.Allow(t.Context(), "caller")
+				results <- allowed
+			})
+		}
+		close(start)
+		waitGroup.Wait()
+		close(results)
+		for allowed := range results {
+			if allowed {
+				t.Fatal("concurrent over-budget request was admitted")
+			}
+		}
+
+		if _, retryAfter := limiter.Allow(t.Context(), "caller"); retryAfter > time.Second {
+			t.Fatalf("Retry-After after rejected requests = %s, want at most one token interval", retryAfter)
+		}
+		time.Sleep(time.Second)
+		if allowed, _ := limiter.Allow(t.Context(), "caller"); !allowed {
+			t.Fatal("rejected requests consumed budget")
+		}
+	})
 }
 
 func TestRouterRejectsARateLimiterWithoutAKey(t *testing.T) {

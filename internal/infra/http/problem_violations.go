@@ -109,7 +109,12 @@ func appendViolations(violations []fieldViolation, err error, field string) []fi
 func schemaViolation(schemaErr *openapi3.SchemaError, fallbackField string) fieldViolation {
 	field := fallbackField
 	if pointer := schemaErr.JSONPointer(); len(pointer) > 0 {
-		field = "/" + strings.Join(pointer, "/")
+		escaped := make([]string, len(pointer))
+		for i, segment := range pointer {
+			segment = strings.ReplaceAll(segment, "~", "~0")
+			escaped[i] = strings.ReplaceAll(segment, "/", "~1")
+		}
+		field = "/" + strings.Join(escaped, "/")
 	}
 
 	// Reason first: it is the only member kin-openapi documents as value-free.
@@ -144,13 +149,16 @@ func requestErrorReason(requestErr *openapi3filter.RequestError) string {
 }
 
 func boundedReason(reason string) string {
-	// Byte length gates a rune slice: under the limit in bytes is under it in
-	// runes too, so the ordinary reason costs no allocation and the one that has
-	// to be cut is not cut through a rune.
+	// Byte length is the allocation-free fast path. A longer byte string may
+	// still fit the rune bound, so count it before slicing.
 	if len(reason) <= maxViolationReason {
 		return reason
 	}
-	return string([]rune(reason)[:maxViolationReason]) + "…"
+	runes := []rune(reason)
+	if len(runes) <= maxViolationReason {
+		return reason
+	}
+	return string(runes[:maxViolationReason-1]) + "…"
 }
 
 // violationFields renders violations for a log record.

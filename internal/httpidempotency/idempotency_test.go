@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -109,17 +110,24 @@ func TestParseKey(t *testing.T) {
 	}
 }
 
-func TestNewRequestFromContextRejectsMultipleWireValues(t *testing.T) {
+func TestCaptureKeyPreservesMultipleWireValues(t *testing.T) {
 	t.Parallel()
 
-	scope := Scope{Caller: "caller", Operation: "create"}
-	ctx := contextWithKeyValues(t.Context(), []string{"key-1", "key-2"})
-	if _, err := NewRequestFromContext(ctx, scope, 1, struct{}{}); !errors.Is(err, ErrInvalidKey) {
-		t.Fatalf("NewRequestFromContext(multiple) error = %v, want ErrInvalidKey", err)
-	}
-	ctx = contextWithKeyValues(t.Context(), []string{"key-1"})
-	if _, err := NewRequestFromContext(ctx, scope, 1, struct{}{}); err != nil {
-		t.Fatalf("NewRequestFromContext(single): %v", err)
+	var gotErr error
+	handler := CaptureKey(http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		_, gotErr = NewRequestFromContext(
+			request.Context(),
+			Scope{Caller: "caller", Operation: "create"},
+			1,
+			struct{}{},
+		)
+	}))
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/widgets", nil)
+	request.Header.Add(Header, "key-1")
+	request.Header.Add(Header, "key-2")
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+	if !errors.Is(gotErr, ErrInvalidKey) {
+		t.Fatalf("NewRequestFromContext(multiple) error = %v, want ErrInvalidKey", gotErr)
 	}
 }
 

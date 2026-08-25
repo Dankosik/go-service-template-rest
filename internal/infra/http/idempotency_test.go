@@ -1,8 +1,6 @@
 package httpx
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -71,32 +69,6 @@ func TestIdempotentOperationRejectsUnsafeSuccessHeader(t *testing.T) {
 	success.Headers["Set-Cookie"] = &openapi3.HeaderRef{Value: &openapi3.Header{}}
 	if _, err := validateIdempotentOperations(spec); err == nil || !strings.Contains(err.Error(), "not replayable") {
 		t.Fatalf("unsafe success header error = %v", err)
-	}
-}
-
-func TestCaptureIdempotencyKeyPreservesWireMultiplicity(t *testing.T) {
-	t.Parallel()
-
-	handler := httpidempotency.CaptureKey(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, err := httpidempotency.NewRequestFromContext(
-			r.Context(),
-			httpidempotency.Scope{Caller: "caller", Operation: "create"},
-			1,
-			struct{}{},
-		)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/widgets", nil)
-	request.Header.Add(httpidempotency.Header, "key-1")
-	request.Header.Add(httpidempotency.Header, "key-2")
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
 	}
 }
 

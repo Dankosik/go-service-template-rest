@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -80,6 +81,47 @@ func TestSchemaViolationChoosesTheFirstNonemptyReason(t *testing.T) {
 		if got := schemaViolation(&openapi3.SchemaError{Reason: test.reason, SchemaField: test.schemaField}, "body").Reason; got != test.want {
 			t.Errorf("schemaViolation(%q, %q) reason = %q, want %q", test.reason, test.schemaField, got, test.want)
 		}
+	}
+}
+
+func TestRequestViolationsEscapesJSONPointerTokens(t *testing.T) {
+	t.Parallel()
+
+	const field = "a/b~c"
+	schema := &openapi3.Schema{
+		Type: &openapi3.Types{"object"},
+		Properties: map[string]*openapi3.SchemaRef{
+			field: {Value: openapi3.NewStringSchema()},
+		},
+	}
+	err := schema.VisitJSON(map[string]any{field: 1})
+	if err == nil {
+		t.Fatal("VisitJSON() returned no error, want a rejection to extract")
+	}
+
+	violations := requestViolations(err)
+	if len(violations) != 1 {
+		t.Fatalf("violations = %+v, want the one member that failed", violations)
+	}
+	if got, want := violations[0].Field, "/a~1b~0c"; got != want {
+		t.Fatalf("field = %q, want escaped JSON pointer %q", got, want)
+	}
+}
+
+func TestBoundedReasonHandlesMultibyteText(t *testing.T) {
+	t.Parallel()
+
+	unchanged := strings.Repeat("é", maxViolationReason-1)
+	if got := boundedReason(unchanged); got != unchanged {
+		t.Fatalf("boundedReason() = %q, want unchanged multibyte text", got)
+	}
+
+	got := boundedReason(strings.Repeat("é", maxViolationReason+1))
+	if want := strings.Repeat("é", maxViolationReason-1) + "…"; got != want {
+		t.Fatalf("boundedReason() = %q, want %q", got, want)
+	}
+	if count := utf8.RuneCountInString(got); count != maxViolationReason {
+		t.Fatalf("boundedReason() runes = %d, want %d", count, maxViolationReason)
 	}
 }
 

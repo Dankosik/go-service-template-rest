@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"time"
 
@@ -53,7 +54,7 @@ const (
 // first request that carried a key. A service that wants no limiting leaves the
 // field unset.
 func NewKeyedRateLimiter(perSecond float64, burst, maxKeys int) (*KeyedRateLimiter, error) {
-	if perSecond <= 0 {
+	if perSecond <= 0 || math.IsNaN(perSecond) {
 		return nil, errors.New("keyed rate limiter: requests per second must be > 0")
 	}
 	if burst <= 0 {
@@ -72,7 +73,13 @@ func NewKeyedRateLimiter(perSecond float64, burst, maxKeys int) (*KeyedRateLimit
 }
 
 func (l *KeyedRateLimiter) Allow(_ context.Context, key string) (bool, time.Duration) {
-	limiter := l.bucket(key)
+	// Reserve and Cancel must be one operation: x/time/rate cannot fully undo an
+	// earlier reservation after a later one has changed the same limiter.
+	// ponytail: one lock also owns the generations; split per bucket only if
+	// measured contention makes that necessary.
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	limiter := l.bucketLocked(key)
 
 	// Reserve rather than Allow, so a rejected caller can be told how long to
 	// wait. Cancel returns the token the reservation took, which keeps a
@@ -88,10 +95,8 @@ func (l *KeyedRateLimiter) Allow(_ context.Context, key string) (bool, time.Dura
 	return true, 0
 }
 
-func (l *KeyedRateLimiter) bucket(key string) *rate.Limiter {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
+// bucketLocked requires l.mu to be held by the caller.
+func (l *KeyedRateLimiter) bucketLocked(key string) *rate.Limiter {
 	if limiter, ok := l.current[key]; ok {
 		return limiter
 	}
