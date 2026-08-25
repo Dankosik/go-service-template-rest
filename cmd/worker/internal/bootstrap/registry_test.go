@@ -15,7 +15,7 @@ func testRegistry(t *testing.T, eventType string, handler func(context.Context, 
 	if err != nil {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
-	if err := registry.Handle(kind, func(ctx context.Context, event domainevent.Typed[string]) error {
+	if err := natsjs.Handle(registry, kind, func(ctx context.Context, event domainevent.Typed[string]) error {
 		return handler(ctx, event.Payload)
 	}); err != nil {
 		t.Fatalf("Handle() error = %v", err)
