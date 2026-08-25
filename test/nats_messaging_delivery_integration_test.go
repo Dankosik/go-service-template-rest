@@ -29,7 +29,7 @@ func TestNATSRegistryRejectsSubjectMismatch(t *testing.T) {
 		t.Fatalf("create route registry: %v", err)
 	}
 	called := make(chan struct{}, 1)
-	if err := registry.Handle(kind, func(context.Context, domainevent.Typed[string]) error {
+	if err := natsjs.Handle(registry, kind, func(context.Context, domainevent.Typed[string]) error {
 		called <- struct{}{}
 		return nil
 	}); err != nil {

@@ -36,7 +36,7 @@ func NewRegistry(routes ...Route) (*Registry, error) {
 
 // Handle registers a typed handler without exposing subjects, headers,
 // delivery attempts, or acknowledgements to business code.
-func (r *Registry) Handle[T any](kind domainevent.Kind[T], handler func(context.Context, domainevent.Typed[T]) error) error {
+func Handle[T any](r *Registry, kind domainevent.Kind[T], handler func(context.Context, domainevent.Typed[T]) error) error {
 	if handler == nil {
 		return fmt.Errorf("%w: event handler is required", ErrRejected)
 	}

@@ -21,7 +21,7 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
 	seen := make(chan domainevent.Typed[typedPayload], 1)
-	if err := registry.Handle(kind, func(_ context.Context, event domainevent.Typed[typedPayload]) error {
+	if err := Handle(registry, kind, func(_ context.Context, event domainevent.Typed[typedPayload]) error {
 		seen <- event
 		return nil
 	}); err != nil {
@@ -76,24 +76,24 @@ func TestTypedHandlerContract(t *testing.T) {
 
 	kind := domainevent.Define[typedPayload]("example.updated", 1)
 	noop := func(context.Context, domainevent.Typed[typedPayload]) error { return nil }
-	if err := (*Registry)(nil).Handle(kind, noop); !errors.Is(err, ErrRejected) {
+	if err := Handle(nil, kind, noop); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Handle(nil registry) error = %v, want ErrRejected", err)
 	}
 	registry, err := NewRegistry(Route{Type: kind.Type, Version: kind.Version, Subject: "events.example"})
 	if err != nil {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
-	if err := registry.Handle[typedPayload](kind, nil); !errors.Is(err, ErrRejected) {
+	if err := Handle[typedPayload](registry, kind, nil); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Handle(nil handler) error = %v, want ErrRejected", err)
 	}
 	called := false
-	if err := registry.Handle(kind, func(context.Context, domainevent.Typed[typedPayload]) error {
+	if err := Handle(registry, kind, func(context.Context, domainevent.Typed[typedPayload]) error {
 		called = true
 		return nil
 	}); err != nil {
 		t.Fatalf("Handle() error = %v", err)
 	}
-	if err := registry.Handle(kind, noop); !errors.Is(err, ErrRejected) {
+	if err := Handle(registry, kind, noop); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Handle(duplicate) error = %v, want ErrRejected", err)
 	}
 	handler, err := registry.Handler()
