@@ -455,12 +455,20 @@ ignored_paths() {
 # every target would receive the template's module path instead of its own.
 assert_no_identity_leak() {
 	local repo="$1" module entry hit
+	local -a identity_hits=() identity_paths=()
 	[[ -f "${repo}/go.mod" ]] || return 0
 	module=$(awk '$1 == "module" { print $2; exit }' "${repo}/go.mod")
 	[[ -n "${module}" ]] || return 0
+	for entry in "${paths[@]}"; do identity_paths+=("${source_root}/${entry%/}"); done
+	while IFS= read -r hit; do
+		[[ -n "${hit}" ]] && identity_hits+=("${hit#"${source_root}/"}")
+	done < <(grep -rlF -- "${module}" "${identity_paths[@]}" 2>/dev/null || true)
 	for entry in "${paths[@]}"; do
-		hit=$(grep -rlF -- "${module}" "${source_root}/${entry%/}" 2>/dev/null || true)
-		[[ -z "${hit}" ]] || fail "owned path ${entry} contains the target module path ${module}; it carries repository-specific content and must leave the manifest"
+		for hit in "${identity_hits[@]-}"; do
+			if [[ "${hit}" == "${entry%/}" || ( "${entry}" == */ && "${hit}" == "${entry}"* ) ]]; then
+				fail "owned path ${entry} contains the target module path ${module}; it carries repository-specific content and must leave the manifest"
+			fi
+		done
 	done
 	return 0
 }
