@@ -5,9 +5,10 @@
 Use the surface-aware route for an ordinary integrated change:
 
 ```bash
-make plan
 make verify
 ```
+
+`make plan` only diagnoses that route. Package iteration uses `make prove`.
 
 Use the full deterministic owner only for a full-repository claim:
 
@@ -22,7 +23,7 @@ under Git-common metadata and reuses that exact receipt while the candidate,
 plan, and environment stay unchanged. `ALLOW_FULL=1 make check` remains the
 full-repository owner: format, `lint-all`, `test-all`, root-module tidy, and
 generated-contract drift. Direct `test-all` and `lint-all` also require
-`ALLOW_FULL=1` or `CI=true`. Package iteration uses `make prove`. Heavy leaves
+`ALLOW_FULL=1` or `CI=true`. Heavy leaves
 (`template-init-check`, `govulncheck`, `gosec`, `audit-full-manual`) require
 `ALLOW_HEAVY=1` or CI.
 
@@ -71,10 +72,12 @@ baseline; missing base authority widens only to the explicit full-history gate.
 
 Dependency Review rejects new high-severity dependencies on pull requests.
 `govulncheck` runs on runtime Go pull requests. `gosec` runs inside `lint-pr`
-on pull requests and as a standalone main/nightly oracle. Go CodeQL is the
-latency-first main, tag, schedule, and manual gate; Actions CodeQL remains
-pull-request scoped when workflow source changes. These tools observe different
-source and dependency paths.
+on pull requests and as a standalone main/nightly oracle. Go CodeQL runs on
+pull requests, merge groups, main, tags, schedule, and manual dispatch when
+handwritten Go or root dependencies change. There is no merge queue, and
+`codeql-required` is a required admission context, so pull-request Go analysis
+remains a merge gate. Actions CodeQL remains pull-request scoped when workflow
+source changes. These tools observe different source and dependency paths.
 
 ## Publication
 

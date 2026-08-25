@@ -152,8 +152,9 @@ TEMPLATE ?= ../go-service-template-rest
 help:
 	@echo "Setup and everyday development:"
 	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team AGENT_HARNESS=core"
-	@echo "  make prove PKG=./internal/<package> FILES='...'   # edit/acceptance loop"
-	@echo "  make plan or make verify                         # explain or run the surface-aware final route"
+	@echo "  make prove PKG=./internal/<package> FILES='...'   # optional package iteration"
+	@echo "  make verify                                      # surface-aware final route"
+	@echo "  make plan                                        # diagnose the route without running it"
 	@echo "  ALLOW_FULL=1 make check                          # explicit full-repository aggregate"
 	@echo "  ALLOW_HEAVY=1 make audit-full-manual             # rare template/release audit; refused otherwise"
 	@echo "  make lint-fast PKG=./internal/config      # local changed-code signal; not a lint claim"

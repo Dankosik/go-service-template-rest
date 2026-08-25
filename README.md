@@ -121,8 +121,8 @@ flowchart LR
    requests and responses into handwritten handlers.
 3. `internal/<feature>` owns business behavior. Transport, database, and
    provider details stay under `internal/infra`.
-4. Package tests give fast feedback. `make prove` validates one
-   package-sized change; `make verify` runs the surface-aware final route;
+4. Package tests give fast feedback. `make prove` is optional package-sized
+   iteration; `make verify` is the surface-aware final local route;
    `ALLOW_FULL=1 make check` validates the whole repository before delivery.
 5. CI selects its checks from the changed files. Image publication is opt-in
    and happens only after the matching checks pass.
@@ -169,8 +169,8 @@ contract; see the [integration initializer](docs/external-integration-initialize
 | Command | Use it for |
 | --- | --- |
 | `make run` | Start the HTTP service locally |
-| `make prove PKG=./pkg FILES='...'` | Format, test, and lint one package-sized change |
-| `make plan` / `make verify` | Explain and run the minimal integrated surface plan |
+| `make prove PKG=./pkg FILES='...'` | Optional package-sized format, test, and lint |
+| `make verify` | Run the minimal integrated surface plan |
 | `ALLOW_FULL=1 make check` | Run the full-repository aggregate once before delivery |
 | `make test-integration` | Run the container-backed integration tests |
 

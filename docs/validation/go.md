@@ -7,7 +7,7 @@ mechanical feedback without turning its `--new-from-rev` filter into a full
 lint claim. `make test-watch` reruns the package containing the saved Go file;
 press `a` only when an explicit full run is useful.
 
-The Acceptance-Unit Lead runs one package aggregate:
+Package-sized iteration is optional:
 
 ```bash
 make prove PKG=./internal/<package> FILES='internal/<package>/a.go internal/<package>/a_test.go'
@@ -16,15 +16,17 @@ make prove PKG=./internal/<package> FILES='internal/<package>/a.go internal/<pac
 `PKG` and `FILES` are required. There is no `./...` default. `make prove` is
 the lock-wrapped `unit-check`. Go's build/test cache and golangci-lint's cache
 reuse unchanged inputs; do not layer a second package receipt on top of them.
+Skip `make prove` when the change is already ready for completion.
 
 The integrated delivery owner runs `make verify` once. It formats changed
 handwritten files, lints changed packages, and tests the module-local reverse
 importer closure instead of defaulting to `test-all`. `test-all` remains the
 fallback when `go.mod`/`go.sum` change, the package graph cannot be built, or
-the reverse closure is most of the module. Use `make plan` to inspect that
-selection first. `ALLOW_FULL=1 make check` remains the explicit full
-formatting, `lint-all`, `test-all`, root-module tidy, and generated-drift gate;
-do not run its leaves beside it.
+the reverse closure is most of the module. Use `make plan` only to diagnose
+that selection; `make verify` already prints the plan it will run.
+`ALLOW_FULL=1 make check` remains the explicit full formatting, `lint-all`,
+`test-all`, root-module tidy, and generated-drift gate; do not run its leaves
+beside it.
 
 `make lint-changed` accepts one `PKG` or a space-separated `PKGS` batch;
 `make test-package` requires `PKG` and remains package-scoped.

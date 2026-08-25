@@ -44,16 +44,17 @@ a removal condition; otherwise the replacement removes the superseded path.
 
 ## Validation budget
 
-During implementation, run one focused falsifier after a coherent edit batch.
-Do not rerun a successful check unless its candidate, inputs, scope, or
-preconditions changed. Workers must not run repository-wide, race, integration,
-security, container, template, or initializer-matrix checks.
-A worker may run only the changed package's focused proof. The Acceptance-Unit
-Lead runs `make prove` once for the integrated unit. The integrated
-delivery owner runs `make verify` once after collapsing all claims into one
-minimal proof plan. Run `ALLOW_FULL=1 make check` only when the claim explicitly spans the
-full repository. `make audit-full-manual` and other heavy targets require an
-explicit claim and `ALLOW_HEAVY=1`. Never run two
+During implementation, run one focused falsifier after a coherent edit batch
+only when that feedback is needed. Do not rerun a successful check unless its
+candidate, inputs, scope, or preconditions changed. Workers must not run
+repository-wide, race, integration, security, container, template, or
+initializer-matrix checks. A worker may run only the changed package's focused
+proof. `make prove` is optional package-sized iteration. Completion is one
+`make verify` on the integrated candidate; do not run `make plan` or the leaves
+it already selected as extra gates. Skip `make prove` when the change is already
+ready for `make verify`. Run `ALLOW_FULL=1 make check` only when the claim
+explicitly spans the full repository. `make audit-full-manual` and other heavy
+targets require an explicit claim and `ALLOW_HEAVY=1`. Never run two
 CPU-heavy validation processes concurrently. Do not clear Go or linter caches.
 Do not use `-count=1` unless the claim explicitly requires fresh execution.
 Reuse evidence produced for the same candidate and scope.

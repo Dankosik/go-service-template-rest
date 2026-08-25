@@ -359,14 +359,10 @@ uses `observability.metrics.addr` (loopback by default) and is never available
 from the application listener. Add low-cardinality feature metrics or spans
 only where they answer an operational question.
 
-Use focused tests while iterating, then run:
-
-```bash
-make prove PKG=./internal/<feature> FILES='internal/<feature>/*.go'
-```
-
-On the integrated candidate review `make plan`, then run `make verify` once.
-Use `ALLOW_FULL=1 make check` only when the intended claim spans the full repository.
+Use focused tests while iterating. Optional package-sized iteration is
+`make prove PKG=./internal/<feature> FILES='internal/<feature>/*.go'`. On the
+integrated candidate run `make verify` once. Use `ALLOW_FULL=1 make check` only
+when the intended claim spans the full repository.
 
 Run the matching container, PostgreSQL, migration, or deployment leaf when the
 change touches it. Before merge, inspect the generated diff and
