@@ -55,14 +55,14 @@ func TestServerTelemetryUsesRegisteredBusinessMethodsOnly(t *testing.T) {
 }
 
 func TestUnhandledFailureLogOmitsHandlerText(t *testing.T) {
-	const secret = "credential=grpc-handler-secret"
+	const handlerTextCanary = "peer-value-redaction-canary"
 
 	var output bytes.Buffer
 	_, provider := telemetrytest.NewRecordingTracerProvider(t)
 	register := func(registrar grpc.ServiceRegistrar) {
 		registerUnaryTestService(registrar, testUnaryFullMethod,
 			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-				return nil, fmt.Errorf("load dependency: %w", errors.New(secret))
+				return nil, fmt.Errorf("load dependency: %w", errors.New(handlerTextCanary))
 			})
 	}
 	_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
@@ -75,7 +75,7 @@ func TestUnhandledFailureLogOmitsHandlerText(t *testing.T) {
 	if detail := status.Convert(err).Message(); detail != failure.SanitizedDetail {
 		t.Fatalf("status detail = %q, want %q", detail, failure.SanitizedDetail)
 	}
-	if bytes.Contains(output.Bytes(), []byte(secret)) {
+	if bytes.Contains(output.Bytes(), []byte(handlerTextCanary)) {
 		t.Fatalf("unhandled failure log disclosed handler text: %q", output.String())
 	}
 

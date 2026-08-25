@@ -74,7 +74,7 @@ func TestNewDisablesResolverServiceConfig(t *testing.T) {
 		connection resolver.ClientConn,
 		_ resolver.BuildOptions,
 	) {
-		connection.UpdateState(resolver.State{ //nolint:errcheck // Test resolver has no recovery path.
+		if err := connection.UpdateState(resolver.State{
 			Addresses: []resolver.Address{{Addr: address}},
 			ServiceConfig: connection.ParseServiceConfig(`{
 				"methodConfig":[{
@@ -88,7 +88,9 @@ func TestNewDisablesResolverServiceConfig(t *testing.T) {
 					}
 				}]
 			}`),
-		})
+		}); err != nil {
+			t.Errorf("resolver UpdateState() error = %v", err)
+		}
 	}
 	resolver.Register(builder)
 	connection, err := grpcclient.New(
