@@ -20,13 +20,17 @@ with `ALLOW_HEAVY=1 make template-init-check`.
 
 ## Validate a change
 
-Use the smallest command that proves the claim:
+Use the smallest command that proves the claim. Completion is one
+surface-aware route:
 
 ```bash
-make prove PKG=./internal/<package> FILES='internal/<package>/*.go'
-make plan
 make verify
 ```
+
+`make prove PKG=./internal/<package> FILES='internal/<package>/*.go'` is optional
+iteration for a package-sized change. Skip it when the change is already ready
+for `make verify`. `make plan` only explains that route; do not run it as a
+required gate.
 
 `ALLOW_FULL=1 make check` is the one full-repository owner. Do not also run
 `fmt-check`, `lint-all`, or `test-all` beside it. `make test` and `make lint`

@@ -33,6 +33,12 @@ self_test() {
 	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
 	if grep -q '^  make ' <<<"${output}"; then return 1; fi
 
+	output=$(bash "$0" --files README.md)
+	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
+	grep -q 'verification not applicable: no executable checks for changed surfaces' <<<"${output}"
+	if grep -q '^  make ' <<<"${output}"; then return 1; fi
+	if grep -q 'reusing exact passing receipt' <<<"${output}"; then return 1; fi
+
 	output=$(bash "$0" --plan --files tools/go.mod)
 	grep -q 'make tools-dependencies-check' <<<"${output}"
 	if grep -q 'test-integration' <<<"${output}"; then return 1; fi
@@ -329,6 +335,12 @@ print_plan() {
 if [[ ${mode} == plan ]]; then
 	print_plan
 	exit
+fi
+
+if ((${#kinds[@]} == 0)); then
+	print_plan
+	echo "verification not applicable: no executable checks for changed surfaces"
+	exit 0
 fi
 
 requires_heavy=false

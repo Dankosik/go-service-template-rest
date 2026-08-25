@@ -11,15 +11,10 @@
 
 ## Test Evidence
 
-- [ ] `make unit-check PKG=./<changed> FILES='...'` (acceptance unit)
-- [ ] `make plan` reviewed and `make verify` passed or exact receipt reused
-- [ ] `make check` (only when the claim spans the full repository)
-- [ ] claim-matched focused checks or CI evidence linked before merge
-- [ ] `make openapi-check` (when API/runtime contract changed)
-- [ ] `ALLOW_HEAVY=1 make test-race` (when concurrency-sensitive code changed)
-- [ ] `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` (when integration behavior changed)
-- [ ] `make sqlc-check` (when SQL queries or migrations changed)
-- [ ] `ALLOW_HEAVY=1 make migration-validate` (when migrations, Docker runtime, or startup changed)
+- [ ] `make verify` passed, or an exact passing receipt was reused
+- [ ] Additional checks only for claims `make verify` marked not applicable
+- [ ] `ALLOW_FULL=1 make check` only when the claim spans the full repository
+- [ ] Unverified remainder named, or none
 
 Commands/output summary:
 
