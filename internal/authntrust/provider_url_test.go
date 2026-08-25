@@ -29,7 +29,7 @@ func TestValidOIDCURLs(t *testing.T) {
 		{name: "relative", raw: "/realms/main"},
 		{name: "opaque", raw: "https:issuer.example.com"},
 		{name: "no host", raw: "https://"},
-		{name: "user info", raw: "https://user:secret@issuer.example.com"},
+		{name: "user info", raw: "https://user:secret@issuer.example.com"}, //nolint:gosec // Test fixture verifies user-info rejection; the value is not a credential.
 		{name: "fragment", raw: "https://issuer.example.com#frag"},
 		{name: "surrounding space", raw: "  https://issuer.example.com  "},
 		{name: "unparseable escape", raw: "https://issuer.example.com/%zz"},

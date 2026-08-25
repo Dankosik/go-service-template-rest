@@ -229,7 +229,7 @@ func assertAuthnProblem(
 		t.Fatalf("decode authentication problem: %v", err)
 	}
 	if decoded.Code != string(wantCode) ||
-		decoded.Status != int32(wantStatus) ||
+		int(decoded.Status) != wantStatus ||
 		decoded.Detail == nil ||
 		*decoded.Detail != wantDetail ||
 		decoded.Title == "" ||

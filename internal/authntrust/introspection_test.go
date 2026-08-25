@@ -19,7 +19,7 @@ func TestValidIntrospectionEndpoint(t *testing.T) {
 		{raw: "HTTPS://idp.example.com/introspect", want: true},
 		{raw: "https://idp.example.com/introspect?x=1"},
 		{raw: "https://idp.example.com/introspect?"},
-		{raw: "https://user:secret@idp.example.com/introspect"},
+		{raw: "https://user:secret@idp.example.com/introspect"}, //nolint:gosec // Test fixture verifies user-info rejection; the value is not a credential.
 		{raw: "https://idp.example.com/introspect#x"},
 		{raw: "http://idp.example.com/introspect"},
 		{raw: "  https://idp.example.com/introspect  "},

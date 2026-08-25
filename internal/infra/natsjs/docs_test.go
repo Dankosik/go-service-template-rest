@@ -16,6 +16,7 @@ package natsjs
 // OUTBOX=none.
 
 import (
+	"fmt"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -147,7 +148,7 @@ var versionedFileExtensions = []string{".go", ".md", ".proto", ".sh", ".sql", ".
 func packageComments(dir string) (map[string][]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read package directory %s: %w", dir, err)
 	}
 
 	commentsByFile := make(map[string][]string)
@@ -163,7 +164,7 @@ func packageComments(dir string) (map[string][]string, error) {
 			parser.ParseComments|parser.SkipObjectResolution,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("parse package file %s: %w", entry.Name(), err)
 		}
 		for _, group := range parsed.Comments {
 			for _, line := range group.List {
@@ -196,7 +197,7 @@ func documentedPaths(document string, rootDirs map[string]struct{}) []string {
 func repositoryRootDirs(root string) (map[string]struct{}, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read repository root %s: %w", root, err)
 	}
 	dirs := make(map[string]struct{})
 	for _, entry := range entries {
