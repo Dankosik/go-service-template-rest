@@ -8,7 +8,7 @@ import (
 )
 
 // trackResponseCommit wraps w and reports whether the response has been
-// committed — a status write, a body write, a flush, or a ReadFrom.
+// committed — a final status write, a body write, a flush, or a ReadFrom.
 //
 // Two middlewares need this and neither may replace a response the handler has
 // already started sending: Recover cannot turn a half-written 200 into a 500,
@@ -20,8 +20,10 @@ func trackResponseCommit(w http.ResponseWriter) (http.ResponseWriter, func() boo
 	wrapped := httpsnoop.Wrap(w, httpsnoop.Hooks{
 		WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
 			return func(code int) {
-				committed = true
 				next(code)
+				if code == http.StatusSwitchingProtocols || code >= http.StatusOK {
+					committed = true
+				}
 			}
 		},
 		Write: func(next httpsnoop.WriteFunc) httpsnoop.WriteFunc {

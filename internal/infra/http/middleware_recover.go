@@ -27,12 +27,12 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 			}
 			// http.ErrAbortHandler is the standard way to abandon a response on
 			// purpose: net/http's own recovery suppresses it, and
-			// httputil.ReverseProxy raises it. Re-panicking hands it back to the
-			// server unchanged. Recovering it here instead would turn every
-			// deliberate abort into an ERROR log with a full stack trace and a
-			// spurious 500 attempt, at traffic volume.
+			// httputil.ReverseProxy raises it. Recovering it here instead would turn
+			// every deliberate abort into an ERROR log with a full stack trace and a
+			// spurious 500 attempt, at traffic volume. net/http suppresses its own panic
+			// log only for the exact sentinel, so canonicalize wrappers here.
 			if err, ok := rec.(error); ok && errors.Is(err, http.ErrAbortHandler) {
-				panic(rec)
+				panic(http.ErrAbortHandler)
 			}
 
 			route := cmp.Or(joinMethodAndPattern(request.Method, routePathTemplateForRequest(request)), "<unmatched>")

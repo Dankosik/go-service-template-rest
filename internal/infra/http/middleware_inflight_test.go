@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/waittest"
 
@@ -84,15 +85,19 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	var admitted sync.WaitGroup
-	admitted.Go(func() {
+	var requests sync.WaitGroup
+	t.Cleanup(func() {
+		close(release)
+		requests.Wait()
+	})
+	requests.Go(func() {
 		doRequest(handler, http.MethodGet, "/work")
 	})
 
 	waittest.ReceiveSignal(t, entered, 2*time.Second, "first request to reach the handler")
 
 	shed := make(chan *httptest.ResponseRecorder, 1)
-	go func() { shed <- doRequest(handler, http.MethodGet, "/work") }()
+	requests.Go(func() { shed <- doRequest(handler, http.MethodGet, "/work") })
 
 	resp := waittest.Receive(t, shed, 2*time.Second, "second request to be shed")
 	if resp.Code != http.StatusServiceUnavailable {
@@ -103,9 +108,6 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 	}
 	assertProblemContentType(t, resp.Header())
 	assertProblemCode(t, resp, problem.CodeServiceUnavailable)
-
-	close(release)
-	admitted.Wait()
 }
 
 // TestMaxInFlightReleasesCapacity keeps a shed burst from permanently consuming
@@ -149,8 +151,12 @@ func TestMaxInFlightExemptsHealthProbes(t *testing.T) {
 	t.Parallel()
 
 	release := make(chan struct{})
-	defer close(release)
 	entered := make(chan struct{}, 1)
+	var requests sync.WaitGroup
+	t.Cleanup(func() {
+		close(release)
+		requests.Wait()
+	})
 
 	var probes atomic.Int64
 	handler := MaxInFlight(1, ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +169,7 @@ func TestMaxInFlightExemptsHealthProbes(t *testing.T) {
 		<-release
 	}))
 
-	go doRequest(handler, http.MethodGet, "/work")
+	requests.Go(func() { doRequest(handler, http.MethodGet, "/work") })
 	waittest.ReceiveSignal(t, entered, 2*time.Second, "saturating request to reach the handler")
 
 	for _, path := range healthProbeRoutePaths {
@@ -183,14 +189,18 @@ func TestMaxInFlightOnlyExemptsProbeReads(t *testing.T) {
 	t.Parallel()
 
 	release := make(chan struct{})
-	defer close(release)
 	entered := make(chan struct{}, 1)
+	var requests sync.WaitGroup
+	t.Cleanup(func() {
+		close(release)
+		requests.Wait()
+	})
 	handler := MaxInFlight(1, ServerLoad{}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		entered <- struct{}{}
 		<-release
 	}))
 
-	go doRequest(handler, http.MethodGet, "/work")
+	requests.Go(func() { doRequest(handler, http.MethodGet, "/work") })
 	waittest.ReceiveSignal(t, entered, 2*time.Second, "saturating request to reach the handler")
 
 	resp := doRequest(handler, http.MethodPost, "/health/ready")
@@ -215,14 +225,8 @@ func TestMaxInFlightDisabledWhenNotPositive(t *testing.T) {
 	}
 }
 
-// TestShedResponseIsCorrelatedAndLogged pins the middleware's placement in the
-// chain rather than its behavior in isolation.
-//
-// This composes the same order newRouter builds — correlation, access log,
-// budget, shedding — because the shipped contract has no non-probe operation to
-// saturate through the assembled router: every route it declares is a platform
-// probe, and probes are exempt by design. Router-level acceptance of the setting
-// is covered by the NewRouter validation table in openapi_contract_test.go.
+// TestShedResponseIsCorrelatedAndLogged pins Harden's real middleware order:
+// correlation and access logging must remain outside shedding.
 func TestShedResponseIsCorrelatedAndLogged(t *testing.T) {
 	t.Parallel()
 
@@ -230,21 +234,26 @@ func TestShedResponseIsCorrelatedAndLogged(t *testing.T) {
 	log := newTestServiceLogger(&logged)
 
 	release := make(chan struct{})
-	defer close(release)
 	entered := make(chan struct{}, 1)
+	var requests sync.WaitGroup
+	t.Cleanup(func() {
+		close(release)
+		requests.Wait()
+	})
 
-	chain := RequestCorrelation(
-		AccessLog(log, false,
-			RequestTimeout(time.Minute,
-				MaxInFlight(1, ServerLoad{}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-					entered <- struct{}{}
-					<-release
-				})),
-			),
-		),
-	)
+	chain, err := Harden(log, telemetry.New(), HardenConfig{
+		MaxBodyBytes:   1,
+		RequestTimeout: time.Minute,
+		MaxInFlight:    1,
+	}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		entered <- struct{}{}
+		<-release
+	}))
+	if err != nil {
+		t.Fatalf("Harden() error = %v", err)
+	}
 
-	go doRequest(chain, http.MethodGet, "/work")
+	requests.Go(func() { doRequest(chain, http.MethodGet, "/work") })
 	waittest.ReceiveSignal(t, entered, 2*time.Second, "saturating request to reach the handler")
 
 	resp := doRequest(chain, http.MethodGet, "/work")

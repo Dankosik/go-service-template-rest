@@ -26,6 +26,9 @@ type HardenConfig struct {
 	// not backpressure.
 	MaxInFlight    int
 	OTelServerName string
+	// TraceRequest decides which requests OpenTelemetry records. Nil keeps the
+	// active profile's default; return false to omit a request from tracing.
+	TraceRequest func(*http.Request) bool
 	// LogHealthProbes re-enables access logging for platform probe routes,
 	// which are excluded by default.
 	LogHealthProbes bool
@@ -88,12 +91,18 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg HardenConfig, apiS
 		otelhttp.WithPropagators(propagation.TraceContext{}),
 		otelhttp.WithServerName(otelServerName(cfg.OTelServerName)),
 	}
+	traceRequest := cfg.TraceRequest
 	// profile:inbound-webhooks-standard:start
 	// otelhttp records url.path before routing. The endpoint id is caller supplied
 	// and belongs in neither trace attributes nor span names, so this public route
 	// stays correlated through its access log rather than exporting the raw path.
-	otelOptions = append(otelOptions, otelhttp.WithFilter(traceInboundWebhookRequest))
+	if traceRequest == nil {
+		traceRequest = traceInboundWebhookRequest
+	}
 	// profile:inbound-webhooks-standard:end
+	if traceRequest != nil {
+		otelOptions = append(otelOptions, otelhttp.WithFilter(traceRequest))
+	}
 	otelMiddleware := otelhttp.NewMiddleware("http.server", otelOptions...)
 
 	rootRouter := newRootRouter(

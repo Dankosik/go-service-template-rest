@@ -94,7 +94,7 @@ func MaxInFlight(limit int, load ServerLoad, next http.Handler) http.Handler {
 	}
 
 	sem := semaphore.NewWeighted(int64(limit))
-	retryAfter := strconv.Itoa(int(shedRetryAfter.Seconds()))
+	retryAfter := strconv.Itoa(retryAfterSeconds(shedRetryAfter))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isHealthProbeRequest(r) {

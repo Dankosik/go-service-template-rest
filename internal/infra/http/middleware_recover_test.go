@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -137,44 +138,52 @@ func TestRecoverPreservesFlusherInterfaceAndCommit(t *testing.T) {
 	}
 }
 
-// http.ErrAbortHandler must reach net/http unchanged. Recovering it here would
-// log a stack trace and attempt a 500 on every deliberate abort — for example
-// every one httputil.ReverseProxy raises.
+// http.ErrAbortHandler must reach net/http as the exact sentinel. Recovering it
+// here would attempt a 500, while re-panicking a wrapper would make net/http log
+// a stack trace for a deliberate abort.
 func TestRecoverRepanicsErrAbortHandler(t *testing.T) {
 	t.Parallel()
 
-	var logs bytes.Buffer
-	log := newTestServiceLogger(&logs)
-	handler := Recover(log, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		panic(http.ErrAbortHandler)
-	}))
+	for _, tt := range []struct {
+		name       string
+		panicValue error
+	}{
+		{name: "sentinel", panicValue: http.ErrAbortHandler},
+		{name: "wrapped", panicValue: fmt.Errorf("abort request: %w", http.ErrAbortHandler)},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	resp := httptest.NewRecorder()
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/abort", nil)
+			var logs bytes.Buffer
+			log := newTestServiceLogger(&logs)
+			handler := Recover(log, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				panic(tt.panicValue)
+			}))
 
-	func() {
-		defer func() {
-			rec := recover()
-			if rec == nil {
-				t.Fatal("Recover() swallowed http.ErrAbortHandler, want it re-panicked")
+			resp := httptest.NewRecorder()
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/abort", nil)
+
+			func() {
+				defer func() {
+					rec := recover()
+					if rec != http.ErrAbortHandler { //nolint:errorlint // Exact identity is net/http's contract.
+						t.Fatalf("re-panicked value = %v, want exact http.ErrAbortHandler sentinel", rec)
+					}
+				}()
+				handler.ServeHTTP(resp, req)
+			}()
+
+			if logs.Len() != 0 {
+				t.Fatalf("Recover() logged %q, want nothing for a deliberate abort", logs.String())
 			}
-			if err, ok := rec.(error); !ok || !errors.Is(err, http.ErrAbortHandler) {
-				t.Fatalf("re-panicked value = %v, want http.ErrAbortHandler", rec)
+			if resp.Body.Len() != 0 {
+				t.Fatalf("Recover() wrote %q, want no response body", resp.Body.String())
 			}
-		}()
-		handler.ServeHTTP(resp, req)
-	}()
-
-	if logs.Len() != 0 {
-		t.Fatalf("Recover() logged %q, want nothing for a deliberate abort", logs.String())
-	}
-	if resp.Body.Len() != 0 {
-		t.Fatalf("Recover() wrote %q, want no response body", resp.Body.String())
+		})
 	}
 }
 
-// A panic that merely wraps ErrAbortHandler is still a deliberate abort, and a
-// plain error panic must keep the recovering behavior.
+// A plain error panic must keep the recovering behavior.
 func TestRecoverDistinguishesAbortFromOrdinaryPanics(t *testing.T) {
 	t.Parallel()
 

@@ -61,12 +61,18 @@ func HeaderRateLimitKey(name string) RateLimitKeyFunc {
 //
 // A nil limiter leaves the middleware out of the chain entirely, which is the
 // shipped default: the limit that suits one deployment is wrong for the next.
+// A configured limiter without a key panics during construction rather than
+// silently serving without the requested control. Harden reports that same
+// configuration as an error before it calls RateLimit.
 //
 // Platform probe routes are exempt for the same reason they are exempt from
 // shedding: rate limiting a readiness probe evicts the instance.
 func RateLimit(limiter RateLimiter, key RateLimitKeyFunc, next http.Handler) http.Handler {
-	if limiter == nil || key == nil {
+	if limiter == nil {
 		return next
+	}
+	if key == nil {
+		panic("http rate limit: key is required when a limiter is configured")
 	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
