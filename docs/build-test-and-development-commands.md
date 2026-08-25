@@ -97,14 +97,15 @@ make plan
 make verify
 ```
 
-`plan` collects base-branch, staged, unstaged, and untracked changes, explains
-their surfaces and not-applicable gates, and prints the minimal command set.
+`plan` collects base-branch, staged, unstaged, and untracked changes, including
+both sides of renames, explains their surfaces and not-applicable gates, and
+prints the minimal command set.
 `verify` rejects missing heavy authorization, Docker, or required binaries before
-the first check. It batches changed Go formatting and lint packages, runs one
-`test-all`, and serializes CPU/Docker work through the Git-common validation
-lock. Its exact passing receipt is shared by related worktrees and binds the
-resolved base, merge base, plan, execution inputs, tool versions, and candidate;
-a candidate change during execution invalidates the run.
+the first check. It batches changed Go formatting and lint packages, tests the
+reverse-importer closure, and serializes CPU/Docker work through the Git-common
+validation lock. Its exact passing receipt is shared by related worktrees and
+binds the resolved base, merge base, plan, execution inputs, tool versions, and
+candidate; a candidate change during execution invalidates the run.
 
 The explicit full-repository owner remains available when the claim spans it:
 
@@ -122,9 +123,9 @@ Package-scoped names refuse a missing `PKG`; they do not default to `./...`:
 make test-package PKG=./internal/<package>
 make lint-changed PKG=./internal/<package>
 make lint-changed PKGS='./internal/one ./internal/two'
-make lint-pr
-make test-all
-make lint-all
+make lint-pr PKGS='./internal/<package>'
+ALLOW_FULL=1 make test-all
+ALLOW_FULL=1 make lint-all
 make fmt
 ```
 

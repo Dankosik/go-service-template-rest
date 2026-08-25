@@ -19,6 +19,15 @@ fi
 
 self_test() {
 	local output
+	bash "${ROOT_DIR}/scripts/ci/git-changed-paths.sh" --self-test
+
+	if CI='' ALLOW_FULL='' make test-all >"${TMPDIR:-/tmp}/verify-full-guard.$$" 2>&1; then
+		echo "verify self-test accepted test-all without ALLOW_FULL=1" >&2
+		return 1
+	fi
+	grep -q 'ALLOW_FULL=1' "${TMPDIR:-/tmp}/verify-full-guard.$$"
+	rm -f "${TMPDIR:-/tmp}/verify-full-guard.$$"
+
 	output=$(bash "$0" --plan --files README.md)
 	grep -q 'documentation=true' <<<"${output}"
 	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
@@ -68,6 +77,7 @@ self_test() {
 	output=$(bash "$0" --plan --files Makefile)
 	grep -q 'make verify-check' <<<"${output}"
 	grep -q 'make changed-surfaces-check' <<<"${output}"
+	if grep -q 'proof-receipt' <<<"${output}"; then return 1; fi
 	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
 	if grep -q 'test-integration' <<<"${output}"; then return 1; fi
 
@@ -120,12 +130,7 @@ else
 	}
 	resolved_base_sha=$(git rev-parse "${base_ref}^{commit}")
 	merge_base_sha=$(git merge-base HEAD "${resolved_base_sha}")
-	{
-		git diff --name-only "${base_ref}...HEAD"
-		git diff --name-only
-		git diff --cached --name-only
-		git ls-files --others --exclude-standard
-	} >"${files_path}"
+	bash ./scripts/ci/git-changed-paths.sh --worktree "${base_ref}" >"${files_path}"
 fi
 LC_ALL=C sort -u -o "${files_path}" "${files_path}"
 
@@ -273,7 +278,6 @@ if is_true validation_system; then
 	add_command make changed-surfaces-check "validation routing changed" "make changed-surfaces-check" cpu false false false
 	add_command make validation-lock-self-test "validation routing changed" "make validation-lock-self-test" cpu false false false
 	add_command make affected-go-packages-check "validation routing changed" "make affected-go-packages-check" cpu false false false
-	add_command make proof-receipt-check "validation routing changed" "make proof-receipt-check" cpu false false false
 fi
 if is_true shell; then
 	shell_files=$(awk '/\.sh$/ { print }' "${files_path}" | while IFS= read -r file; do [[ -f ${file} ]] && printf '%s ' "${file}"; done)
@@ -402,7 +406,16 @@ print_plan
 execute() {
 	local kind=$1 argument=$2
 	case "${kind}" in
-		make) make "${argument}" ;;
+		make)
+			case "${argument}" in
+			test-all | lint-all | check-go)
+				ALLOW_FULL=1 make "${argument}"
+				;;
+			*)
+				make "${argument}"
+				;;
+			esac
+			;;
 		fmt) make fmt-files-check FILES="${argument}" ;;
 		lint) make lint-changed PKGS="${argument}" ;;
 		test) make test-package PKG="${argument}" ;;

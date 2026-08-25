@@ -4,9 +4,19 @@ set -euo pipefail
 if [[ ${1:-} == --self-test ]]; then
 	tmp=$(mktemp -d)
 	trap 'rm -rf -- "${tmp}"' EXIT
+	# An outer verify/unit-check may export VALIDATION_LOCK_HELD=1. The self-test
+	# must still take its own temp lock, or it waits forever for owner.
+	unset VALIDATION_LOCK_HELD
 	VALIDATION_LOCK_DIR="${tmp}/lock" bash "$0" -- sh -c 'printf 1 >>"$1"; sleep 1; printf 2 >>"$1"' -- "${tmp}/order" &
 	first_pid=$!
-	while [[ ! -f ${tmp}/lock/owner ]]; do sleep 0.05; done
+	deadline=$((SECONDS + 10))
+	while [[ ! -f ${tmp}/lock/owner ]]; do
+		if ((SECONDS >= deadline)); then
+			echo "validation lock self-test never acquired ${tmp}/lock" >&2
+			exit 1
+		fi
+		sleep 0.05
+	done
 	VALIDATION_LOCK_DIR="${tmp}/lock" bash "$0" -- sh -c 'printf 3 >>"$1"' -- "${tmp}/order"
 	wait "${first_pid}"
 	[[ $(<"${tmp}/order") == 123 ]] || {

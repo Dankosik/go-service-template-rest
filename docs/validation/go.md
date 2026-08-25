@@ -14,8 +14,8 @@ make prove PKG=./internal/<package> FILES='internal/<package>/a.go internal/<pac
 ```
 
 `PKG` and `FILES` are required. There is no `./...` default. `make prove` is
-the lock-wrapped `unit-check` and records focused receipts that `make verify`
-reuses while the package files and toolchain stay unchanged.
+the lock-wrapped `unit-check`. Go's build/test cache and golangci-lint's cache
+reuse unchanged inputs; do not layer a second package receipt on top of them.
 
 The integrated delivery owner runs `make verify` once. It formats changed
 handwritten files, lints changed packages, and tests the module-local reverse
@@ -29,7 +29,8 @@ do not run its leaves beside it.
 `make lint-changed` accepts one `PKG` or a space-separated `PKGS` batch;
 `make test-package` requires `PKG` and remains package-scoped.
 `lint-pr` is the PR correctness, architecture, resource, error, context, and
-interface set. Full-module leaves are `lint-all` and `test-all`. `make lint-deep`, `make test-race`,
+interface set and requires `PKG` or `PKGS`. Full-module leaves are `lint-all`
+and `test-all`; they require `ALLOW_FULL=1` or `CI=true`. `make lint-deep`, `make test-race`,
 `make test-integration`, and `make audit-full-manual` require `ALLOW_HEAVY=1`
 or `CI=true`.
 

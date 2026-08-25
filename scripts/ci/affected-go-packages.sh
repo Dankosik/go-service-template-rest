@@ -106,6 +106,11 @@ self_test() {
 	grep -qx 'format_files=' <<<"${output}"
 	grep -qx 'lint_packages=' <<<"${output}"
 	grep -q 'changed_packages=./internal/openapi' <<<"${output}"
+
+	# Both sides of a production move must remain seeds.
+	output=$(printf '%s\n' internal/failure/failure.go internal/problem/problem.go | bash "$0")
+	grep -q './internal/failure' <<<"${output}"
+	grep -q './internal/problem' <<<"${output}"
 }
 
 if [[ ${1:-} == --self-test ]]; then
@@ -228,14 +233,14 @@ dirs=${tmp}/dirs
 list_err=${tmp}/list.err
 : >"${graph}"
 : >"${dirs}"
-if ! go list -e -f '{{.ImportPath}}	{{.Dir}}	{{if .Error}}ERR{{end}}	{{join .Imports " "}}' ./... >"${tmp}/forward" 2>"${list_err}"; then
+if ! go list -e -test -f '{{if not .ForTest}}{{.ImportPath}}	{{.Dir}}	{{if .Error}}ERR{{end}}	{{join .Imports " "}}	{{join .TestImports " "}}	{{join .XTestImports " "}}{{end}}' ./... >"${tmp}/list" 2>"${list_err}"; then
 	fallback=true
 	fallback_reason=go_list_error
 	affected_test_packages=./...
 	emit
 	exit
 fi
-if grep -q $'\tERR\t' "${tmp}/forward"; then
+if grep -q $'\tERR\t' "${tmp}/list"; then
 	fallback=true
 	fallback_reason=go_list_error
 	affected_test_packages=./...
@@ -243,34 +248,18 @@ if grep -q $'\tERR\t' "${tmp}/forward"; then
 	exit
 fi
 
-while IFS=$'\t' read -r import_path dir _ imports; do
+while IFS=$'\t' read -r import_path dir _ imports test_imports xtest_imports; do
 	[[ -n ${import_path} ]] || continue
 	printf '%s\t%s\n' "${import_path}" "${dir}" >>"${dirs}"
 	local_imports=''
 	# shellcheck disable=SC2086
-	for imp in ${imports}; do
+	for imp in ${imports} ${test_imports} ${xtest_imports}; do
 		case "${imp}" in
 		"${module}" | "${module}"/*) local_imports+=" ${imp}" ;;
 		esac
 	done
 	printf '%s%s\n' "${import_path}" "${local_imports}" >>"${graph}"
-done <"${tmp}/forward"
-
-if go list -e -test -f '{{if not .ForTest}}{{.ImportPath}}	{{join .TestImports " "}} {{join .XTestImports " "}}{{end}}' ./... >"${tmp}/tests" 2>>"${list_err}"; then
-	while IFS=$'\t' read -r import_path test_imports; do
-		[[ -n ${import_path} ]] || continue
-		local_imports=''
-		# shellcheck disable=SC2086
-		for imp in ${test_imports}; do
-			case "${imp}" in
-			"${module}" | "${module}"/*) local_imports+=" ${imp}" ;;
-			esac
-		done
-		if [[ -n ${local_imports} ]]; then
-			printf '%s%s\n' "${import_path}" "${local_imports}" >>"${graph}"
-		fi
-	done <"${tmp}/tests"
-fi
+done <"${tmp}/list"
 
 pkg_to_import() {
 	local pkg=$1
@@ -367,7 +356,7 @@ if [[ -s ${test_only_list} ]]; then
 	done < <(LC_ALL=C sort -u "${test_only_list}")
 fi
 
-total=$(go list ./... | wc -l | tr -d ' ')
+total=$(cut -f1 "${dirs}" | LC_ALL=C sort -u | grep -c . || true)
 count=$(LC_ALL=C sort -u "${affected_pkgs}" | grep -c . || true)
 if ((count == 0)); then
 	affected_test_packages=$(join_sorted "${changed_list}")
