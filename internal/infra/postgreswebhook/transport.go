@@ -162,12 +162,11 @@ func sendWithTransport(ctx context.Context, prepared preparedSend, transport *ht
 }
 
 func permanentTLSValidationError(err error) bool {
-	var verification *tls.CertificateVerificationError
-	var unknownAuthority x509.UnknownAuthorityError
-	var hostname x509.HostnameError
-	var invalidCertificate x509.CertificateInvalidError
-	return errors.As(err, &verification) || errors.As(err, &unknownAuthority) ||
-		errors.As(err, &hostname) || errors.As(err, &invalidCertificate)
+	_, verification := errors.AsType[*tls.CertificateVerificationError](err)
+	_, unknownAuthority := errors.AsType[x509.UnknownAuthorityError](err)
+	_, hostname := errors.AsType[x509.HostnameError](err)
+	_, invalidCertificate := errors.AsType[x509.CertificateInvalidError](err)
+	return verification || unknownAuthority || hostname || invalidCertificate
 }
 
 func webhookRequest(ctx context.Context, prepared preparedSend) (*http.Request, error) {

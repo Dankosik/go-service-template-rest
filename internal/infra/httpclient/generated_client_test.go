@@ -20,6 +20,7 @@ func TestGeneratedClientComposition(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(generatedDirectory) })
 
+	// #nosec G204 -- fixed Go executable with repository-owned and generated paths, never caller input.
 	generate := exec.CommandContext(t.Context(), "go", "tool", "-modfile="+filepath.Join(repositoryRoot, "tools", "go.mod"),
 		"oapi-codegen", "-generate", "types,client", "-package", "generatedclient", "-o",
 		filepath.Join(generatedDirectory, "client.gen.go"), filepath.Join(packageDirectory, "testdata", "generated-client.yaml"))
@@ -55,6 +56,7 @@ func TestUsesFixedHTTPClient(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// #nosec G204 -- fixed Go executable with a package path derived from the test-owned temporary directory.
 	testCommand := exec.CommandContext(t.Context(), "go", "test", "-vet=off", "./"+filepath.ToSlash(relativePackage), "-run", "^TestUsesFixedHTTPClient$", "-count=1")
 	testCommand.Dir = repositoryRoot
 	if output, err := testCommand.CombinedOutput(); err != nil {

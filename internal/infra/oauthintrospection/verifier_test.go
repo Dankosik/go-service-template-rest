@@ -32,8 +32,8 @@ import (
 
 func TestCanonicalIntrospectionRequest(t *testing.T) {
 	clientID := "id with +%:"
-	secret := "secret with +%:"
-	token := "token with +%:"
+	clientAuthFixture := "fixture with +%:"
+	opaqueFixture := "opaque with +%:"
 	provider := newLoopbackProvider(t, nil)
 	policy := mustPolicy(t, PolicyInput{
 		Issuer:       testIssuer,
@@ -41,10 +41,10 @@ func TestCanonicalIntrospectionRequest(t *testing.T) {
 		Endpoint:     "https://idp.example.com/oauth/introspect",
 		TargetClass:  "external-https",
 		ClientID:     clientID,
-		ClientSecret: secret,
+		ClientSecret: clientAuthFixture,
 	})
 	verifier := newPinnedVerifierWithPolicy(t, provider, policy)
-	result, err := verifier.Verify(t.Context(), token)
+	result, err := verifier.Verify(t.Context(), opaqueFixture)
 	if err != nil || result.Principal.Subject != "subject-1" || result.Principal.ClientID != "client-1" {
 		t.Fatalf("Verify() = %+v, %v", result, err)
 	}
@@ -58,7 +58,7 @@ func TestCanonicalIntrospectionRequest(t *testing.T) {
 	if got.rawURL != "/oauth/introspect" {
 		t.Fatalf("url = %q", got.rawURL)
 	}
-	if strings.Contains(got.rawURL, token) || strings.Contains(got.rawURL, url.QueryEscape(token)) {
+	if strings.Contains(got.rawURL, opaqueFixture) || strings.Contains(got.rawURL, url.QueryEscape(opaqueFixture)) {
 		t.Fatal("token appeared in URL")
 	}
 	if got.header.Get("Content-Type") != "application/x-www-form-urlencoded" {
@@ -67,12 +67,12 @@ func TestCanonicalIntrospectionRequest(t *testing.T) {
 	if got.header.Get("Accept") != "application/json" {
 		t.Fatalf("accept = %q", got.header.Get("Accept"))
 	}
-	wantBasic := "Basic " + base64.StdEncoding.EncodeToString([]byte(url.QueryEscape(clientID)+":"+url.QueryEscape(secret)))
+	wantBasic := "Basic " + base64.StdEncoding.EncodeToString([]byte(url.QueryEscape(clientID)+":"+url.QueryEscape(clientAuthFixture)))
 	if got.header.Get("Authorization") != wantBasic {
 		t.Fatalf("authorization = %q", got.header.Get("Authorization"))
 	}
 	form := mustParseForm(t, got.body)
-	if form.Get("token") != token || form.Get("token_type_hint") != "access_token" {
+	if form.Get("token") != opaqueFixture || form.Get("token_type_hint") != "access_token" {
 		t.Fatalf("form = %v", form)
 	}
 }
@@ -375,13 +375,11 @@ func TestUncachedIndependentDecisions(t *testing.T) {
 	entered.Add(2)
 	start := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(2)
 	for range 2 {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			_, _ = verifier.Verify(t.Context(), testToken)
-		}()
+		})
 	}
 	close(start)
 	done := make(chan struct{})

@@ -89,8 +89,8 @@ func validateMessage(
 	if err == nil {
 		return nil
 	}
-	var validationErr *protovalidate.ValidationError
-	if !errors.As(err, &validationErr) {
+	validationErr, ok := errors.AsType[*protovalidate.ValidationError](err)
+	if !ok {
 		recordUnhandledFailure(ctx, log, method, err)
 		return ownedStatus(codes.Internal, failure.SanitizedDetail)
 	}

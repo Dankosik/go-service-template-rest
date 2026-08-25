@@ -31,13 +31,13 @@ func (c *Client) Upload(ctx context.Context, key string, source io.Reader, optio
 
 	if options.Size <= multipartPartBytes {
 		input := &awss3.PutObjectInput{
-			Bucket: aws.String(c.config.Bucket), Key: aws.String(key), Body: source,
-			ContentLength: aws.Int64(options.Size), ExpectedBucketOwner: c.expectedBucketOwner(),
+			Bucket: new(c.config.Bucket), Key: new(key), Body: source,
+			ContentLength: new(options.Size), ExpectedBucketOwner: c.expectedBucketOwner(),
 			ChecksumAlgorithm: types.ChecksumAlgorithmCrc64nvme,
 		}
 		input.ContentType = optionalString(options.ContentType)
 		if options.IfNotExists {
-			input.IfNoneMatch = aws.String("*")
+			input.IfNoneMatch = new("*")
 		}
 		output, putErr := c.sdk.PutObject(ctx, input)
 		if putErr != nil {
@@ -50,8 +50,8 @@ func (c *Client) Upload(ctx context.Context, key string, source io.Reader, optio
 	}
 
 	output, uploadErr := c.uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
-		Bucket: aws.String(c.config.Bucket), Key: aws.String(key), Body: readerOnly{Reader: source},
-		ContentLength: aws.Int64(options.Size), MpuObjectSize: aws.Int64(options.Size),
+		Bucket: new(c.config.Bucket), Key: new(key), Body: readerOnly{Reader: source},
+		ContentLength: new(options.Size), MpuObjectSize: new(options.Size),
 		ContentType: optionalString(options.ContentType), ExpectedBucketOwner: c.expectedBucketOwner(),
 		ChecksumAlgorithm: tmtypes.ChecksumAlgorithm("CRC64NVME"), ChecksumType: tmtypes.ChecksumTypeFullObject,
 	})
@@ -74,7 +74,7 @@ func (c *Client) Download(ctx context.Context, key string) (objectstorage.Object
 	}
 
 	output, err := c.sdk.GetObject(ctx, &awss3.GetObjectInput{
-		Bucket: aws.String(c.config.Bucket), Key: aws.String(key),
+		Bucket: new(c.config.Bucket), Key: new(key),
 		ExpectedBucketOwner: c.expectedBucketOwner(), ChecksumMode: types.ChecksumModeEnabled,
 	})
 	if err != nil {
@@ -111,7 +111,7 @@ func (c *Client) Metadata(ctx context.Context, key string) (objectstorage.Metada
 	defer release()
 
 	output, err := c.sdk.HeadObject(ctx, &awss3.HeadObjectInput{
-		Bucket: aws.String(c.config.Bucket), Key: aws.String(key), ExpectedBucketOwner: c.expectedBucketOwner(),
+		Bucket: new(c.config.Bucket), Key: new(key), ExpectedBucketOwner: c.expectedBucketOwner(),
 	})
 	if err != nil {
 		return objectstorage.Metadata{}, readError(ctx, err)
@@ -133,7 +133,7 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 	defer release()
 
 	_, err = c.sdk.DeleteObject(ctx, &awss3.DeleteObjectInput{
-		Bucket: aws.String(c.config.Bucket), Key: aws.String(key), ExpectedBucketOwner: c.expectedBucketOwner(),
+		Bucket: new(c.config.Bucket), Key: new(key), ExpectedBucketOwner: c.expectedBucketOwner(),
 	})
 	if err != nil {
 		return mutationError(ctx, err)
@@ -149,7 +149,7 @@ func (c *Client) PresignGet(ctx context.Context, key string, ttl time.Duration) 
 		return "", objectstorage.ErrInvalid
 	}
 	output, err := c.presigner.PresignGetObject(ctx, &awss3.GetObjectInput{
-		Bucket: aws.String(c.config.Bucket), Key: aws.String(key), ExpectedBucketOwner: c.expectedBucketOwner(),
+		Bucket: new(c.config.Bucket), Key: new(key), ExpectedBucketOwner: c.expectedBucketOwner(),
 	}, func(options *awss3.PresignOptions) { options.Expires = ttl })
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -259,7 +259,7 @@ func optionalString(value string) *string {
 	if value == "" {
 		return nil
 	}
-	return aws.String(value)
+	return new(value)
 }
 
 type readerOnly struct{ io.Reader }

@@ -301,13 +301,11 @@ func TestGRPCAuthnRunsInsideBusinessAdmission(t *testing.T) {
 	credential := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("authorization", "Bearer token"))
 
 	var started sync.WaitGroup
-	started.Add(256)
 	for i := range 256 {
 		connection := connections[i%len(connections)]
-		go func() {
-			defer started.Done()
+		started.Go(func() {
 			_ = connection.Invoke(credential, method, &emptypb.Empty{}, &emptypb.Empty{})
-		}()
+		})
 	}
 	for range 256 {
 		waittest.ReceiveSignal(t, entered, 5*time.Second, "admitted RPC to enter verifier")

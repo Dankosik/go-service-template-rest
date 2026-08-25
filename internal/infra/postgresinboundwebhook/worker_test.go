@@ -78,7 +78,7 @@ func pendingReceipt() storedReceipt {
 func testRegistry(t *testing.T, handle func(context.Context, inboundwebhook.VerifiedDelivery, json.RawMessage) error, decodeErr error) *inboundwebhook.Registry {
 	t.Helper()
 	reg := inboundwebhook.NewRegistry()
-	if err := inboundwebhook.Bind(reg, "orders", func(raw json.RawMessage) (json.RawMessage, error) {
+	if err := reg.Bind("orders", func(raw json.RawMessage) (json.RawMessage, error) {
 		if decodeErr != nil {
 			return nil, decodeErr
 		}
@@ -151,8 +151,7 @@ func TestInboundWebhookMissingBindingSnoozesAtAttemptLimit(t *testing.T) {
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 3, MaxAttempts: 3},
 	})
-	var snooze *rivertype.JobSnoozeError
-	if !errors.As(err, &snooze) || store.failed != 0 || store.receipt.Outcome != "pending" {
+	if _, ok := errors.AsType[*rivertype.JobSnoozeError](err); !ok || store.failed != 0 || store.receipt.Outcome != "pending" {
 		t.Fatalf("err=%v failed=%d outcome=%s", err, store.failed, store.receipt.Outcome)
 	}
 }
@@ -171,8 +170,7 @@ func TestInboundWebhookStorageFailureSnoozesAtAttemptLimit(t *testing.T) {
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 3, MaxAttempts: 3},
 	})
-	var snooze *rivertype.JobSnoozeError
-	if !errors.As(err, &snooze) || store.failed != 0 {
+	if _, ok := errors.AsType[*rivertype.JobSnoozeError](err); !ok || store.failed != 0 {
 		t.Fatalf("err=%v failed=%d", err, store.failed)
 	}
 }
@@ -245,8 +243,7 @@ func TestInboundWebhookRetryAndFinalization(t *testing.T) {
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 3, MaxAttempts: 3},
 	})
-	var snooze *rivertype.JobSnoozeError
-	if !errors.As(err, &snooze) || handled != 1 {
+	if _, ok := errors.AsType[*rivertype.JobSnoozeError](err); !ok || handled != 1 {
 		t.Fatalf("finalizer snooze err=%v handled=%d", err, handled)
 	}
 	if err := worker.Work(context.Background(), &river.Job[receiptJobArgs]{
