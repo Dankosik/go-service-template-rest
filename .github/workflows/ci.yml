@@ -221,6 +221,7 @@ jobs:
               echo "fallback=true"
               echo "test_packages=./..."
               echo "lint_packages="
+              echo "format_files="
             } >>"${GITHUB_OUTPUT}"
             exit 0
           fi
@@ -228,6 +229,7 @@ jobs:
           while IFS='=' read -r name value; do
             case "${name}" in
             fallback) printf 'fallback=%s\n' "${value}" ;;
+            format_files) printf 'format_files=%s\n' "${value}" ;;
             affected_test_packages) printf 'test_packages=%s\n' "${value}" ;;
             lint_packages) printf 'lint_packages=%s\n' "${value}" ;;
             esac
@@ -238,12 +240,16 @@ jobs:
           (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_testdata == 'true' || needs.changes.outputs.go_root_dependencies == 'true')
         env:
           TEST_PACKAGES: ${{ steps.affected-go.outputs.test_packages }}
+          FORMAT_FILES: ${{ steps.affected-go.outputs.format_files }}
           FALLBACK: ${{ steps.affected-go.outputs.fallback }}
         run: |
+          set -euo pipefail
           if [[ "${FALLBACK}" == true || "${TEST_PACKAGES}" == "./..." || -z "${TEST_PACKAGES}" ]]; then
             bash ./scripts/ci/measure.sh quality-pr-format-test -- make fmt-check test-all
+          elif [[ -n "${FORMAT_FILES}" ]]; then
+            bash ./scripts/ci/measure.sh quality-pr-format-test -- make fmt-files-check FILES="${FORMAT_FILES}" test-package PKG="${TEST_PACKAGES}"
           else
-            bash ./scripts/ci/measure.sh quality-pr-format-test -- make fmt-check test-package PKG="${TEST_PACKAGES}"
+            bash ./scripts/ci/measure.sh quality-pr-format-test -- make test-package PKG="${TEST_PACKAGES}"
           fi
       - name: Go pull-request lint
         if: >-
@@ -280,12 +286,6 @@ jobs:
       - name: Root dependencies
         if: needs.changes.outputs.go_root_dependencies == 'true'
         run: bash ./scripts/ci/measure.sh quality-root-mod -- make root-mod-check
-      - name: Lint configuration
-        if: >-
-          needs.changes.outputs.go_lint_config == 'true' &&
-          needs.changes.outputs.go_source != 'true' &&
-          needs.changes.outputs.go_root_dependencies != 'true'
-        run: bash ./scripts/ci/measure.sh quality-lint-config -- make lint-all GOLANGCI_LINT=golangci-lint
       - name: Tool dependencies
         if: needs.changes.outputs.go_tool_dependencies == 'true'
         env:

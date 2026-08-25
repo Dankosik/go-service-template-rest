@@ -180,7 +180,7 @@ classify() {
 		esac
 
 		case "${file}" in
-			Makefile|scripts/ci/changed-surfaces.sh|scripts/ci/verify.sh|scripts/ci/validation-lock.sh|scripts/ci/affected-go-packages.sh|scripts/ci/git-changed-paths.sh|scripts/ci/proof-receipt.sh|scripts/ci/measure.sh)
+			Makefile|scripts/ci/changed-surfaces.sh|scripts/ci/verify.sh|scripts/ci/validation-lock.sh|scripts/ci/affected-go-packages.sh|scripts/ci/git-changed-paths.sh|scripts/ci/measure.sh)
 				mark validation_system
 				;;
 		esac
@@ -298,7 +298,7 @@ self_test() {
 	output="$(printf '%s\n' scripts/ci/git-changed-paths.sh | classify)"
 	grep -qx 'shell=true' <<<"${output}"
 	grep -qx 'validation_system=true' <<<"${output}"
-	output="$(printf '%s\n' scripts/ci/proof-receipt.sh | classify)"
+	output="$(printf '%s\n' scripts/ci/measure.sh | classify)"
 	grep -qx 'validation_system=true' <<<"${output}"
 	grep -qx 'classified=true' <<<"${output}"
 	grep -qx 'go_source=false' <<<"${output}"

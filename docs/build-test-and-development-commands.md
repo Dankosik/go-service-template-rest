@@ -67,22 +67,24 @@ make integration-init-check
 
 ## Fast Go iteration
 
-Use active gopls diagnostics first, then format and test only the changed files
-and package:
+Use active gopls diagnostics first. When package-sized feedback is useful,
+format, test, and lint only the changed files and package:
 
 ```bash
 make prove PKG=./path/to/changed/package FILES='path/to/changed.go'
-make lint-fast PKG=./path/to/changed/package
 ```
 
 When only the CLI exposes diagnostics, use `gopls check path/to/changed.go`.
 Use `gopls references file.go:line:column` before a semantic rename or exported
 signature change. `make test-watch` watches all Go directories but runs the
 package containing the saved file; press `a` for an explicit full run.
+`make lint-fast` remains a local changed-code signal; it is not a lint claim and
+is not required beside `make prove`.
 
 ## Ordinary Go leaves
 
-Edit-loop and acceptance-unit proof is the lock-wrapped package aggregate:
+Package-sized iteration is the lock-wrapped package aggregate. Skip it when the
+change is already ready for the integrated route:
 
 ```bash
 make prove \
@@ -90,16 +92,17 @@ make prove \
   FILES="internal/<package>/a.go internal/<package>/a_test.go"
 ```
 
-Inspect and run the surface-aware integrated plan:
+Completion is one surface-aware route:
 
 ```bash
-make plan
 make verify
 ```
 
-`plan` collects base-branch, staged, unstaged, and untracked changes, including
-both sides of renames, explains their surfaces and not-applicable gates, and
-prints the minimal command set.
+`make plan` diagnoses that route without running it: it collects base-branch,
+staged, unstaged, and untracked changes, including both sides of renames,
+explains their surfaces and not-applicable gates, and prints the minimal
+command set. Do not run it as a required gate; `make verify` already prints the
+plan it will execute.
 `verify` rejects missing heavy authorization, Docker, or required binaries before
 the first check. It batches changed Go formatting and lint packages, tests the
 reverse-importer closure, and serializes CPU/Docker work through the Git-common

@@ -52,10 +52,11 @@ review and remaining read-only or non-mutating validation concurrently. Do not
 mutate the candidate while those lanes are active. Acceptance waits for every
 mandatory result; the lanes do not wait for one another.
 
-Workers run only the focused proof named by their brief. The Lead reruns
-claim-matched proof on the integrated candidate. Repository-wide aggregate proof
-runs once on the integrated delivery tree unless the unit's own acceptance claim
-requires that aggregate.
+Workers run only the focused proof named by their brief. The Lead does not
+rerun an equivalent package aggregate on an unchanged integrated candidate.
+Surface-aware aggregate proof runs once as `make verify` on the integrated
+delivery tree unless the unit's own acceptance claim still needs a leaf that
+`make verify` marked not applicable.
 
 The same Lead owns every candidate-caused repair. [Review](../shared/review.md)
 selects bounded delta recheck versus a fresh reviewer. During orchestrated
