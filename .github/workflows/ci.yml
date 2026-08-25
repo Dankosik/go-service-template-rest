@@ -21,7 +21,6 @@ permissions:
 env:
   GOFLAGS: -mod=readonly
   GOTOOLCHAIN: local
-  VALIDATION_MODE: ci
   VALIDATION_JOBS: 4
   VALIDATION_PARALLEL_TESTS: 4
 
@@ -62,6 +61,7 @@ jobs:
       secret_scanning: ${{ steps.surfaces.outputs.secret_scanning }}
       documentation: ${{ steps.surfaces.outputs.documentation }}
       integration_records: ${{ steps.surfaces.outputs.integration_records }}
+      validation_system: ${{ steps.surfaces.outputs.validation_system }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -108,7 +108,8 @@ jobs:
       needs.changes.outputs.module_initializer == 'true' ||
       needs.changes.outputs.integration_initializer == 'true' ||
       needs.changes.outputs.integration_records == 'true' ||
-      needs.changes.outputs.agent_instructions == 'true'
+      needs.changes.outputs.agent_instructions == 'true' ||
+      needs.changes.outputs.validation_system == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
@@ -129,7 +130,8 @@ jobs:
           needs.changes.outputs.sqlc == 'true' ||
           needs.changes.outputs.module_initializer == 'true' ||
           needs.changes.outputs.integration_initializer == 'true' ||
-          needs.changes.outputs.integration_records == 'true'
+          needs.changes.outputs.integration_records == 'true' ||
+          needs.changes.outputs.validation_system == 'true'
         id: setup-go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -180,20 +182,68 @@ jobs:
           version: v2.13.1
           install-only: true
           skip-cache: true
+      - name: Fetch Go comparison base
+        if: >-
+          (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+          (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_testdata == 'true' || needs.changes.outputs.go_root_dependencies == 'true' || needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.module_initializer == 'true' || needs.changes.outputs.integration_initializer == 'true')
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          if [[ -n "${BASE_SHA}" && "${BASE_SHA}" != 0000000000000000000000000000000000000000 ]]; then
+            git fetch --no-tags --depth=1 origin "${BASE_SHA}"
+          fi
+      - name: Affected Go packages
+        if: >-
+          (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+          (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_testdata == 'true' || needs.changes.outputs.go_root_dependencies == 'true')
+        id: affected-go
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+          ROOT_DEPS: ${{ needs.changes.outputs.go_root_dependencies }}
+        run: |
+          set -euo pipefail
+          if [[ "${ROOT_DEPS}" == true || -z "${BASE_SHA}" || "${BASE_SHA}" == 0000000000000000000000000000000000000000 ]]; then
+            {
+              echo "fallback=true"
+              echo "test_packages=./..."
+              echo "lint_packages="
+            } >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/affected-go-packages.sh | tee /tmp/affected-go.env
+          while IFS='=' read -r name value; do
+            case "${name}" in
+            fallback) printf 'fallback=%s\n' "${value}" ;;
+            affected_test_packages) printf 'test_packages=%s\n' "${value}" ;;
+            lint_packages) printf 'lint_packages=%s\n' "${value}" ;;
+            esac
+          done </tmp/affected-go.env >>"${GITHUB_OUTPUT}"
       - name: Go pull-request format and tests
         if: >-
           (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
           (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_testdata == 'true' || needs.changes.outputs.go_root_dependencies == 'true')
-        run: bash ./scripts/ci/measure.sh quality-pr-format-test -- make fmt-check test-all
+        env:
+          TEST_PACKAGES: ${{ steps.affected-go.outputs.test_packages }}
+          FALLBACK: ${{ steps.affected-go.outputs.fallback }}
+        run: |
+          if [[ "${FALLBACK}" == true || "${TEST_PACKAGES}" == "./..." || -z "${TEST_PACKAGES}" ]]; then
+            bash ./scripts/ci/measure.sh quality-pr-format-test -- make fmt-check test-all
+          else
+            bash ./scripts/ci/measure.sh quality-pr-format-test -- make fmt-check test-package PKG="${TEST_PACKAGES}"
+          fi
       - name: Go pull-request lint
         if: >-
           (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
           (needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.go_root_dependencies == 'true' || needs.changes.outputs.go_lint_config == 'true')
         env:
           LINT_CONFIG_CHANGED: ${{ needs.changes.outputs.go_lint_config }}
+          LINT_PACKAGES: ${{ steps.affected-go.outputs.lint_packages }}
+          ROOT_DEPS: ${{ needs.changes.outputs.go_root_dependencies }}
         run: |
-          if [[ "${LINT_CONFIG_CHANGED}" == true ]]; then
+          if [[ "${LINT_CONFIG_CHANGED}" == true || "${ROOT_DEPS}" == true ]]; then
             bash ./scripts/ci/measure.sh quality-pr-lint-all -- make lint-all GOLANGCI_LINT=golangci-lint
+          elif [[ -n "${LINT_PACKAGES}" ]]; then
+            bash ./scripts/ci/measure.sh quality-pr-lint -- make lint-pr PKGS="${LINT_PACKAGES}" GOLANGCI_LINT=golangci-lint
           else
             bash ./scripts/ci/measure.sh quality-pr-lint -- make lint-pr GOLANGCI_LINT=golangci-lint
           fi
@@ -201,7 +251,7 @@ jobs:
         if: >-
           github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
           (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_testdata == 'true' || needs.changes.outputs.go_root_dependencies == 'true')
-        run: bash ./scripts/ci/measure.sh quality-main -- make fmt-check test-all mod-tidy-check
+        run: bash ./scripts/ci/measure.sh quality-main -- make fmt-check test-all
       - name: Go full lint
         if: >-
           github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
@@ -213,9 +263,7 @@ jobs:
           needs.changes.outputs.go_handwritten == 'true'
         run: bash ./scripts/ci/measure.sh quality-whole-program -- make lint-deep
       - name: Root dependencies
-        if: >-
-          needs.changes.outputs.go_root_dependencies == 'true' &&
-          (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        if: needs.changes.outputs.go_root_dependencies == 'true'
         run: bash ./scripts/ci/measure.sh quality-root-mod -- make root-mod-check
       - name: Lint configuration
         if: >-
@@ -238,7 +286,28 @@ jobs:
           fi
       - name: OpenAPI
         if: needs.changes.outputs.openapi == 'true'
-        run: bash ./scripts/ci/measure.sh quality-openapi -- make check-openapi
+        run: bash ./scripts/ci/measure.sh quality-openapi -- make openapi-drift-check openapi-lint openapi-validate
+      - name: OpenAPI runtime
+        if: needs.changes.outputs.openapi == 'true'
+        env:
+          TEST_PACKAGES: ${{ steps.affected-go.outputs.test_packages }}
+          FALLBACK: ${{ steps.affected-go.outputs.fallback }}
+        run: |
+          if [[ "${FALLBACK}" == true || "${TEST_PACKAGES}" == "./..." ]]; then
+            echo "OpenAPI runtime tests are covered by the module Go tests"
+            exit 0
+          fi
+          case " ${TEST_PACKAGES} " in
+          *" ./internal/openapi "*)
+            case " ${TEST_PACKAGES} " in
+            *" ./internal/infra/http "*)
+              echo "OpenAPI runtime tests are covered by the affected Go package tests"
+              exit 0
+              ;;
+            esac
+            ;;
+          esac
+          bash ./scripts/ci/measure.sh quality-openapi-runtime -- make openapi-runtime-contract-check
       - name: Protobuf
         if: needs.changes.outputs.protobuf == 'true'
         run: bash ./scripts/ci/measure.sh quality-protobuf -- make check-proto
@@ -247,12 +316,25 @@ jobs:
         run: bash ./scripts/ci/measure.sh quality-sqlc -- make check-sqlc
       - name: Module initializer contract
         if: needs.changes.outputs.module_initializer == 'true'
-        run: bash ./scripts/ci/measure.sh quality-module-initializer -- make template-init-check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == pull_request || "${{ github.event_name }}" == merge_group ]]; then
+            profiles=$(git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/init-module-contract-check.sh --select-from-files | tr '\n' ' ')
+            bash ./scripts/ci/measure.sh quality-module-initializer -- env INIT_MODULE_PROFILES="${profiles}" make template-init-check
+          else
+            bash ./scripts/ci/measure.sh quality-module-initializer -- env INIT_MODULE_RESOLVE_TOOLS=1 make template-init-check
+          fi
       - name: Integration initializer contract
         if: needs.changes.outputs.integration_initializer == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: |
+          set -euo pipefail
           if [[ "${{ github.event_name }}" == pull_request || "${{ github.event_name }}" == merge_group ]]; then
-            make integration-init-check INTEGRATION_INIT_ROWS='row_e1_http row_e1_grpc row_e2_oauth row_e2_none row_e5_openapi row_e5_proto row_e6_http row_e6_grpc row_e7_refresh row_e8_disclosure'
+            rows=$(git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/integration-init-check.sh --select-from-files | tr '\n' ' ')
+            make integration-init-check INTEGRATION_INIT_ROWS="${rows}"
           else
             make integration-init-check
           fi
@@ -262,6 +344,9 @@ jobs:
       - name: Instruction ownership
         if: needs.changes.outputs.agent_instructions == 'true'
         run: bash ./scripts/ci/measure.sh quality-instructions -- make check-instructions
+      - name: Validation routing
+        if: needs.changes.outputs.validation_system == 'true'
+        run: bash ./scripts/ci/measure.sh quality-validation-system -- make verify-check changed-surfaces-check validation-lock-self-test affected-go-packages-check proof-receipt-check
       - name: Save root module cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-go.outcome == 'success'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -314,7 +399,7 @@ jobs:
     timeout-minutes: 20
     env:
       GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
-      TOOL_GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
+      TOOL_GOMODCACHE: ${{ github.workspace }}/.cache/gomod/tools
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Set up Go
@@ -330,6 +415,13 @@ jobs:
           path: ${{ env.GOMODCACHE }}
           key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
           restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
+      - name: Restore security tool cache
+        if: needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.go_root_dependencies == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TOOL_GOMODCACHE }}
+          key: go-mod-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-tools-${{ runner.os }}-${{ runner.arch }}-
       - name: Dependency review
         if: >-
           github.event_name == 'pull_request' && (
@@ -346,8 +438,10 @@ jobs:
         if: needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.go_root_dependencies == 'true'
         run: bash ./scripts/ci/measure.sh security-govulncheck -- make govulncheck
       - name: Go source security
-        if: needs.changes.outputs.go_handwritten == 'true'
-        continue-on-error: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
+        if: >-
+          needs.changes.outputs.go_handwritten == 'true' &&
+          (needs.changes.outputs.go_lint_config == 'true' ||
+            (github.event_name != 'pull_request' && github.event_name != 'merge_group'))
         run: bash ./scripts/ci/measure.sh security-gosec -- make gosec
 
   secrets:

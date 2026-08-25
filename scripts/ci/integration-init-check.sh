@@ -3,6 +3,50 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+if [[ ${1:-} == --select-from-files ]]; then
+	engine=false
+	http=false
+	grpc=false
+	oauth=false
+	while IFS= read -r file; do
+		[[ -n ${file} ]] || continue
+		case "${file}" in
+		scripts/integration-init.sh | scripts/ci/integration-init-check.sh | scripts/openapi-ref-check.go)
+			engine=true
+			;;
+		*.proto | buf.yaml | buf.gen.yaml | buf.lock | api/proto/* | internal/gen/proto/*)
+			grpc=true
+			;;
+		.redocly.yaml | api/openapi/* | api/external/*/openapi.yaml | examples/reference-service/api/openapi.yaml | internal/openapi/* | */internal/openapi/*)
+			http=true
+			;;
+		*oauth* | *outbound-auth* | *clientcredentials*)
+			oauth=true
+			;;
+		esac
+	done
+	if [[ ${engine} == true ]] || [[ ${http} != true && ${grpc} != true && ${oauth} != true ]]; then
+		printf '%s\n' row_e1_http row_e1_grpc row_e2_oauth row_e2_none row_e5_openapi row_e5_proto row_e6_http row_e6_grpc row_e7_refresh row_e8_disclosure
+		exit 0
+	fi
+	rows=()
+	if [[ ${http} == true ]]; then
+		rows+=(row_e1_http row_e5_openapi row_e6_http)
+	fi
+	if [[ ${grpc} == true ]]; then
+		rows+=(row_e1_grpc row_e5_proto row_e6_grpc)
+	fi
+	if [[ ${oauth} == true ]]; then
+		rows+=(row_e2_oauth row_e8_disclosure)
+	fi
+	if [[ ${http} == true || ${grpc} == true ]]; then
+		rows+=(row_e2_none)
+	fi
+	printf '%s\n' "${rows[@]}" | LC_ALL=C sort -u
+	exit 0
+fi
+
 export GOTOOLCHAIN="${GOTOOLCHAIN:-local}"
 required_go="$(awk '/^go / { print "go" $2; exit }' "${ROOT_DIR}/go.mod")"
 actual_go="$(go env GOVERSION)"

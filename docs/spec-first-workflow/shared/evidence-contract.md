@@ -23,9 +23,9 @@ surface-aware `make verify`; do not automatically append a full-repository gate.
 
 The bounded-change actor owns iterative focused checks. The acceptance owner
 assigns every deterministic gate, validates any reused receipt, and runs
-`make unit-check` on the integrated unit when identity or preconditions
+`make prove` on the integrated unit when identity or preconditions
 changed. A reviewer runs only a missing or adversarial falsifier for its
-independent question. Run `make check` only when the integrated claim spans its
+independent question. Run `ALLOW_FULL=1 make check` only when the integrated claim spans its
 full-repository evidence boundary. Heavy targets require `ALLOW_HEAVY=1` or CI.
 
 Return [Evidence Result V1](../interfaces/evidence-result-v1.md) for each claim.
