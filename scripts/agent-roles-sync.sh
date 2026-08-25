@@ -54,42 +54,56 @@ done
 source_link=$(find "${sources}" "${repo}/.agents/role-classes" -type l -print -quit 2>/dev/null || true)
 [[ -z "${source_link}" ]] || fail "${source_link#"${repo}/"} is a symlink"
 
-read_strings() {
-	awk '
-		BEGIN {
-			order[1] = "name"
-			order[2] = "description"
-			order[3] = "class"
-			order[4] = "claude_model"
-			order[5] = "qwen_model"
-			order[6] = "cursor_model"
-			order[7] = "grok_model"
-			order[8] = "grok_effort"
-			order[9] = "output_schema"
-			for (i = 1; i <= 9; i++) wanted[order[i]] = 1
-		}
-		{
-			key = $1
-			prefix = key " = \""
-			if (key in wanted && index($0, prefix) == 1 && substr($0, length($0), 1) == "\"") {
-				values[key] = substr($0, length(prefix) + 1, length($0) - length(prefix) - 1)
-				seen[key]++
-			}
-		}
-		END {
-			for (key in seen) if (seen[key] != 1) exit 2
-			for (i = 1; i <= 9; i++) print values[order[i]]
-		}
-	' "$1"
-}
-
-read_body() {
-	awk '
-		$0 == "instructions = \"\"\"" { body = 1; next }
-		body && $0 == "\"\"\"" { body = 0; found = 1; next }
-		body { print }
-		END { if (!found) exit 1 }
-	' "$1"
+read_role() {
+	local file=$1 line value in_body=false body_found=false
+	local name_count=0 description_count=0 class_count=0 claude_model_count=0 qwen_model_count=0
+	local cursor_model_count=0 grok_model_count=0 grok_effort_count=0 output_schema_count=0
+	name=''
+	description=''
+	class=''
+	claude_model=''
+	qwen_model=''
+	cursor_model=''
+	grok_model=''
+	grok_effort=''
+	output_schema=''
+	body=''
+	read_role_error=''
+	while IFS= read -r line || [[ -n ${line} ]]; do
+		case "${line}" in
+		'name = "'*'"') value=${line#*\"}; name=${value%\"}; ((name_count += 1)) ;;
+		'description = "'*'"') value=${line#*\"}; description=${value%\"}; ((description_count += 1)) ;;
+		'class = "'*'"') value=${line#*\"}; class=${value%\"}; ((class_count += 1)) ;;
+		'claude_model = "'*'"') value=${line#*\"}; claude_model=${value%\"}; ((claude_model_count += 1)) ;;
+		'qwen_model = "'*'"') value=${line#*\"}; qwen_model=${value%\"}; ((qwen_model_count += 1)) ;;
+		'cursor_model = "'*'"') value=${line#*\"}; cursor_model=${value%\"}; ((cursor_model_count += 1)) ;;
+		'grok_model = "'*'"') value=${line#*\"}; grok_model=${value%\"}; ((grok_model_count += 1)) ;;
+		'grok_effort = "'*'"') value=${line#*\"}; grok_effort=${value%\"}; ((grok_effort_count += 1)) ;;
+		'output_schema = "'*'"') value=${line#*\"}; output_schema=${value%\"}; ((output_schema_count += 1)) ;;
+		esac
+		if [[ ${in_body} == true ]]; then
+			if [[ ${line} == '"""' ]]; then
+				in_body=false
+				body_found=true
+			else
+				body+=$'\n'"${line}"
+			fi
+		elif [[ ${line} == 'instructions = """' ]]; then
+			in_body=true
+		fi
+	done <"${file}"
+	if ((name_count > 1 || description_count > 1 || class_count > 1 || claude_model_count > 1 ||
+		qwen_model_count > 1 || cursor_model_count > 1 || grok_model_count > 1 || grok_effort_count > 1 ||
+		output_schema_count > 1)); then
+		read_role_error=metadata
+		return 1
+	fi
+	if [[ ${body_found} != true ]]; then
+		read_role_error=body
+		return 1
+	fi
+	body=${body#$'\n'}
+	while [[ ${body} == *$'\n' ]]; do body=${body%$'\n'}; done
 }
 
 validate_name() {
@@ -100,10 +114,17 @@ validate_name() {
 }
 
 validate_model() {
-	local key="$1" value="$2" file="$3"
+	local key="$1" value="$2" file="$3" sanitized
 	[[ -z "${value}" ]] && return 0
-	printf '%s\n' "${value}" | LC_ALL=C grep -Eq '^[A-Za-z0-9][][A-Za-z0-9._/:=-]*$' ||
-		fail "${file#"${repo}/"} has an unsafe ${key} value"
+	case "${value}" in
+	[A-Za-z0-9]*) ;;
+	*) fail "${file#"${repo}/"} has an unsafe ${key} value" ;;
+	esac
+	sanitized=${value//\[/}
+	sanitized=${sanitized//\]/}
+	case "${sanitized}" in
+	*[!A-Za-z0-9._/:=-]*) fail "${file#"${repo}/"} has an unsafe ${key} value" ;;
+	esac
 }
 
 validate_description() {
@@ -141,19 +162,12 @@ mkdir -p "${tmp}/codex" "${tmp}/claude" "${tmp}/qwen" "${tmp}/grok" "${tmp}/grok
 role_names=()
 shopt -s nullglob
 for source_file in "${sources}"/*.toml; do
-	metadata=()
-	while IFS= read -r value; do metadata+=("${value}"); done < <(read_strings "${source_file}")
-	((${#metadata[@]} == 9)) || fail "${source_file#"${repo}/"} has duplicate role metadata"
-	name=${metadata[0]}
-	description=${metadata[1]}
-	class=${metadata[2]}
-	claude_model=${metadata[3]}
-	qwen_model=${metadata[4]}
-	cursor_model=${metadata[5]}
-	grok_model=${metadata[6]}
-	grok_effort=${metadata[7]}
-	output_schema=${metadata[8]}
-	body=$(read_body "${source_file}") || fail "${source_file#"${repo}/"} has no closed instructions block"
+	if ! read_role "${source_file}"; then
+		if [[ ${read_role_error} == metadata ]]; then
+			fail "${source_file#"${repo}/"} has duplicate role metadata"
+		fi
+		fail "${source_file#"${repo}/"} has no closed instructions block"
+	fi
 
 	validate_name "${name}" "${source_file}"
 	expected_name=${source_file##*/}
@@ -369,6 +383,13 @@ sync_generated() {
 	shopt -u nullglob
 }
 
+same_text() {
+	local left='' right=''
+	IFS= read -r -d '' left <"$1" || true
+	IFS= read -r -d '' right <"$2" || true
+	[[ ${left} == "${right}" ]]
+}
+
 check_generated() {
 	local harness="$1" extension="$2" target role actual expected
 	check_extra "${harness}" "${extension}"
@@ -378,7 +399,7 @@ check_generated() {
 		actual="${target}/${role}.${extension}"
 		expected="${tmp}/${harness}/${role}.${extension}"
 		[[ -f "${actual}" ]] || fail "${actual#"${repo}/"} is missing"
-		if ! cmp -s "${expected}" "${actual}"; then
+		if ! same_text "${expected}" "${actual}"; then
 			diff -u "${actual}" "${expected}" >&2 || true
 			fail "${actual#"${repo}/"} is stale; run scripts/agent-roles-sync.sh --apply"
 		fi

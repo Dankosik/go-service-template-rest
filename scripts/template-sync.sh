@@ -107,7 +107,7 @@ for entry in "${paths[@]}"; do template_pathspecs+=("${entry%/}"); done
 # repository. Check every path component and every nested entry before diffing.
 first_manifest_symlink() {
 	local root="$1" entry component candidate nested
-	local -a components=()
+	local -a components=() directories=()
 
 	for entry in "${paths[@]}"; do
 		components=()
@@ -121,13 +121,12 @@ first_manifest_symlink() {
 			fi
 		done
 		if [[ "${entry}" == */ && -d "${root}/${entry%/}" ]]; then
-			nested=$(find "${root}/${entry%/}" -type l -print -quit 2>/dev/null || true)
-			if [[ -n "${nested}" ]]; then
-				printf '%s' "${nested#"${root}/"}"
-				return
-			fi
+			directories+=("${root}/${entry%/}")
 		fi
 	done
+	((${#directories[@]} > 0)) || return 0
+	nested=$(find "${directories[@]}" -type l -print -quit 2>/dev/null || true)
+	[[ -z "${nested}" ]] || printf '%s' "${nested#"${root}/"}"
 }
 
 # Target-local projections rebuilt from template-owned skills and Codex runtime.
