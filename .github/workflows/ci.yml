@@ -146,7 +146,18 @@ jobs:
           key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
           restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
       - name: Restore tool module cache
-        if: steps.setup-go.outcome == 'success'
+        if: >-
+          steps.setup-go.outcome == 'success' &&
+          (needs.changes.outputs.go_source == 'true' ||
+           needs.changes.outputs.go_testdata == 'true' ||
+           needs.changes.outputs.go_handwritten == 'true' ||
+           needs.changes.outputs.go_root_dependencies == 'true' ||
+           needs.changes.outputs.go_tool_dependencies == 'true' ||
+           needs.changes.outputs.openapi == 'true' ||
+           needs.changes.outputs.protobuf == 'true' ||
+           needs.changes.outputs.sqlc == 'true' ||
+           needs.changes.outputs.module_initializer == 'true' ||
+           needs.changes.outputs.integration_initializer == 'true')
         id: tool-module-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -274,7 +285,7 @@ jobs:
           needs.changes.outputs.go_lint_config == 'true' &&
           needs.changes.outputs.go_source != 'true' &&
           needs.changes.outputs.go_root_dependencies != 'true'
-        run: bash ./scripts/ci/measure.sh quality-lint-config -- make lint-all
+        run: bash ./scripts/ci/measure.sh quality-lint-config -- make lint-all GOLANGCI_LINT=golangci-lint
       - name: Tool dependencies
         if: needs.changes.outputs.go_tool_dependencies == 'true'
         env:
@@ -371,6 +382,7 @@ jobs:
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main' &&
           steps.setup-go.outcome == 'success' &&
+          steps.tool-module-cache.outcome == 'success' &&
           steps.tool-module-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
