@@ -30,16 +30,16 @@ func TestGRPCServerTLS13AndMutualTLS(t *testing.T) {
 	settings.ClientCAFile = writeTestFile(t, directory, "clients.pem", authority.pem)
 	address := startTLSGRPCRuntime(t, settings)
 
-	client := &tls.Config{ //nolint:gosec // Test verifies the presented pair separately from hostname trust.
-		InsecureSkipVerify: true,
+	client := &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // Test verifies the presented pair separately from hostname trust.
 		MaxVersion:         tls.VersionTLS12,
 	}
 	if err := checkHealthOver(t, address, client); err == nil {
 		t.Fatal("TLS 1.2 caller reached the listener")
 	}
 
-	client = &tls.Config{ //nolint:gosec // The issuing CA is tested by the server side.
-		InsecureSkipVerify: true,
+	client = &tls.Config{
+		InsecureSkipVerify: true, //nolint:gosec // The issuing CA is tested by the server side.
 		MinVersion:         tls.VersionTLS13,
 	}
 	if err := checkHealthOver(t, address, client); err == nil {

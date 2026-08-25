@@ -177,7 +177,7 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 
 	dependencies, err := initRuntimeDependencies(startupCtx, startupBootstrap{
 		cfg: config.Config{
-			Postgres: config.PostgresConfig{
+			Postgres: config.PostgresConfig{ //nolint:gosec // Deliberately unreachable local test DSN.
 				Enabled: true,
 				DSN:     "postgres://app:app@127.0.0.1:1/app?sslmode=disable",
 
@@ -206,7 +206,7 @@ func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 	cancel()
 
 	runtime := postgresStartupRuntime{
-		cfg: config.Config{Postgres: config.PostgresConfig{
+		cfg: config.Config{Postgres: config.PostgresConfig{ //nolint:gosec // Local test DSN; no live credential.
 			Enabled: true,
 			DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
 
