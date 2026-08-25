@@ -10,6 +10,8 @@ func TestTrackResponseCommitRequiresFinalStatus(t *testing.T) {
 	t.Parallel()
 
 	t.Run("informational status", func(t *testing.T) {
+		t.Parallel()
+
 		writer, committed := trackResponseCommit(httptest.NewRecorder())
 
 		writer.WriteHeader(http.StatusEarlyHints)
@@ -24,6 +26,8 @@ func TestTrackResponseCommitRequiresFinalStatus(t *testing.T) {
 	})
 
 	t.Run("switching protocols", func(t *testing.T) {
+		t.Parallel()
+
 		writer, committed := trackResponseCommit(httptest.NewRecorder())
 
 		writer.WriteHeader(http.StatusSwitchingProtocols)
@@ -33,6 +37,8 @@ func TestTrackResponseCommitRequiresFinalStatus(t *testing.T) {
 	})
 
 	t.Run("rejected status", func(t *testing.T) {
+		t.Parallel()
+
 		writer, committed := trackResponseCommit(httptest.NewRecorder())
 
 		defer func() {
