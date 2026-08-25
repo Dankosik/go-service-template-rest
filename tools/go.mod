@@ -49,6 +49,7 @@ require (
 	github.com/ClickHouse/clickhouse-go-linter v1.2.1 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.48.0 // indirect
 	github.com/Djarvur/go-err113 v0.1.1 // indirect
+	github.com/JetBrains/go-modern-guidelines v0.1.1 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/Masterminds/sprig/v3 v3.3.0 // indirect
@@ -432,6 +433,7 @@ require (
 )
 
 tool (
+	github.com/JetBrains/go-modern-guidelines
 	github.com/bufbuild/buf/cmd/buf
 	github.com/getkin/kin-openapi/cmd/validate
 	github.com/golangci/golangci-lint/v2/cmd/golangci-lint

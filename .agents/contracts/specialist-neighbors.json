@@ -21,6 +21,7 @@
       "go-idiomatic",
       "go-implementation-ownership",
       "go-language-simplifier",
+      "go-modern-version",
       "go-structural-quality",
       "go-system-architecture"
     ],
@@ -213,6 +214,26 @@
       "decisive_axis": {
         "go-language-simplifier": "behavior-preserving reader cost",
         "go-idiomatic": "caller-visible language semantics"
+      }
+    },
+    {
+      "skills": [
+        "go-modern-version",
+        "go-idiomatic"
+      ],
+      "decisive_axis": {
+        "go-modern-version": "target-version language and standard-library availability",
+        "go-idiomatic": "caller-visible language semantics"
+      }
+    },
+    {
+      "skills": [
+        "go-modern-version",
+        "go-language-simplifier"
+      ],
+      "decisive_axis": {
+        "go-modern-version": "target-version idiom availability",
+        "go-language-simplifier": "behavior-preserving reader cost"
       }
     },
     {

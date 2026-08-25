@@ -375,8 +375,15 @@ fingerprint_candidate() {
 		printf 'head=%s\n' "$(git rev-parse HEAD)"
 		printf 'base_ref=%s\nresolved_base_sha=%s\nmerge_base_sha=%s\n' "${base_ref}" "${resolved_base_sha}" "${merge_base_sha}"
 		while IFS= read -r file; do
-			if [[ -L ${file} ]]; then mode=120000; elif [[ -x ${file} ]]; then mode=100755; else mode=100644; fi
-			if [[ -f ${file} || -L ${file} ]]; then printf 'mode %s  %s\n' "${mode}" "${file}"; shasum -a 256 "${file}"; else printf 'deleted  %s\n' "${file}"; fi
+			if [[ -L ${file} ]]; then
+				printf 'mode 120000  %s\nsymlink %s\n' "${file}" "$(readlink "${file}" | git hash-object --stdin)"
+			elif [[ -f ${file} ]]; then
+				if [[ -x ${file} ]]; then mode=100755; else mode=100644; fi
+				printf 'mode %s  %s\n' "${mode}" "${file}"
+				shasum -a 256 "${file}"
+			else
+				printf 'deleted  %s\n' "${file}"
+			fi
 		done <"${files_path}"
 	} | shasum -a 256 | awk '{print $1}'
 }
