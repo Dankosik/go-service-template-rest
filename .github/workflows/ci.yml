@@ -203,19 +203,21 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${ROOT_DEPS}" == true || -z "${BASE_SHA}" || "${BASE_SHA}" == 0000000000000000000000000000000000000000 ]]; then
-            echo "fallback=true" >>"${GITHUB_OUTPUT}"
-            echo "test_packages=./..." >>"${GITHUB_OUTPUT}"
-            echo "lint_packages=" >>"${GITHUB_OUTPUT}"
+            {
+              echo "fallback=true"
+              echo "test_packages=./..."
+              echo "lint_packages="
+            } >>"${GITHUB_OUTPUT}"
             exit 0
           fi
           git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/affected-go-packages.sh | tee /tmp/affected-go.env
           while IFS='=' read -r name value; do
             case "${name}" in
-            fallback) printf 'fallback=%s\n' "${value}" >>"${GITHUB_OUTPUT}" ;;
-            affected_test_packages) printf 'test_packages=%s\n' "${value}" >>"${GITHUB_OUTPUT}" ;;
-            lint_packages) printf 'lint_packages=%s\n' "${value}" >>"${GITHUB_OUTPUT}" ;;
+            fallback) printf 'fallback=%s\n' "${value}" ;;
+            affected_test_packages) printf 'test_packages=%s\n' "${value}" ;;
+            lint_packages) printf 'lint_packages=%s\n' "${value}" ;;
             esac
-          done </tmp/affected-go.env
+          done </tmp/affected-go.env >>"${GITHUB_OUTPUT}"
       - name: Go pull-request format and tests
         if: >-
           (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
