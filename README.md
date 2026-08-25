@@ -138,6 +138,10 @@ reliability, testing, delivery, and Go maintenance. Small local edits stay
 direct. Bigger changes can record decisions under `specs/` so another session
 can continue without guessing.
 
+Before handwritten Go edits, agents load version-specific guidance from
+[JetBrains Modern Go Guidelines](https://github.com/JetBrains/go-modern-guidelines),
+pinned in `tools/go.mod`; focused and pull-request lint enforce `modernize`.
+
 `AGENT_HARNESS=core` keeps the shared contract without a generated adapter.
 Pass `codex`, `claude`, `cursor`, `qwen`, `grok`, `opencode`, or `all` to keep
 the matching adapter. See [Agent Harness](docs/agent-harness.md) and the
