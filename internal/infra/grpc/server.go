@@ -31,31 +31,13 @@ type Server struct {
 	server *grpc.Server
 	health *health.Server
 
-	// Health inputs, all guarded by healthMu and combined by publishHealthLocked.
 	healthMu sync.Mutex
 	draining bool
-	ready    bool
 
 	healthDrain healthDrain
 	drain       *rpcDrain
 	stopOnce    sync.Once
 	stopDone    chan struct{}
-}
-
-// publishHealthLocked republishes standard health from the current inputs. It
-// owns the whole rule so each caller below only records its own input:
-//
-//	SERVING iff the process's cached readiness is current. Drain is terminal,
-//	so a late recovery can never make a draining server serving again.
-//
-// Adding a readiness input means adding a field and one term here, not another
-// copy of the composite in a third method.
-func (s *Server) publishHealthLocked() {
-	status := healthgrpc.HealthCheckResponse_NOT_SERVING
-	if s.ready {
-		status = healthgrpc.HealthCheckResponse_SERVING
-	}
-	s.health.SetServingStatus("", status)
 }
 
 // SetServing publishes the same cached readiness state as the HTTP probe.
@@ -65,8 +47,11 @@ func (s *Server) SetServing(ready bool) {
 	if s.draining {
 		return
 	}
-	s.ready = ready
-	s.publishHealthLocked()
+	status := healthgrpc.HealthCheckResponse_NOT_SERVING
+	if ready {
+		status = healthgrpc.HealthCheckResponse_SERVING
+	}
+	s.health.SetServingStatus("", status)
 }
 
 // StartDrain makes every registered health service NOT_SERVING and prevents a

@@ -47,10 +47,18 @@ type Options struct {
 // semantics.
 func New(target string, options Options) (*grpc.ClientConn, error) {
 	target = strings.TrimSpace(target)
-	if err := validateConfig(target, options); err != nil {
-		return nil, err
+	if target == "" {
+		return nil, errors.New("build gRPC client: target is required")
 	}
-	options = withOptionDefaults(options)
+	if options.TransportCredentials == nil {
+		return nil, errors.New("build gRPC client: transport credentials are required")
+	}
+	if options.MeterProvider == nil {
+		options.MeterProvider = metricnoop.NewMeterProvider()
+	}
+	if options.TracerProvider == nil {
+		options.TracerProvider = tracenoop.NewTracerProvider()
+	}
 
 	dialOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(options.TransportCredentials),
@@ -77,30 +85,4 @@ func New(target string, options Options) (*grpc.ClientConn, error) {
 		return nil, fmt.Errorf("build gRPC client connection: %w", err)
 	}
 	return connection, nil
-}
-
-// withOptionDefaults fills the collaborators [Options] documents as optional, so
-// the construction in [New] reads as one uninterrupted sequence and every later
-// reader of options sees a non-nil value. The server adapter in
-// internal/infra/grpc has the same helper for the same reason.
-func withOptionDefaults(options Options) Options {
-	if options.MeterProvider == nil {
-		options.MeterProvider = metricnoop.NewMeterProvider()
-	}
-	if options.TracerProvider == nil {
-		options.TracerProvider = tracenoop.NewTracerProvider()
-	}
-	return options
-}
-
-// validateConfig proves the trust and bounds New is about to hand grpc-go.
-// target is already trimmed, because New dials exactly the value checked here.
-func validateConfig(target string, options Options) error {
-	if target == "" {
-		return errors.New("build gRPC client: target is required")
-	}
-	if options.TransportCredentials == nil {
-		return errors.New("build gRPC client: transport credentials are required")
-	}
-	return nil
 }

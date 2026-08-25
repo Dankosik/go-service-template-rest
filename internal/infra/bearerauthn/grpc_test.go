@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -16,10 +15,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -297,7 +294,7 @@ func TestGRPCAuthnRunsInsideBusinessAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
-	connections := serveBufconnClients(t, server, 3)
+	connections := grpctest.ServeBufconnClients(t, server, 3)
 	credential := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("authorization", "Bearer token"))
 
 	var started sync.WaitGroup
@@ -370,39 +367,3 @@ func (s *stubServerStream) SendHeader(metadata.MD) error { return nil }
 func (s *stubServerStream) SetTrailer(metadata.MD)       {}
 
 var _ grpc.ServerStream = (*stubServerStream)(nil)
-
-func serveBufconnClients(t *testing.T, server *grpcx.Server, count int) []*grpc.ClientConn {
-	t.Helper()
-	listener := bufconn.Listen(1 << 20)
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-	connections := make([]*grpc.ClientConn, 0, count)
-	for range count {
-		connection, err := grpc.NewClient(
-			"passthrough:///bufconn",
-			grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err != nil {
-			t.Fatalf("grpc.NewClient() error = %v", err)
-		}
-		connections = append(connections, connection)
-	}
-	t.Cleanup(func() {
-		for _, connection := range connections {
-			if err := connection.Close(); err != nil {
-				t.Errorf("ClientConn.Close() error = %v", err)
-			}
-		}
-		if err := server.Close(); err != nil {
-			t.Errorf("Server.Close() error = %v", err)
-		}
-		if err := <-serveDone; err != nil {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-		if err := listener.Close(); err != nil {
-			t.Errorf("bufconn.Listener.Close() error = %v", err)
-		}
-	})
-	return connections
-}

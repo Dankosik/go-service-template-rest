@@ -2,6 +2,7 @@ package grpcx
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -19,6 +20,11 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
+const (
+	expectedValidationViolationLimit = 10
+	rejectedValidationValue          = "secret-invalid-value"
+)
+
 func TestProtovalidatePrivacyAndUnaryStreamParity(t *testing.T) {
 	validator, err := protovalidate.New()
 	if err != nil {
@@ -28,7 +34,7 @@ func TestProtovalidatePrivacyAndUnaryStreamParity(t *testing.T) {
 	invalid := messageType.New().Interface()
 	invalid.ProtoReflect().Set(
 		invalid.ProtoReflect().Descriptor().Fields().ByName("value"),
-		protoreflect.ValueOfString("secret-invalid-value"),
+		protoreflect.ValueOfString(rejectedValidationValue),
 	)
 	log := slog.New(slog.DiscardHandler)
 
@@ -57,7 +63,16 @@ func TestProtovalidatePrivacyAndUnaryStreamParity(t *testing.T) {
 			&validationTestStream{ctx: t.Context(), source: invalid},
 			&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
 			func(_ any, stream grpc.ServerStream) error {
-				return stream.RecvMsg(messageType.New().Interface())
+				return handlerErrorBoundary(log, nil)(
+					stream.Context(),
+					testStreamFullMethod,
+					func(context.Context) error {
+						if err := stream.RecvMsg(messageType.New().Interface()); err != nil {
+							return fmt.Errorf("receive validated message: %w", err)
+						}
+						return nil
+					},
+				)
 			},
 		)
 		assertValidationStatus(t, err)
@@ -70,22 +85,81 @@ func assertValidationStatus(t *testing.T, err error) {
 	if converted.Code() != codes.InvalidArgument || converted.Message() != validationFailureDetail {
 		t.Fatalf("validation status = %s %q", converted.Code(), converted.Message())
 	}
-	if strings.Contains(err.Error(), "secret-invalid-value") {
+	if strings.Contains(err.Error(), rejectedValidationValue) {
 		t.Fatalf("validation status disclosed rejected value: %v", err)
 	}
-	if details := converted.Details(); len(details) != 1 {
+	details := converted.Details()
+	if len(details) != 1 {
 		t.Fatalf("validation details = %v, want one structured violation", details)
-	} else if _, ok := details[0].(*validate.Violations); !ok {
+	}
+	violations, ok := details[0].(*validate.Violations)
+	if !ok {
 		t.Fatalf("validation detail type = %T", details[0])
+	}
+	if got := len(violations.GetViolations()); got != 1 {
+		t.Fatalf("validation violations = %d, want 1", got)
+	}
+	assertPublicValidationViolation(t, violations.GetViolations()[0], "value", "value.private")
+}
+
+func TestPublicValidationViolationsBoundsAndRemovesPeerValues(t *testing.T) {
+	raw := &protovalidate.Violation{Proto: validate.Violation_builder{
+		Field: validate.FieldPath_builder{Elements: []*validate.FieldPathElement{
+			validate.FieldPathElement_builder{
+				FieldNumber: new(int32(1)),
+				FieldName:   new("values"),
+				StringKey:   new(rejectedValidationValue),
+			}.Build(),
+		}}.Build(),
+		RuleId:  new("values.private"),
+		Message: new(rejectedValidationValue),
+	}.Build()}
+	source := make([]*protovalidate.Violation, expectedValidationViolationLimit+1)
+	for index := range source {
+		source[index] = raw
+	}
+	validationErr := &protovalidate.ValidationError{Violations: source}
+
+	got := publicValidationViolations(validationErr).GetViolations()
+	if len(got) != expectedValidationViolationLimit {
+		t.Fatalf("validation violations = %d, want %d", len(got), expectedValidationViolationLimit)
+	}
+	for _, violation := range got {
+		assertPublicValidationViolation(t, violation, "values", "values.private")
+	}
+	if raw.Proto.GetMessage() != rejectedValidationValue ||
+		raw.Proto.GetField().GetElements()[0].GetStringKey() != rejectedValidationValue {
+		t.Fatal("public validation projection mutated the validator-owned error")
+	}
+}
+
+func assertPublicValidationViolation(
+	t *testing.T,
+	violation *validate.Violation,
+	wantField string,
+	wantRule string,
+) {
+	t.Helper()
+	if violation.HasMessage() || strings.Contains(violation.String(), rejectedValidationValue) {
+		t.Fatalf("public validation violation disclosed rejected value: %v", violation)
+	}
+	if violation.GetRuleId() != wantRule {
+		t.Fatalf("validation rule ID = %q, want %q", violation.GetRuleId(), wantRule)
+	}
+	field := violation.GetField().GetElements()
+	if len(field) != 1 || field[0].GetFieldName() != wantField || field[0].HasSubscript() {
+		t.Fatalf("public validation field path = %v, want %s without a subscript", violation.GetField(), wantField)
 	}
 }
 
 func validationMessageType(t *testing.T) protoreflect.MessageType { //nolint:ireturn // Dynamic test descriptor API.
 	t.Helper()
-	maxLen := uint64(1)
 	options := new(descriptorpb.FieldOptions)
 	proto.SetExtension(options, validate.E_Field, validate.FieldRules_builder{
-		String: validate.StringRules_builder{MaxLen: &maxLen}.Build(),
+		Cel: []*validate.Rule{validate.Rule_builder{
+			Id:         new("value.private"),
+			Expression: new("this == 'allowed' ? '' : 'rejected: ' + this"),
+		}.Build()},
 	}.Build())
 	file, err := protodesc.NewFile(&descriptorpb.FileDescriptorProto{
 		Name:       new("grpcx_validation_test.proto"),
