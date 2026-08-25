@@ -54,9 +54,33 @@ done
 source_link=$(find "${sources}" "${repo}/.agents/role-classes" -type l -print -quit 2>/dev/null || true)
 [[ -z "${source_link}" ]] || fail "${source_link#"${repo}/"} is a symlink"
 
-read_string() {
-	local key="$1" file="$2"
-	sed -n "s/^${key} = \"\(.*\)\"$/\1/p" "${file}"
+read_strings() {
+	awk '
+		BEGIN {
+			order[1] = "name"
+			order[2] = "description"
+			order[3] = "class"
+			order[4] = "claude_model"
+			order[5] = "qwen_model"
+			order[6] = "cursor_model"
+			order[7] = "grok_model"
+			order[8] = "grok_effort"
+			order[9] = "output_schema"
+			for (i = 1; i <= 9; i++) wanted[order[i]] = 1
+		}
+		{
+			key = $1
+			prefix = key " = \""
+			if (key in wanted && index($0, prefix) == 1 && substr($0, length($0), 1) == "\"") {
+				values[key] = substr($0, length(prefix) + 1, length($0) - length(prefix) - 1)
+				seen[key]++
+			}
+		}
+		END {
+			for (key in seen) if (seen[key] != 1) exit 2
+			for (i = 1; i <= 9; i++) print values[order[i]]
+		}
+	' "$1"
 }
 
 read_body() {
@@ -117,19 +141,24 @@ mkdir -p "${tmp}/codex" "${tmp}/claude" "${tmp}/qwen" "${tmp}/grok" "${tmp}/grok
 role_names=()
 shopt -s nullglob
 for source_file in "${sources}"/*.toml; do
-	name=$(read_string name "${source_file}")
-	description=$(read_string description "${source_file}")
-	class=$(read_string class "${source_file}")
-	claude_model=$(read_string claude_model "${source_file}")
-	qwen_model=$(read_string qwen_model "${source_file}")
-	cursor_model=$(read_string cursor_model "${source_file}")
-	grok_model=$(read_string grok_model "${source_file}")
-	grok_effort=$(read_string grok_effort "${source_file}")
-	output_schema=$(read_string output_schema "${source_file}")
+	metadata=()
+	while IFS= read -r value; do metadata+=("${value}"); done < <(read_strings "${source_file}")
+	((${#metadata[@]} == 9)) || fail "${source_file#"${repo}/"} has duplicate role metadata"
+	name=${metadata[0]}
+	description=${metadata[1]}
+	class=${metadata[2]}
+	claude_model=${metadata[3]}
+	qwen_model=${metadata[4]}
+	cursor_model=${metadata[5]}
+	grok_model=${metadata[6]}
+	grok_effort=${metadata[7]}
+	output_schema=${metadata[8]}
 	body=$(read_body "${source_file}") || fail "${source_file#"${repo}/"} has no closed instructions block"
 
 	validate_name "${name}" "${source_file}"
-	[[ "${name}" == "$(basename "${source_file}" .toml)" ]] ||
+	expected_name=${source_file##*/}
+	expected_name=${expected_name%.toml}
+	[[ "${name}" == "${expected_name}" ]] ||
 		fail "${source_file#"${repo}/"} name must match its filename"
 	[[ -n "${description}" ]] || fail "${source_file#"${repo}/"} has no description"
 	validate_description "${description}" "${source_file}"
@@ -278,25 +307,27 @@ done
 shopt -u nullglob
 ((${#role_names[@]} > 0)) || fail ".agents/roles contains no canonical role files"
 
-generated_path() {
+set_generated_path() {
 	case "$1" in
-	codex) printf '%s/.codex/agents' "${repo}" ;;
-	claude) printf '%s/.claude/agents' "${repo}" ;;
-	qwen) printf '%s/.qwen/agents' "${repo}" ;;
-	grok) printf '%s/.grok/agents' "${repo}" ;;
-	grok-roles) printf '%s/.grok/roles' "${repo}" ;;
-	cursor) printf '%s/.cursor/agents' "${repo}" ;;
-	opencode) printf '%s/.opencode/agents' "${repo}" ;;
+	codex) generated_target="${repo}/.codex/agents" ;;
+	claude) generated_target="${repo}/.claude/agents" ;;
+	qwen) generated_target="${repo}/.qwen/agents" ;;
+	grok) generated_target="${repo}/.grok/agents" ;;
+	grok-roles) generated_target="${repo}/.grok/roles" ;;
+	cursor) generated_target="${repo}/.cursor/agents" ;;
+	opencode) generated_target="${repo}/.opencode/agents" ;;
 	esac
 }
 
 check_extra() {
 	local harness="$1" extension="$2" target file role
-	target=$(generated_path "${harness}")
+	set_generated_path "${harness}"
+	target=${generated_target}
 	[[ -d "${target}" ]] || fail "${target#"${repo}/"} is missing"
 	shopt -s nullglob
 	for file in "${target}"/*."${extension}"; do
-		role=$(basename "${file}" ".${extension}")
+		role=${file##*/}
+		role=${role%."${extension}"}
 		if [[ "${harness}" == grok ]] && is_grok_session_agent "${role}.${extension}"; then
 			continue
 		fi
@@ -314,11 +345,13 @@ check_extra() {
 
 sync_generated() {
 	local harness="$1" extension="$2" target file role
-	target=$(generated_path "${harness}")
+	set_generated_path "${harness}"
+	target=${generated_target}
 	mkdir -p "${target}"
 	shopt -s nullglob
 	for file in "${target}"/*."${extension}"; do
-		role=$(basename "${file}" ".${extension}")
+		role=${file##*/}
+		role=${role%."${extension}"}
 		if [[ "${harness}" == grok ]] && is_grok_session_agent "${role}.${extension}"; then
 			continue
 		fi
@@ -331,7 +364,7 @@ sync_generated() {
 		[[ -f "${tmp}/${harness}/${role}.${extension}" ]] || rm -f -- "${file}"
 	done
 	for file in "${tmp}/${harness}"/*."${extension}"; do
-		cp "${file}" "${target}/$(basename "${file}")"
+		cp "${file}" "${target}/${file##*/}"
 	done
 	shopt -u nullglob
 }
@@ -339,7 +372,8 @@ sync_generated() {
 check_generated() {
 	local harness="$1" extension="$2" target role actual expected
 	check_extra "${harness}" "${extension}"
-	target=$(generated_path "${harness}")
+	set_generated_path "${harness}"
+	target=${generated_target}
 	for role in "${role_names[@]}"; do
 		actual="${target}/${role}.${extension}"
 		expected="${tmp}/${harness}/${role}.${extension}"

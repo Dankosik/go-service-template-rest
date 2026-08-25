@@ -41,17 +41,24 @@ skills_root="${repo}/.agents/skills"
 harness_root="${repo}/.${harness}"
 links_root="${harness_root}/skills"
 
-metadata_value() {
-	local key="$1" file="$2"
-	sed -n "s/^  ${key}: //p" "${file}"
+read_metadata() {
+	awk '
+		index($0, "  invocation: ") == 1 { invocation = substr($0, 15); invocation_count++ }
+		index($0, "  kind: ") == 1 { kind = substr($0, 9); kind_count++ }
+		END {
+			if (invocation_count != 1 || kind_count != 1) exit 2
+			printf "%s/%s", invocation, kind
+		}
+	' "$1"
 }
 
 validate_metadata() {
-	local entry="$1" file invocation kind policy
+	local entry="$1" file metadata invocation kind policy
 	file="${entry}/SKILL.md"
 	[[ -f "${file}" ]] || fail "${file#"${repo}/"} is missing"
-	invocation=$(metadata_value invocation "${file}")
-	kind=$(metadata_value kind "${file}")
+	metadata=$(read_metadata "${file}") || fail "${file#"${repo}/"} has invalid invocation metadata"
+	invocation=${metadata%/*}
+	kind=${metadata#*/}
 	case "${invocation}/${kind}" in
 	model/method) ;;
 	user/workflow | role/carrier)
@@ -125,7 +132,7 @@ check_links() {
 	skill_directories
 
 	for entry in "${skill_dirs[@]}"; do
-		name=$(basename -- "${entry}")
+		name=${entry##*/}
 		link="${links_root}/${name}"
 		expected="../../.agents/skills/${name}"
 		if [[ -L "${link}" ]]; then
@@ -156,7 +163,7 @@ check_links() {
 		shopt -u nullglob dotglob
 		if ((${#entries[@]} > 0)); then
 			for entry in "${entries[@]}"; do
-				name=$(basename -- "${entry}")
+				name=${entry##*/}
 				if [[ ! -d "${skills_root}/${name}" ]]; then
 					printf '%s skills: %s has no owner in .agents/skills\n' \
 						"${harness}" "${entry#"${repo}/"}" >&2
@@ -183,7 +190,7 @@ apply)
 	shopt -u nullglob dotglob
 	((${#entries[@]} == 0)) || rm -f -- "${entries[@]}"
 	for entry in "${skill_dirs[@]}"; do
-		name=$(basename -- "${entry}")
+		name=${entry##*/}
 		ln -s "../../.agents/skills/${name}" "${links_root}/${name}"
 	done
 	check_links

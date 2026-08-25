@@ -215,6 +215,51 @@ if ! command -v go >/dev/null 2>&1; then
 	exit
 fi
 
+if [[ ! -s ${production_list} ]]; then
+	test_packages=()
+	while IFS= read -r pkg; do
+		[[ -n ${pkg} ]] && test_packages+=("${pkg}")
+	done < <(LC_ALL=C sort -u "${test_only_list}")
+	test_list=${tmp}/test-list
+	if ! go list -e -find -f '{{if not .Error}}OK{{"\t"}}{{.Dir}}{{else if or .GoFiles .CgoFiles .TestGoFiles .XTestGoFiles .InvalidGoFiles}}ERR{{"\t"}}{{.Error.Err}}{{end}}' \
+		"${test_packages[@]}" >"${test_list}"; then
+		fallback=true
+		fallback_reason=go_list_error
+		affected_test_packages=./...
+		emit
+		exit
+	fi
+	if grep -q $'^ERR\t' "${test_list}"; then
+		fallback=true
+		fallback_reason=go_list_error
+		affected_test_packages=./...
+		emit
+		exit
+	fi
+	valid_test_list=${tmp}/valid-test
+	lint_keep=${tmp}/lint-keep
+	: >"${valid_test_list}"
+	: >"${lint_keep}"
+	while IFS=$'\t' read -r state dir; do
+		[[ ${state} == OK ]] || continue
+		if [[ ${dir} == "${ROOT_DIR}" ]]; then
+			pkg=.
+		elif [[ ${dir} == "${ROOT_DIR}"/* ]]; then
+			pkg=./${dir#"${ROOT_DIR}"/}
+		else
+			continue
+		fi
+		printf '%s\n' "${pkg}" >>"${valid_test_list}"
+		if grep -Fxq "${pkg}" "${lint_list}"; then
+			printf '%s\n' "${pkg}" >>"${lint_keep}"
+		fi
+	done <"${test_list}"
+	lint_packages=$(join_sorted "${lint_keep}")
+	affected_test_packages=$(join_sorted "${valid_test_list}")
+	emit
+	exit
+fi
+
 module=$(go list -m) || {
 	fallback=true
 	fallback_reason=go_list_error

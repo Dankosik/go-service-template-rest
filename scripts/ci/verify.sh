@@ -174,7 +174,7 @@ not_applicable=()
 add_command() {
 	local kind=$1 argument=$2 reason=$3 display=$4 cost_class=$5 requires_heavy=$6 requires_docker=$7 requires_network=$8 key
 	key="${kind}|${argument}"
-	grep -Fqx "${key}" <<<"${keys}" && return
+	case $'\n'"${keys}" in *$'\n'"${key}"$'\n'*) return ;; esac
 	keys="${keys}${key}"$'\n'
 	kinds[${#kinds[@]}]=${kind}
 	arguments[${#arguments[@]}]=${argument}
