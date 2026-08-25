@@ -40,6 +40,10 @@ emit() {
 	printf 'classified=%s\nsurface_count=%s\nunclassified_files=%s\n' "${classified}" "${count}" "${unclassified}"
 }
 
+has_line() {
+	[[ $'\n'"$1"$'\n' == *$'\n'"$2"$'\n'* ]]
+}
+
 classify() {
 	local file matched
 	reset
@@ -193,6 +197,7 @@ classify() {
 
 union_classify() {
 	local base_ref=$1 tmp files old_files base_script current old current_status old_status name value count=0
+	local current_classified current_unclassified line
 	tmp=$(mktemp -d)
 	trap 'rm -rf -- "${tmp}"' RETURN
 	files=${tmp}/files
@@ -216,14 +221,20 @@ union_classify() {
 	fi
 	for name in "${names[@]}"; do
 		value=false
-		if grep -qx "${name}=true" <<<"${current}" || grep -qx "${name}=true" <<<"${old}"; then value=true; fi
+		if has_line "${current}" "${name}=true" || has_line "${old}" "${name}=true"; then value=true; fi
 		printf '%s=%s\n' "${name}" "${value}"
 		if [[ ${name} != no_validation_required && ${value} == true ]]; then ((count += 1)); fi
 	done
+	while IFS= read -r line; do
+		case "${line}" in
+		classified=*) current_classified=${line#*=} ;;
+		unclassified_files=*) current_unclassified=${line#*=} ;;
+		esac
+	done <<<"${current}"
 	printf 'classified=%s\nsurface_count=%s\nunclassified_files=%s\n' \
-		"$(awk -F= '$1 == "classified" { print $2 }' <<<"${current}")" \
+		"${current_classified}" \
 		"${count}" \
-		"$(awk -F= '$1 == "unclassified_files" { sub(/^[^=]*=/, ""); print }' <<<"${current}")"
+		"${current_unclassified}"
 	return "${current_status}"
 }
 
@@ -231,13 +242,13 @@ assert_case() {
 	local file=$1 true_names=$2 false_names=$3 output name
 	output="$(printf '%s\n' "${file}" | classify)"
 	for name in ${true_names}; do
-		grep -qx "${name}=true" <<<"${output}" || {
+		has_line "${output}" "${name}=true" || {
 			printf '%s: expected %s=true\n%s\n' "${file}" "${name}" "${output}" >&2
 			return 1
 		}
 	done
 	for name in ${false_names}; do
-		grep -qx "${name}=false" <<<"${output}" || {
+		has_line "${output}" "${name}=false" || {
 			printf '%s: expected %s=false\n%s\n' "${file}" "${name}" "${output}" >&2
 			return 1
 		}
@@ -293,23 +304,23 @@ self_test() {
 
 	local output name
 	output="$(printf '%s\n' scripts/ci/changed-surfaces.sh | classify)"
-	grep -qx 'shell=true' <<<"${output}"
-	grep -qx 'validation_system=true' <<<"${output}"
+	has_line "${output}" 'shell=true'
+	has_line "${output}" 'validation_system=true'
 	output="$(printf '%s\n' scripts/ci/git-changed-paths.sh | classify)"
-	grep -qx 'shell=true' <<<"${output}"
-	grep -qx 'validation_system=true' <<<"${output}"
+	has_line "${output}" 'shell=true'
+	has_line "${output}" 'validation_system=true'
 	output="$(printf '%s\n' scripts/ci/measure.sh | classify)"
-	grep -qx 'validation_system=true' <<<"${output}"
-	grep -qx 'classified=true' <<<"${output}"
-	grep -qx 'go_source=false' <<<"${output}"
-	grep -qx 'db_integration=false' <<<"${output}"
+	has_line "${output}" 'validation_system=true'
+	has_line "${output}" 'classified=true'
+	has_line "${output}" 'go_source=false'
+	has_line "${output}" 'db_integration=false'
 
 	output="$(printf '%s\n' scripts/ci/template-sync-behavior-check.sh | classify)"
-	grep -qx 'agent_instructions=true' <<<"${output}"
-	grep -qx 'shell=true' <<<"${output}"
+	has_line "${output}" 'agent_instructions=true'
+	has_line "${output}" 'shell=true'
 
 	output="$(printf '%s\n' scripts/integration-init.sh | classify)"
-	grep -qx 'integration_initializer=true' <<<"${output}"
+	has_line "${output}" 'integration_initializer=true'
 
 	for file in \
 		integrations/billing.toml \
@@ -322,23 +333,23 @@ self_test() {
 		api/proto/external/identity/v1/identity.proto \
 		internal/gen/proto/external/identity/v1/identity.pb.go; do
 		output="$(printf '%s\n' "${file}" | classify)"
-		grep -qx 'integration_records=true' <<<"${output}"
+		has_line "${output}" 'integration_records=true'
 	done
 	output="$(bash "$0" --release)"
 	for name in "${names[@]}"; do
-		grep -qx "${name}=true" <<<"${output}"
+		has_line "${output}" "${name}=true"
 	done
 	if output="$(printf '%s\n' unknown/new-owner.xyz | classify 2>&1)"; then
 		echo "unknown paths must fail closed" >&2
 		return 1
 	fi
-	grep -qx 'classified=false' <<<"${output}"
-	grep -qx 'unclassified_files=unknown/new-owner.xyz' <<<"${output}"
+	has_line "${output}" 'classified=false'
+	has_line "${output}" 'unclassified_files=unknown/new-owner.xyz'
 	output="$(git ls-files | classify)"
-	grep -qx 'classified=true' <<<"${output}"
+	has_line "${output}" 'classified=true'
 	output="$(printf '%s\n' scripts/ci/changed-surfaces.sh | bash "$0" --union HEAD)"
-	grep -qx 'shell=true' <<<"${output}"
-	grep -qx 'db_integration=false' <<<"${output}"
+	has_line "${output}" 'shell=true'
+	has_line "${output}" 'db_integration=false'
 }
 
 case "${1:-}" in

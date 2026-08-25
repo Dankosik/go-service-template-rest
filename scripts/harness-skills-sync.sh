@@ -42,39 +42,51 @@ harness_root="${repo}/.${harness}"
 links_root="${harness_root}/skills"
 
 read_metadata() {
-	awk '
-		index($0, "  invocation: ") == 1 { invocation = substr($0, 15); invocation_count++ }
-		index($0, "  kind: ") == 1 { kind = substr($0, 9); kind_count++ }
-		END {
-			if (invocation_count != 1 || kind_count != 1) exit 2
-			printf "%s/%s", invocation, kind
-		}
-	' "$1"
+	local file=$1 line invocation_count=0 kind_count=0
+	metadata_invocation=''
+	metadata_kind=''
+	metadata_disables_model=false
+	while IFS= read -r line || [[ -n ${line} ]]; do
+		case "${line}" in
+		"  invocation: "*) metadata_invocation=${line#"  invocation: "}; ((invocation_count += 1)) ;;
+		"  kind: "*) metadata_kind=${line#"  kind: "}; ((kind_count += 1)) ;;
+		'disable-model-invocation: true') metadata_disables_model=true ;;
+		esac
+	done <"${file}"
+	((invocation_count == 1 && kind_count == 1))
+}
+
+has_exact_line() {
+	local expected=$1 file=$2 line
+	while IFS= read -r line || [[ -n ${line} ]]; do
+		[[ ${line} == "${expected}" ]] && return 0
+	done <"${file}"
+	return 1
 }
 
 validate_metadata() {
-	local entry="$1" file metadata invocation kind policy
+	local entry="$1" file invocation kind policy
 	file="${entry}/SKILL.md"
 	[[ -f "${file}" ]] || fail "${file#"${repo}/"} is missing"
-	metadata=$(read_metadata "${file}") || fail "${file#"${repo}/"} has invalid invocation metadata"
-	invocation=${metadata%/*}
-	kind=${metadata#*/}
+	read_metadata "${file}" || fail "${file#"${repo}/"} has invalid invocation metadata"
+	invocation=${metadata_invocation}
+	kind=${metadata_kind}
 	case "${invocation}/${kind}" in
 	model/method) ;;
 	user/workflow | role/carrier)
-		grep -Fxq 'disable-model-invocation: true' "${file}" ||
+		[[ ${metadata_disables_model} == true ]] ||
 			fail "${file#"${repo}/"} must disable implicit harness invocation"
 		policy="${entry}/agents/openai.yaml"
 		[[ -f "${policy}" ]] ||
 			fail "${policy#"${repo}/"} is required for ${invocation} invocation"
-		grep -Fxq '  allow_implicit_invocation: false' "${policy}" ||
+		has_exact_line '  allow_implicit_invocation: false' "${policy}" ||
 			fail "${policy#"${repo}/"} must disable implicit Codex invocation"
 		;;
 	*)
 		fail "${file#"${repo}/"} has unsupported invocation/kind ${invocation}/${kind}"
 		;;
 	esac
-	if [[ "${invocation}" == model ]] && grep -Fxq 'disable-model-invocation: true' "${file}"; then
+	if [[ "${invocation}" == model && ${metadata_disables_model} == true ]]; then
 		fail "${file#"${repo}/"} disables its model invocation"
 	fi
 }
@@ -124,9 +136,9 @@ skill_directories() {
 }
 
 check_links() {
-	local actual entry expected link name
+	local actual entry expected link name i
 	local failed=0 linked=0
-	local -a entries=()
+	local -a actual_targets=() entries=() links=() names=()
 
 	preflight
 	skill_directories
@@ -134,26 +146,35 @@ check_links() {
 	for entry in "${skill_dirs[@]}"; do
 		name=${entry##*/}
 		link="${links_root}/${name}"
-		expected="../../.agents/skills/${name}"
 		if [[ -L "${link}" ]]; then
-			actual=$(readlink "${link}")
-			if [[ "${actual}" != "${expected}" ]]; then
-				printf '%s skills: %s points at %s, expected %s\n' "${harness}" \
-					"${link#"${repo}/"}" "${actual}" "${expected}" >&2
-				failed=1
-			elif [[ ! -f "${link}/SKILL.md" ]]; then
-				printf '%s skills: %s does not resolve to a readable SKILL.md\n' \
-					"${harness}" "${link#"${repo}/"}" >&2
-				failed=1
-			else
-				linked=$((linked + 1))
-			fi
+			links+=("${link}")
+			names+=("${name}")
 		elif [[ -e "${link}" ]]; then
 			printf '%s skills: %s is not a symlink\n' "${harness}" "${link#"${repo}/"}" >&2
 			failed=1
 		else
 			printf '%s skills: %s is missing\n' "${harness}" "${link#"${repo}/"}" >&2
 			failed=1
+		fi
+	done
+	if ((${#links[@]} > 0)); then
+		while IFS= read -r actual; do actual_targets+=("${actual}"); done < <(readlink "${links[@]}")
+	fi
+	for i in "${!links[@]}"; do
+		link=${links[$i]}
+		name=${names[$i]}
+		actual=${actual_targets[$i]-}
+		expected="../../.agents/skills/${name}"
+		if [[ "${actual}" != "${expected}" ]]; then
+			printf '%s skills: %s points at %s, expected %s\n' "${harness}" \
+				"${link#"${repo}/"}" "${actual}" "${expected}" >&2
+			failed=1
+		elif [[ ! -f "${link}/SKILL.md" ]]; then
+			printf '%s skills: %s does not resolve to a readable SKILL.md\n' \
+				"${harness}" "${link#"${repo}/"}" >&2
+			failed=1
+		else
+			linked=$((linked + 1))
 		fi
 	done
 
