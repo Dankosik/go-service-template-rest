@@ -309,8 +309,8 @@ func TestResponseHeaderTimeoutEnforced(t *testing.T) {
 	}
 	select {
 	case err := <-done:
-		var timeoutError net.Error
-		if !errors.As(err, &timeoutError) || !timeoutError.Timeout() {
+		timeoutError, ok := errors.AsType[net.Error](err)
+		if !ok || !timeoutError.Timeout() {
 			t.Fatalf("withheld-header error = %v, want timeout", err)
 		}
 	case <-watchdog.C:

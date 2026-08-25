@@ -38,22 +38,21 @@ func NewRegistry() *Registry {
 }
 
 // Bind registers one non-nil decoder and handler for endpointID.
-func Bind[T any](
-	reg *Registry,
+func (r *Registry) Bind[T any](
 	endpointID string,
 	decode func(json.RawMessage) (T, error),
 	handle func(context.Context, VerifiedDelivery, T) error,
 ) error {
-	if reg == nil || endpointID == "" || decode == nil || handle == nil {
+	if r == nil || endpointID == "" || decode == nil || handle == nil {
 		return ErrInvalidBinding
 	}
-	if reg.bindings == nil {
-		reg.bindings = make(map[string]dispatchHandle)
+	if r.bindings == nil {
+		r.bindings = make(map[string]dispatchHandle)
 	}
-	if _, exists := reg.bindings[endpointID]; exists {
+	if _, exists := r.bindings[endpointID]; exists {
 		return ErrDuplicateBinding
 	}
-	reg.bindings[endpointID] = func(ctx context.Context, delivery VerifiedDelivery) error {
+	r.bindings[endpointID] = func(ctx context.Context, delivery VerifiedDelivery) error {
 		value, err := decode(json.RawMessage(bytes.Clone(delivery.Body)))
 		if err != nil {
 			return decodeError{err: err}
@@ -112,8 +111,8 @@ func (e decodeError) Unwrap() error { return e.err }
 
 // IsDecodeError reports a decoder failure, including typed rejection.
 func IsDecodeError(err error) bool {
-	var decoded decodeError
-	return errors.As(err, &decoded)
+	_, ok := errors.AsType[decodeError](err)
+	return ok
 }
 
 // profile:inbound-webhooks-standard:end

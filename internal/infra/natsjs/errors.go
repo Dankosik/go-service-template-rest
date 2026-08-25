@@ -28,6 +28,6 @@ func Permanent(err error) error {
 }
 
 func IsPermanent(err error) bool {
-	var target permanentError
-	return errors.As(err, &target)
+	_, ok := errors.AsType[permanentError](err)
+	return ok
 }

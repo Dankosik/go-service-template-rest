@@ -27,8 +27,7 @@ func TestWebhookDeliveryClassification(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			err := classifyDelivery(test.result, test.err)
-			var cancelErr *river.JobCancelError
-			cancelled := errors.As(err, &cancelErr)
+			_, cancelled := errors.AsType[*river.JobCancelError](err)
 			if cancelled != test.cancelled {
 				t.Fatalf("cancelled = %t, want %t; error = %v", cancelled, test.cancelled, err)
 			}

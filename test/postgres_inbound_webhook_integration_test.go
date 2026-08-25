@@ -167,9 +167,7 @@ func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 	var wg sync.WaitGroup
 	outcomes := make(chan inboundwebhook.Outcome, 32)
 	for range 32 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
 			if err != nil {
@@ -177,7 +175,7 @@ func TestPostgresInboundWebhookIdentityArbitration(t *testing.T) {
 				return
 			}
 			outcomes <- result
-		}()
+		})
 	}
 	close(start)
 	wg.Wait()

@@ -375,13 +375,11 @@ func TestUncachedIndependentDecisions(t *testing.T) {
 	entered.Add(2)
 	start := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(2)
 	for range 2 {
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			<-start
 			_, _ = verifier.Verify(t.Context(), testToken)
-		}()
+		})
 	}
 	close(start)
 	done := make(chan struct{})

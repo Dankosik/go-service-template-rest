@@ -96,7 +96,7 @@ func validationMessageType(t *testing.T) protoreflect.MessageType { //nolint:ire
 			Name: new("Request"),
 			Field: []*descriptorpb.FieldDescriptorProto{{
 				Name:    new("value"),
-				Number:  proto.Int32(1),
+				Number:  new(int32(1)),
 				Label:   descriptorpb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
 				Type:    descriptorpb.FieldDescriptorProto_TYPE_STRING.Enum(),
 				Options: options,
