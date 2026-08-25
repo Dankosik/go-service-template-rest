@@ -73,7 +73,6 @@ ALLOW_FULL ?=
 export ALLOW_FULL
 LINT_PACKAGE_LINTERS := govet,errcheck,staticcheck,ineffassign,unused,bodyclose,nilerr,errorlint,forcetypeassert,noctx
 LINT_PR_LINTERS := $(LINT_PACKAGE_LINTERS),depguard,sqlclosecheck,exhaustive,containedctx,contextcheck,iface,interfacebloat,ireturn,rowserrcheck,wrapcheck,gosec
-PR_LINT_TARGET ?= lint-pr
 SECRET_SCAN_BASE_REF ?= $(if $(strip $(BASE_REF)),$(BASE_REF),origin/main)
 GITLEAKS_FLAGS := --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml --baseline-path .gitleaks.baseline.json
 GITLEAKS ?= $(GO_TOOL) gitleaks
@@ -83,7 +82,7 @@ VERIFY_RUNTIME_IMAGE ?= $(SERVICE_NAME):verify
 # Not a security boundary: stop an agent from launching a costly matrix by accident.
 # GitHub Actions and other CI systems set CI=true, which is enough.
 HEAVY_GUARD = @if [ "$(ALLOW_HEAVY)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_HEAVY=1 (CI sets CI=true)\n' "$@"; exit 2; fi
-FULL_GUARD = @if [ "$(ALLOW_FULL)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_FULL=1 for the full-repository aggregate (CI sets CI=true)\n' "$@"; exit 2; fi
+FULL_GUARD = @if [ "$(ALLOW_FULL)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_FULL=1 (CI sets CI=true)\n' "$@"; exit 2; fi
 REQUIRE_PKG = @if [ -z "$(strip $(PKG))" ]; then printf '%s requires PKG=./path/to/package\n' "$@"; exit 2; fi
 REQUIRE_LINT_PKGS = @if [ -z "$(strip $(LINT_PKGS))" ]; then printf '%s requires PKG=./path or PKGS="./path ./other"\n' "$@"; exit 2; fi
 REQUIRE_FILES = @if [ -z "$(strip $(FILES))" ]; then printf '%s requires FILES="file.go ..."\n' "$@"; exit 2; fi
@@ -119,10 +118,10 @@ TEMPLATE ?= ../go-service-template-rest
 # The broad-aggregate reference-host A/B recorded by 5d8d9652e rejected -j4.
 # Only targets with prerequisites belong here; re-measure after their membership,
 # host, or toolchain changes.
-.NOTPARALLEL: check check-go check-go-pr unit-check unit-check-unlocked prove tools-dependencies-check mod-check openapi-check proto-check
+.NOTPARALLEL: check check-unlocked check-go unit-check unit-check-unlocked prove tools-dependencies-check mod-check openapi-check proto-check
 
 .PHONY: help template-init template-init-check integration-init integration-init-check integration-record-check integration-routing-check \
-	tidy fmt mod-check root-mod-check tools-mod-check tools-resolution-check tools-dependencies-check mod-tidy-check mod-verify fmt-check fmt-files-check prove unit-check unit-check-unlocked plan verify verify-check check check-go check-go-pr check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check affected-go-packages-check proof-receipt-check integration-routing-self-test validation-lock-self-test compose-environment-check \
+	tidy fmt mod-check root-mod-check tools-mod-check tools-resolution-check tools-dependencies-check mod-tidy-check fmt-check fmt-files-check prove unit-check unit-check-unlocked plan verify verify-check check check-unlocked check-go check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check affected-go-packages-check integration-routing-self-test validation-lock-self-test compose-environment-check \
 	test test-package test-all test-watch test-race test-integration test-integration-db test-integration-messaging test-integration-process test-integration-race \
 	lint lint-package lint-changed lint-pr lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
 	govulncheck gosec secret-scan secret-scan-history \
@@ -185,7 +184,6 @@ help:
 	@echo "Focused validation:"
 	@echo "  make test-package PKG=./pkg"
 	@echo "  make lint-changed PKG=./pkg or make lint-pr PKGS='./pkg'"
-	@echo "  make test-all or make lint-all only as an explicit full-module oracle"
 	@echo "  make test-race, make test-integration, or a focused test-integration-{db,messaging,process,race} target"
 	@echo "  make root-mod-check, make tools-mod-check, or make mod-check"
 	@echo "  make govulncheck, make gosec, make secret-scan, or make secret-scan-history"
@@ -292,10 +290,6 @@ tools-dependencies-check: tools-mod-check tools-resolution-check
 
 mod-tidy-check: mod-check
 
-mod-verify:
-	go mod verify
-	go -C tools mod verify
-
 fmt-check:
 	@set -e; \
 	files="$$(git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)"; \
@@ -308,15 +302,10 @@ fmt-check:
 
 fmt-files-check:
 	$(REQUIRE_FILES)
-	@if bash ./scripts/ci/proof-receipt.sh check-all fmt $(FILES); then \
-		echo "reusing focused fmt receipt"; \
-	else \
-		unformatted="$$( $(GO_TOOL) goimports -l $(FILES) )"; \
-		if [ -n "$$unformatted" ]; then echo "goimports required for:"; echo "$$unformatted"; echo "run 'make fmt'"; exit 1; fi; \
-		gofumpt_unformatted="$$( $(GO_TOOL) gofumpt -l $(FILES) )"; \
-		if [ -n "$$gofumpt_unformatted" ]; then echo "gofumpt required for:"; echo "$$gofumpt_unformatted"; echo "run 'make fmt'"; exit 1; fi; \
-		bash ./scripts/ci/proof-receipt.sh store-all fmt $(FILES); \
-	fi
+	@unformatted="$$( $(GO_TOOL) goimports -l $(FILES) )"; \
+	if [ -n "$$unformatted" ]; then echo "goimports required for:"; echo "$$unformatted"; echo "run 'make fmt'"; exit 1; fi; \
+	gofumpt_unformatted="$$( $(GO_TOOL) gofumpt -l $(FILES) )"; \
+	if [ -n "$$gofumpt_unformatted" ]; then echo "gofumpt required for:"; echo "$$gofumpt_unformatted"; echo "run 'make fmt'"; exit 1; fi
 
 lint-changed:
 	$(REQUIRE_LINT_PKGS)
@@ -324,7 +313,7 @@ lint-changed:
 	if git rev-parse --verify "$(LINT_BASE_REF)" >/dev/null 2>&1; then \
 		new_from="--new-from-merge-base=$(LINT_BASE_REF)"; \
 	fi; \
-	$(VALIDATION_LOCK) bash ./scripts/ci/proof-receipt.sh run-packages lint "$(LINT_PKGS)" -- $(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PACKAGE_LINTERS) $$new_from --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+	$(VALIDATION_LOCK) $(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PACKAGE_LINTERS) $$new_from --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(LINT_PKGS)
 
 prove: unit-check
 
@@ -334,12 +323,17 @@ unit-check:
 unit-check-unlocked: fmt-files-check test-package lint-changed
 
 # Atomic CI owners; check remains the one local aggregate for an integrated tree.
-check-go: fmt-check lint-all test-all root-mod-check
-
-check-go-pr: fmt-check $(PR_LINT_TARGET) test-all
+check-go:
+	$(FULL_GUARD)
+	$(MAKE) fmt-check
+	$(MAKE) lint-all
+	$(MAKE) test-all
+	$(MAKE) root-mod-check
 
 check-openapi: openapi-check
 
+# Recipe stays outside the grpc profile so `make check-proto` remains after removal.
+# The profile appends proto-check as a prerequisite when protobuf sources exist.
 check-proto:
 	@if ! find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q . && [ ! -f examples/grpc-reference-service/buf.yaml ]; then \
 		echo "not applicable: no protobuf sources"; \
@@ -349,7 +343,7 @@ check-sqlc: sqlc-check
 
 check-instructions: template-owned-purity-check
 
-check-delivery: actionlint shellcheck dockerfile-check publish-image-metadata-check integration-routing-check integration-routing-self-test validation-lock-self-test affected-go-packages-check proof-receipt-check
+check-delivery: actionlint shellcheck dockerfile-check publish-image-metadata-check integration-routing-check integration-routing-self-test validation-lock-self-test affected-go-packages-check
 
 check-security-go: govulncheck gosec
 
@@ -380,14 +374,14 @@ validation-lock-self-test:
 affected-go-packages-check:
 	bash ./scripts/ci/affected-go-packages.sh --self-test
 
-proof-receipt-check:
-	bash ./scripts/ci/proof-receipt.sh --self-test
-
 compose-environment-check:
 	docker compose -f env/docker-compose.yml config --quiet
 
 check:
 	$(FULL_GUARD)
+	$(VALIDATION_LOCK) $(MAKE) check-unlocked
+
+check-unlocked:
 	$(MAKE) check-go
 	$(MAKE) check-openapi
 	$(MAKE) check-proto
@@ -411,9 +405,10 @@ audit-full-manual:
 
 test test-package:
 	$(REQUIRE_PKG)
-	$(VALIDATION_LOCK) bash ./scripts/ci/proof-receipt.sh run-packages test "$(PKG)" -- $(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off -p=$(VALIDATION_JOBS) -parallel=$(VALIDATION_PARALLEL_TESTS)
+	$(VALIDATION_LOCK) $(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off -p=$(VALIDATION_JOBS) -parallel=$(VALIDATION_PARALLEL_TESTS) $(PKG)
 
 test-all:
+	$(FULL_GUARD)
 	$(VALIDATION_LOCK) $(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off -p=$(VALIDATION_JOBS) -parallel=$(VALIDATION_PARALLEL_TESTS) ./...
 
 test-watch:
@@ -502,10 +497,12 @@ run-outbox-relay:
 lint lint-package: lint-changed
 
 lint-all:
+	$(FULL_GUARD)
 	$(VALIDATION_LOCK) $(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
 
 lint-pr:
-	$(VALIDATION_LOCK) bash ./scripts/ci/proof-receipt.sh run-packages lint "$(LINT_PKGS)" -- $(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PR_LINTERS) --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+	$(REQUIRE_LINT_PKGS)
+	$(VALIDATION_LOCK) $(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PR_LINTERS) --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(LINT_PKGS)
 
 lint-deep:
 	$(HEAVY_GUARD)

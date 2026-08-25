@@ -18,10 +18,11 @@ ALLOW_FULL=1 make check
 `make verify` selects a minimal non-overlapping set: affected Go packages
 instead of a default `test-all`, plus the exact contract owners that changed.
 It records candidate, scope, command plan, environment, result, and duration
-under Git-common metadata and reuses focused `prove`/`unit-check` receipts
-while those leaves stay unchanged. `ALLOW_FULL=1 make check` remains the
+under Git-common metadata and reuses that exact receipt while the candidate,
+plan, and environment stay unchanged. `ALLOW_FULL=1 make check` remains the
 full-repository owner: format, `lint-all`, `test-all`, root-module tidy, and
-generated-contract drift. Package iteration uses `make prove`. Heavy leaves
+generated-contract drift. Direct `test-all` and `lint-all` also require
+`ALLOW_FULL=1` or `CI=true`. Package iteration uses `make prove`. Heavy leaves
 (`template-init-check`, `govulncheck`, `gosec`, `audit-full-manual`) require
 `ALLOW_HEAVY=1` or CI.
 

@@ -89,7 +89,7 @@ jobs:
           elif [[ "${EVENT_NAME}" == workflow_dispatch ]]; then
             bash ./scripts/ci/changed-surfaces.sh --all | tee -a "${GITHUB_OUTPUT}" >>"${GITHUB_STEP_SUMMARY}"
           elif [[ -n "${BASE_SHA}" && "${BASE_SHA}" != 0000000000000000000000000000000000000000 ]]; then
-            git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/changed-surfaces.sh --union "${BASE_SHA}" | tee -a "${GITHUB_OUTPUT}" >>"${GITHUB_STEP_SUMMARY}"
+            bash ./scripts/ci/git-changed-paths.sh --diff "${BASE_SHA}" HEAD | bash ./scripts/ci/changed-surfaces.sh --union "${BASE_SHA}" | tee -a "${GITHUB_OUTPUT}" >>"${GITHUB_STEP_SUMMARY}"
           else
             bash ./scripts/ci/changed-surfaces.sh --all | tee -a "${GITHUB_OUTPUT}" >>"${GITHUB_STEP_SUMMARY}"
           fi
@@ -139,6 +139,7 @@ jobs:
           cache: false
       - name: Restore root module cache
         if: steps.setup-go.outcome == 'success'
+        id: root-module-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.GOMODCACHE }}
@@ -146,6 +147,7 @@ jobs:
           restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
       - name: Restore tool module cache
         if: steps.setup-go.outcome == 'success'
+        id: tool-module-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.TOOL_GOMODCACHE }}
@@ -162,6 +164,7 @@ jobs:
           needs.changes.outputs.module_initializer == 'true' ||
           needs.changes.outputs.integration_initializer == 'true' ||
           needs.changes.outputs.integration_records == 'true'
+        id: quality-build-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
@@ -210,7 +213,7 @@ jobs:
             } >>"${GITHUB_OUTPUT}"
             exit 0
           fi
-          git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/affected-go-packages.sh | tee /tmp/affected-go.env
+          bash ./scripts/ci/git-changed-paths.sh --diff "${BASE_SHA}" HEAD | bash ./scripts/ci/affected-go-packages.sh | tee /tmp/affected-go.env
           while IFS='=' read -r name value; do
             case "${name}" in
             fallback) printf 'fallback=%s\n' "${value}" ;;
@@ -245,12 +248,13 @@ jobs:
           elif [[ -n "${LINT_PACKAGES}" ]]; then
             bash ./scripts/ci/measure.sh quality-pr-lint -- make lint-pr PKGS="${LINT_PACKAGES}" GOLANGCI_LINT=golangci-lint
           else
-            bash ./scripts/ci/measure.sh quality-pr-lint -- make lint-pr GOLANGCI_LINT=golangci-lint
+            echo "no remaining lint packages"
           fi
       - name: Go full format and tests
         if: >-
           github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
           (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_testdata == 'true' || needs.changes.outputs.go_root_dependencies == 'true')
+        id: go-full-tests
         run: bash ./scripts/ci/measure.sh quality-main -- make fmt-check test-all
       - name: Go full lint
         if: >-
@@ -292,7 +296,12 @@ jobs:
         env:
           TEST_PACKAGES: ${{ steps.affected-go.outputs.test_packages }}
           FALLBACK: ${{ steps.affected-go.outputs.fallback }}
+          GO_FULL_TESTS: ${{ steps.go-full-tests.outcome }}
         run: |
+          if [[ "${GO_FULL_TESTS}" == success ]]; then
+            echo "OpenAPI runtime tests are covered by the full Go tests"
+            exit 0
+          fi
           if [[ "${FALLBACK}" == true || "${TEST_PACKAGES}" == "./..." ]]; then
             echo "OpenAPI runtime tests are covered by the module Go tests"
             exit 0
@@ -321,7 +330,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ github.event_name }}" == pull_request || "${{ github.event_name }}" == merge_group ]]; then
-            profiles=$(git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/init-module-contract-check.sh --select-from-files | tr '\n' ' ')
+            profiles=$(bash ./scripts/ci/git-changed-paths.sh --diff "${BASE_SHA}" HEAD | bash ./scripts/ci/init-module-contract-check.sh --select-from-files | tr '\n' ' ')
             bash ./scripts/ci/measure.sh quality-module-initializer -- env INIT_MODULE_PROFILES="${profiles}" make template-init-check
           else
             bash ./scripts/ci/measure.sh quality-module-initializer -- env INIT_MODULE_RESOLVE_TOOLS=1 make template-init-check
@@ -333,7 +342,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ github.event_name }}" == pull_request || "${{ github.event_name }}" == merge_group ]]; then
-            rows=$(git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/integration-init-check.sh --select-from-files | tr '\n' ' ')
+            rows=$(bash ./scripts/ci/git-changed-paths.sh --diff "${BASE_SHA}" HEAD | bash ./scripts/ci/integration-init-check.sh --select-from-files | tr '\n' ' ')
             make integration-init-check INTEGRATION_INIT_ROWS="${rows}"
           else
             make integration-init-check
@@ -346,25 +355,38 @@ jobs:
         run: bash ./scripts/ci/measure.sh quality-instructions -- make check-instructions
       - name: Validation routing
         if: needs.changes.outputs.validation_system == 'true'
-        run: bash ./scripts/ci/measure.sh quality-validation-system -- make verify-check changed-surfaces-check validation-lock-self-test affected-go-packages-check proof-receipt-check
+        run: bash ./scripts/ci/measure.sh quality-validation-system -- make verify-check changed-surfaces-check validation-lock-self-test affected-go-packages-check
       - name: Save root module cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-go.outcome == 'success'
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.setup-go.outcome == 'success' &&
+          steps.root-module-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.GOMODCACHE }}
-          key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
+          key: ${{ steps.root-module-cache.outputs.cache-primary-key }}
       - name: Save tool module cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-go.outcome == 'success'
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.setup-go.outcome == 'success' &&
+          steps.tool-module-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.TOOL_GOMODCACHE }}
-          key: go-mod-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/go.mod', 'tools/go.sum') }}
+          key: ${{ steps.tool-module-cache.outputs.cache-primary-key }}
       - name: Save Go build cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.setup-go.outcome == 'success'
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.setup-go.outcome == 'success' &&
+          steps.quality-build-cache.outcome == 'success' &&
+          steps.quality-build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
-          key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}
+          key: ${{ steps.quality-build-cache.outputs.cache-primary-key }}
       - name: Fetch contract comparison base
         if: >-
           github.event_name == 'pull_request' &&
