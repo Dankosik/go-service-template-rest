@@ -2,6 +2,7 @@ package httpidempotency
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,11 +64,11 @@ func TestNewRequestUsesScopeAndSemanticInput(t *testing.T) {
 			t.Fatalf("different %s shared an identity", name)
 		}
 	}
-	if got := fmt.Sprintf("%x", base.Identity()); got != "04304754d2e1051a6656c9a4a47fe49e97b7df96428764e8166b2fac8f826ac4" {
+	if got := hex.EncodeToString(base.Identity()); got != "04304754d2e1051a6656c9a4a47fe49e97b7df96428764e8166b2fac8f826ac4" {
 		t.Fatalf("identity vector = %s", got)
 	}
 	version, fingerprint = base.Fingerprint()
-	if got := fmt.Sprintf("%x", fingerprint); version != 1 || got != "2ada3a04075d65481e605c8239af61ef529b95af367e6d700cddf098e7acec65" {
+	if got := hex.EncodeToString(fingerprint); version != 1 || got != "2ada3a04075d65481e605c8239af61ef529b95af367e6d700cddf098e7acec65" {
 		t.Fatalf("fingerprint vector = v%d %s", version, got)
 	}
 	version, fingerprint = otherVersion.Fingerprint()
