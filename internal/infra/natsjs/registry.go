@@ -36,11 +36,11 @@ func NewRegistry(routes ...Route) (*Registry, error) {
 
 // Handle registers a typed handler without exposing subjects, headers,
 // delivery attempts, or acknowledgements to business code.
-func Handle[T any](registry *Registry, kind domainevent.Kind[T], handler func(context.Context, domainevent.Typed[T]) error) error {
+func Handle[T any](r *Registry, kind domainevent.Kind[T], handler func(context.Context, domainevent.Typed[T]) error) error {
 	if handler == nil {
 		return fmt.Errorf("%w: event handler is required", ErrRejected)
 	}
-	err := registry.Register(kind.Type, kind.Version, func(ctx context.Context, event domainevent.Event) error {
+	err := r.Register(kind.Type, kind.Version, func(ctx context.Context, event domainevent.Event) error {
 		var payload T
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			return Permanent(fmt.Errorf("decode %s v%d: %w", event.Type, event.Version, err))
