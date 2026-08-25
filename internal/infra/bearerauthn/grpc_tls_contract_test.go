@@ -38,8 +38,8 @@ func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
 	serverTLS, clientTLS := testGRPCTLSConfigs(t)
 	verifier := &fakeVerifier{
 		result: Result{
-			Principal: reqctx.Principal{Subject: "subject-1"},
-			ExpiresAt: time.Unix(1_900_003_600, 0),
+			Principal: reqctx.Principal{Issuer: grpcTestIssuer, Subject: "subject-1"},
+			ExpiresAt: time.Now().Add(time.Hour),
 		},
 	}
 	runtime := newTestRuntime(t, verifier)
@@ -140,14 +140,12 @@ func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			caseVerifier := &fakeVerifier{err: testCase.err}
-			caseRuntime := newTestRuntime(t, caseVerifier)
-			caseConn := startTLSAuthnServer(t, serverTLS, clientTLS, caseRuntime, new(atomic.Int64), new(atomic.Int64))
+			verifier.err = testCase.err
 			ctx := t.Context()
 			if testCase.md != nil {
 				ctx = metadata.NewOutgoingContext(ctx, testCase.md)
 			}
-			err := caseConn.Invoke(ctx, tlsAuthnUnaryMethod, &emptypb.Empty{}, &emptypb.Empty{})
+			err := connection.Invoke(ctx, tlsAuthnUnaryMethod, &emptypb.Empty{}, &emptypb.Empty{})
 			if status.Code(err) != testCase.code {
 				t.Fatalf("status = %v, want %v (%v)", status.Code(err), testCase.code, err)
 			}
@@ -156,6 +154,9 @@ func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
 			}
 			if strings.Contains(err.Error(), "poison") || strings.Contains(err.Error(), "parser") {
 				t.Fatal("status leaked authentication error detail")
+			}
+			if unaryCalls.Load() != 1 {
+				t.Fatal("rejected credential reached application handler")
 			}
 		})
 	}
@@ -175,13 +176,13 @@ func startTLSAuthnServer(
 	)
 	registerTLSAuthnService(
 		server,
-		func(ctx context.Context) {
+		func(ctx context.Context) error {
 			unaryCalls.Add(1)
-			assertAuthenticatedRPCContext(ctx, t)
+			return validateAuthenticatedRPCContext(ctx)
 		},
-		func(ctx context.Context) {
+		func(ctx context.Context) error {
 			streamCalls.Add(1)
-			assertAuthenticatedRPCContext(ctx, t)
+			return validateAuthenticatedRPCContext(ctx)
 		},
 	)
 	healthServer := health.NewServer()
@@ -218,29 +219,31 @@ func startTLSAuthnServer(
 	return connection
 }
 
-func assertAuthenticatedRPCContext(ctx context.Context, t *testing.T) {
-	t.Helper()
+func validateAuthenticatedRPCContext(ctx context.Context) error {
 	principal, ok := reqctx.PrincipalFromContext(ctx)
-	if !ok || principal.Subject != "subject-1" {
-		t.Fatalf("RPC principal = (%+v, %v), want subject-1", principal, ok)
+	if !ok || principal.Issuer != grpcTestIssuer || principal.Subject != "subject-1" {
+		return fmt.Errorf("RPC principal = (%+v, %v), want issuer %q and subject-1", principal, ok, grpcTestIssuer)
 	}
 	incoming, _ := metadata.FromIncomingContext(ctx)
 	if len(incoming.Get("authorization")) != 0 {
-		t.Fatal("handler-visible authorization metadata was retained")
+		return errors.New("handler-visible authorization metadata was retained")
 	}
+	return nil
 }
 
 func registerTLSAuthnService(
 	registrar grpc.ServiceRegistrar,
-	unary func(context.Context),
-	stream func(context.Context),
+	unary func(context.Context) error,
+	stream func(context.Context) error,
 ) {
 	grpctest.Register(
 		registrar,
 		grpctest.Unary(
 			tlsAuthnUnaryMethod,
 			func(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-				unary(ctx)
+				if err := unary(ctx); err != nil {
+					return nil, err
+				}
 				return &emptypb.Empty{}, nil
 			},
 		),
@@ -249,7 +252,9 @@ func registerTLSAuthnService(
 			if err := serverStream.RecvMsg(&request); err != nil {
 				return fmt.Errorf("receive TLS authn test request: %w", err)
 			}
-			stream(serverStream.Context())
+			if err := stream(serverStream.Context()); err != nil {
+				return err
+			}
 			if err := serverStream.SendMsg(&emptypb.Empty{}); err != nil {
 				return fmt.Errorf("send TLS authn test response: %w", err)
 			}
@@ -264,13 +269,14 @@ func testGRPCTLSConfigs(t *testing.T) (*tls.Config, *tls.Config) {
 	if err != nil {
 		t.Fatalf("generate TLS test key: %v", err)
 	}
+	now := time.Now()
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject:      pkix.Name{CommonName: "localhost"},
 		DNSNames:     []string{"localhost"},
 		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
-		NotBefore:    time.Unix(1_700_000_000, 0),
-		NotAfter:     time.Unix(2_200_000_000, 0),
+		NotBefore:    now.Add(-time.Hour),
+		NotAfter:     now.Add(time.Hour),
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}

@@ -317,6 +317,17 @@ func TestProviderCancellationClassification(t *testing.T) {
 	})
 }
 
+type closeCountingClient struct {
+	providerClient
+
+	closes atomic.Int64
+}
+
+func (c *closeCountingClient) CloseIdleConnections() {
+	c.providerClient.CloseIdleConnections()
+	c.closes.Add(1)
+}
+
 func TestVerifierCloseIsIdempotentAndReleasesIdleConnections(t *testing.T) {
 	var reused atomic.Bool
 	trace := &httptrace.ClientTrace{
@@ -325,7 +336,8 @@ func TestVerifierCloseIsIdempotentAndReleasesIdleConnections(t *testing.T) {
 		},
 	}
 	provider := newLoopbackProvider(t, nil)
-	verifier := newPinnedVerifier(t, provider)
+	client := &closeCountingClient{providerClient: newLoopbackProviderClient(t, provider.server)}
+	verifier := newVerifier(testPolicy(t), client, func() time.Time { return testNow })
 	ctx := httptrace.WithClientTrace(t.Context(), trace)
 	if _, err := verifier.Verify(ctx, testToken); err != nil {
 		t.Fatalf("first Verify() error = %v", err)
@@ -335,6 +347,9 @@ func TestVerifierCloseIsIdempotentAndReleasesIdleConnections(t *testing.T) {
 	}
 	verifier.Close()
 	verifier.Close()
+	if got := client.closes.Load(); got != 1 {
+		t.Fatalf("close calls = %d, want 1", got)
+	}
 	if _, err := verifier.Verify(ctx, testToken); err != nil {
 		t.Fatalf("post-close Verify() error = %v", err)
 	}
@@ -347,11 +362,15 @@ func TestUncachedIndependentDecisions(t *testing.T) {
 	var next atomic.Int64
 	release := make(chan struct{})
 	var entered sync.WaitGroup
-	provider := newLoopbackProvider(t, func(response http.ResponseWriter, _ *http.Request) {
+	provider := newLoopbackProvider(t, func(response http.ResponseWriter, request *http.Request) {
 		n := next.Add(1)
 		if n == 3 || n == 4 {
 			entered.Done()
-			<-release
+			select {
+			case <-release:
+			case <-request.Context().Done():
+				return
+			}
 		}
 		response.Header().Set("Content-Type", "application/json")
 		switch n {

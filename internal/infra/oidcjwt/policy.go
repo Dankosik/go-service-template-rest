@@ -15,9 +15,10 @@ type Policy struct {
 	tokenProfile string
 }
 
-// PolicyInput carries the configured trust values one deployment holds. doc.go's
-// "Adding a configured trust value" owns the full list of what a new field
-// touches.
+// PolicyInput carries the configured trust values one deployment holds. A new
+// field must also reach Policy, NewPolicy, config schema/default/validation,
+// bootstrap wiring, operator docs, and profile proof. Add a shared authntrust
+// rule when both configuration and the engine must enforce the same predicate.
 //
 // The exhaustruct_v5 enforce pattern for this type in .golangci.yml is load-bearing: a
 // field added here fails lint at every production call site that does not set it.

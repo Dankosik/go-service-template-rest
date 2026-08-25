@@ -318,7 +318,7 @@ func (v *independentAdmissionVerifier) Verify(ctx context.Context, _ string) (be
 		}
 	}
 	return bearerauthn.Result{
-		Principal: reqctx.Principal{Subject: "bootstrap-test-subject"},
+		Principal: reqctx.Principal{Issuer: "https://issuer.example.com", Subject: "bootstrap-test-subject"},
 		ExpiresAt: time.Now().Add(time.Hour),
 	}, nil
 }

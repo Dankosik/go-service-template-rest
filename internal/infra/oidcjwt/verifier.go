@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,11 +60,11 @@ func New(
 	returnFirstError := false
 	keys, err := keyfunc.NewDefaultOverrideCtx(processCtx, []string{jwksURI}, keyfunc.Override{
 		Client:                    jwksClient,
-		HTTPTimeout:               ProviderTimeout,
+		HTTPTimeout:               providerTimeout,
 		NoErrorReturnFirstHTTPReq: &returnFirstError,
 		RateLimitWaitMax:          time.Nanosecond,
-		RefreshInterval:           RefreshInterval,
-		RefreshUnknownKID:         rate.NewLimiter(rate.Every(RefreshCooldown), 1),
+		RefreshInterval:           refreshInterval,
+		RefreshUnknownKID:         rate.NewLimiter(rate.Every(refreshCooldown), 1),
 		RefreshErrorHandlerFunc: func(string) func(context.Context, error) {
 			return func(refreshCtx context.Context, _ error) {
 				if !shouldReportRefreshFailure(processCtx, refreshCtx) {
@@ -126,7 +125,7 @@ func newVerifier(
 	return &Verifier{
 		policy: policy,
 		parser: jwt.NewParser(
-			jwt.WithValidMethods([]string{AllowedAlgorithm}),
+			jwt.WithValidMethods([]string{allowedAlgorithm}),
 			jwt.WithIssuer(policy.issuer),
 			jwt.WithAudience(policy.audience),
 			jwt.WithExpirationRequired(),
@@ -181,5 +180,3 @@ func (v *Verifier) Verify(ctx context.Context, compact string) (bearerauthn.Resu
 	}
 	return bearerauthn.Result{Principal: principal, ExpiresAt: claims.ExpiresAt.Time}, nil
 }
-
-var _ http.RoundTripper = jwksRoundTripper{}

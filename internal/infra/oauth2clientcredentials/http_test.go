@@ -11,12 +11,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f(request)
-}
-
 type recordingResourceClient struct {
 	authorization string
 }
@@ -27,10 +21,10 @@ func (c *recordingResourceClient) RoundTrip(request *http.Request) (*http.Respon
 }
 
 func newTestHTTPClient(owner *Client, base http.RoundTripper) *HTTPClient {
-	return &HTTPClient{client: &http.Client{Transport: &oauth2.Transport{
+	return &HTTPClient{client: newNoRedirectHTTPClient(&oauth2.Transport{
 		Source: clientTokenSource{client: owner},
 		Base:   base,
-	}}}
+	})}
 }
 
 func TestHTTPClientAttachesLibraryTokenToRequestCopy(t *testing.T) {
@@ -86,6 +80,36 @@ func TestHTTPClientRejectsUseAfterOwnerClose(t *testing.T) {
 	}
 	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("Do() error = %v, want ErrUnavailable", err)
+	}
+}
+
+func TestHTTPClientDoesNotFollowRedirect(t *testing.T) {
+	owner := newClient(func(context.Context) (*oauth2.Token, error) {
+		return validTestToken("opaque"), nil
+	}, nil)
+	t.Cleanup(owner.Close)
+	var calls int
+	client := newTestHTTPClient(owner, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{
+			StatusCode: http.StatusTemporaryRedirect,
+			Header:     http.Header{"Location": []string{"/redirected"}},
+			Body:       http.NoBody,
+			Request:    request,
+		}, nil
+	}))
+	request, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://resource.example.com/items", http.NoBody)
+
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	t.Cleanup(func() { _ = response.Body.Close() })
+	if response.StatusCode != http.StatusTemporaryRedirect {
+		t.Fatalf("Do() status = %d, want %d", response.StatusCode, http.StatusTemporaryRedirect)
+	}
+	if calls != 1 {
+		t.Fatalf("resource calls = %d, want 1", calls)
 	}
 }
 

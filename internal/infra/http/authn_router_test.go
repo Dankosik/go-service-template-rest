@@ -328,7 +328,7 @@ func (v *blockingVerifier) Verify(ctx context.Context, _ string) (bearerauthn.Re
 		}
 	}
 	return bearerauthn.Result{
-		Principal: reqctx.Principal{Subject: "opaque-subject"},
+		Principal: reqctx.Principal{Issuer: "https://issuer.example.com", Subject: "opaque-subject"},
 		ExpiresAt: time.Now().Add(time.Hour),
 	}, nil
 }
