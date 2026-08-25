@@ -46,11 +46,3 @@ func namespaceEnvToKey(envKey string) string {
 	}
 	return strings.Join(segments, keyDelimiter)
 }
-
-func namespaceEnvForConfigKey(key string) string {
-	trimmed := strings.TrimSpace(key)
-	if trimmed == "" {
-		return ""
-	}
-	return namespacePrefix + strings.ToUpper(strings.ReplaceAll(trimmed, keyDelimiter, "__"))
-}

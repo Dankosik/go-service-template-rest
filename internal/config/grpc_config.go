@@ -57,7 +57,7 @@ func validateGRPCConfig(cfg *GRPCConfig) error {
 				ErrValidate,
 			)
 		}
-	case secureTransportTLS:
+	case "tls":
 		if server.TLS.CertFile == "" || server.TLS.KeyFile == "" {
 			return fmt.Errorf(
 				"%w: grpc.server.tls cert_file and key_file are required when transport_security is tls",
@@ -70,14 +70,6 @@ func validateGRPCConfig(cfg *GRPCConfig) error {
 			ErrValidate,
 		)
 	}
-	// profile:authn-bearer:start
-	if server.TransportSecurity != secureTransportTLS {
-		return fmt.Errorf(
-			"%w: authn OIDC profile requires grpc.server.transport_security=tls",
-			ErrValidate,
-		)
-	}
-	// profile:authn-bearer:end
 	return nil
 }
 

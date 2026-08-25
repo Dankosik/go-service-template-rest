@@ -50,6 +50,14 @@
 // internal/authntrust is that leaf for the issuer, JWKS, and token-profile trust
 // rules.
 // profile:authn-oidc-jwt:end
+// profile:messaging-nats-jetstream:start
+// internal/messagingconfig is that leaf for NATS URL and stream/consumer name
+// rules.
+// profile:messaging-nats-jetstream:end
+// profile:inbound-webhooks-standard:start
+// internal/inboundwebhook/manifest is that leaf for the non-secret endpoint
+// document.
+// profile:inbound-webhooks-standard:end
 // internal/observability/otelconfig is that leaf for the OpenTelemetry sampler
 // vocabulary and validation.
 package config

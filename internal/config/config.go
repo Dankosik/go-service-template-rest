@@ -7,19 +7,12 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-// The load-pipeline stage names, and one transport scheme that has to be
-// declared with them. secureTransportTLS is shared by grpc_config.go and
-// messaging_config.go, each of which a build profile removes on its own, so it
-// can live in neither; the minimal profile removes both, and there `unused`
-// reports it unless it stays contiguous with a constant something still reads.
-// Keep it in this block, with no blank line separating it.
 const (
-	StageLoadDefaults  = "config.load.defaults"
-	StageLoadFile      = "config.load.file"
-	StageLoadEnv       = "config.load.env"
-	StageParse         = "config.parse"
-	StageValidate      = "config.validate"
-	secureTransportTLS = "tls"
+	StageLoadDefaults = "config.load.defaults"
+	StageLoadFile     = "config.load.file"
+	StageLoadEnv      = "config.load.env"
+	StageParse        = "config.parse"
+	StageValidate     = "config.validate"
 )
 
 type LoadOptions struct {

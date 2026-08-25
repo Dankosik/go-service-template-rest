@@ -124,7 +124,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 
 	var baseEndpoint *string
 	if cfg.Provider == ProviderCloudflare {
-		baseEndpoint = aws.String(cfg.Endpoint)
+		baseEndpoint = new(cfg.Endpoint)
 	}
 	sdk := awss3.NewFromConfig(awsConfig, func(options *awss3.Options) {
 		options.BaseEndpoint = baseEndpoint
@@ -132,7 +132,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		options.UseAccelerate = false
 		options.UseARNRegion = false
 		options.DisableMultiRegionAccessPoints = true
-		options.DisableS3ExpressSessionAuth = aws.Bool(true)
+		options.DisableS3ExpressSessionAuth = new(true)
 		options.EndpointOptions.UseDualStackEndpoint = aws.DualStackEndpointStateDisabled
 		options.EndpointOptions.UseFIPSEndpoint = aws.FIPSEndpointStateDisabled
 		options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
@@ -233,7 +233,7 @@ func newHTTPClient() (*http.Client, *http.Transport) {
 
 func (c *Client) expectedBucketOwner() *string {
 	if c.config.Provider == ProviderAmazonS3 {
-		return aws.String(c.config.ExpectedBucketOwner)
+		return new(c.config.ExpectedBucketOwner)
 	}
 	return nil
 }

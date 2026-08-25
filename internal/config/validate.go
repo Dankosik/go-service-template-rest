@@ -39,6 +39,9 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:authn-bearer:start
+	if err := validateAuthnHTTPCompatibility(cfg.HTTP); err != nil {
+		return err
+	}
 	if err := validateAuthnConfig(&cfg.Authn); err != nil {
 		return err
 	}
@@ -47,6 +50,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateGRPCConfig(&cfg.GRPC); err != nil {
 		return err
 	}
+	// profile:authn-bearer:start
+	if err := validateAuthnGRPCCompatibility(cfg.GRPC); err != nil {
+		return err
+	}
+	// profile:authn-bearer:end
 	// profile:grpc:end
 	if err := validateHealthConfig(cfg.Health); err != nil {
 		return err

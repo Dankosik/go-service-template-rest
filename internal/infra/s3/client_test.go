@@ -99,7 +99,7 @@ func TestUploadDelegatesSingleAndMultipart(t *testing.T) {
 		if aws.ToString(input.ExpectedBucketOwner) != "123456789012" || input.ChecksumAlgorithm != types.ChecksumAlgorithmCrc64nvme {
 			t.Fatalf("PutObject input = %#v", input)
 		}
-		return &awss3.PutObjectOutput{ChecksumCRC64NVME: aws.String("checksum"), ChecksumType: types.ChecksumTypeFullObject}, nil
+		return &awss3.PutObjectOutput{ChecksumCRC64NVME: new("checksum"), ChecksumType: types.ChecksumTypeFullObject}, nil
 	}}
 	uploader := fakeUploader(func(_ context.Context, input *transfermanager.UploadObjectInput) (*transfermanager.UploadObjectOutput, error) {
 		multiparts++
@@ -107,7 +107,7 @@ func TestUploadDelegatesSingleAndMultipart(t *testing.T) {
 			input.ChecksumType != tmtypes.ChecksumTypeFullObject || aws.ToInt64(input.MpuObjectSize) != multipartPartBytes+1 {
 			t.Fatalf("UploadObject input = %#v", input)
 		}
-		return &transfermanager.UploadObjectOutput{ChecksumCRC64NVME: aws.String("checksum"), ChecksumType: tmtypes.ChecksumTypeFullObject}, nil
+		return &transfermanager.UploadObjectOutput{ChecksumCRC64NVME: new("checksum"), ChecksumType: tmtypes.ChecksumTypeFullObject}, nil
 	})
 	client := testClient(api, uploader)
 
@@ -153,8 +153,8 @@ func TestDownloadReleasesAtValidatedEOF(t *testing.T) {
 	body := &trackedBody{Reader: strings.NewReader("payload")}
 	api := &fakeObjectAPI{get: func(context.Context, *awss3.GetObjectInput) (*awss3.GetObjectOutput, error) {
 		return &awss3.GetObjectOutput{
-			Body: body, ContentLength: aws.Int64(7), ContentType: aws.String("text/plain"),
-			LastModified: aws.Time(time.Unix(1, 0)), ChecksumCRC64NVME: aws.String("checksum"),
+			Body: body, ContentLength: new(int64(7)), ContentType: new("text/plain"),
+			LastModified: new(time.Unix(1, 0)), ChecksumCRC64NVME: new("checksum"),
 			ChecksumType: types.ChecksumTypeFullObject,
 		}, nil
 	}}
@@ -287,7 +287,7 @@ func TestStoreMapsOperationResults(t *testing.T) {
 			return nil, providerTestError{status: http.StatusNotFound, code: "NoSuchKey"}
 		},
 		head: func(context.Context, *awss3.HeadObjectInput) (*awss3.HeadObjectOutput, error) {
-			return &awss3.HeadObjectOutput{ContentLength: aws.Int64(3), ContentType: aws.String("text/plain"), LastModified: &modified}, nil
+			return &awss3.HeadObjectOutput{ContentLength: new(int64(3)), ContentType: new("text/plain"), LastModified: &modified}, nil
 		},
 		delete: func(context.Context, *awss3.DeleteObjectInput) (*awss3.DeleteObjectOutput, error) {
 			return &awss3.DeleteObjectOutput{}, nil
@@ -328,7 +328,7 @@ func TestStoreRejectsIncompleteLibraryResults(t *testing.T) {
 			return nil, nil //nolint:nilnil // Incomplete SDK result under test.
 		},
 		head: func(context.Context, *awss3.HeadObjectInput) (*awss3.HeadObjectOutput, error) {
-			return &awss3.HeadObjectOutput{ContentLength: aws.Int64(-1), LastModified: aws.Time(time.Unix(1, 0))}, nil
+			return &awss3.HeadObjectOutput{ContentLength: new(int64(-1)), LastModified: new(time.Unix(1, 0))}, nil
 		},
 	}
 	uploader := fakeUploader(func(context.Context, *transfermanager.UploadObjectInput) (*transfermanager.UploadObjectOutput, error) {

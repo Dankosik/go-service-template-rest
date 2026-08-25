@@ -14,15 +14,29 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
+type snapshotContractValue struct {
+	source any
+	want   any
+}
+
+func sameSnapshotValue(value any) snapshotContractValue {
+	return snapshotContractValue{source: value, want: value}
+}
+
 func TestSnapshotContract(t *testing.T) {
 	t.Parallel()
 
-	sourceValues := sentinelConfigSourceValues()
+	contractValues := snapshotContractValues()
 	knownKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
 	slices.Sort(knownKeys)
-	sourceKeys := sortedStringSetKeys(sourceValues)
-	if !slices.Equal(sourceKeys, knownKeys) {
-		t.Fatalf("sentinel source keys = %v, want known config keys %v", sourceKeys, knownKeys)
+	contractKeys := sortedStringSetKeys(contractValues)
+	if !slices.Equal(contractKeys, knownKeys) {
+		t.Fatalf("snapshot contract keys = %v, want known config keys %v", contractKeys, knownKeys)
+	}
+
+	sourceValues := make(map[string]any, len(contractValues))
+	for key, value := range contractValues {
+		sourceValues[key] = value.source
 	}
 
 	k := koanf.New(keyDelimiter)
@@ -41,14 +55,8 @@ func TestSnapshotContract(t *testing.T) {
 		t.Fatalf("flattened Config keys = %v, want known config keys %v", observedKeys, knownKeys)
 	}
 
-	expectedValues := expectedSentinelSnapshotValues()
-	expectedKeys := sortedStringSetKeys(expectedValues)
-	if !slices.Equal(expectedKeys, knownKeys) {
-		t.Fatalf("expected sentinel keys = %v, want known config keys %v", expectedKeys, knownKeys)
-	}
-
 	for _, key := range knownKeys {
-		if diff := cmp.Diff(expectedValues[key], observedValues[key]); diff != "" {
+		if diff := cmp.Diff(contractValues[key].want, observedValues[key]); diff != "" {
 			t.Fatalf("buildSnapshot() value for %s mismatch (-want +got):\n%s", key, diff)
 		}
 	}
@@ -228,229 +236,116 @@ func flattenConfigSnapshotValues(t *testing.T, value reflect.Value, prefix strin
 	return values
 }
 
-func sentinelConfigSourceValues() map[string]any {
-	return map[string]any{
-		"app.env":         "stage",
-		"app.version":     "v-snapshot-test",
-		"app.commit":      "c0ffee-snapshot-test",
-		"app.instance_id": "instance-snapshot-test",
+func snapshotContractValues() map[string]snapshotContractValue {
+	return map[string]snapshotContractValue{
+		"app.env":         sameSnapshotValue("stage"),
+		"app.version":     sameSnapshotValue("v-snapshot-test"),
+		"app.commit":      sameSnapshotValue("c0ffee-snapshot-test"),
+		"app.instance_id": sameSnapshotValue("instance-snapshot-test"),
 
-		"http.addr":                        ":18080",
-		"http.grace_period":                "61s",
-		"http.shutdown_timeout":            "31s",
-		"http.readiness_timeout":           "4s",
-		"http.readiness_propagation_delay": "16s",
-		"http.read_header_timeout":         "6s",
-		"http.read_timeout":                "7s",
-		"http.request_timeout":             "9s",
-		"http.write_timeout":               "11s",
-		"http.idle_timeout":                "61s",
-		"http.max_header_bytes":            20 << 10,
-		"http.max_body_bytes":              int64(2 << 20),
-		"http.max_in_flight":               512,
-		"http.max_connections":             1024,
-		"http.access_log_health_probes":    true,
+		"http.addr":                        sameSnapshotValue(":18080"),
+		"http.grace_period":                {source: "61s", want: 61 * time.Second},
+		"http.shutdown_timeout":            {source: "31s", want: 31 * time.Second},
+		"http.readiness_timeout":           {source: "4s", want: 4 * time.Second},
+		"http.readiness_propagation_delay": {source: "16s", want: 16 * time.Second},
+		"http.read_header_timeout":         {source: "6s", want: 6 * time.Second},
+		"http.read_timeout":                {source: "7s", want: 7 * time.Second},
+		"http.request_timeout":             {source: "9s", want: 9 * time.Second},
+		"http.write_timeout":               {source: "11s", want: 11 * time.Second},
+		"http.idle_timeout":                {source: "61s", want: 61 * time.Second},
+		"http.max_header_bytes":            sameSnapshotValue(20 << 10),
+		"http.max_body_bytes":              sameSnapshotValue(int64(2 << 20)),
+		"http.max_in_flight":               sameSnapshotValue(512),
+		"http.max_connections":             sameSnapshotValue(1024),
+		"http.access_log_health_probes":    sameSnapshotValue(true),
 
 		// profile:authn-bearer:start
-		"authn.issuer":   "https://issuer.snapshot.example",
-		"authn.audience": "snapshot-api",
+		"authn.issuer":   sameSnapshotValue("https://issuer.snapshot.example"),
+		"authn.audience": sameSnapshotValue("snapshot-api"),
 		// profile:authn-oidc-jwt:start
-		"authn.token_profile": "resource-server",
+		"authn.token_profile": sameSnapshotValue("resource-server"),
 		// profile:authn-oidc-jwt:end
 		// profile:authn-oidc-introspection:start
-		"authn.introspection_endpoint":            "https://idp.snapshot.example/oauth/introspect",
-		"authn.introspection_target_class":        "external-https",
-		"authn.introspection_private_host_suffix": "",
-		"authn.introspection_client_id":           "snapshot-rs",
-		"authn.introspection_client_secret":       " snapshot-introspection-secret ",
+		"authn.introspection_endpoint":            sameSnapshotValue("https://idp.snapshot.example/oauth/introspect"),
+		"authn.introspection_target_class":        sameSnapshotValue("external-https"),
+		"authn.introspection_private_host_suffix": sameSnapshotValue(""),
+		"authn.introspection_client_id":           sameSnapshotValue("snapshot-rs"),
+		"authn.introspection_client_secret":       sameSnapshotValue(" snapshot-introspection-secret "),
 		// profile:authn-oidc-introspection:end
 		// profile:authn-bearer:end
 
 		// profile:grpc:start
-		"grpc.server.enabled":            true,
-		"grpc.server.addr":               ":19091",
-		"grpc.server.transport_security": "tls",
-		"grpc.server.tls.cert_file":      "/run/secrets/snapshot.crt",
-		"grpc.server.tls.key_file":       "/run/secrets/snapshot.key",
-		"grpc.server.tls.client_ca_file": "/run/secrets/snapshot-clients.pem",
+		"grpc.server.enabled":            sameSnapshotValue(true),
+		"grpc.server.addr":               sameSnapshotValue(":19091"),
+		"grpc.server.transport_security": sameSnapshotValue("tls"),
+		"grpc.server.tls.cert_file":      sameSnapshotValue("/run/secrets/snapshot.crt"),
+		"grpc.server.tls.key_file":       sameSnapshotValue("/run/secrets/snapshot.key"),
+		"grpc.server.tls.client_ca_file": sameSnapshotValue("/run/secrets/snapshot-clients.pem"),
 		// profile:grpc:end
 
-		"health.refresh_interval":  "3s",
-		"health.failure_threshold": 5,
+		"health.refresh_interval":  {source: "3s", want: 3 * time.Second},
+		"health.failure_threshold": sameSnapshotValue(5),
 
-		"log.level": "warn",
+		"log.level": {source: "warn", want: slog.LevelWarn},
 
 		// profile:messaging-nats-jetstream:start
-		"messaging.urls":                       "tls://nats.snapshot.example:4222",
-		"messaging.credentials_file":           "/run/secrets/nats.creds",
-		"messaging.root_ca_file":               "/run/secrets/nats-ca.pem",
-		"messaging.allow_plaintext":            false,
-		"messaging.allow_unauthenticated":      false,
-		"messaging.stream":                     "EVENTS",
-		"messaging.max_payload_bytes":          300 << 10,
-		"messaging.worker.consumer":            "snapshot-worker",
-		"messaging.worker.filter_subject":      "events.snapshot.>",
-		"messaging.worker.dead_letter_subject": "dead.snapshot",
-		"messaging.worker.max_concurrency":     9,
+		"messaging.urls":                       sameSnapshotValue("tls://nats.snapshot.example:4222"),
+		"messaging.credentials_file":           sameSnapshotValue("/run/secrets/nats.creds"),
+		"messaging.root_ca_file":               sameSnapshotValue("/run/secrets/nats-ca.pem"),
+		"messaging.allow_plaintext":            sameSnapshotValue(false),
+		"messaging.allow_unauthenticated":      sameSnapshotValue(false),
+		"messaging.stream":                     sameSnapshotValue("EVENTS"),
+		"messaging.max_payload_bytes":          sameSnapshotValue(300 << 10),
+		"messaging.worker.consumer":            sameSnapshotValue("snapshot-worker"),
+		"messaging.worker.filter_subject":      sameSnapshotValue("events.snapshot.>"),
+		"messaging.worker.dead_letter_subject": sameSnapshotValue("dead.snapshot"),
+		"messaging.worker.max_concurrency":     sameSnapshotValue(9),
 		// profile:messaging-nats-jetstream:end
 
-		"runtime.memory_limit_ratio": 0.75,
+		"runtime.memory_limit_ratio": sameSnapshotValue(0.75),
 
 		// profile:database-postgres:start
-		"postgres.enabled":        true,
-		"postgres.dsn":            "postgres://app:secret@db:5432/app?sslmode=disable",
-		"postgres.max_open_conns": 26,
+		"postgres.enabled":        sameSnapshotValue(true),
+		"postgres.dsn":            sameSnapshotValue("postgres://app:secret@db:5432/app?sslmode=disable"),
+		"postgres.max_open_conns": sameSnapshotValue(26),
 		// profile:database-postgres:end
 
 		// profile:http-idempotency-postgres:start
-		"http_idempotency.retention": "24h",
+		"http_idempotency.retention": {source: "24h", want: 24 * time.Hour},
 		// profile:http-idempotency-postgres:end
 
 		// profile:jobs-postgres:start
-		"jobs.max_workers": 7,
+		"jobs.max_workers": sameSnapshotValue(7),
 		// profile:jobs-postgres:end
 
 		// profile:webhooks-durable:start
-		"webhooks.enabled":        true,
-		"webhooks.endpoints":      `{"endpoints":[]}`,
-		"webhooks.static_secrets": `{"entries":[]}`,
+		"webhooks.enabled":        sameSnapshotValue(true),
+		"webhooks.endpoints":      sameSnapshotValue(`{"endpoints":[]}`),
+		"webhooks.static_secrets": sameSnapshotValue(`{"entries":[]}`),
 		// profile:webhooks-durable:end
 		// profile:inbound-webhooks-standard:start
-		"inbound_webhooks.endpoints":      `{"endpoints":[]}`,
-		"inbound_webhooks.static_secrets": `{"entries":[]}`,
+		"inbound_webhooks.endpoints":      sameSnapshotValue(`{"endpoints":[]}`),
+		"inbound_webhooks.static_secrets": sameSnapshotValue(`{"entries":[]}`),
 		// profile:inbound-webhooks-standard:end
 
 		// profile:object-storage:start
-		"object_storage.provider":              "amazon_s3",
-		"object_storage.endpoint":              "",
-		"object_storage.region":                "us-east-1",
-		"object_storage.bucket":                "examplebucket",
-		"object_storage.expected_bucket_owner": "123456789012",
-		"object_storage.credential_source":     "aws_default",
-		"object_storage.max_object_bytes":      10485760,
+		"object_storage.provider":              sameSnapshotValue("amazon_s3"),
+		"object_storage.endpoint":              sameSnapshotValue(""),
+		"object_storage.region":                sameSnapshotValue("us-east-1"),
+		"object_storage.bucket":                sameSnapshotValue("examplebucket"),
+		"object_storage.expected_bucket_owner": sameSnapshotValue("123456789012"),
+		"object_storage.credential_source":     sameSnapshotValue("aws_default"),
+		"object_storage.max_object_bytes":      {source: 10485760, want: int64(10485760)},
 		// profile:object-storage:end
 
-		"observability.metrics.addr":                        "127.0.0.1:19090",
-		"observability.pprof.enabled":                       true,
-		"observability.otel.service_name":                   "snapshot-service",
-		"observability.otel.traces_sampler":                 "always_on",
-		"observability.otel.traces_sampler_arg":             0.25,
-		"observability.otel.exporter.otlp_metrics_endpoint": "https://sentinel-metrics.example/v1/metrics",
-		"observability.otel.exporter.otlp_endpoint":         "https://otel.example.com:4318",
-		"observability.otel.exporter.otlp_headers":          "authorization=Bearer snapshot",
-	}
-}
-
-func expectedSentinelSnapshotValues() map[string]any {
-	return map[string]any{
-		"app.env":         "stage",
-		"app.version":     "v-snapshot-test",
-		"app.commit":      "c0ffee-snapshot-test",
-		"app.instance_id": "instance-snapshot-test",
-
-		"http.addr":                        ":18080",
-		"http.grace_period":                61 * time.Second,
-		"http.shutdown_timeout":            31 * time.Second,
-		"http.readiness_timeout":           4 * time.Second,
-		"http.readiness_propagation_delay": 16 * time.Second,
-		"http.read_header_timeout":         6 * time.Second,
-		"http.read_timeout":                7 * time.Second,
-		"http.request_timeout":             9 * time.Second,
-		"http.write_timeout":               11 * time.Second,
-		"http.idle_timeout":                61 * time.Second,
-		"http.max_header_bytes":            20 << 10,
-		"http.max_body_bytes":              int64(2 << 20),
-		"http.max_in_flight":               512,
-		"http.max_connections":             1024,
-		"http.access_log_health_probes":    true,
-
-		// profile:authn-bearer:start
-		"authn.issuer":   "https://issuer.snapshot.example",
-		"authn.audience": "snapshot-api",
-		// profile:authn-oidc-jwt:start
-		"authn.token_profile": "resource-server",
-		// profile:authn-oidc-jwt:end
-		// profile:authn-oidc-introspection:start
-		"authn.introspection_endpoint":            "https://idp.snapshot.example/oauth/introspect",
-		"authn.introspection_target_class":        "external-https",
-		"authn.introspection_private_host_suffix": "",
-		"authn.introspection_client_id":           "snapshot-rs",
-		"authn.introspection_client_secret":       " snapshot-introspection-secret ",
-		// profile:authn-oidc-introspection:end
-		// profile:authn-bearer:end
-
-		// profile:grpc:start
-		"grpc.server.enabled":            true,
-		"grpc.server.addr":               ":19091",
-		"grpc.server.transport_security": "tls",
-		"grpc.server.tls.cert_file":      "/run/secrets/snapshot.crt",
-		"grpc.server.tls.key_file":       "/run/secrets/snapshot.key",
-		"grpc.server.tls.client_ca_file": "/run/secrets/snapshot-clients.pem",
-		// profile:grpc:end
-
-		"health.refresh_interval":  3 * time.Second,
-		"health.failure_threshold": 5,
-
-		"log.level": slog.LevelWarn,
-
-		// profile:messaging-nats-jetstream:start
-		"messaging.urls":                       "tls://nats.snapshot.example:4222",
-		"messaging.credentials_file":           "/run/secrets/nats.creds",
-		"messaging.root_ca_file":               "/run/secrets/nats-ca.pem",
-		"messaging.allow_plaintext":            false,
-		"messaging.allow_unauthenticated":      false,
-		"messaging.stream":                     "EVENTS",
-		"messaging.max_payload_bytes":          300 << 10,
-		"messaging.worker.consumer":            "snapshot-worker",
-		"messaging.worker.filter_subject":      "events.snapshot.>",
-		"messaging.worker.dead_letter_subject": "dead.snapshot",
-		"messaging.worker.max_concurrency":     9,
-		// profile:messaging-nats-jetstream:end
-
-		"runtime.memory_limit_ratio": 0.75,
-
-		// profile:database-postgres:start
-		"postgres.enabled":        true,
-		"postgres.dsn":            "postgres://app:secret@db:5432/app?sslmode=disable",
-		"postgres.max_open_conns": 26,
-		// profile:database-postgres:end
-
-		// profile:http-idempotency-postgres:start
-		"http_idempotency.retention": 24 * time.Hour,
-		// profile:http-idempotency-postgres:end
-
-		// profile:jobs-postgres:start
-		"jobs.max_workers": 7,
-		// profile:jobs-postgres:end
-
-		// profile:webhooks-durable:start
-		"webhooks.enabled":        true,
-		"webhooks.endpoints":      `{"endpoints":[]}`,
-		"webhooks.static_secrets": `{"entries":[]}`,
-		// profile:webhooks-durable:end
-		// profile:inbound-webhooks-standard:start
-		"inbound_webhooks.endpoints":      `{"endpoints":[]}`,
-		"inbound_webhooks.static_secrets": `{"entries":[]}`,
-		// profile:inbound-webhooks-standard:end
-
-		// profile:object-storage:start
-		"object_storage.provider":              "amazon_s3",
-		"object_storage.endpoint":              "",
-		"object_storage.region":                "us-east-1",
-		"object_storage.bucket":                "examplebucket",
-		"object_storage.expected_bucket_owner": "123456789012",
-		"object_storage.credential_source":     "aws_default",
-		"object_storage.max_object_bytes":      int64(10485760),
-		// profile:object-storage:end
-
-		"observability.metrics.addr":                        "127.0.0.1:19090",
-		"observability.pprof.enabled":                       true,
-		"observability.otel.service_name":                   "snapshot-service",
-		"observability.otel.traces_sampler":                 "always_on",
-		"observability.otel.traces_sampler_arg":             0.25,
-		"observability.otel.exporter.otlp_metrics_endpoint": "https://sentinel-metrics.example/v1/metrics",
-		"observability.otel.exporter.otlp_endpoint":         "https://otel.example.com:4318",
-		"observability.otel.exporter.otlp_headers":          "authorization=Bearer snapshot",
+		"observability.metrics.addr":                        sameSnapshotValue("127.0.0.1:19090"),
+		"observability.pprof.enabled":                       sameSnapshotValue(true),
+		"observability.otel.service_name":                   sameSnapshotValue("snapshot-service"),
+		"observability.otel.traces_sampler":                 sameSnapshotValue("always_on"),
+		"observability.otel.traces_sampler_arg":             sameSnapshotValue(0.25),
+		"observability.otel.exporter.otlp_metrics_endpoint": sameSnapshotValue("https://sentinel-metrics.example/v1/metrics"),
+		"observability.otel.exporter.otlp_endpoint":         sameSnapshotValue("https://otel.example.com:4318"),
+		"observability.otel.exporter.otlp_headers":          sameSnapshotValue("authorization=Bearer snapshot"),
 	}
 }
 

@@ -66,7 +66,7 @@ func validateJobsWorkerConfig(cfg *Config, unknownKeys []string) error {
 	}
 	// profile:webhooks-durable:end
 	// profile:inbound-webhooks-standard:start
-	if err := validateInboundWebhooksWorker(cfg.InboundWebhooks); err != nil {
+	if err := validateInboundWebhookEndpoints(cfg.InboundWebhooks.Endpoints); err != nil {
 		return err
 	}
 	// profile:inbound-webhooks-standard:end

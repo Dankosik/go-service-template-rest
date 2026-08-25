@@ -12,10 +12,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
 
-// internal/config restates the rules natsjs applies to a client configuration,
-// because depguard forbids it from importing the adapter. This package is the
-// only one that wires both, so it is the only one that can prove the two copies
-// still describe the same configuration.
+// internal/messagingconfig owns the rules shared by configuration loading and
+// the NATS adapter. This composition-root test proves the typed mapping keeps
+// those accepted values intact on the way to the adapter.
 //
 // The two are not required to be identical, and one direction is allowed:
 // internal/config may reject what natsjs accepts, because it also canonicalizes
@@ -23,6 +22,8 @@ import (
 // a value internal/config admits and natsjs then refuses moves what should be a
 // config-load failure to connect time, where an operator reads it as a broker
 // outage instead of a typo.
+//
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
 	for _, testCase := range configtest.MessagingCases() {
 		t.Run(testCase.Name, func(t *testing.T) {
@@ -35,12 +36,6 @@ func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
 				// internal/config already refused it, so the operator sees the
 				// fault at load. Whether natsjs would also refuse it does not
 				// change what anyone observes.
-				//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-				// loadMessagingConfig runs one messaging setting set through the real load path
-				// and returns the validated config, or nil when validation rejected it. Only
-				// ErrValidate counts as a rejection; a parse or IO fault fails the test, so a
-				// broken fixture cannot read as the config side doing its job.
 				return
 			}
 			if cfg.URLs == "" {
@@ -56,6 +51,10 @@ func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
 	}
 }
 
+// loadMessagingConfig runs one messaging setting set through the real load path
+// and returns the validated config, or nil when validation rejected it. Only
+// ErrValidate counts as a rejection; a parse or IO fault fails the test, so a
+// broken fixture cannot read as the config side doing its job.
 func loadMessagingConfig(t *testing.T, urls, stream string, plaintext bool) (*config.MessagingConfig, error) {
 	t.Helper()
 	// A concrete port: nothing is served here, but config validation rejects 0.

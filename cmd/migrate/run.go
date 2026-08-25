@@ -29,7 +29,7 @@ func run(args []string, stdout io.Writer) error {
 	// Configuration is not loaded yet, so this carries no service identity; the
 	// records before the load below are the only ones that cannot.
 	logger := logctx.NewProcessLogger(stdout, slog.LevelInfo)
-	loadOptions, err := config.ParseLoadOptions("migrate", args, nil)
+	loadOptions, err := config.ParseLoadOptions(args)
 	if err != nil {
 		logMigrationTerminal(logger, postgresmigrate.RunResult{}, err, postgresmigrate.FailureConfig)
 		return err

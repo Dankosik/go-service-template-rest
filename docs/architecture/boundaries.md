@@ -64,6 +64,7 @@ owns River-to-NATS composition, readiness, drain, and cleanup.
 
 <!-- profile:messaging-nats-jetstream:start -->
 `internal/domainevent/` owns typed event identity/version/time/encoding;
+`internal/messagingconfig/` owns pure NATS URL and stream/consumer-name rules;
 `internal/infra/natsjs/` owns composition routes and JetStream publication and
 settlement without exposing broker vocabulary to feature code.
 <!-- profile:messaging-nats-jetstream:end -->
@@ -81,9 +82,11 @@ subscriber administration, feature transactions, or deployment policy.
 <!-- profile:webhooks-durable:end -->
 
 <!-- profile:inbound-webhooks-standard:start -->
-`internal/inboundwebhook/` and `internal/infra/postgresinboundwebhook/` own
-Standard Webhooks verification, receipt identity, and River dispatch, not
-provider schemas, business effects, or deployment ingress.
+`internal/inboundwebhook/manifest/` owns the pure non-secret endpoint document;
+the rest of `internal/inboundwebhook/` and
+`internal/infra/postgresinboundwebhook/` own Standard Webhooks verification,
+receipt identity, and River dispatch, not provider schemas, business effects,
+or deployment ingress.
 <!-- profile:inbound-webhooks-standard:end -->
 
 ## Dependency Direction

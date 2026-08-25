@@ -129,7 +129,7 @@ func TestIntrospectionConfigRejectsUnknownKeyAndSecretFile(t *testing.T) {
 	}
 }
 
-func TestIntrospectionConfigPrivateSuffixAndHTTPAdmission(t *testing.T) {
+func TestIntrospectionConfigPrivateSuffix(t *testing.T) {
 	resetConfigEnv(t)
 	setIntrospectionTestEnv(t)
 	t.Setenv("APP__AUTHN__INTROSPECTION_TARGET_CLASS", "private-https")
@@ -146,14 +146,6 @@ func TestIntrospectionConfigPrivateSuffixAndHTTPAdmission(t *testing.T) {
 	_, _, err = LoadDetailed(LoadOptions{})
 	if err == nil || !strings.Contains(err.Error(), "introspection_private_host_suffix") {
 		t.Fatalf("forbidden suffix error = %v", err)
-	}
-
-	resetConfigEnv(t)
-	setIntrospectionTestEnv(t)
-	t.Setenv("APP__HTTP__MAX_IN_FLIGHT", "0")
-	_, _, err = LoadDetailed(LoadOptions{})
-	if err == nil || !strings.Contains(err.Error(), "http.max_in_flight") {
-		t.Fatalf("HTTP admission error = %v", err)
 	}
 }
 
@@ -190,6 +182,20 @@ func setIntrospectionTestEnv(t *testing.T) {
 }
 
 // profile:authn-oidc-introspection:end
+
+//nolint:paralleltest // This test mutates process-global environment.
+func TestAuthnRequiresHTTPAdmission(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__HTTP__MAX_IN_FLIGHT", "0")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "authn OIDC profile requires http.max_in_flight > 0") {
+		t.Fatalf("LoadDetailed() error = %v, want OIDC HTTP admission requirement", err)
+	}
+}
 
 // profile:grpc:start
 

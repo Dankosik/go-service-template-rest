@@ -192,18 +192,6 @@ func TestMaxInFlightBounds(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "default accepted"},
-		{
-			name:  "zero disables shedding",
-			value: "0",
-			// profile:authn-bearer:start
-			wantErr: true,
-			// profile:authn-bearer:end
-			//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-			// TestMaxConnectionsBounds covers the accept ceiling, which bounds what
-			// max_in_flight cannot: a connection costs a goroutine and its buffers before
-			// any middleware, including the load shedder, ever runs.
-		},
 		{name: "negative", value: "-1", wantErr: true},
 		{name: "above ceiling", value: "100001", wantErr: true},
 	} {
@@ -221,6 +209,19 @@ func TestMaxInFlightBounds(t *testing.T) {
 				t.Fatalf("LoadDetailed() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestHTTPMaxInFlightMayDisableShedding(t *testing.T) {
+	resetConfigEnv(t)
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	cfg.HTTP.MaxInFlight = 0
+	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
+		t.Fatalf("validateHTTPConfig() error = %v, want zero to disable shedding", err)
 	}
 }
 

@@ -29,6 +29,28 @@ func TestObjectStorageConfigContract(t *testing.T) {
 		})
 	}
 
+	t.Run("normalizes Cloudflare R2", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__OBJECT_STORAGE__PROVIDER", "  cloudflare_r2  ")
+		t.Setenv("APP__OBJECT_STORAGE__ENDPOINT", "  https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com  ")
+		t.Setenv("APP__OBJECT_STORAGE__REGION", "  ")
+		t.Setenv("APP__OBJECT_STORAGE__BUCKET", "  examplebucket  ")
+		t.Setenv("APP__OBJECT_STORAGE__EXPECTED_BUCKET_OWNER", "  ")
+		t.Setenv("APP__OBJECT_STORAGE__CREDENTIAL_SOURCE", "  static  ")
+
+		cfg, _, err := LoadDetailed(LoadOptions{})
+		if err != nil {
+			t.Fatalf("LoadDetailed() error = %v", err)
+		}
+		want := ObjectStorageConfig{
+			Provider: "cloudflare_r2", Endpoint: "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",
+			Region: "auto", Bucket: "examplebucket", CredentialSource: "static", MaxObjectBytes: 10 << 20,
+		}
+		if cfg.ObjectStorage != want {
+			t.Fatalf("ObjectStorage = %#v, want %#v", cfg.ObjectStorage, want)
+		}
+	})
+
 	resetConfigEnv(t)
 	t.Setenv("APP__AWS__REGION", "hostile-ambient-region")
 	if _, _, err := LoadDetailed(LoadOptions{}); !errors.Is(err, ErrUnknownKey) {

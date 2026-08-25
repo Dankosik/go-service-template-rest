@@ -9,28 +9,23 @@ import (
 	"encoding/base64"
 	"encoding/json/v2"
 	"errors"
+	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
 )
 
 const (
-	maxEndpointManifestBytes   = 1 << 20
-	maxSecretManifestBytes     = 1 << 20
-	maxEndpointManifestEntries = 4096
-	maxSecretManifestEntries   = 4096
-	maxEndpointIDBytes         = 64
-	maxKeyReferenceBytes       = 64
-	minSecretBytes             = 32
-	maxSecretBytes             = 64
+	maxSecretManifestBytes   = 1 << 20
+	maxSecretManifestEntries = 4096
+	minSecretBytes           = 32
+	maxSecretBytes           = 64
 )
 
 // Endpoint is the non-secret trust identity for one inbound endpoint.
-type Endpoint struct {
-	ID                      string
-	ActiveKeyReference      string
-	PredecessorKeyReference string
-}
+type Endpoint = inboundmanifest.Endpoint
 
 type endpointSecrets struct {
 	active      []byte
@@ -38,23 +33,11 @@ type endpointSecrets struct {
 }
 
 // EndpointManifest is the immutable non-secret endpoint snapshot.
-type EndpointManifest struct {
-	endpoints map[string]Endpoint
-}
+type EndpointManifest = inboundmanifest.Endpoints
 
 // SecretManifest is the immutable endpoint/key-reference to secret bytes.
 type SecretManifest struct {
 	secrets map[string]map[string][]byte
-}
-
-type endpointDocument struct {
-	Endpoints []endpointEntry `json:"endpoints"`
-}
-
-type endpointEntry struct {
-	EndpointID              string `json:"endpoint_id"`
-	ActiveKeyReference      string `json:"active_key_reference"`
-	PredecessorKeyReference string `json:"predecessor_key_reference,omitempty"`
 }
 
 type secretDocument struct {
@@ -69,43 +52,9 @@ type secretEntry struct {
 
 // ParseEndpointManifest parses the non-secret endpoint document.
 func ParseEndpointManifest(raw string) (*EndpointManifest, error) {
-	if raw == "" {
-		return &EndpointManifest{endpoints: map[string]Endpoint{}}, nil
-	}
-	if len(raw) > maxEndpointManifestBytes {
-		return nil, errors.New("parse inbound webhook endpoints: document size is invalid")
-	}
-	var document endpointDocument
-	if err := json.UnmarshalRead(strings.NewReader(raw), &document, json.RejectUnknownMembers(true)); err != nil {
-		return nil, errors.New("parse inbound webhook endpoints: invalid JSON")
-	}
-	if len(document.Endpoints) == 0 || len(document.Endpoints) > maxEndpointManifestEntries {
-		return nil, errors.New("parse inbound webhook endpoints: entries are required")
-	}
-	manifest := &EndpointManifest{endpoints: make(map[string]Endpoint, len(document.Endpoints))}
-	for _, entry := range document.Endpoints {
-		if err := validateEndpointID(entry.EndpointID); err != nil {
-			return nil, errors.New("parse inbound webhook endpoints: invalid identifier")
-		}
-		if err := validateKeyReference(entry.ActiveKeyReference); err != nil {
-			return nil, errors.New("parse inbound webhook endpoints: invalid identifier")
-		}
-		if entry.PredecessorKeyReference != "" {
-			if err := validateKeyReference(entry.PredecessorKeyReference); err != nil {
-				return nil, errors.New("parse inbound webhook endpoints: invalid predecessor key")
-			}
-			if entry.PredecessorKeyReference == entry.ActiveKeyReference {
-				return nil, errors.New("parse inbound webhook endpoints: predecessor key must differ from active key")
-			}
-		}
-		if _, exists := manifest.endpoints[entry.EndpointID]; exists {
-			return nil, errors.New("parse inbound webhook endpoints: duplicate endpoint")
-		}
-		manifest.endpoints[entry.EndpointID] = Endpoint{
-			ID:                      entry.EndpointID,
-			ActiveKeyReference:      entry.ActiveKeyReference,
-			PredecessorKeyReference: entry.PredecessorKeyReference,
-		}
+	manifest, err := inboundmanifest.ParseEndpoints(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
 	}
 	return manifest, nil
 }
@@ -128,10 +77,10 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 	manifest := &SecretManifest{secrets: make(map[string]map[string][]byte)}
 	bindings := make(map[[sha256.Size]byte]string)
 	for _, entry := range document.Entries {
-		if err := validateEndpointID(entry.EndpointID); err != nil {
+		if !inboundmanifest.ValidEndpointID(entry.EndpointID) {
 			return nil, errors.New("parse inbound webhook secrets: invalid identifier")
 		}
-		if err := validateKeyReference(entry.KeyReference); err != nil {
+		if !inboundmanifest.ValidKeyReference(entry.KeyReference) {
 			return nil, errors.New("parse inbound webhook secrets: invalid identifier")
 		}
 		encoded, ok := strings.CutPrefix(entry.Secret, "whsec_")
@@ -163,12 +112,14 @@ func BindSecrets(endpoints *EndpointManifest, secrets *SecretManifest) (*TrustMa
 	if endpoints == nil || secrets == nil {
 		return nil, errors.New("inbound webhook manifests are required")
 	}
+	endpointIDs := endpoints.IDs()
 	trust := &TrustManifest{
-		endpoints: make(map[string]Endpoint, len(endpoints.endpoints)),
-		secrets:   make(map[string]endpointSecrets, len(endpoints.endpoints)),
+		endpoints: make(map[string]Endpoint, len(endpointIDs)),
+		secrets:   make(map[string]endpointSecrets, len(endpointIDs)),
 	}
 	referenced := make(map[string]map[string]struct{})
-	for id, endpoint := range endpoints.endpoints {
+	for _, id := range endpointIDs {
+		endpoint, _ := endpoints.Lookup(id)
 		keys, ok := secrets.secrets[id]
 		if !ok {
 			return nil, errors.New("parse inbound webhook secrets: missing referenced key")
@@ -228,40 +179,6 @@ func (m *TrustManifest) secretsFor(endpointID string) (endpointSecrets, bool) {
 	}
 	secrets, ok := m.secrets[endpointID]
 	return secrets, ok
-}
-
-// IDs returns configured endpoint identifiers.
-func (m *EndpointManifest) IDs() []string {
-	if m == nil {
-		return nil
-	}
-	ids := make([]string, 0, len(m.endpoints))
-	for id := range m.endpoints {
-		ids = append(ids, id)
-	}
-	return ids
-}
-
-func validateEndpointID(value string) error {
-	if value == "" || len(value) > maxEndpointIDBytes || !utf8.ValidString(value) {
-		return errors.New("invalid endpoint id")
-	}
-	for _, r := range value {
-		if r > unicode.MaxASCII || (r != '_' && r != '-' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9')) {
-			return errors.New("invalid endpoint id")
-		}
-	}
-	return nil
-}
-
-func validateKeyReference(value string) error {
-	if value == "" || len(value) > maxKeyReferenceBytes || !utf8.ValidString(value) {
-		return errors.New("invalid key reference")
-	}
-	if strings.IndexFunc(value, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) >= 0 {
-		return errors.New("invalid key reference")
-	}
-	return nil
 }
 
 func validDeliveryID(value string) bool {

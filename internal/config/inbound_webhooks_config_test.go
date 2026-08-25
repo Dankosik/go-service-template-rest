@@ -47,6 +47,19 @@ func TestInboundWebhooksConfigBoundary(t *testing.T) {
 		}
 	})
 
+	t.Run("service rejects invalid endpoints during config load", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__INBOUND_WEBHOOKS__ENDPOINTS", `{"endpoints":[{"endpoint_id":"bad id","active_key_reference":"key-v1"}]}`)
+		t.Setenv("APP__INBOUND_WEBHOOKS__STATIC_SECRETS", inboundWebhookTestCanary)
+		_, _, err := LoadDetailed(LoadOptions{})
+		if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "inbound_webhooks.endpoints") {
+			t.Fatalf("error = %v", err)
+		}
+		if strings.Contains(err.Error(), inboundWebhookTestCanary) {
+			t.Fatalf("error disclosed canary: %v", err)
+		}
+	})
+
 	t.Run("worker projects endpoints only", func(t *testing.T) {
 		setJobsWorkerConfigEnv(t)
 		t.Setenv("APP__INBOUND_WEBHOOKS__ENDPOINTS", endpoints)
@@ -69,6 +82,15 @@ func TestInboundWebhooksConfigBoundary(t *testing.T) {
 		}
 		if strings.Contains(err.Error(), inboundWebhookTestCanary) {
 			t.Fatalf("error disclosed canary: %v", err)
+		}
+	})
+
+	t.Run("worker rejects invalid endpoints during config load", func(t *testing.T) {
+		setJobsWorkerConfigEnv(t)
+		t.Setenv("APP__INBOUND_WEBHOOKS__ENDPOINTS", `{"endpoints":[{"endpoint_id":"bad id","active_key_reference":"key-v1"}]}`)
+		_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
+		if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "inbound_webhooks.endpoints") {
+			t.Fatalf("error = %v", err)
 		}
 	})
 }

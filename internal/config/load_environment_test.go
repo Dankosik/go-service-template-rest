@@ -251,14 +251,6 @@ func TestFlatEnvKeysAreIgnored(t *testing.T) {
 	}
 }
 
-func TestNamespaceEnvForConfigKey(t *testing.T) {
-	t.Parallel()
-
-	if got := namespaceEnvForConfigKey("app.env"); got != "APP__APP__ENV" {
-		t.Fatalf("namespaceEnvForConfigKey(app.env) = %q, want APP__APP__ENV", got)
-	}
-}
-
 // profile:object-storage:start
 //
 //nolint:paralleltest // Reads env/.env.example through process-wide environment overrides.
