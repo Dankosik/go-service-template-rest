@@ -10,10 +10,12 @@ package grpcx
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -30,6 +32,7 @@ func TestServerHealthFollowsAdmissionAndDrain(t *testing.T) {
 	server.SetServing(true)
 	assertHealthStatus(t, healthClient, healthgrpc.HealthCheckResponse_SERVING)
 	server.StartDrain()
+	server.SetServing(true)
 	assertHealthStatus(t, healthClient, healthgrpc.HealthCheckResponse_NOT_SERVING)
 
 	if err := server.Shutdown(t.Context()); err != nil {
@@ -154,6 +157,35 @@ func TestServerStreamingPolicyErrorBoundary(t *testing.T) {
 	}
 }
 
+func TestPolicyErrorMappingDoesNotTrustWrappedStatus(t *testing.T) {
+	t.Parallel()
+
+	mapped, sanitized := mapPolicyError(fmt.Errorf(
+		"policy dependency: %w",
+		status.Error(codes.PermissionDenied, "credential=secret"),
+	))
+	if !sanitized {
+		t.Fatal("wrapped policy status was trusted")
+	}
+	assertStatusCode(t, mapped, codes.Internal)
+	if detail := status.Convert(mapped).Message(); detail != failure.SanitizedDetail {
+		t.Fatalf("wrapped policy detail = %q, want %q", detail, failure.SanitizedDetail)
+	}
+}
+
+func TestHandlerErrorMappingPreservesWrappedCancellation(t *testing.T) {
+	t.Parallel()
+
+	mapped, sanitized := mapHandlerError(fmt.Errorf("handler stopped: %w", context.Canceled), nil, "")
+	if sanitized {
+		t.Fatal("wrapped cancellation was reported as an unhandled failure")
+	}
+	assertStatusCode(t, mapped, codes.Canceled)
+	if detail := status.Convert(mapped).Message(); detail != "request canceled" {
+		t.Fatalf("cancellation detail = %q, want %q", detail, "request canceled")
+	}
+}
+
 func TestServerSanitizesUntrustedHandlerStatus(t *testing.T) {
 	register := func(registrar grpc.ServiceRegistrar) {
 		registerUnaryTestService(registrar, testUnaryFullMethod,
@@ -214,15 +246,15 @@ func TestServerShutdownForcesBlockedRPCOnCanceledBudget(t *testing.T) {
 			&emptypb.Empty{},
 		)
 	}()
-	<-entered
+	waittest.ReceiveSignal(t, entered, time.Second, "blocked RPC handler")
 
 	shutdownCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := server.Shutdown(shutdownCtx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Shutdown() error = %v, want context.Canceled", err)
 	}
-	<-handlerDone
-	if err := <-callDone; err == nil {
+	waittest.ReceiveSignal(t, handlerDone, time.Second, "forced handler cancellation")
+	if err := waittest.Receive(t, callDone, time.Second, "forced RPC result"); err == nil {
 		t.Fatal("blocked RPC succeeded after forced shutdown")
 	}
 	if err := server.Close(); err != nil {
@@ -368,7 +400,7 @@ func TestServerShutdownReturnsWhenHandlerIgnoresCancellation(t *testing.T) {
 			&emptypb.Empty{},
 		)
 	}()
-	<-entered
+	waittest.ReceiveSignal(t, entered, time.Second, "cancellation-ignoring handler")
 
 	shutdownCtx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -389,12 +421,12 @@ func TestServerShutdownReturnsWhenHandlerIgnoresCancellation(t *testing.T) {
 	}
 
 	releaseHandler()
-	<-handlerDone
+	waittest.ReceiveSignal(t, handlerDone, time.Second, "released cancellation-ignoring handler")
 	// The handler and transport stop race after release: the client may observe
 	// either its response or the forced connection close. The lifecycle
 	// contract is the bounded shutdown return while the handler is still
 	// parked, not a stronger claim about that concurrent terminal outcome.
-	<-callDone
+	_ = waittest.Receive(t, callDone, time.Second, "cancellation-ignoring RPC result")
 }
 
 func TestNewServerRejectsUnboundedConfig(t *testing.T) {

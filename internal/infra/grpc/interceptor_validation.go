@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	"buf.build/go/protovalidate"
 	"github.com/example/go-service-template-rest/internal/failure"
 	"google.golang.org/grpc"
@@ -14,7 +15,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const validationFailureDetail = "request validation failed"
+const (
+	validationFailureDetail = "request validation failed"
+	maxValidationViolations = 10
+)
 
 func validationUnaryInterceptor(
 	log *slog.Logger,
@@ -95,10 +99,25 @@ func validateMessage(
 		return ownedStatus(codes.Internal, failure.SanitizedDetail)
 	}
 	rendered := status.New(codes.InvalidArgument, validationFailureDetail)
-	withDetails, detailErr := rendered.WithDetails(validationErr.ToProto())
+	withDetails, detailErr := rendered.WithDetails(publicValidationViolations(validationErr))
 	if detailErr != nil {
 		recordUnhandledFailure(ctx, log, method, detailErr)
 		return &ownedStatusError{status: rendered}
 	}
 	return &ownedStatusError{status: withDetails}
+}
+
+// publicValidationViolations keeps only schema-owned identifiers. A CEL rule's
+// message and a field-path subscript may contain values copied from the request.
+func publicValidationViolations(validationErr *protovalidate.ValidationError) *validate.Violations {
+	source := validationErr.ToProto().GetViolations()
+	violations := make([]*validate.Violation, min(len(source), maxValidationViolations))
+	for index, violation := range source[:len(violations)] {
+		violations[index] = proto.CloneOf(violation)
+		violations[index].ClearMessage()
+		for _, element := range violations[index].GetField().GetElements() {
+			element.ClearSubscript()
+		}
+	}
+	return validate.Violations_builder{Violations: violations}.Build()
 }

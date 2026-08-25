@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -93,7 +94,7 @@ func TestCallerDeadlineEarlierThanTheBudgetWins(t *testing.T) {
 		t.Fatalf("ClientConn.Invoke() error = %v", err)
 	}
 
-	remaining := <-observed
+	remaining := waittest.Receive(t, observed, time.Second, "handler deadline")
 	if remaining <= 0 || remaining > callerBudget {
 		t.Fatalf("handler deadline was %s away, want at most the caller's %s", remaining, callerBudget)
 	}
@@ -109,10 +110,8 @@ func TestStreamIsNotBoundedByTheUnaryDefault(t *testing.T) {
 				if err := stream.RecvMsg(&request); err != nil {
 					return fmt.Errorf("receive deadline stream request: %w", err)
 				}
-				select {
-				case <-time.After(4 * cfg.unaryTimeout):
-				case <-stream.Context().Done():
-					return stream.Context().Err()
+				if deadline, ok := stream.Context().Deadline(); ok {
+					return fmt.Errorf("stream received server deadline %s", deadline)
 				}
 				return stream.SendMsg(&emptypb.Empty{})
 			})

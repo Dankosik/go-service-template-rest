@@ -16,12 +16,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-// handlerErrorBoundary and [policyErrorBoundary] are this transport's two error
-// boundaries. They are the same mechanism — [mapError] — and differ only in the
-// [trustedStatus] each passes it; the package doc owns why they sit where they
-// do in the chain.
-//
-// This one is innermost and sanitizes what a generated handler returns. Standard
+// handlerErrorBoundary sanitizes what a generated handler returns. Standard
 // health RPCs pass through untouched so their own status semantics survive.
 func handlerErrorBoundary(log *slog.Logger, mappers []failure.Mapper) aroundRPC {
 	mappers = slices.Clone(mappers)
@@ -30,40 +25,19 @@ func handlerErrorBoundary(log *slog.Logger, mappers []failure.Mapper) aroundRPC 
 		if isHealthMethod(fullMethod) {
 			return err
 		}
-		mapped, sanitized := mapError(err, ownedStatusOnly, errorRendering{
-			mappers: mappers,
-			domain:  methodDomain(fullMethod),
-		})
+		mapped, sanitized := mapHandlerError(err, mappers, methodDomain(fullMethod))
 		if sanitized {
 			recordUnhandledFailure(ctx, log, fullMethod, err)
 		}
 		return mapped
 	}
-}
-
-// errorRendering is everything a classified answer needs beyond the error
-// itself: which mappers may claim it, and the domain that scopes the reason a
-// caller matches on. The two travel together because every signature between the
-// boundary and the status would otherwise carry an unnamed pair.
-type errorRendering struct {
-	mappers []failure.Mapper
-	// domain scopes ErrorInfo.Reason, so two services' reasons cannot collide.
-	// Empty omits the detail rather than publishing an unscoped reason; the
-	// composition root always supplies one, and exhaustruct on [Options] is what
-	// keeps that true.
-	domain string
 }
 
 // policyErrorBoundary sanitizes what a supplied policy interceptor returns.
-//
-// It closes over the logger for the same reason its siblings in
-// [builtinPolicies] close over their collaborators: a policy failure this
-// boundary refuses to hand the caller is discarded unless something writes it
-// down, and this is the only position that still holds it.
 func policyErrorBoundary(log *slog.Logger) aroundRPC {
 	return func(ctx context.Context, fullMethod string, call func(context.Context) error) error {
 		err := call(ctx)
-		mapped, sanitized := mapError(err, anyServiceStatus, errorRendering{})
+		mapped, sanitized := mapPolicyError(err)
 		if sanitized {
 			recordUnhandledFailure(ctx, log, fullMethod, err)
 		}
@@ -71,70 +45,62 @@ func policyErrorBoundary(log *slog.Logger) aroundRPC {
 	}
 }
 
-// trustedStatus reports whether one error boundary may hand err's gRPC status
-// to the caller unchanged, and yields the status error to return. Reporting
-// false sanitizes the error into a generic INTERNAL. The two implementations
-// below are the only difference between this transport's two error boundaries.
-type trustedStatus func(err error) (error, bool)
-
-// ownedStatusOnly trusts only a status this package built from repository
-// policy, so a generated handler's own status.Error cannot make a dependency's
-// code and detail the client's answer by accident.
-func ownedStatusOnly(err error) (error, bool) {
-	if owned, ok := errors.AsType[*ownedStatusError](err); ok {
-		return owned, true
-	}
-	return nil, false
-}
-
-// anyServiceStatus trusts any status the error itself carries. The boundary
-// using it wraps the policy interceptors supplied through Options.UnaryPolicy
-// and Options.StreamPolicy, which live in other packages and therefore cannot
-// construct an ownedStatusError; an ordinary status.Error already carries a
-// status, which is the whole of what this boundary asks for, and
-// TestServerPolicyErrorBoundary returns exactly that from a policy. It
-// deliberately does not unwrap: only a status a policy chose to return directly
-// is its own output.
-func anyServiceStatus(err error) (error, bool) {
-	if statusErr, ok := err.(interface{ GRPCStatus() *status.Status }); ok && statusErr.GRPCStatus() != nil {
-		return err, true
-	}
-	return nil, false
-}
-
-// mapError converts a handler or policy failure into the status this transport
-// returns. Cancellation and deadlines answer first at every boundary because
-// they are the caller's own signal rather than a service outcome; trusted then
-// decides how much of the remaining error is already deliberate output.
-//
-// The second result reports that err reached the caller as a generic INTERNAL
-// carrying none of what actually failed. That is the one outcome worth a record,
-// and it is returned rather than logged here so this function stays a pure
-// mapping: the context and method a record needs live at the boundary, not in
-// the mapping.
-func mapError(err error, trusted trustedStatus, rendering errorRendering) (error, bool) {
+func mapHandlerError(err error, mappers []failure.Mapper, domain string) (error, bool) {
 	if err == nil {
 		return nil, false
 	}
-	if errors.Is(err, context.Canceled) {
-		return ownedStatus(codes.Canceled, "request canceled"), false
+	if mapped, ok := mapContextError(err); ok {
+		return mapped, false
 	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return ownedStatus(codes.DeadlineExceeded, "request deadline exceeded"), false
-	}
-	if owned, ok := trusted(err); ok {
+	if owned, ok := errors.AsType[*ownedStatusError](err); ok {
 		return owned, false
 	}
 	// Generated Unimplemented<Service>Server methods return an ordinary status.
 	// Preserve forward-compatible generated behavior without trusting its text.
-	if statusErr, ok := err.(interface{ GRPCStatus() *status.Status }); ok &&
-		statusErr.GRPCStatus() != nil && statusErr.GRPCStatus().Code() == codes.Unimplemented {
+	if grpcStatus, ok := directStatus(err); ok && grpcStatus.Code() == codes.Unimplemented {
 		return ownedStatus(codes.Unimplemented, "method not implemented"), false
 	}
-	if mapped, ok := failure.Classify(err, rendering.mappers); ok {
-		return mappedStatus(mapped, rendering.domain), false
+	if mapped, ok := failure.Classify(err, mappers); ok {
+		return mappedStatus(mapped, domain), false
 	}
 	return ownedStatus(codes.Internal, failure.SanitizedDetail), true
+}
+
+func mapPolicyError(err error) (error, bool) {
+	if err == nil {
+		return nil, false
+	}
+	if mapped, ok := mapContextError(err); ok {
+		return mapped, false
+	}
+	// Deliberately do not unwrap: only a status the policy returned directly is
+	// service-owned output.
+	if _, ok := directStatus(err); ok {
+		return err, false
+	}
+	return ownedStatus(codes.Internal, failure.SanitizedDetail), true
+}
+
+func mapContextError(err error) (error, bool) {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return ownedStatus(codes.Canceled, "request canceled"), true
+	case errors.Is(err, context.DeadlineExceeded):
+		return ownedStatus(codes.DeadlineExceeded, "request deadline exceeded"), true
+	default:
+		return nil, false
+	}
+}
+
+// directStatus inspects only err itself; errors.As would also trust a status a
+// policy merely wrapped.
+func directStatus(err error) (*status.Status, bool) {
+	statusErr, ok := err.(interface{ GRPCStatus() *status.Status })
+	if !ok {
+		return nil, false
+	}
+	grpcStatus := statusErr.GRPCStatus()
+	return grpcStatus, grpcStatus != nil
 }
 
 func methodDomain(fullMethod string) string {
@@ -161,9 +127,9 @@ func methodDomain(fullMethod string) string {
 // What it records is the class chain, never the message. The error's text is
 // exactly what this boundary refused to give the caller, and a log is not a
 // safer place to put a credential than a status:
-// TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods drives a
-// handler returning a secret and asserts none of it reaches here. See
-// failure.ClassChain for what that buys and what it costs.
+// TestUnhandledFailureLogOmitsHandlerText drives a handler returning a secret
+// and asserts none of it reaches here. See failure.ClassChain for what that buys
+// and what it costs.
 //
 // The span is deliberately untouched. RecordError would publish the same text as
 // exception.message, and the bounded error.type this package could set instead is
@@ -258,9 +224,9 @@ func classifiedDetails(mapped failure.Classification, domain string) []protoadap
 	return details
 }
 
-// ownedStatusError is the provenance marker for a status this adapter created
-// from repository-owned policy. A handler's ordinary status.Error does not
-// carry this marker and is therefore sanitized by ownedStatusOnly.
+// ownedStatusError marks repository-owned output. Stream validation returns its
+// status from RecvMsg inside the handler boundary, so chain position alone cannot
+// distinguish it from a handler's ordinary status.Error.
 type ownedStatusError struct {
 	status *status.Status
 }

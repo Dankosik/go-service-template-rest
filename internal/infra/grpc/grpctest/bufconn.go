@@ -4,7 +4,9 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -25,8 +27,15 @@ type BufconnServer interface {
 	Close() error
 }
 
-// ServeBufconn serves server over an in-memory listener and returns a client
-// connected to it. Both are released when the test finishes.
+// ServeBufconn serves server over an in-memory listener and returns one client.
+func ServeBufconn(tb testing.TB, server BufconnServer) *grpc.ClientConn {
+	tb.Helper()
+	return ServeBufconnClients(tb, server, 1)[0]
+}
+
+// ServeBufconnClients serves server over an in-memory listener and returns
+// count clients connected to it. All resources are released when the test
+// finishes.
 //
 // The teardown order is why this is shared rather than retyped. The client goes
 // first, then the server stops its transport, and only then is Serve joined.
@@ -35,42 +44,43 @@ type BufconnServer interface {
 //
 // The connection is insecure because the listener is in memory and has no
 // transport to secure. A test proving transport trust needs a real socket.
-func ServeBufconn(tb testing.TB, server BufconnServer) *grpc.ClientConn {
+func ServeBufconnClients(tb testing.TB, server BufconnServer, count int) []*grpc.ClientConn {
 	tb.Helper()
 
 	listener := bufconn.Listen(bufconnBuffer)
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- server.Serve(listener) }()
-
-	connection, err := grpc.NewClient(
-		"passthrough:///bufconn",
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		// Same order as the cleanup below, because the serving goroutine is
-		// already running and this path still owns joining it.
-		if closeErr := server.Close(); closeErr != nil {
-			tb.Errorf("Server.Close() after client setup failure = %v", closeErr)
-		}
-		<-serveDone
-		_ = listener.Close()
-		tb.Fatalf("grpc.NewClient() error = %v", err)
-	}
+	connections := make([]*grpc.ClientConn, 0, count)
 
 	tb.Cleanup(func() {
-		if err := connection.Close(); err != nil {
-			tb.Errorf("ClientConn.Close() error = %v", err)
+		defer func() {
+			if err := listener.Close(); err != nil {
+				tb.Errorf("bufconn.Listener.Close() error = %v", err)
+			}
+		}()
+		for _, connection := range connections {
+			if err := connection.Close(); err != nil {
+				tb.Errorf("ClientConn.Close() error = %v", err)
+			}
 		}
 		if err := server.Close(); err != nil {
 			tb.Errorf("Server.Close() error = %v", err)
 		}
-		if err := <-serveDone; err != nil {
+		if err := waittest.Receive(tb, serveDone, time.Second, "bufconn server to stop"); err != nil {
 			tb.Errorf("Server.Serve() error = %v", err)
 		}
-		if err := listener.Close(); err != nil {
-			tb.Errorf("bufconn.Listener.Close() error = %v", err)
-		}
 	})
-	return connection
+
+	for range count {
+		connection, err := grpc.NewClient(
+			"passthrough:///bufconn",
+			grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }),
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+		if err != nil {
+			tb.Fatalf("grpc.NewClient() error = %v", err)
+		}
+		connections = append(connections, connection)
+	}
+	return connections
 }

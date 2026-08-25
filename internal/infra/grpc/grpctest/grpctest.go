@@ -132,8 +132,9 @@ func Register(registrar grpc.ServiceRegistrar, first Method, rest ...Method) {
 }
 
 func splitFullMethod(fullMethod string) (string, string) {
-	service, method, ok := strings.Cut(strings.TrimPrefix(fullMethod, "/"), "/")
-	if !ok {
+	trimmed, prefixed := strings.CutPrefix(fullMethod, "/")
+	service, method, separated := strings.Cut(trimmed, "/")
+	if !prefixed || !separated || service == "" || method == "" || strings.Contains(method, "/") {
 		panic(fmt.Sprintf("test method %q is not /package.Service/Method", fullMethod))
 	}
 	return service, method

@@ -53,18 +53,17 @@ func saturatedMapper(delay time.Duration) failure.Mapper {
 // granularity rather than a defect to mirror.
 func TestRetryHintReachesBothTransports(t *testing.T) {
 	for _, testCase := range []struct {
-		delay           time.Duration
-		wantRetryAfter  int
-		wantGRPCSeconds float64
+		delay          time.Duration
+		wantRetryAfter int
 	}{
-		{delay: 200 * time.Millisecond, wantRetryAfter: 1, wantGRPCSeconds: 0.2},
-		{delay: time.Second, wantRetryAfter: 1, wantGRPCSeconds: 1},
-		{delay: 1500 * time.Millisecond, wantRetryAfter: 2, wantGRPCSeconds: 1.5},
+		{delay: 200 * time.Millisecond, wantRetryAfter: 1},
+		{delay: time.Second, wantRetryAfter: 1},
+		{delay: 1500 * time.Millisecond, wantRetryAfter: 2},
 	} {
 		t.Run(testCase.delay.String(), func(t *testing.T) {
 			mappers := []failure.Mapper{saturatedMapper(testCase.delay)}
 
-			retryInfo, _ := classifiedDetailsFromServer(t, mappers)
+			retryInfo := grpcRetryInfoFromServer(t, mappers)
 			if retryInfo == nil {
 				t.Fatal("gRPC status carried no RetryInfo for a positive mapper delay")
 			}
@@ -80,7 +79,7 @@ func TestRetryHintReachesBothTransports(t *testing.T) {
 			if err != nil {
 				t.Fatalf("HTTP Retry-After = %q, want whole seconds", header)
 			}
-			if float64(advertised) < testCase.wantGRPCSeconds {
+			if float64(advertised) < testCase.delay.Seconds() {
 				t.Fatalf(
 					"HTTP advertised %ds, shorter than the mapper's %s",
 					advertised,
@@ -213,12 +212,11 @@ func TestClassifiedEmptyDetailUsesGRPCOwnedFallback(t *testing.T) {
 	}
 }
 
-// classifiedDetailsFromServer drives one classified error through a real server
-// and returns whichever of the two details the caller received.
-func classifiedDetailsFromServer(
+// grpcRetryInfoFromServer drives one classified error through a real server.
+func grpcRetryInfoFromServer(
 	t *testing.T,
 	mappers []failure.Mapper,
-) (*errdetails.RetryInfo, *errdetails.ErrorInfo) {
+) *errdetails.RetryInfo {
 	t.Helper()
 
 	register := func(registrar grpc.ServiceRegistrar) {
@@ -236,19 +234,12 @@ func classifiedDetailsFromServer(
 		t.Fatal("classified handler error reached the caller as success")
 	}
 
-	var (
-		retryInfo *errdetails.RetryInfo
-		errorInfo *errdetails.ErrorInfo
-	)
 	for _, detail := range status.Convert(err).Details() {
-		switch typed := detail.(type) {
-		case *errdetails.RetryInfo:
-			retryInfo = typed
-		case *errdetails.ErrorInfo:
-			errorInfo = typed
+		if retryInfo, ok := detail.(*errdetails.RetryInfo); ok {
+			return retryInfo
 		}
 	}
-	return retryInfo, errorInfo
+	return nil
 }
 
 // httpRetryAfter renders the same mapper through the HTTP transport's own
