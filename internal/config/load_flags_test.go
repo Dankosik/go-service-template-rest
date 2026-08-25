@@ -1,7 +1,6 @@
 package config
 
 import (
-	"flag"
 	"slices"
 	"strings"
 	"testing"
@@ -13,11 +12,11 @@ import (
 func TestParseLoadOptionsAcceptsTheSharedFlagSurface(t *testing.T) {
 	t.Parallel()
 
-	options, err := ParseLoadOptions("service", []string{
+	options, err := ParseLoadOptions([]string{
 		"--config", "base.yaml",
 		"--config-overlay", "one.yaml",
 		"--config-overlay=two.yaml",
-	}, nil)
+	})
 	if err != nil {
 		t.Fatalf("ParseLoadOptions() error = %v", err)
 	}
@@ -48,7 +47,7 @@ func TestParseLoadOptionsRefusesWhatWouldStartTheWrongProcess(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := ParseLoadOptions("service", testCase.args, nil)
+			_, err := ParseLoadOptions(testCase.args)
 			if err == nil {
 				t.Fatalf("ParseLoadOptions(%q) error = nil, want a rejection", testCase.args)
 			}
@@ -56,31 +55,5 @@ func TestParseLoadOptionsRefusesWhatWouldStartTheWrongProcess(t *testing.T) {
 				t.Errorf("ParseLoadOptions(%q) err = %v, want the parse flags stage named", testCase.args, err)
 			}
 		})
-	}
-}
-
-// TestParseLoadOptionsRegistersBinaryLocalFlags covers a caller with its own
-// flag. Registering on the shared set is what makes an unknown flag one
-// rejection rather than two flag sets disagreeing about which flags exist.
-func TestParseLoadOptionsRegistersBinaryLocalFlags(t *testing.T) {
-	t.Parallel()
-
-	var local bool
-	options, err := ParseLoadOptions("service-helper", []string{"--local", "--config", "base.yaml"},
-		func(flags *flag.FlagSet) { flags.BoolVar(&local, "local", false, "binary-local flag") })
-	if err != nil {
-		t.Fatalf("ParseLoadOptions() error = %v", err)
-	}
-	if !local {
-		t.Error("binary-local flag was not parsed")
-	}
-	if options.ConfigPath != "base.yaml" {
-		t.Errorf("ConfigPath = %q, want base.yaml", options.ConfigPath)
-	}
-
-	if _, err := ParseLoadOptions("service-helper", []string{"--local=maybe"},
-		func(flags *flag.FlagSet) { flags.BoolVar(&local, "local", false, "binary-local flag") },
-	); err == nil {
-		t.Fatal("ParseLoadOptions(invalid binary-local value) error = nil, want a rejection")
 	}
 }

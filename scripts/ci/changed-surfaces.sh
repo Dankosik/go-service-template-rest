@@ -122,7 +122,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			cmd/worker/*|cmd/outbox-relay/*|internal/domainevent/*|internal/infra/natsjs/*|internal/infra/postgresoutbox/*|test/nats*|test/postgres_outbox_natsjs*)
+			cmd/worker/*|cmd/outbox-relay/*|internal/domainevent/*|internal/messagingconfig/*|internal/infra/natsjs/*|internal/infra/postgresoutbox/*|test/nats*|test/postgres_outbox_natsjs*)
 				mark messaging_integration
 				;;
 		esac
@@ -292,6 +292,9 @@ self_test() {
 	assert_case internal/infra/natsjs/client.go \
 		"go_source messaging_integration integration_race" \
 		"db_integration migrations runtime_image image_security"
+	assert_case internal/messagingconfig/config.go \
+		"go_source messaging_integration" \
+		"db_integration migrations process_integration integration_race runtime_image image_security"
 	assert_case test/performance/http/single-flow.js \
 		"performance_harness" \
 		"go_source db_integration messaging_integration process_integration integration_race runtime_image image_security"

@@ -23,21 +23,15 @@ func enforceSecretSourcePolicy(k *koanf.Koanf, path string) error {
 }
 
 func isSecretLikeConfigKey(key string) bool {
-	lower := strings.ToLower(strings.TrimSpace(key))
-	if lower == "" {
-		return false
-	}
-
-	switch lower {
-	case "postgres.dsn", "observability.otel.exporter.otlp_headers":
-		return true
-	}
-
-	segments := configKeySegments(lower)
+	segments := configKeySegments(strings.ToLower(strings.TrimSpace(key)))
 	for i, segment := range segments {
 		switch segment {
-		case "password", "token", "secret", "secrets", "authorization", "dsn":
+		case "password", "secret", "secrets", "authorization", "dsn":
 			return true
+		case "token":
+			if i+1 == len(segments) || (segments[i+1] != "profile" && segments[i+1] != "url") {
+				return true
+			}
 		case "key":
 			if i > 0 && (segments[i-1] == "api" || segments[i-1] == "private") {
 				return true

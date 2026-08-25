@@ -89,6 +89,27 @@ func validateAuthnConfig(cfg *AuthnConfig) error {
 	return nil
 }
 
+func validateAuthnHTTPCompatibility(cfg HTTPConfig) error {
+	if cfg.MaxInFlight == 0 {
+		return fmt.Errorf("%w: authn OIDC profile requires http.max_in_flight > 0", ErrValidate)
+	}
+	return nil
+}
+
+// profile:grpc:start
+
+func validateAuthnGRPCCompatibility(cfg GRPCConfig) error {
+	if cfg.Server.Enabled && cfg.Server.TransportSecurity != "tls" {
+		return fmt.Errorf(
+			"%w: authn OIDC profile requires grpc.server.transport_security=tls",
+			ErrValidate,
+		)
+	}
+	return nil
+}
+
+// profile:grpc:end
+
 // profile:authn-oidc-introspection:start
 
 // profile:authn-oidc-jwt:start

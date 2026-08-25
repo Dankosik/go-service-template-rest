@@ -127,7 +127,7 @@ still at-least-once and the consumer's durable idempotency remains authoritative
 ## Proof
 
 ```bash
-go test -vet=off ./internal/domainevent ./internal/infra/natsjs ./cmd/worker/...
+go test -vet=off ./internal/domainevent ./internal/messagingconfig ./internal/infra/natsjs ./cmd/worker/...
 go test -vet=off -tags=integration ./internal/infra/natsjs
 REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration-messaging
 make test-messaging-race

@@ -211,6 +211,7 @@ linters:
           files:
             - "**/internal/**/*.go"
             - "!**/cmd/**/*.go"
+            - "!**/internal/config/*.go"
             - "!**/internal/config/**/*.go"
             - "!**/internal/infra/**/*.go"
             - "!**/internal/observability/**/*.go"
@@ -240,6 +241,12 @@ linters:
             # is what keeps one rule from being written twice.
             - github.com/example/go-service-template-rest/internal/authntrust
             # profile:authn-bearer:end
+            # profile:messaging-nats-jetstream:start
+            - github.com/example/go-service-template-rest/internal/messagingconfig
+            # profile:messaging-nats-jetstream:end
+            # profile:inbound-webhooks-standard:start
+            - github.com/example/go-service-template-rest/internal/inboundwebhook/manifest
+            # profile:inbound-webhooks-standard:end
             - github.com/example/go-service-template-rest/internal/observability/otelconfig
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
@@ -340,6 +347,30 @@ linters:
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: authntrust must not depend on composition roots.
         # profile:authn-bearer:end
+        # profile:messaging-nats-jetstream:start
+        messagingconfig_is_pure_policy:
+          list-mode: lax
+          files:
+            - "**/internal/messagingconfig/*.go"
+            - "!**/internal/messagingconfig/*_test.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: messagingconfig is the pure rule leaf shared by config and the NATS adapter.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: messagingconfig must not depend on composition roots.
+        # profile:messaging-nats-jetstream:end
+        # profile:inbound-webhooks-standard:start
+        inbound_webhook_manifest_is_pure_policy:
+          list-mode: lax
+          files:
+            - "**/internal/inboundwebhook/manifest/*.go"
+            - "!**/internal/inboundwebhook/manifest/*_test.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: inbound webhook manifest rules must stay usable by config and the runtime adapter.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: inbound webhook manifest rules must not depend on composition roots.
+        # profile:inbound-webhooks-standard:end
         # profile:authn-oidc-jwt:start
         oidcjwt_core_is_transport_neutral:
           list-mode: lax

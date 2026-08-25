@@ -514,7 +514,7 @@ row_e1_http() {
 	private_root="$(http_none_fixture)"
 	run_init "${private_root}" NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=private-https AUTH=none
 	assert "private suffix config" grep -q 'PrivateDNSSuffix' "${private_root}/internal/config/billing_integration_config.go"
-	assert "private suffix test env" grep -q 'APP__INTEGRATIONS__BILLING__PRIVATE_DNS_SUFFIX' "${private_root}/internal/config/testhelpers_test.go"
+	assert "private suffix test env" grep -q 'APP__INTEGRATIONS__BILLING__PRIVATE_DNS_SUFFIX' "${private_root}/internal/config/configtest/configtest.go"
 	(
 		cd "${private_root}"
 		go test -vet=off ./internal/config ./internal/infra/billing ./cmd/service/internal/bootstrap \

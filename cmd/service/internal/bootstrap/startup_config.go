@@ -85,5 +85,5 @@ func bootstrapConfigStage(
 // check.
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
-	return config.ParseLoadOptions("service", args, nil)
+	return config.ParseLoadOptions(args)
 }

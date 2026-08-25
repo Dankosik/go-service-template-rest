@@ -39,7 +39,7 @@ if [[ ${1:-} == --select-from-files ]]; then
 		scripts/profiles/outbox-* | */postgresoutbox/*)
 			add_selected outbox
 			;;
-		scripts/profiles/messaging-* | */natsjs/*)
+		scripts/profiles/messaging-* | */messagingconfig/* | */natsjs/*)
 			add_selected messaging
 			;;
 		scripts/profiles/object-storage* | */infra/s3/*)
@@ -219,6 +219,7 @@ assert_profile() {
 		test ! -d "${root}/internal/infra/postgres"
 		test ! -d "${root}/internal/infra/bearerauthn"
 		test ! -d "${root}/internal/infra/natsjs"
+		test ! -d "${root}/internal/messagingconfig"
 		;;
 	oidc-jwt)
 		test -d "${root}/internal/infra/oidcjwt"
@@ -254,6 +255,7 @@ assert_profile() {
 		test -d "${root}/cmd/jobs-worker"
 		;;
 	inbound-webhooks)
+		test -d "${root}/internal/inboundwebhook/manifest"
 		test -d "${root}/internal/infra/postgresinboundwebhook"
 		test -e "${root}/migrations/000010_postgres_inbound_webhooks.sql"
 		;;
@@ -264,6 +266,7 @@ assert_profile() {
 		! grep -R -E 'type Outbox(Event|CommitReceipt|OrderingHead|Redrife)' "${root}/internal/infra/postgres/sqlcgen" 2>/dev/null
 		;;
 	messaging)
+		test -d "${root}/internal/messagingconfig"
 		test -d "${root}/internal/infra/natsjs"
 		test -d "${root}/cmd/worker"
 		test ! -d "${root}/internal/infra/postgres"

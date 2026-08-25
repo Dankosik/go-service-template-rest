@@ -12,18 +12,14 @@ import (
 // accepts out of args: -config once, and -config-overlay repeatably in the order
 // the overlays are applied.
 //
-// name is the flag set's name, which is the binary in a usage error. register
-// adds the flags one binary owns alone and may be nil; it runs before parsing, on
-// the same set, so a binary-local flag is refused by the same unknown-flag path.
-//
 // Usage output is discarded because a composition root reports its own startup
 // rejection through the process logger, and flag's default output would print a
 // second, unstructured copy to stderr.
-func ParseLoadOptions(name string, args []string, register func(*flag.FlagSet)) (LoadOptions, error) {
+func ParseLoadOptions(args []string) (LoadOptions, error) {
 	var configPath string
 	var overlays []string
 
-	flags := flag.NewFlagSet(name, flag.ContinueOnError)
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.Func("config", "path to base config file", func(value string) error {
 		trimmed := strings.TrimSpace(value)
@@ -41,10 +37,6 @@ func ParseLoadOptions(name string, args []string, register func(*flag.FlagSet)) 
 		overlays = append(overlays, trimmed)
 		return nil
 	})
-	if register != nil {
-		register(flags)
-	}
-
 	if err := flags.Parse(args); err != nil {
 		return LoadOptions{}, fmt.Errorf("parse flags: %w", err)
 	}

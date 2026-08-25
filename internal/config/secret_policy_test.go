@@ -26,10 +26,14 @@ postgres:
 }
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestConfigFileAllowsEmptySecretLikePlaceholders(t *testing.T) {
+func TestConfigFileAllowsNonSecretValuesAndEmptySecretLikePlaceholders(t *testing.T) {
 	resetConfigEnv(t)
 
 	path := writeTempConfig(t, `
+# profile:authn-bearer:start
+authn:
+  token_profile: "resource-server"
+# profile:authn-bearer:end
 # profile:database-postgres:start
 postgres:
   dsn: ""
@@ -78,12 +82,25 @@ func TestConfigFileRejectsCommonFutureSecretLikeKeys(t *testing.T) {
 	}
 }
 
-func TestSecretLikeConfigKeyPolicyAllowsNonSecretShapes(t *testing.T) {
+func TestSecretLikeConfigKeyPolicy(t *testing.T) {
 	t.Parallel()
 
-	for _, key := range []string{"http.addr", "metadata.public_key"} {
-		if isSecretLikeConfigKey(key) {
-			t.Fatalf("isSecretLikeConfigKey(%q) = true, want false", key)
+	for _, testCase := range []struct {
+		key  string
+		want bool
+	}{
+		{key: "http.addr"},
+		{key: "metadata.public_key"},
+		{key: "authn.token_profile"},
+		{key: "integrations.billing.oauth.token_url"},
+		{key: "provider.access_token", want: true},
+		{key: "provider.client_secret", want: true},
+		{key: "provider.token_url.secret", want: true},
+		{key: "postgres.dsn", want: true},
+		{key: "observability.otel.exporter.otlp_headers", want: true},
+	} {
+		if got := isSecretLikeConfigKey(testCase.key); got != testCase.want {
+			t.Fatalf("isSecretLikeConfigKey(%q) = %t, want %t", testCase.key, got, testCase.want)
 		}
 	}
 }

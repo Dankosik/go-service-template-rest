@@ -22,7 +22,6 @@ import (
 const (
 	poolName = "postgres"
 
-	DefaultMaxOpenConns       = 4
 	DefaultHealthcheckTimeout = 3 * time.Second
 	defaultStatementTimeout   = 8 * time.Second
 	postgresConnectTimeout    = 3 * time.Second

@@ -44,3 +44,16 @@ func TestGRPCEnabledTLSValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestGRPCPlaintextTransportConfig(t *testing.T) {
+	t.Parallel()
+
+	cfg := GRPCConfig{Server: GRPCServerConfig{
+		Enabled:           true,
+		Addr:              ":9091",
+		TransportSecurity: "plaintext",
+	}}
+	if err := validateGRPCConfig(&cfg); err != nil {
+		t.Fatalf("validateGRPCConfig() error = %v, want plaintext transport accepted", err)
+	}
+}

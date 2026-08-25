@@ -10,7 +10,7 @@ import (
 )
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
-	return config.ParseLoadOptions("worker", args, nil)
+	return config.ParseLoadOptions(args)
 }
 
 func validateShutdownBudget(cfg config.Config) error {

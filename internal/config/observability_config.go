@@ -97,13 +97,7 @@ func validateObservabilityConfig(cfg *ObservabilityConfig) error {
 	if cfg.OTel.ServiceName == "" {
 		return fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
 	}
-	return validateObservabilitySampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg)
-}
-
-// validateObservabilitySampler prefixes the shared sampler rules with the
-// section that owns them, so a rejection names the setting an operator can edit.
-func validateObservabilitySampler(sampler string, samplerArg float64) error {
-	if err := otelconfig.ValidateTraceSampler(sampler, samplerArg); err != nil {
+	if err := otelconfig.ValidateTraceSampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg); err != nil {
 		return fmt.Errorf("%w: observability.otel.%w", ErrValidate, err)
 	}
 	return nil

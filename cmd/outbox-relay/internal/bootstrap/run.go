@@ -44,7 +44,7 @@ func Run(args []string) error {
 }
 
 func run(signalCtx context.Context, args []string) (runErr error) {
-	loadOptions, err := config.ParseLoadOptions("outbox-relay", args, nil)
+	loadOptions, err := config.ParseLoadOptions(args)
 	if err != nil {
 		return err
 	}

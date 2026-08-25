@@ -1160,7 +1160,7 @@ else
 fi
 
 	if [[ "${messaging}" == "none" ]]; then
-		rm -rf -- cmd/worker internal/domainevent internal/infra/natsjs
+		rm -rf -- cmd/worker internal/domainevent internal/infra/natsjs internal/messagingconfig
 		rm -f -- \
 			cmd/internal/runtimeopts/messaging.go \
 			cmd/service/internal/bootstrap/startup_messaging.go \
@@ -1207,12 +1207,9 @@ fi
 		make proto-generate
 	fi
 
-	# internal/config/configtest exists for parity tests that hold runtime owners
-	# and internal/config to one answer. Retained Postgres, jobs, outbox, authn,
-	# outbound-auth, and messaging tests use it, so it leaves only after them.
-	if [[ "${database}" == "none" && "${jobs}" == "none" && "${outbox}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
-		rm -rf -- internal/config/configtest
-	fi
+	# configtest remains in every profile because internal/config's test helpers
+	# delegate environment isolation to it. Its messaging corpus still leaves
+	# with the messaging profile above.
 
 	# internal/waittest is deliberately not removed by any profile. It once left
 	# with gRPC and messaging together, because every importer was one of their

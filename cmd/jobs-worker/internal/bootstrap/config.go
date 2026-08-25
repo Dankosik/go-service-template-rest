@@ -18,7 +18,7 @@ const (
 )
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
-	return config.ParseLoadOptions("jobs-worker", args, nil)
+	return config.ParseLoadOptions(args)
 }
 
 func validateRuntimeConfig(cfg config.Config) error {

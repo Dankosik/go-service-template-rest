@@ -2,9 +2,10 @@ package natsjs
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/messagingconfig"
 )
 
 const (
@@ -30,31 +31,15 @@ type Config struct {
 // under. [Connect] applies it before touching the network, so a settings fault
 // never reaches the broker.
 //
-// It is exported for the same reason [ValidateWorkerConfig] is: internal/config
-// restates these rules and cannot import this package, so the composition root
-// is the only place that can hold both and prove they still describe the same
-// configuration. See the comment above validateMessagingConfig in
-// internal/config/messaging_config.go for that arrangement and the test that
-// pins it.
+// It is exported for the same reason [ValidateWorkerConfig] is: direct adapter
+// callers receive the same fail-closed rules configuration loading applies.
 func ValidateConfig(cfg Config) error {
 	if len(cfg.URLs) == 0 {
 		return fmt.Errorf("%w: messaging URLs are required", ErrRejected)
 	}
 	for _, raw := range cfg.URLs {
-		parsed, err := url.Parse(raw)
-		if err != nil || parsed.Host == "" {
-			return fmt.Errorf("%w: invalid messaging URL", ErrRejected)
-		}
-		if parsed.User != nil {
-			return fmt.Errorf("%w: messaging URL userinfo is forbidden", ErrRejected)
-		}
-		if !cfg.AllowPlaintext && parsed.Scheme != "tls" && parsed.Scheme != "wss" {
-			return fmt.Errorf("%w: plaintext messaging URL requires explicit opt-in", ErrRejected)
-		}
-		switch parsed.Scheme {
-		case "nats", "tls", "ws", "wss":
-		default:
-			return fmt.Errorf("%w: unsupported messaging URL scheme", ErrRejected)
+		if err := messagingconfig.ValidateURL(raw, cfg.AllowPlaintext); err != nil {
+			return fmt.Errorf("%w: %w", ErrRejected, err)
 		}
 	}
 	if !cfg.AllowUnauthenticated && strings.TrimSpace(cfg.CredentialsFile) == "" {
@@ -69,16 +54,10 @@ func ValidateConfig(cfg Config) error {
 	return nil
 }
 
-// validConsumerName bounds a stream or durable-consumer name to what NATS
-// accepts as one token: no subject separators, wildcards, path characters, or
-// whitespace. internal/config restates this rule as validMessagingStreamName —
-// see the comment above validateMessagingConfig there for why it must, and for
-// the test that keeps the two in step.
+// validConsumerName keeps the adapter's local vocabulary while the pure leaf
+// owns the rule shared with configuration loading.
 func validConsumerName(value string) bool {
-	if value == "" {
-		return false
-	}
-	return !strings.ContainsAny(value, " .*\\/>\t\r\n")
+	return messagingconfig.ValidStreamOrConsumerName(value)
 }
 
 func validSubject(value string, wildcards bool) bool {

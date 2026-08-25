@@ -25,7 +25,8 @@ func TestInitObjectStorageMapsConfig(t *testing.T) {
 	want := validObjectStorageConfig()
 	built := &countingObjectStorageRuntime{}
 	runtime, err := initObjectStorageWith(t.Context(), want, func(ctx context.Context, got s3.Config) (objectStorageRuntime, error) {
-		if ctx != t.Context() || got.Provider != s3.ProviderAmazonS3 || got.Bucket != want.Bucket ||
+		if ctx != t.Context() || got.Provider != s3.ProviderAmazonS3 || got.Endpoint != want.Endpoint ||
+			got.Region != want.Region || got.Bucket != want.Bucket || got.ExpectedBucketOwner != want.ExpectedBucketOwner ||
 			got.CredentialSource != want.CredentialSource || got.MaxObjectBytes != want.MaxObjectBytes {
 			t.Fatalf("mapped S3 config = %#v", got)
 		}

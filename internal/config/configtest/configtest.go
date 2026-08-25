@@ -1,4 +1,4 @@
-// Package configtest owns the environment isolation a parity test needs.
+// Package configtest owns config-loader test setup shared across package boundaries.
 //
 // The rules internal/config enforces are restated by the runtime owners that
 // consume them, because the depguard rule config_no_runtime_owners stops its
@@ -27,16 +27,7 @@ import (
 func IsolateEnv(tb testing.TB) {
 	tb.Helper()
 
-	for _, entry := range os.Environ() {
-		key, value, found := strings.Cut(entry, "=")
-		if !found || !strings.HasPrefix(key, "APP__") {
-			continue
-		}
-		tb.Setenv(key, value)
-		if err := os.Unsetenv(key); err != nil {
-			tb.Fatalf("os.Unsetenv(%q) error = %v", key, err)
-		}
-	}
+	ClearEnv(tb)
 	tb.Setenv("APP__APP__ENV", "local")
 	// profile:authn-bearer:start
 	tb.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
@@ -60,4 +51,20 @@ func IsolateEnv(tb testing.TB) {
 		tb.Setenv(key, value)
 	}
 	// profile:object-storage:end
+}
+
+// ClearEnv removes namespaced variables for tests that install their own baseline.
+func ClearEnv(tb testing.TB) {
+	tb.Helper()
+
+	for _, entry := range os.Environ() {
+		key, value, found := strings.Cut(entry, "=")
+		if !found || !strings.HasPrefix(key, "APP__") {
+			continue
+		}
+		tb.Setenv(key, value)
+		if err := os.Unsetenv(key); err != nil {
+			tb.Fatalf("os.Unsetenv(%q) error = %v", key, err)
+		}
+	}
 }

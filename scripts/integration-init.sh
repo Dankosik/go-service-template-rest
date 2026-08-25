@@ -1140,64 +1140,53 @@ PY
 }
 
 add_snapshot_keys() {
-	local src exp
-	src="$(mktemp)"
-	exp="$(mktemp)"
+	local entries
+	entries="$(mktemp)"
 	if [[ "${TRANSPORT}" == "http" ]]; then
-		printf '\t\t"integrations.%s.base_url": "https://%s.snapshot.example",\n' "${NAME}" "${NAME}" >"${src}"
-		printf '\t\t"integrations.%s.base_url": "https://%s.snapshot.example",\n' "${NAME}" "${NAME}" >"${exp}"
+		printf '\t\t"integrations.%s.base_url": sameSnapshotValue("https://%s.snapshot.example"),\n' \
+			"${NAME}" "${NAME}" >"${entries}"
 		if [[ "${TARGET}" == "private-https" ]]; then
-			printf '\t\t"integrations.%s.private_dns_suffix": "svc.cluster.local",\n' "${NAME}" >>"${src}"
-			printf '\t\t"integrations.%s.private_dns_suffix": "svc.cluster.local",\n' "${NAME}" >>"${exp}"
+			printf '\t\t"integrations.%s.private_dns_suffix": sameSnapshotValue("svc.cluster.local"),\n' \
+				"${NAME}" >>"${entries}"
 		fi
 	else
-		printf '\t\t"integrations.%s.target": "dns:///%s.snapshot.example:443",\n' "${NAME}" "${NAME}" >"${src}"
-		printf '\t\t"integrations.%s.target": "dns:///%s.snapshot.example:443",\n' "${NAME}" "${NAME}" >"${exp}"
+		printf '\t\t"integrations.%s.target": sameSnapshotValue("dns:///%s.snapshot.example:443"),\n' \
+			"${NAME}" "${NAME}" >"${entries}"
 	fi
 	if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
-		cat >>"${src}" <<EOF
-		"integrations.${NAME}.oauth.token_url":     "https://auth.snapshot.example/oauth/token",
-		"integrations.${NAME}.oauth.client_id":     " snapshot-client:id ",
-		"integrations.${NAME}.oauth.client_secret": " snapshot-client-secret ",
-		"integrations.${NAME}.oauth.scopes":        "snapshot.read snapshot.write",
-EOF
-		cat >>"${exp}" <<EOF
-		"integrations.${NAME}.oauth.token_url":     "https://auth.snapshot.example/oauth/token",
-		"integrations.${NAME}.oauth.client_id":     " snapshot-client:id ",
-		"integrations.${NAME}.oauth.client_secret": " snapshot-client-secret ",
-		"integrations.${NAME}.oauth.scopes":        "snapshot.read snapshot.write",
+		cat >>"${entries}" <<EOF
+		"integrations.${NAME}.oauth.token_url":     sameSnapshotValue("https://auth.snapshot.example/oauth/token"),
+		"integrations.${NAME}.oauth.client_id":     sameSnapshotValue(" snapshot-client:id "),
+		"integrations.${NAME}.oauth.client_secret": sameSnapshotValue(" snapshot-client-secret "),
+		"integrations.${NAME}.oauth.scopes":        sameSnapshotValue("snapshot.read snapshot.write"),
 EOF
 	fi
-	python3 - "${ROOT_DIR}/internal/config/snapshot_contract_test.go" "${src}" "${exp}" <<'PY'
+	python3 - "${ROOT_DIR}/internal/config/snapshot_contract_test.go" "${entries}" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
-src = Path(sys.argv[2]).read_text()
-exp = Path(sys.argv[3]).read_text()
+block = Path(sys.argv[2]).read_text()
 text = path.read_text()
-for fn, block in (
-    ("func sentinelConfigSourceValues() map[string]any {", src),
-    ("func expectedSentinelSnapshotValues() map[string]any {", exp),
-):
-    start = text.find(fn)
-    if start < 0:
-        raise SystemExit(f"missing {fn}")
-    marker = "return map[string]any{"
-    brace = text.find(marker, start)
-    if brace < 0:
-        raise SystemExit(f"missing map literal in {fn}")
-    insert_at = text.find("\n", brace) + 1
-    end = text.find("\n}", insert_at)
-    region = text[insert_at:end]
-    if block.strip() and block.strip() not in region:
-        text = text[:insert_at] + block + text[insert_at:]
+fn = "func snapshotContractValues() map[string]snapshotContractValue {"
+start = text.find(fn)
+if start < 0:
+    raise SystemExit(f"missing {fn}")
+marker = "return map[string]snapshotContractValue{"
+brace = text.find(marker, start)
+if brace < 0:
+    raise SystemExit(f"missing map literal in {fn}")
+insert_at = text.find("\n", brace) + 1
+end = text.find("\n}", insert_at)
+region = text[insert_at:end]
+if block.strip() and block.strip() not in region:
+    text = text[:insert_at] + block + text[insert_at:]
 path.write_text(text)
 PY
-	rm -f "${src}" "${exp}"
+	rm -f "${entries}"
 }
 
 install_test_env_tuple() {
-	local dest="${ROOT_DIR}/internal/config/testhelpers_test.go"
+	local dest
 	local env_key env_val
 	if [[ "${TRANSPORT}" == "http" ]]; then
 		env_key="APP__INTEGRATIONS__$(printf '%s' "${NAME}" | tr '[:lower:]' '[:upper:]')__BASE_URL"
@@ -1209,22 +1198,6 @@ install_test_env_tuple() {
 	else
 		env_key="APP__INTEGRATIONS__$(printf '%s' "${NAME}" | tr '[:lower:]' '[:upper:]')__TARGET"
 		env_val="dns:///${NAME}.example.com:443"
-	fi
-	if [[ -f "${dest}" ]] && ! grep -q "${env_key}" "${dest}"; then
-		python3 - "${dest}" "${env_key}" "${env_val}" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-key, value = sys.argv[2], sys.argv[3]
-text = path.read_text()
-needle = '\tt.Setenv("APP__APP__ENV", "local")\n'
-insert = needle + f'\tt.Setenv("{key}", "{value}")\n'
-if key in text:
-    raise SystemExit(0)
-if needle not in text:
-    raise SystemExit("testhelpers_test.go missing APP__APP__ENV anchor")
-path.write_text(text.replace(needle, insert, 1))
-PY
 	fi
 	dest="${ROOT_DIR}/internal/config/configtest/configtest.go"
 	if [[ -f "${dest}" ]] && ! grep -q "${env_key}" "${dest}"; then
@@ -1282,7 +1255,6 @@ install_named_test_env_key() {
 	local value="$3"
 	local item dest receiver
 	for item in \
-		"${ROOT_DIR}/internal/config/testhelpers_test.go|t" \
 		"${ROOT_DIR}/internal/config/configtest/configtest.go|tb" \
 		"${ROOT_DIR}/cmd/service/internal/bootstrap/run_test.go|t"; do
 		dest="${item%|*}"
@@ -1310,7 +1282,6 @@ install_named_oauth_test_env() {
 	local anchor_key="$1"
 	local item dest receiver
 	for item in \
-		"${ROOT_DIR}/internal/config/testhelpers_test.go|t" \
 		"${ROOT_DIR}/internal/config/configtest/configtest.go|tb" \
 		"${ROOT_DIR}/cmd/service/internal/bootstrap/run_test.go|t"; do
 		dest="${item%|*}"

@@ -10,11 +10,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	// profile:database-postgres:start
-	"github.com/example/go-service-template-rest/internal/config/configtest"
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
-
-	// profile:database-postgres:end
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 
 	// profile:messaging-nats-jetstream:start
@@ -55,21 +50,6 @@ func TestAdapterOptionsPreserveConfiguredValues(t *testing.T) {
 	}
 	// profile:database-postgres:end
 }
-
-// profile:database-postgres:start
-func TestPostgresDefaultPoolCeilingMatchesAdapter(t *testing.T) {
-	configtest.IsolateEnv(t)
-
-	cfg, _, err := config.LoadDetailed(config.LoadOptions{})
-	if err != nil {
-		t.Fatalf("config.LoadDetailed() error = %v", err)
-	}
-	if got := Postgres(cfg.Postgres).MaxOpenConns; got != postgres.DefaultMaxOpenConns {
-		t.Fatalf("Postgres default MaxOpenConns = %d, want adapter default %d", got, postgres.DefaultMaxOpenConns)
-	}
-}
-
-// profile:database-postgres:end
 
 func TestLoggerCarriesProcessIdentityAndExtraFields(t *testing.T) {
 	t.Parallel()

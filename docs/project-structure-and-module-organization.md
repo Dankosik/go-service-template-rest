@@ -81,8 +81,9 @@ remains in `internal/infra/natsjs`.
 <!-- profile:outbox-postgres:end -->
 
 <!-- profile:messaging-nats-jetstream:start -->
-`internal/domainevent` and `internal/infra/natsjs` form the removable typed
-messaging pack. The domain package owns typed event identity and encoding; the
+`internal/domainevent`, `internal/messagingconfig`, and `internal/infra/natsjs`
+form the removable typed messaging pack. The domain package owns typed event
+identity and encoding, the pure leaf owns shared client-config rules, and the
 adapter owns composition routes and JetStream mechanics.
 <!-- profile:messaging-nats-jetstream:end -->
 
@@ -96,8 +97,8 @@ HTTP, or config policy.
 <!-- profile:inbound-webhooks-standard:start -->
 `internal/inboundwebhook/` and `internal/infra/postgresinboundwebhook/` form the
 removable inbound receipt pack. The capability owns verification, receipt
-deduplication, and durable dispatch; feature adapters own provider JSON and
-idempotent effects.
+deduplication, durable dispatch, and its pure endpoint-manifest leaf; feature
+adapters own provider JSON and idempotent effects.
 <!-- profile:inbound-webhooks-standard:end -->
 
 <!-- profile:object-storage:start -->
