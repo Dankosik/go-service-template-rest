@@ -3,6 +3,7 @@
 package httpidempotency
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -11,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -199,8 +201,8 @@ type Work[Repository, Response any] func(context.Context, Repository) (Response,
 // Codec is the closed generated-response persistence format for one operation.
 type Codec[Response any] struct{ status int }
 
-// JSONCodec persists one concrete generated success response. The generated
-// response itself later renders the public wire representation.
+// JSONCodec persists one concrete generated success response. Keep its JSON
+// and rendering semantics stable while retained rows can replay.
 func JSONCodec[Response any](status int) Codec[Response] {
 	return Codec[Response]{status: status}
 }
@@ -216,6 +218,9 @@ func (c Codec[Response]) Encode(response Response) ([]byte, error) {
 	body, err := json.Marshal(response)
 	if err != nil {
 		return nil, fmt.Errorf("%w: encode generated response: %w", ErrInvalidResult, err)
+	}
+	if _, err := decodeResponse[Response](body); err != nil {
+		return nil, err
 	}
 	encoded, err := json.Marshal(storedResult{Schema: resultSchema, Status: c.status, Body: body})
 	if err != nil {
@@ -242,10 +247,32 @@ func (c Codec[Response]) Decode(encoded []byte) (Response, error) {
 	if stored.Status != c.status {
 		return response, fmt.Errorf("%w: stored status %d, want %d", ErrInvalidResult, stored.Status, c.status)
 	}
-	if err := json.Unmarshal(stored.Body, &response); err != nil {
+	return decodeResponse[Response](stored.Body)
+}
+
+func decodeResponse[Response any](body []byte) (Response, error) {
+	var response Response
+	if err := json.Unmarshal(body, &response); err != nil {
 		return response, fmt.Errorf("%w: decode generated response: %w", ErrInvalidResult, err)
 	}
+	roundTrip, err := json.Marshal(response)
+	if err != nil {
+		return response, fmt.Errorf("%w: re-encode generated response: %w", ErrInvalidResult, err)
+	}
+	if !sameJSON(body, roundTrip) {
+		return response, fmt.Errorf("%w: generated response changed stored JSON", ErrInvalidResult)
+	}
 	return response, nil
+}
+
+func sameJSON(left, right []byte) bool {
+	var leftValue, rightValue any
+	leftDecoder := json.NewDecoder(bytes.NewReader(left))
+	leftDecoder.UseNumber()
+	rightDecoder := json.NewDecoder(bytes.NewReader(right))
+	rightDecoder.UseNumber()
+	return leftDecoder.Decode(&leftValue) == nil && rightDecoder.Decode(&rightValue) == nil &&
+		reflect.DeepEqual(leftValue, rightValue)
 }
 
 // Executor is the feature-facing seam. Bootstrap supplies the concrete

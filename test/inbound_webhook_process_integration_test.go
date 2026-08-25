@@ -29,7 +29,7 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
 	receiver := inboundReceiver(t, dsn)
 	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
-	if err != nil || result.Outcome != inboundwebhook.OutcomeAccepted {
+	if err != nil || result != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("accept=%+v err=%v", result, err)
 	}
 
@@ -100,7 +100,7 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	control, err := receiver.Receive(ctx, inboundDelivery("orders", controlID, controlBody, controlSignature))
-	if err != nil || control.Outcome != inboundwebhook.OutcomeAccepted {
+	if err != nil || control != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("control=%+v err=%v", control, err)
 	}
 	waittest.Until(t, 30*time.Second, func(context.Context) bool {
@@ -131,7 +131,7 @@ func TestInboundWebhookDisclosureBoundary(t *testing.T) {
 	defer cancel()
 	receiver := inboundReceiver(t, dsn)
 	rejected, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, `{"secret":"`+disclosureCanary+`"}`, "v1,bad"))
-	if err != nil || rejected.Outcome != inboundwebhook.OutcomeRejected {
+	if err != nil || rejected != inboundwebhook.OutcomeRejected {
 		t.Fatalf("rejected=%+v err=%v", rejected, err)
 	}
 
@@ -145,7 +145,7 @@ func TestInboundWebhookDisclosureBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	accepted, err := receiver.Receive(ctx, inboundDelivery("orders", "msg_disclosure", acceptedBody, signature))
-	if err != nil || accepted.Outcome != inboundwebhook.OutcomeAccepted {
+	if err != nil || accepted != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("accepted=%+v err=%v", accepted, err)
 	}
 

@@ -47,6 +47,9 @@ func Bind[T any](
 	if reg == nil || endpointID == "" || decode == nil || handle == nil {
 		return ErrInvalidBinding
 	}
+	if reg.bindings == nil {
+		reg.bindings = make(map[string]dispatchHandle)
+	}
 	if _, exists := reg.bindings[endpointID]; exists {
 		return ErrDuplicateBinding
 	}
@@ -55,24 +58,9 @@ func Bind[T any](
 		if err != nil {
 			return decodeError{err: err}
 		}
-		if err := handle(ctx, delivery, value); err != nil {
-			return handleError{err: err}
-		}
-		return nil
+		return handle(ctx, delivery, value)
 	}
 	return nil
-}
-
-// EndpointIDs returns the registered endpoint set.
-func (r *Registry) EndpointIDs() []string {
-	if r == nil {
-		return nil
-	}
-	ids := make([]string, 0, len(r.bindings))
-	for id := range r.bindings {
-		ids = append(ids, id)
-	}
-	return ids
 }
 
 // HasBinding reports whether endpointID has a decoder and handler.
@@ -92,7 +80,12 @@ func (r *Registry) RequireExact(configured []string) error {
 	if len(configured) != len(r.bindings) {
 		return ErrInvalidBinding
 	}
+	seen := make(map[string]struct{}, len(configured))
 	for _, id := range configured {
+		if _, duplicate := seen[id]; duplicate {
+			return ErrInvalidBinding
+		}
+		seen[id] = struct{}{}
 		if _, ok := r.bindings[id]; !ok {
 			return ErrInvalidBinding
 		}
@@ -116,11 +109,6 @@ type decodeError struct{ err error }
 
 func (e decodeError) Error() string { return e.err.Error() }
 func (e decodeError) Unwrap() error { return e.err }
-
-type handleError struct{ err error }
-
-func (e handleError) Error() string { return e.err.Error() }
-func (e handleError) Unwrap() error { return e.err }
 
 // IsDecodeError reports a decoder failure, including typed rejection.
 func IsDecodeError(err error) bool {

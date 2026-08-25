@@ -10,8 +10,6 @@ import (
 	"unicode/utf8"
 )
 
-const maxTextBytes = 256
-
 // Event is one domain occurrence encoded for publication. Treat it as
 // immutable after construction; value copies share Payload's backing bytes.
 // Broker routing and delivery policy deliberately live outside this type.
@@ -30,8 +28,8 @@ type Kind[T any] struct {
 	Version uint16
 }
 
-// Define declares a typed event kind. Invalid constants are rejected when New
-// validates the event, keeping declaration convenient without an init panic.
+// Define declares a typed event kind. Invalid constants are rejected when
+// [Kind.New] validates the event, keeping declaration convenient without an init panic.
 func Define[T any](eventType string, version uint16) Kind[T] {
 	return Kind[T]{Type: eventType, Version: version}
 }
@@ -43,20 +41,16 @@ type Typed[T any] struct {
 	Payload    T
 }
 
-func (k Kind[T]) New(id string, occurredAt time.Time, payload T) (Event, error) {
-	return New(id, k.Type, k.Version, occurredAt, payload)
-}
-
 // New encodes a typed payload once, before the caller enters its transaction.
-func New(id, eventType string, version uint16, occurredAt time.Time, payload any) (Event, error) {
+func (k Kind[T]) New(id string, occurredAt time.Time, payload T) (Event, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return Event{}, fmt.Errorf("marshal domain event payload: %w", err)
 	}
 	event := Event{
 		ID:         id,
-		Type:       eventType,
-		Version:    version,
+		Type:       k.Type,
+		Version:    k.Version,
 		OccurredAt: occurredAt,
 		Payload:    encoded,
 	}
@@ -91,9 +85,6 @@ func (e Event) Validate() error {
 func validateText(name, value string) error {
 	if value == "" {
 		return fmt.Errorf("%s is required", name)
-	}
-	if len(value) > maxTextBytes {
-		return fmt.Errorf("%s exceeds %d bytes", name, maxTextBytes)
 	}
 	if !utf8.ValidString(value) || strings.ContainsFunc(value, unicode.IsControl) {
 		return fmt.Errorf("%s must be valid text without control characters", name)

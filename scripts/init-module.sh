@@ -1214,13 +1214,6 @@ fi
 		rm -rf -- internal/config/configtest
 	fi
 
-	# internal/packagetest owns the source walk behind the comment and doc proofs
-	# in retained PostgreSQL outbox code as well as grpc, authn, outbound auth,
-	# and natsjs. It leaves only after every current importer.
-	if [[ "${http_idempotency}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
-		rm -rf -- internal/packagetest
-	fi
-
 	# internal/waittest is deliberately not removed by any profile. It once left
 	# with gRPC and messaging together, because every importer was one of their
 	# integration tests; cmd/internal/runtimeopts' diagnostics test now reserves

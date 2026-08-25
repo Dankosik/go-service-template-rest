@@ -85,7 +85,7 @@ func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 		Signature:  reviewedVectorSignature,
 		Body:       []byte(reviewedVectorBody),
 	})
-	if err != nil || result.Outcome != inboundwebhook.OutcomeAccepted {
+	if err != nil || result != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("vector result = %+v, err = %v", result, err)
 	}
 	if store.accepts != 1 {
@@ -130,8 +130,8 @@ func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if result.Outcome != inboundwebhook.OutcomeRejected && result.Outcome != inboundwebhook.OutcomeUnknownEndpoint {
-				t.Fatalf("outcome = %s", result.Outcome)
+			if result != inboundwebhook.OutcomeRejected && result != inboundwebhook.OutcomeUnknownEndpoint {
+				t.Fatalf("outcome = %s", result)
 			}
 			if store.accepts != beforeAccepts {
 				t.Fatal("store called on rejection")
@@ -163,7 +163,7 @@ func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 			Signature:  signature,
 			Body:       []byte(reviewedVectorBody),
 		})
-		if err != nil || result.Outcome != inboundwebhook.OutcomeAccepted {
+		if err != nil || result != inboundwebhook.OutcomeAccepted {
 			t.Fatalf("predecessor result = %+v err = %v", result, err)
 		}
 	})
@@ -178,7 +178,7 @@ func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 				Signature:  reviewedVectorSignature,
 				Body:       []byte(reviewedVectorBody),
 			})
-			if err != nil || result.Outcome != inboundwebhook.OutcomeAccepted {
+			if err != nil || result != inboundwebhook.OutcomeAccepted {
 				t.Fatalf("edge %s result = %+v err = %v", delta, result, err)
 			}
 		}

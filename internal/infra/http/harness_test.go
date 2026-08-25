@@ -135,5 +135,5 @@ func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode p
 // that logged through a bare handler would assert that correlation is absent and
 // pass whether or not the wiring is right.
 func newTestServiceLogger(out io.Writer) *slog.Logger {
-	return slog.New(logctx.New(slog.NewJSONHandler(out, nil)))
+	return logctx.NewProcessLogger(out, slog.LevelInfo)
 }

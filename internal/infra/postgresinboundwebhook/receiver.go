@@ -119,30 +119,30 @@ func NewReceiver(pool *pgxpool.Pool, trust *TrustManifest, opts ...ReceiverOptio
 }
 
 // Receive verifies then durably accepts one signed delivery.
-func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery) (inboundwebhook.Result, error) {
+func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery) (inboundwebhook.Outcome, error) {
 	if r == nil || r.trust == nil || r.store == nil {
-		return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeUnavailable}, inboundwebhook.ErrUnavailable
+		return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
 	}
 	delivery = delivery.Clone()
 	if _, ok := r.trust.Lookup(delivery.EndpointID); !ok {
-		return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeUnknownEndpoint}, nil
+		return inboundwebhook.OutcomeUnknownEndpoint, nil
 	}
 	if !validDeliveryID(delivery.DeliveryID) {
 		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeRejected}, nil
+		return inboundwebhook.OutcomeRejected, nil
 	}
 	signedAt, ok := parseSignedTimestamp(delivery.Timestamp)
 	if !ok {
 		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeRejected}, nil
+		return inboundwebhook.OutcomeRejected, nil
 	}
 	if !timestampInTolerance(signedAt, r.now()) {
 		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeRejected}, nil
+		return inboundwebhook.OutcomeRejected, nil
 	}
 	if !r.signatureOK(delivery) {
 		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeRejected}, nil
+		return inboundwebhook.OutcomeRejected, nil
 	}
 	digest := sha256.Sum256(delivery.Body)
 	outcome, err := r.store.Accept(ctx, receiptRecord{
@@ -156,16 +156,16 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 	if err != nil {
 		if errors.Is(err, postgres.ErrCommitUnknown) {
 			r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
-			return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeUnavailable}, inboundwebhook.ErrUnavailable
+			return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
 		}
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeUnavailable}, fmt.Errorf("accept inbound webhook receipt: %w", err)
+			return inboundwebhook.OutcomeUnavailable, fmt.Errorf("accept inbound webhook receipt: %w", err)
 		}
 		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
-		return inboundwebhook.Result{Outcome: inboundwebhook.OutcomeUnavailable}, inboundwebhook.ErrUnavailable
+		return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
 	}
 	r.telem.recordIngress(ctx, string(outcome))
-	return inboundwebhook.Result{Outcome: outcome}, nil
+	return outcome, nil
 }
 
 func (r *Receiver) signatureOK(delivery inboundwebhook.Delivery) bool {

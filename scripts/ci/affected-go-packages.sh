@@ -111,6 +111,13 @@ self_test() {
 	output=$(printf '%s\n' internal/failure/failure.go internal/problem/problem.go | bash "$0")
 	grep -q './internal/failure' <<<"${output}"
 	grep -q './internal/problem' <<<"${output}"
+
+	output=$(printf '%s\n' internal/packagetest/packagetest.go | bash "$0")
+	grep -qx 'affected_test_packages=' <<<"${output}"
+
+	output=$(printf '%s\n' test/inbound_webhook_process_integration_test.go | bash "$0")
+	grep -qx 'lint_packages=' <<<"${output}"
+	grep -qx 'affected_test_packages=' <<<"${output}"
 }
 
 if [[ ${1:-} == --self-test ]]; then
@@ -187,19 +194,7 @@ done <"${go_files}"
 
 format_files=$(join_sorted "${format_list}")
 changed_packages=$(join_sorted "${changed_list}")
-lint_keep=${tmp}/lint-keep
-: >"${lint_keep}"
-if [[ -s ${lint_list} ]]; then
-	while IFS= read -r pkg; do
-		[[ -n ${pkg} ]] || continue
-		dir=${pkg#./}
-		[[ ${pkg} == . ]] && dir=.
-		if find "${dir}" -maxdepth 1 -type f -name '*.go' -print -quit 2>/dev/null | grep -q .; then
-			printf '%s\n' "${pkg}" >>"${lint_keep}"
-		fi
-	done < <(LC_ALL=C sort -u "${lint_list}")
-fi
-lint_packages=$(join_sorted "${lint_keep}")
+lint_packages=''
 
 if [[ ${fallback} == true ]]; then
 	affected_test_packages=./...
@@ -271,26 +266,30 @@ pkg_to_import() {
 }
 
 import_to_pkg() {
-	local import_path=$1 dir rel
+	local import_path=$1 dir
 	dir=$(awk -F '\t' -v p="${import_path}" '$1 == p { print $2; exit }' "${dirs}")
-	if [[ -n ${dir} ]]; then
-		if [[ ${dir} == "${ROOT_DIR}" ]]; then
-			printf '.\n'
-			return
-		fi
-		if [[ ${dir} == "${ROOT_DIR}"/* ]]; then
-			printf './%s\n' "${dir#"${ROOT_DIR}"/}"
-			return
-		fi
-	fi
-	rel=${import_path#"${module}"}
-	rel=${rel#/}
-	if [[ -z ${rel} ]]; then
+	[[ -n ${dir} ]] || return 0
+	if [[ ${dir} == "${ROOT_DIR}" ]]; then
 		printf '.\n'
-	else
-		printf './%s\n' "${rel}"
+		return
+	fi
+	if [[ ${dir} == "${ROOT_DIR}"/* ]]; then
+		printf './%s\n' "${dir#"${ROOT_DIR}"/}"
 	fi
 }
+
+lint_keep=${tmp}/lint-keep
+: >"${lint_keep}"
+if [[ -s ${lint_list} ]]; then
+	while IFS= read -r pkg; do
+		[[ -n ${pkg} ]] || continue
+		import_path=$(pkg_to_import "${pkg}")
+		if grep -Fq "${import_path}"$'\t' "${dirs}"; then
+			printf '%s\n' "${pkg}" >>"${lint_keep}"
+		fi
+	done < <(LC_ALL=C sort -u "${lint_list}")
+fi
+lint_packages=$(join_sorted "${lint_keep}")
 
 seeds=${tmp}/seeds
 affected_imports=${tmp}/affected-imports
@@ -352,6 +351,10 @@ if [[ -s ${test_only_list} ]]; then
 		if grep -Fxq "${pkg}" "${production_list}" 2>/dev/null; then
 			continue
 		fi
+		import_path=$(pkg_to_import "${pkg}")
+		if ! grep -Fq "${import_path}"$'\t' "${dirs}"; then
+			continue
+		fi
 		printf '%s\n' "${pkg}" >>"${affected_pkgs}"
 	done < <(LC_ALL=C sort -u "${test_only_list}")
 fi
@@ -359,7 +362,7 @@ fi
 total=$(cut -f1 "${dirs}" | LC_ALL=C sort -u | grep -c . || true)
 count=$(LC_ALL=C sort -u "${affected_pkgs}" | grep -c . || true)
 if ((count == 0)); then
-	affected_test_packages=$(join_sorted "${changed_list}")
+	affected_test_packages=''
 elif ((count >= 50)) || ((count * 10 >= total * 8)); then
 	fallback=true
 	fallback_reason=wide_reverse_closure

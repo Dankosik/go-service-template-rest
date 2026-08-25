@@ -38,10 +38,10 @@ Create the immutable event once, before any transaction callback that may be
 retried:
 
 ```go
-event, err := domainevent.New(
+var orderUpdatedV1 = domainevent.Define[order.UpdatedV1]("order.updated", 1)
+
+event, err := orderUpdatedV1.New(
     eventID,
-    "order.updated",
-    1,
     occurredAt,
     order.UpdatedV1{
         OrderID:  orderID,
@@ -61,7 +61,9 @@ subject:
 outbox, err := natsjs.NewOutboxAppender(
     cfg.Messaging.MaxPayloadBytes,
     natsjs.Route{
-        Type: "order.updated", Version: 1, Subject: "events.orders",
+        Type:    orderUpdatedV1.Type,
+        Version: orderUpdatedV1.Version,
+        Subject: "events.orders",
     },
 )
 if err != nil {

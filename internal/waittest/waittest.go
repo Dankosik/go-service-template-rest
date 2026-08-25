@@ -19,14 +19,6 @@ import (
 	"time"
 )
 
-// tick is how often [Until] re-evaluates its predicate.
-//
-// It is a constant rather than a parameter because no caller has a reason to
-// choose: the timeout is what a test asserts on, and the interval only trades
-// idle CPU against how quickly a satisfied condition is noticed. It stays far
-// below every timeout this repository waits with.
-const tick = 20 * time.Millisecond
-
 // Until blocks until predicate reports true, and fails the test when timeout
 // expires first.
 //
@@ -64,7 +56,7 @@ func UntilFunc(
 
 	ctx, cancel := context.WithTimeout(tb.Context(), timeout)
 	defer cancel()
-	ticker := time.NewTicker(tick)
+	ticker := time.NewTicker(20 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		if predicate(ctx) {

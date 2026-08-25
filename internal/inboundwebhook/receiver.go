@@ -38,14 +38,9 @@ func (d Delivery) Clone() Delivery {
 	return d
 }
 
-// Result is one closed acceptance category. Unexpected failures are errors.
-type Result struct {
-	Outcome Outcome
-}
-
 // Receiver is the HTTP-to-durable acceptance port.
 type Receiver interface {
-	Receive(ctx context.Context, delivery Delivery) (Result, error)
+	Receive(ctx context.Context, delivery Delivery) (Outcome, error)
 }
 
 var _ Receiver = NoopReceiver{}
@@ -54,8 +49,8 @@ var _ Receiver = NoopReceiver{}
 type NoopReceiver struct{}
 
 // Receive reports an unknown endpoint without durable work.
-func (NoopReceiver) Receive(context.Context, Delivery) (Result, error) {
-	return Result{Outcome: OutcomeUnknownEndpoint}, nil
+func (NoopReceiver) Receive(context.Context, Delivery) (Outcome, error) {
+	return OutcomeUnknownEndpoint, nil
 }
 
 // profile:inbound-webhooks-standard:end

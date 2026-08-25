@@ -7,6 +7,7 @@
 package failure
 
 import (
+	"slices"
 	"time"
 )
 
@@ -99,13 +100,17 @@ type Classification struct {
 // Mapper classifies one service-owned error for any transport that exposes it.
 type Mapper func(error) (Classification, bool)
 
-// Classify runs mappers in order, skips nil entries, and returns the first match.
+// Classify runs mappers in order, skips nil entries, and returns the first match
+// carrying a published code. An unpublished match fails closed as unclassified.
 func Classify(err error, mappers []Mapper) (Classification, bool) {
 	for _, classify := range mappers {
 		if classify == nil {
 			continue
 		}
 		if classified, ok := classify(err); ok {
+			if !slices.Contains(AllCodes(), classified.Code) {
+				return Classification{}, false
+			}
 			return classified, true
 		}
 	}

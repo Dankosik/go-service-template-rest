@@ -49,7 +49,7 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"})
 		return
 	}
-	result, receiveErr := s.receiver.Receive(r.Context(), inboundwebhook.Delivery{
+	outcome, receiveErr := s.receiver.Receive(r.Context(), inboundwebhook.Delivery{
 		EndpointID: endpointID,
 		DeliveryID: params.WebhookId,
 		Timestamp:  params.WebhookTimestamp,
@@ -68,7 +68,7 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 		}
 		return
 	}
-	switch result.Outcome {
+	switch outcome {
 	case inboundwebhook.OutcomeAccepted, inboundwebhook.OutcomeDuplicate:
 		w.WriteHeader(http.StatusNoContent)
 	case inboundwebhook.OutcomeUnknownEndpoint:

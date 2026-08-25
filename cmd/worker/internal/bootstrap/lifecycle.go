@@ -28,6 +28,7 @@ const (
 	backgroundClose  = 5 * time.Second
 	handlerClose     = 5 * time.Second
 	telemetryClose   = 5 * time.Second
+	workerTailBudget = diagnosticsClose + backgroundClose + handlerClose + telemetryClose
 )
 
 func runWorkerLifecycle(
@@ -86,7 +87,11 @@ func runWorkerLifecycle(
 	worker.StartDrain()
 	processCtx, processCancel, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer processCancel()
-	workerErr := worker.Shutdown(processCtx)
+	workerCtx, workerCancel := runtimeopts.TeardownStage(
+		processCtx, shutdownDeadline, cfg.HTTP.ShutdownTimeout,
+	)
+	workerErr := worker.Shutdown(workerCtx)
+	workerCancel()
 	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
 	backgroundCtx, backgroundCancel := context.WithTimeout(processCtx, backgroundClose)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)

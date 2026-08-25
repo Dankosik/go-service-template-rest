@@ -4,12 +4,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
 	return config.ParseLoadOptions("worker", args, nil)
+}
+
+func validateShutdownBudget(cfg config.Config) error {
+	return runtimeopts.ValidateGracePeriod(
+		cfg.HTTP.GracePeriod,
+		"http.shutdown_timeout",
+		cfg.HTTP.ShutdownTimeout,
+		workerTailBudget,
+	)
 }
 
 func messagingWorkerConfig(cfg config.MessagingConfig) (natsjs.WorkerConfig, error) {

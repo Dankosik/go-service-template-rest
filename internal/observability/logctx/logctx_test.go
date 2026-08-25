@@ -16,7 +16,7 @@ func newTestLogger(t *testing.T) (*slog.Logger, *bytes.Buffer) {
 	t.Helper()
 
 	var out bytes.Buffer
-	return slog.New(logctx.New(slog.NewJSONHandler(&out, nil))), &out
+	return logctx.NewProcessLogger(&out, slog.LevelInfo), &out
 }
 
 func decodeRecord(t *testing.T, out *bytes.Buffer) map[string]any {
@@ -165,7 +165,7 @@ func TestHandlerRespectsLevel(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := slog.New(logctx.New(slog.NewJSONHandler(&out, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	log := logctx.NewProcessLogger(&out, slog.LevelWarn)
 
 	log.InfoContext(acceptedRequestIDContext("req-5"), "below level")
 
@@ -189,13 +189,5 @@ func TestHandlerOmitsAbsentCorrelation(t *testing.T) {
 		if value, present := record[key]; present {
 			t.Fatalf("record carries %s = %v without a request or span", key, value)
 		}
-	}
-}
-
-func TestNewRejectsNilHandler(t *testing.T) {
-	t.Parallel()
-
-	if got := logctx.New(nil); got != nil {
-		t.Fatalf("New(nil) = %v, want nil", got)
 	}
 }

@@ -249,7 +249,7 @@ func (s *Service) Refresh(ctx context.Context, probeBudget time.Duration, failur
 		// previously healthy instance stays in rotation through a blip; one that
 		// was already failing keeps reporting the newest cause. A service that
 		// has never been healthy has no previous verdict and fails immediately.
-		if failures < failureThreshold {
+		if previous.err == nil && failures < failureThreshold {
 			reported = previous.err
 		}
 	}

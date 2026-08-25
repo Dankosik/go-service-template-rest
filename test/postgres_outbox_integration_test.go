@@ -4,10 +4,13 @@ package integration_test
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/domainevent"
+	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
@@ -19,17 +22,17 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	if _, err := pool.Exec(ctx, "CREATE TABLE outbox_domain_probe (id text PRIMARY KEY)"); err != nil {
 		t.Fatalf("create domain probe: %v", err)
 	}
-	event, err := domainevent.New(
+	type payload struct {
+		ID string `json:"id"`
+	}
+	kind := domainevent.Define[payload]("example.changed", 1)
+	event, err := kind.New(
 		"event-1",
-		"example.changed",
-		1,
 		time.Unix(1, 0).UTC(),
-		struct {
-			ID string `json:"id"`
-		}{ID: "domain-1"},
+		payload{ID: "domain-1"},
 	)
 	if err != nil {
-		t.Fatalf("domainevent.New(): %v", err)
+		t.Fatalf("Kind.New(): %v", err)
 	}
 	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "INSERT INTO outbox_domain_probe (id) VALUES ($1)", "domain-1"); err != nil {
@@ -64,21 +67,36 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	}
 	assertOutboxAtomicCounts(t, pool, "domain-1", event.ID, 1, 1)
 
-	conflict, err := domainevent.New(
+	conflict, err := kind.New(
 		event.ID,
-		event.Type,
-		event.Version,
 		event.OccurredAt,
-		map[string]string{"id": "different"},
+		payload{ID: "different"},
 	)
 	if err != nil {
-		t.Fatalf("domainevent.New(conflict): %v", err)
+		t.Fatalf("Kind.New(conflict): %v", err)
 	}
 	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return appender.Append(ctx, tx, conflict)
 	})
 	if !errors.Is(err, postgresoutbox.ErrEventIDConflict) {
 		t.Fatalf("conflicting event error = %v", err)
+	}
+
+	oversized := event
+	oversized.ID = strings.Repeat("x", 257)
+	var inserted int
+	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		appendErr := appender.Append(ctx, tx, oversized)
+		if !errors.Is(appendErr, natsjs.ErrRejected) {
+			return fmt.Errorf("append oversized NATS identity: %w", appendErr)
+		}
+		return tx.QueryRow(ctx, "SELECT count(*) FROM river_job WHERE args->>'id' = $1", oversized.ID).Scan(&inserted)
+	})
+	if err != nil {
+		t.Fatalf("verify oversized NATS identity rejection: %v", err)
+	}
+	if inserted != 0 {
+		t.Fatalf("oversized NATS identity inserted %d River jobs, want 0", inserted)
 	}
 }
 

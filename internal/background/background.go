@@ -57,14 +57,15 @@ type Supervisor struct {
 	// path. Keeping sibling cancellation under Shutdown preserves the ordered
 	// drain.
 	//nolint:containedctx // A supervisor's whole job is owning the lifetime it hands out.
-	taskCtx   context.Context
-	cancel    context.CancelFunc
-	startOnce sync.Once
-	stopOnce  sync.Once
-	stopErr   error
+	taskCtx     context.Context
+	cancel      context.CancelFunc
+	lifecycleMu sync.Mutex
+	startOnce   sync.Once
+	stopOnce    sync.Once
+	stopErr     error
 
-	// stopping reports that Shutdown has begun, so a task ending during the drain
-	// is an ordinary stop rather than something readiness has to report.
+	// stopping rejects new tasks after Shutdown begins and makes a task ending
+	// during the drain an ordinary stop rather than a readiness failure.
 	stopping atomic.Bool
 	// failure holds the first task that ended with an error while the process was
 	// still serving.
@@ -96,8 +97,9 @@ func New(ctx context.Context, log *slog.Logger) *Supervisor {
 	}
 }
 
-// Go starts task. A panic inside Run is recovered and converted into an error so
-// the process can run its ordered drain instead of losing shutdown telemetry.
+// Go starts task unless Shutdown has begun. A panic inside Run is recovered and
+// converted into an error so the process can run its ordered drain instead of
+// losing shutdown telemetry.
 func (s *Supervisor) Go(task Task) {
 	name := cmp.Or(task.Name, "unnamed")
 	if task.Run == nil {
@@ -106,16 +108,28 @@ func (s *Supervisor) Go(task Task) {
 		return
 	}
 
-	s.startOnce.Do(func() {
-		s.log.Info("background_supervisor_started", "component", "background")
-	})
-	s.log.Info("background_task_started", "component", "background", "task", name)
-
+	s.lifecycleMu.Lock()
+	if s.stopping.Load() {
+		s.lifecycleMu.Unlock()
+		s.log.Error(
+			"background_task_invalid",
+			"component", "background",
+			"task", name,
+			"reason", "supervisor is stopping",
+		)
+		return
+	}
 	s.group.Go(func() error {
+		s.startOnce.Do(func() {
+			s.log.Info("background_supervisor_started", "component", "background")
+		})
+		s.log.Info("background_task_started", "component", "background", "task", name)
+
 		err := s.runTask(name, task.Run)
 		s.recordStop(name, err)
 		return err
 	})
+	s.lifecycleMu.Unlock()
 }
 
 func (s *Supervisor) runTask(name string, run func(context.Context) error) (runErr error) {
@@ -139,7 +153,7 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 	if err := run(s.taskCtx); err != nil {
 		// The parent context and Shutdown own this context's terminal error, so a
 		// task returning that same cause stopped as asked rather than failed.
-		if taskErr := s.taskCtx.Err(); taskErr != nil && errors.Is(err, taskErr) {
+		if taskErr := s.taskCtx.Err(); taskErr != nil && matchesOnly(err, taskErr) {
 			s.log.Info("background_task_canceled", "component", "background", "task", name)
 			return nil
 		}
@@ -153,6 +167,32 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 	err := fmt.Errorf("%w: %s", ErrTaskStopped, name)
 	s.log.Error("background_task_failed", "component", "background", "task", name, "err", err)
 	return err
+}
+
+type multiCauseError interface {
+	error
+	Unwrap() []error
+}
+
+// matchesOnly reports whether every cause in err is target. errors.Is alone is
+// insufficient because it matches one branch of errors.Join and would hide a
+// sibling cleanup failure during cancellation.
+func matchesOnly(err, target error) bool {
+	if !errors.Is(err, target) {
+		return false
+	}
+	if wrapped, ok := errors.AsType[multiCauseError](err); ok {
+		for _, cause := range wrapped.Unwrap() {
+			if !matchesOnly(cause, target) {
+				return false
+			}
+		}
+		return true
+	}
+	if cause := errors.Unwrap(err); cause != nil {
+		return matchesOnly(cause, target)
+	}
+	return true
 }
 
 // recordStop publishes a task that failed while the process was still serving.
@@ -200,9 +240,11 @@ func taskFailureError(recorded *taskFailure) error {
 // cancellation once.
 func (s *Supervisor) Shutdown(ctx context.Context) error {
 	s.stopOnce.Do(func() {
-		// Marked before the cancel, so a task that ends because of it is not
-		// recorded as a failure readiness has to report.
+		// Serializing this store with Go makes every accepted group.Go happen
+		// before group.Wait and rejects registration after the join begins.
+		s.lifecycleMu.Lock()
 		s.stopping.Store(true)
+		s.lifecycleMu.Unlock()
 		s.cancel()
 
 		joined := make(chan error, 1)

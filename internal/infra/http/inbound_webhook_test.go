@@ -26,13 +26,13 @@ type recordingReceiver struct {
 	mu      sync.Mutex
 	calls   int
 	bodies  [][]byte
-	result  inboundwebhook.Result
+	outcome inboundwebhook.Outcome
 	err     error
 	block   chan struct{}
 	started chan struct{}
 }
 
-func (r *recordingReceiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery) (inboundwebhook.Result, error) {
+func (r *recordingReceiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery) (inboundwebhook.Outcome, error) {
 	r.mu.Lock()
 	r.calls++
 	r.bodies = append(r.bodies, append([]byte(nil), delivery.Body...))
@@ -45,10 +45,10 @@ func (r *recordingReceiver) Receive(ctx context.Context, delivery inboundwebhook
 		select {
 		case <-block:
 		case <-ctx.Done():
-			return inboundwebhook.Result{}, fmt.Errorf("inbound webhook receive: %w", ctx.Err())
+			return "", fmt.Errorf("inbound webhook receive: %w", ctx.Err())
 		}
 	}
-	return r.result, r.err
+	return r.outcome, r.err
 }
 
 func inboundRouter(t *testing.T, receiver inboundwebhook.Receiver, cfg RouterConfig) http.Handler {
@@ -71,7 +71,7 @@ func inboundRequest(body string) *http.Request {
 func TestInboundWebhookRawDispatch(t *testing.T) {
 	t.Parallel()
 
-	receiver := &recordingReceiver{result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeAccepted}}
+	receiver := &recordingReceiver{outcome: inboundwebhook.OutcomeAccepted}
 	handler := inboundRouter(t, receiver, RouterConfig{})
 	whitespace := `{ "hello" : "world" }`
 	invalid := `{`
@@ -97,7 +97,7 @@ func TestInboundWebhookRawDispatch(t *testing.T) {
 func TestInboundWebhookRequestValidation(t *testing.T) {
 	t.Parallel()
 
-	receiver := &recordingReceiver{result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeAccepted}}
+	receiver := &recordingReceiver{outcome: inboundwebhook.OutcomeAccepted}
 	handler := inboundRouter(t, receiver, RouterConfig{})
 	cases := []struct {
 		name    string
@@ -134,7 +134,7 @@ func TestInboundWebhookRequestValidation(t *testing.T) {
 	}
 	receiver.mu.Unlock()
 
-	unknown := &recordingReceiver{result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeUnknownEndpoint}}
+	unknown := &recordingReceiver{outcome: inboundwebhook.OutcomeUnknownEndpoint}
 	unknownHandler := inboundRouter(t, unknown, RouterConfig{})
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/webhooks/missing", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -154,7 +154,7 @@ func TestInboundWebhookRequestValidation(t *testing.T) {
 func TestInboundWebhookAdmissionBeforeDurableWork(t *testing.T) {
 	t.Parallel()
 
-	receiver := &recordingReceiver{result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeAccepted}}
+	receiver := &recordingReceiver{outcome: inboundwebhook.OutcomeAccepted}
 	limit := inboundRouter(t, receiver, RouterConfig{MaxBodyBytes: 8})
 	exact := httptest.NewRecorder()
 	limit.ServeHTTP(exact, inboundRequest("12345678"))
@@ -181,7 +181,7 @@ func TestInboundWebhookAdmissionBeforeDurableWork(t *testing.T) {
 	}
 
 	blocked := &recordingReceiver{
-		result:  inboundwebhook.Result{Outcome: inboundwebhook.OutcomeAccepted},
+		outcome: inboundwebhook.OutcomeAccepted,
 		block:   make(chan struct{}),
 		started: make(chan struct{}),
 	}
@@ -208,7 +208,7 @@ func TestInboundWebhookAdmissionBeforeDurableWork(t *testing.T) {
 	releaseBlocked()
 	waittest.ReceiveSignal(t, firstDone, 2*time.Second, "admitted webhook request to return")
 
-	rateReceiver := &recordingReceiver{result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeAccepted}}
+	rateReceiver := &recordingReceiver{outcome: inboundwebhook.OutcomeAccepted}
 	limited := inboundRouter(t, rateReceiver, RouterConfig{
 		RateLimit:    rejectAllLimiter{},
 		RateLimitKey: func(*http.Request) string { return "caller" },
@@ -236,24 +236,24 @@ func TestInboundWebhookResponseContract(t *testing.T) {
 
 	cases := []struct {
 		name       string
-		result     inboundwebhook.Result
+		outcome    inboundwebhook.Outcome
 		err        error
 		wantStatus int
 		wantRetry  bool
 	}{
-		{name: "accepted", result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeAccepted}, wantStatus: http.StatusNoContent},
-		{name: "duplicate", result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeDuplicate}, wantStatus: http.StatusNoContent},
-		{name: "rejected", result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeRejected}, wantStatus: http.StatusBadRequest},
-		{name: "unknown", result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeUnknownEndpoint}, wantStatus: http.StatusNotFound},
-		{name: "conflict", result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeConflict}, wantStatus: http.StatusConflict},
-		{name: "unavailable", result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeUnavailable}, wantStatus: http.StatusServiceUnavailable, wantRetry: true},
+		{name: "accepted", outcome: inboundwebhook.OutcomeAccepted, wantStatus: http.StatusNoContent},
+		{name: "duplicate", outcome: inboundwebhook.OutcomeDuplicate, wantStatus: http.StatusNoContent},
+		{name: "rejected", outcome: inboundwebhook.OutcomeRejected, wantStatus: http.StatusBadRequest},
+		{name: "unknown", outcome: inboundwebhook.OutcomeUnknownEndpoint, wantStatus: http.StatusNotFound},
+		{name: "conflict", outcome: inboundwebhook.OutcomeConflict, wantStatus: http.StatusConflict},
+		{name: "unavailable", outcome: inboundwebhook.OutcomeUnavailable, wantStatus: http.StatusServiceUnavailable, wantRetry: true},
 		{name: "unavailable err", err: inboundwebhook.ErrUnavailable, wantStatus: http.StatusServiceUnavailable, wantRetry: true},
 		{name: "unexpected", err: errors.New("sql canary"), wantStatus: http.StatusInternalServerError},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			handler := inboundRouter(t, &recordingReceiver{result: tc.result, err: tc.err}, RouterConfig{})
+			handler := inboundRouter(t, &recordingReceiver{outcome: tc.outcome, err: tc.err}, RouterConfig{})
 			resp := httptest.NewRecorder()
 			handler.ServeHTTP(resp, inboundRequest(`{}`))
 			if resp.Code != tc.wantStatus {

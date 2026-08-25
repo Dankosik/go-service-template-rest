@@ -17,7 +17,7 @@ func TestInboundWebhookTypedBindings(t *testing.T) {
 		Hello string `json:"hello"`
 	}
 	raw := json.RawMessage(`{ "hello" : "world" }`)
-	reg := NewRegistry()
+	reg := new(Registry)
 	var seen []byte
 	var handled payload
 	if err := Bind(reg, "orders", func(body json.RawMessage) (payload, error) {
@@ -82,6 +82,15 @@ func TestInboundWebhookTypedBindings(t *testing.T) {
 	}
 	if err := reg.Dispatch(context.Background(), VerifiedDelivery{EndpointID: "orders", Body: json.RawMessage(`not-json`)}); !errors.Is(err, ErrDecodeRejected) {
 		t.Fatalf("invalid JSON error = %v", err)
+	}
+	if err := Bind(reg, "payments", func(json.RawMessage) (payload, error) { return payload{}, nil }, func(context.Context, VerifiedDelivery, payload) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.RequireExact([]string{"orders", "payments"}); err != nil {
+		t.Fatalf("exact bindings error = %v", err)
+	}
+	if err := reg.RequireExact([]string{"orders", "orders"}); !errors.Is(err, ErrInvalidBinding) {
+		t.Fatalf("duplicate configured binding error = %v", err)
 	}
 }
 

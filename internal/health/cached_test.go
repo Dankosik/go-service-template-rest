@@ -115,6 +115,24 @@ func TestCachedReportsFirstFailureImmediately(t *testing.T) {
 	}
 }
 
+func TestCachedReportsNewestFailureWhileAlreadyUnhealthy(t *testing.T) {
+	t.Parallel()
+
+	firstErr := errors.New("first failure")
+	secondErr := errors.New("second failure")
+	probe := &countingProbe{name: "db"}
+	probe.err.Store(&firstErr)
+	svc := New(probe)
+
+	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	probe.err.Store(&secondErr)
+	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+
+	if err := svc.Cached(); !errors.Is(err, secondErr) {
+		t.Fatalf("Cached() error = %v, want newest wrapped %v", err, secondErr)
+	}
+}
+
 func TestCachedRecoversAfterHealthyRefresh(t *testing.T) {
 	t.Parallel()
 
