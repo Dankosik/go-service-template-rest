@@ -101,7 +101,7 @@ func testJWKSet(t *testing.T, key *rsa.PublicKey, keyID, use string) []byte {
 		"keys": []map[string]any{{
 			"kty": "RSA",
 			"use": use,
-			"alg": AllowedAlgorithm,
+			"alg": allowedAlgorithm,
 			"kid": keyID,
 			"n":   base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
 			"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes()),
@@ -115,7 +115,7 @@ func testJWKSet(t *testing.T, key *rsa.PublicKey, keyID, use string) []byte {
 
 func loadTestRSAKey(t *testing.T, name string) *rsa.PrivateKey {
 	t.Helper()
-	encoded, err := os.ReadFile("testdata/" + name)
+	encoded, err := os.ReadFile("testdata/" + name) //nolint:gosec // Callers pass code-owned test fixture names.
 	if err != nil {
 		t.Fatalf("read test key: %v", err)
 	}

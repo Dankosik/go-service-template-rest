@@ -63,7 +63,7 @@ func newJWKSClient(jwksURI string) (*http.Client, func(), error) {
 	}
 	client := &http.Client{
 		Transport: jwksRoundTripper{client: bounded},
-		Timeout:   ProviderTimeout,
+		Timeout:   providerTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -75,6 +75,8 @@ type jwksRoundTripper struct {
 	client requestClient
 }
 
+var _ http.RoundTripper = jwksRoundTripper{}
+
 func (t jwksRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	response, err := t.client.Do(request)
 	if err != nil {
@@ -83,12 +85,12 @@ func (t jwksRoundTripper) RoundTrip(request *http.Request) (*http.Response, erro
 	if response == nil || response.Body == nil {
 		return nil, errors.New("JWKS provider returned an empty response")
 	}
-	body, readErr := io.ReadAll(io.LimitReader(response.Body, MaxProviderBody+1))
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, maxProviderBody+1))
 	closeErr := response.Body.Close()
 	if readErr != nil || closeErr != nil {
 		return nil, errors.New("read JWKS provider response")
 	}
-	if len(body) > MaxProviderBody {
+	if len(body) > maxProviderBody {
 		return nil, errors.New("JWKS provider response is too large")
 	}
 	response.Body = io.NopCloser(bytes.NewReader(body))
@@ -101,7 +103,7 @@ type requestClient interface {
 }
 
 func fetchDocument(ctx context.Context, client requestClient, target string) ([]byte, error) {
-	requestCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
+	requestCtx, cancel := context.WithTimeout(ctx, providerTimeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, target, http.NoBody)
 	if err != nil {
@@ -119,14 +121,14 @@ func fetchDocument(ctx context.Context, client requestClient, target string) ([]
 	if response.StatusCode != http.StatusOK {
 		return nil, errors.New("provider returned an unsuccessful status")
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, MaxProviderBody+1))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxProviderBody+1))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, fmt.Errorf("provider response canceled: %w", ctxErr)
 		}
 		return nil, errors.New("provider response failed")
 	}
-	if len(body) > MaxProviderBody {
+	if len(body) > maxProviderBody {
 		return nil, errors.New("provider response is too large")
 	}
 	return body, nil

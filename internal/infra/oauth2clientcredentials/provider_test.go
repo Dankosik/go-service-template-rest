@@ -13,6 +13,12 @@ import (
 	"golang.org/x/oauth2"
 )
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
 func TestProviderDelegatesParsingAndPublishesOnlySafeBearerState(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		clientID, clientSecret, ok := request.BasicAuth()
@@ -71,7 +77,7 @@ func TestProviderErrorsAndUnusableTokensAreOpaque(t *testing.T) {
 	for name, token := range map[string]*oauth2.Token{
 		"missing expiry": {AccessToken: "opaque", TokenType: "Bearer"},
 		"missing type":   {AccessToken: "opaque", Expiry: time.Now().Add(time.Hour)},
-		"header newline": {AccessToken: "opaque\nleak", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour)},
+		"header newline": {AccessToken: "opaque\nleak", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour)}, //nolint:gosec // Rejected test fixture.
 		"expires soon":   {AccessToken: "opaque", TokenType: "Bearer", Expiry: time.Now().Add(defaultEarlyExpiry / 2)},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -79,5 +85,29 @@ func TestProviderErrorsAndUnusableTokensAreOpaque(t *testing.T) {
 				t.Fatalf("sanitizeToken() error = %v, want ErrUnavailable", err)
 			}
 		})
+	}
+}
+
+func TestProviderDoesNotFollowRedirect(t *testing.T) {
+	var calls int
+	tokenHTTP := newNoRedirectHTTPClient(roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{
+			StatusCode: http.StatusTemporaryRedirect,
+			Header:     http.Header{"Location": []string{"/redirected"}},
+			Body:       http.NoBody,
+			Request:    request,
+		}, nil
+	}))
+	client := newClient(newProviderAcquirer(Config{ //nolint:gosec // Obvious local test fixture, not a live credential.
+		TokenURL: "https://auth.example.com/token", ClientID: "client", ClientSecret: "secret",
+	}, tokenHTTP), nil)
+	t.Cleanup(client.Close)
+
+	if _, err := (clientTokenSource{client: client}).Token(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Token() error = %v, want ErrUnavailable", err)
+	}
+	if calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", calls)
 	}
 }

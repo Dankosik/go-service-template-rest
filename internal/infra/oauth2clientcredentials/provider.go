@@ -19,6 +19,15 @@ func (t doerRoundTripper) RoundTrip(request *http.Request) (*http.Response, erro
 	return t.client.Do(request) //nolint:wrapcheck // The fixed-target client owns the safe public error.
 }
 
+func newNoRedirectHTTPClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
 func newTokenHTTPClient(cfg Config) (*httpclient.Client, error) {
 	client, err := httpclient.NewExternalHTTPS(cfg.TokenURL)
 	if err != nil {
@@ -28,7 +37,7 @@ func newTokenHTTPClient(cfg Config) (*httpclient.Client, error) {
 }
 
 func newAcquirer(cfg Config, bounded *httpclient.Client) acquireToken {
-	return newProviderAcquirer(cfg, &http.Client{Transport: doerRoundTripper{client: bounded}})
+	return newProviderAcquirer(cfg, newNoRedirectHTTPClient(doerRoundTripper{client: bounded}))
 }
 
 func newProviderAcquirer(cfg Config, tokenHTTP *http.Client) acquireToken {

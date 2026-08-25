@@ -20,7 +20,10 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-const expiringBidiMethod = "/bearerauthn.test.Expiry/Block"
+const (
+	expiringBidiMethod = "/bearerauthn.test.Expiry/Block"
+	grpcTestIssuer     = "https://issuer.example.com"
+)
 
 func TestGRPCAuthenticationErrorsStayPrivate(t *testing.T) {
 	t.Parallel()
@@ -52,7 +55,7 @@ func TestProtectedStreamExpiry(t *testing.T) {
 		t.Parallel()
 		runtime := newTestRuntime(t, &fakeVerifier{
 			result: Result{
-				Principal: reqctx.Principal{Subject: "subject-1"},
+				Principal: reqctx.Principal{Issuer: grpcTestIssuer, Subject: "subject-1"},
 				ExpiresAt: expiryBeforeCaller,
 			},
 		})
@@ -81,7 +84,7 @@ func TestProtectedStreamExpiry(t *testing.T) {
 		t.Parallel()
 		runtime := newTestRuntime(t, &fakeVerifier{
 			result: Result{
-				Principal: reqctx.Principal{Subject: "subject-1"},
+				Principal: reqctx.Principal{Issuer: grpcTestIssuer, Subject: "subject-1"},
 				ExpiresAt: callerBeforeExpiry,
 			},
 		})
@@ -105,7 +108,7 @@ func TestProtectedStreamExpiry(t *testing.T) {
 		t.Parallel()
 		runtime := newTestRuntime(t, &fakeVerifier{
 			result: Result{
-				Principal: reqctx.Principal{Subject: "subject-1"},
+				Principal: reqctx.Principal{Issuer: grpcTestIssuer, Subject: "subject-1"},
 				ExpiresAt: now.Add(time.Hour),
 			},
 		})
@@ -128,7 +131,7 @@ func TestProtectedStreamExpiry(t *testing.T) {
 		t.Parallel()
 		runtime := newTestRuntime(t, &fakeVerifier{
 			result: Result{
-				Principal: reqctx.Principal{Subject: "subject-1"},
+				Principal: reqctx.Principal{Issuer: grpcTestIssuer, Subject: "subject-1"},
 				ExpiresAt: time.Now().Add(-time.Hour),
 			},
 		})
@@ -183,7 +186,7 @@ func TestProtectedStreamExpiryUnblocksMessageIO(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				runtime := newTestRuntime(t, &fakeVerifier{
 					result: Result{
-						Principal: reqctx.Principal{Subject: "subject-1"},
+						Principal: reqctx.Principal{Issuer: grpcTestIssuer, Subject: "subject-1"},
 						ExpiresAt: time.Now().Add(time.Second - ClockSkew),
 					},
 				})
@@ -246,7 +249,7 @@ func TestProtectedStreamExpiryReleasesRealTransportIO(t *testing.T) {
 	}
 	connection := grpctest.ServeBufconn(t, server)
 	verifier.result = Result{
-		Principal: reqctx.Principal{Subject: "subject-1"},
+		Principal: reqctx.Principal{Issuer: grpcTestIssuer, Subject: "subject-1"},
 		ExpiresAt: time.Now().Add(500*time.Millisecond - ClockSkew),
 	}
 	credential := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("authorization", "Bearer token"))

@@ -76,7 +76,8 @@ func (r *Runtime) verifyCredential(ctx context.Context, values []string, carrier
 }
 
 func validResult(result Result) bool {
-	return !result.ExpiresAt.IsZero() &&
+	return strings.TrimSpace(result.Principal.Issuer) != "" &&
+		!result.ExpiresAt.IsZero() &&
 		(strings.TrimSpace(result.Principal.Subject) != "" || strings.TrimSpace(result.Principal.ClientID) != "")
 }
 

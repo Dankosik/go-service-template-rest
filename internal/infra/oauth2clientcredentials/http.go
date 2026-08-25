@@ -20,10 +20,10 @@ func (c *Client) HTTP(base *httpclient.Client) (*HTTPClient, error) {
 	if !c.available() || base == nil {
 		return nil, ErrInvalidConfiguration
 	}
-	return &HTTPClient{client: &http.Client{Transport: &oauth2.Transport{
+	return &HTTPClient{client: newNoRedirectHTTPClient(&oauth2.Transport{
 		Source: clientTokenSource{client: c},
 		Base:   doerRoundTripper{client: base},
-	}}}, nil
+	})}, nil
 }
 
 // Do authenticates one request copy with the current valid token.

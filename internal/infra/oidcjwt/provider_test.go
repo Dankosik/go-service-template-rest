@@ -48,7 +48,7 @@ func TestFetchDocumentPreservesCallerCancellationAndRedactsProviderContent(t *te
 	_, err = fetchDocument(t.Context(), requestClientFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", MaxProviderBody+1))),
+			Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", maxProviderBody+1))),
 		}, nil
 	}), "https://issuer.example/document")
 	if err == nil {
@@ -82,7 +82,7 @@ func TestJWKSClientRejectsOversizedDocumentBeforeDecode(t *testing.T) {
 	transport := jwksRoundTripper{client: requestClientFunc(func(*http.Request) (*http.Response, error) {
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", MaxProviderBody+1))),
+			Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", maxProviderBody+1))),
 		}, nil
 	})}
 	response, err := transport.RoundTrip(request)
