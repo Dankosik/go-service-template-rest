@@ -47,12 +47,33 @@ self_test() {
 	output=$(bash "$0" --plan --files internal/failure/failure.go internal/problem/problem.go)
 	test "$(grep -c "make fmt-files-check" <<<"${output}")" -eq 1
 	test "$(grep -c "make lint-changed" <<<"${output}")" -eq 1
-	test "$(grep -c "make test-all" <<<"${output}")" -eq 1
+	grep -q 'make test-package PKG=' <<<"${output}"
+	grep -q './internal/failure' <<<"${output}"
+	grep -q './internal/problem' <<<"${output}"
+	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
+
+	output=$(bash "$0" --plan --files internal/failure/failure_test.go)
+	grep -q "make test-package PKG='./internal/failure'" <<<"${output}"
+	if grep -q './internal/problem' <<<"${output}"; then return 1; fi
+	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
 
 	output=$(bash "$0" --plan --files internal/failure/removed.go)
 	grep -q "make lint-changed PKGS='./internal/failure'" <<<"${output}"
+	grep -q 'make test-package PKG=' <<<"${output}"
+	if grep -q 'removed.go' <<<"${output}" && grep -q 'fmt-files-check' <<<"${output}"; then
+		if grep -q "FILES='internal/failure/removed.go'" <<<"${output}"; then return 1; fi
+	fi
+	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
+
+	output=$(bash "$0" --plan --files Makefile)
+	grep -q 'make verify-check' <<<"${output}"
+	grep -q 'make changed-surfaces-check' <<<"${output}"
+	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
+	if grep -q 'test-integration' <<<"${output}"; then return 1; fi
+
+	output=$(bash "$0" --plan --files go.mod)
 	grep -q 'make test-all' <<<"${output}"
-	if grep -q 'removed.go.*fmt-files-check' <<<"${output}"; then return 1; fi
+	grep -q 'make root-mod-check' <<<"${output}"
 
 	if ALLOW_HEAVY='' bash "$0" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-heavy.$$"; then
 		echo "verify self-test accepted a heavy route without ALLOW_HEAVY=1" >&2
@@ -68,12 +89,9 @@ self_test() {
 	grep -q 'Docker is required' "${TMPDIR:-/tmp}/verify-docker.$$"
 	rm -f "${TMPDIR:-/tmp}/verify-docker.$$"
 
-	if VERIFY_NETWORK_COMMAND=false bash "$0" --files api/openapi/service.yaml >/dev/null 2>"${TMPDIR:-/tmp}/verify-network.$$"; then
-		echo "verify self-test accepted a network route without connectivity" >&2
-		return 1
-	fi
-	grep -q 'network access is required' "${TMPDIR:-/tmp}/verify-network.$$"
-	rm -f "${TMPDIR:-/tmp}/verify-network.$$"
+	output=$(bash "$0" --plan --files api/openapi/service.yaml)
+	grep -q 'make openapi-runtime-contract-check' <<<"${output}"
+	if grep -q 'requires_network=true' <<<"${output}"; then return 1; fi
 }
 
 if [[ ${mode} == self-test ]]; then
@@ -172,43 +190,65 @@ if is_true go_tool_dependencies; then
 	add_command make tools-dependencies-check "tool dependencies changed" "make tools-dependencies-check" cpu false false false
 fi
 
-if grep -q '\.go$' "${files_path}"; then
-	go_dirs=${tmp}/go-dirs
-	go_files=${tmp}/go-files
-	go_packages=${tmp}/go-packages
-	: >"${go_files}"
-	: >"${go_packages}"
-	awk '/\.go$/ { sub("/[^/]+$", ""); if ($0 == "") print "."; else print }' "${files_path}" | LC_ALL=C sort -u >"${go_dirs}"
-	while IFS= read -r file; do
-		[[ -f ${file} ]] || continue
-		is_generated_go "${file}" || printf '%s\n' "${file}" >>"${go_files}"
-	done < <(awk '/\.go$/ { print }' "${files_path}")
-	while IFS= read -r dir; do
-		[[ -n ${dir} ]] || continue
-		if find "${dir}" -maxdepth 1 -type f -name '*.go' -print -quit 2>/dev/null | grep -q .; then
-			if [[ ${dir} == . ]]; then printf '.\n'; else printf './%s\n' "${dir}"; fi
-		fi
-	done <"${go_dirs}" | LC_ALL=C sort -u >"${go_packages}"
-
-	if [[ -s ${go_files} ]]; then
-		files=$(tr '\n' ' ' <"${go_files}")
-		files=${files% }
-		add_command fmt "${files}" "handwritten Go files changed" "make fmt-files-check FILES='${files}'" cpu false false false
+affected_format=''
+affected_lint=''
+affected_tests=''
+affected_fallback=false
+affected_reason=''
+if grep -qE '\.go$|/testdata/' "${files_path}" || is_true go_root_dependencies || is_true go_testdata; then
+	affected_path=${tmp}/affected
+	bash ./scripts/ci/affected-go-packages.sh <"${files_path}" >"${affected_path}"
+	while IFS='=' read -r name value; do
+		case "${name}" in
+		format_files) affected_format=${value} ;;
+		lint_packages) affected_lint=${value} ;;
+		affected_test_packages) affected_tests=${value} ;;
+		fallback) affected_fallback=${value} ;;
+		fallback_reason) affected_reason=${value} ;;
+		esac
+	done <"${affected_path}"
+	if [[ -n ${affected_format} ]]; then
+		add_command fmt "${affected_format}" "handwritten Go files changed" "make fmt-files-check FILES='${affected_format}'" cpu false false false
 	fi
-	if [[ -s ${go_packages} ]] && ! is_true go_lint_config; then
-		packages=$(tr '\n' ' ' <"${go_packages}")
-		packages=${packages% }
-		add_command lint "${packages}" "Go package owners changed" "make lint-changed PKGS='${packages}'" cpu false false false
+	if [[ -n ${affected_lint} ]] && ! is_true go_lint_config; then
+		add_command lint "${affected_lint}" "Go package owners changed" "make lint-changed PKGS='${affected_lint}'" cpu false false false
 	fi
 	if [[ ${root_dependencies} != true ]]; then
-		add_command make test-all "Go changes can break reverse dependents" "make test-all" cpu false false false
+		if [[ ${affected_fallback} == true || ${affected_tests} == ./... ]]; then
+			reason="Go changes require the module test oracle"
+			[[ -n ${affected_reason} ]] && reason="${reason} (${affected_reason})"
+			add_command make test-all "${reason}" "make test-all" cpu false false false
+		elif [[ -n ${affected_tests} ]]; then
+			add_command test "${affected_tests}" "affected Go packages changed" "make test-package PKG='${affected_tests}'" cpu false false false
+		fi
 	fi
 fi
 
-if is_true go_testdata; then add_command make test-all "Go test fixtures changed" "make test-all" cpu false false false; fi
+tests_cover_openapi_runtime() {
+	if [[ ${root_dependencies} == true || ${affected_fallback} == true || ${affected_tests} == ./... ]]; then
+		return 0
+	fi
+	case " ${affected_tests} " in
+	*" ./internal/openapi "*)
+		case " ${affected_tests} " in
+		*" ./internal/infra/http "*) return 0 ;;
+		esac
+		;;
+	esac
+	return 1
+}
 
 if is_true go_lint_config; then add_command make lint-all "the complete lint configuration changed" "make lint-all" cpu false false false; fi
-if is_true openapi; then add_command make check-openapi "OpenAPI source or generated output changed" "make check-openapi" cpu false false true; fi
+if is_true openapi; then
+	add_command make openapi-drift-check "OpenAPI source or generated output changed" "make openapi-drift-check" cpu false false false
+	add_command make openapi-lint "OpenAPI source or generated output changed" "make openapi-lint" cpu false false false
+	add_command make openapi-validate "OpenAPI source or generated output changed" "make openapi-validate" cpu false false false
+	if tests_cover_openapi_runtime; then
+		add_na openapi "Go tests already cover the OpenAPI runtime packages"
+	else
+		add_command make openapi-runtime-contract-check "OpenAPI runtime packages are not in the selected Go tests" "make openapi-runtime-contract-check" cpu false false false
+	fi
+fi
 if is_true protobuf; then
 	if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q . || [[ -f examples/grpc-reference-service/buf.yaml ]]; then
 		add_command make check-proto "Protobuf source or generated output changed" "make check-proto" cpu false false false
@@ -222,6 +262,13 @@ fi
 if is_true module_initializer; then add_command make template-init-check "module initializer contract changed" "make template-init-check" cpu true false false; fi
 if is_true integration_initializer; then add_command integration-init row_e1_http "integration initializer changed; use one representative row locally" "make integration-init-check INTEGRATION_INIT_ROWS=row_e1_http" cpu false false false; fi
 if is_true agent_instructions; then add_command make check-instructions "agent instructions or their carriers changed" "make check-instructions" cpu false false false; fi
+if is_true validation_system; then
+	add_command make verify-check "validation routing changed" "make verify-check" cpu false false false
+	add_command make changed-surfaces-check "validation routing changed" "make changed-surfaces-check" cpu false false false
+	add_command make validation-lock-self-test "validation routing changed" "make validation-lock-self-test" cpu false false false
+	add_command make affected-go-packages-check "validation routing changed" "make affected-go-packages-check" cpu false false false
+	add_command make proof-receipt-check "validation routing changed" "make proof-receipt-check" cpu false false false
+fi
 if is_true shell; then
 	shell_files=$(awk '/\.sh$/ { print }' "${files_path}" | while IFS= read -r file; do [[ -f ${file} ]] && printf '%s ' "${file}"; done)
 	shell_files=${shell_files% }
@@ -252,7 +299,7 @@ if is_true migrations; then add_command make migration-check "migration history 
 if [[ ${needs_image} == true ]]; then add_command image-build "${VERIFY_RUNTIME_IMAGE:-service:verify}" "one image is shared by selected runtime gates" "make runtime-image-build RUNTIME_IMAGE=${VERIFY_RUNTIME_IMAGE:-service:verify}" docker true true false; fi
 if is_true runtime_image && ! is_true migrations; then add_command image-check "${VERIFY_RUNTIME_IMAGE:-service:verify}" "runtime image lifecycle changed" "make runtime-image-check RUNTIME_IMAGE=${VERIFY_RUNTIME_IMAGE:-service:verify}" docker true true false; fi
 if is_true migrations; then add_command migration-validate "${VERIFY_RUNTIME_IMAGE:-service:verify}" "migrations require exact-image rehearsal" "make migration-validate RUNTIME_IMAGE=${VERIFY_RUNTIME_IMAGE:-service:verify}" docker true true false; fi
-if is_true image_security; then add_command image-security "${VERIFY_RUNTIME_IMAGE:-service:verify}" "runtime image inputs changed" "make container-security CONTAINER_IMAGE=${VERIFY_RUNTIME_IMAGE:-service:verify}" docker true true true; fi
+if is_true image_security; then add_command image-security "${VERIFY_RUNTIME_IMAGE:-service:verify}" "runtime image inputs changed" "make container-security CONTAINER_IMAGE=${VERIFY_RUNTIME_IMAGE:-service:verify}" docker true true false; fi
 
 print_plan() {
 	echo "files:"
@@ -290,7 +337,7 @@ blocked() {
 
 if [[ ${requires_heavy} == true && ${ALLOW_HEAVY:-} != 1 && ${CI:-} != true ]]; then blocked "set ALLOW_HEAVY=1 before verification"; fi
 for binary in git make shasum; do command -v "${binary}" >/dev/null 2>&1 || blocked "required binary is unavailable: ${binary}"; done
-if grep -q '\.go$' "${files_path}" || is_true go_root_dependencies || is_true go_tool_dependencies || is_true go_lint_config; then
+if grep -q '\.go$' "${files_path}" || is_true go_root_dependencies || is_true go_tool_dependencies || is_true go_lint_config || is_true validation_system; then
 	command -v go >/dev/null 2>&1 || blocked "required binary is unavailable: go"
 fi
 if is_true openapi; then command -v npx >/dev/null 2>&1 || blocked "required binary is unavailable: npx"; fi
@@ -298,11 +345,6 @@ docker_command=${VERIFY_DOCKER_COMMAND:-docker}
 if [[ ${requires_docker} == true ]]; then
 	command -v "${docker_command}" >/dev/null 2>&1 || blocked "Docker is required"
 	"${docker_command}" info >/dev/null 2>&1 || blocked "Docker is required and the daemon is unavailable"
-fi
-if [[ ${requires_network} == true ]]; then
-	network_command=${VERIFY_NETWORK_COMMAND:-curl}
-	command -v "${network_command}" >/dev/null 2>&1 || blocked "network access is required"
-	"${network_command}" -fsSIL --max-time 5 "${VERIFY_NETWORK_CHECK_URL:-https://github.com}" >/dev/null 2>&1 || blocked "network access is required"
 fi
 
 fingerprint_candidate() {
@@ -359,6 +401,7 @@ execute() {
 		make) make "${argument}" ;;
 		fmt) make fmt-files-check FILES="${argument}" ;;
 		lint) make lint-changed PKGS="${argument}" ;;
+		test) make test-package PKG="${argument}" ;;
 		shell) make shellcheck SHELL_FILES="${argument}" ;;
 		integration-init) make integration-init-check INTEGRATION_INIT_ROWS="${argument}" ;;
 		integration) REQUIRE_DOCKER=1 make "${argument}" ;;

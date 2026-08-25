@@ -23,14 +23,14 @@ with `ALLOW_HEAVY=1 make template-init-check`.
 Use the smallest command that proves the claim:
 
 ```bash
-go test -vet=off ./internal/<package>
-make unit-check PKG=./internal/<package> FILES='internal/<package>/*.go'
-make check
+make prove PKG=./internal/<package> FILES='internal/<package>/*.go'
+make plan
+make verify
 ```
 
-`make check` is the one full-repository owner. Do not also run `fmt-check`,
-`lint-all`, or `test-all` beside it. `make test` and `make lint` require `PKG`
-and do not default to `./...`.
+`ALLOW_FULL=1 make check` is the one full-repository owner. Do not also run
+`fmt-check`, `lint-all`, or `test-all` beside it. `make test` and `make lint`
+require `PKG` and do not default to `./...`.
 
 Heavy commands remain available with an explicit grant:
 
@@ -50,9 +50,8 @@ ALLOW_HEAVY=1 make secret-scan-history
 Docker-backed focused commands require a reachable Docker daemon. Do not
 describe a host-only result as container or migration evidence.
 
-`make mod-tidy-check` is the fast manifest-drift check used inside generated
-template fixtures. `make mod-verify` verifies downloaded module content;
-`make mod-check` runs both and remains the normal repository gate.
+`make root-mod-check` owns the service module. `make tools-mod-check` owns the
+tool module. `make mod-check` runs both and remains the explicit combined gate.
 
 Use `make secret-scan` for local and pull-request changes. Main and release use
 `make secret-scan-history`; do not replace the historical gate with

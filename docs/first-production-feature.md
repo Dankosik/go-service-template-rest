@@ -362,12 +362,11 @@ only where they answer an operational question.
 Use focused tests while iterating, then run:
 
 ```bash
-go test ./internal/<feature> ./internal/infra/http
-make unit-check PKG=./internal/<feature> FILES='internal/<feature>/*.go'
+make prove PKG=./internal/<feature> FILES='internal/<feature>/*.go'
 ```
 
 On the integrated candidate review `make plan`, then run `make verify` once.
-Use `make check` only when the intended claim spans the full repository.
+Use `ALLOW_FULL=1 make check` only when the intended claim spans the full repository.
 
 Run the matching container, PostgreSQL, migration, or deployment leaf when the
 change touches it. Before merge, inspect the generated diff and

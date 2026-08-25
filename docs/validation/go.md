@@ -10,21 +10,24 @@ press `a` only when an explicit full run is useful.
 The Acceptance-Unit Lead runs one package aggregate:
 
 ```bash
-make unit-check PKG=./internal/<package> FILES='internal/<package>/a.go internal/<package>/a_test.go'
+make prove PKG=./internal/<package> FILES='internal/<package>/a.go internal/<package>/a_test.go'
 ```
 
-`PKG` and `FILES` are required. There is no `./...` default.
+`PKG` and `FILES` are required. There is no `./...` default. `make prove` is
+the lock-wrapped `unit-check` and records focused receipts that `make verify`
+reuses while the package files and toolchain stay unchanged.
 
-The integrated delivery owner runs `make verify` once. It selects one changed-file
-format check, one batch `lint-changed`, one cached `test-all`, and any other
-applicable surface owners. Deleted Go files still select the surviving package
-for lint and always select `test-all`. Use
-`make plan` to inspect that selection first. `make check` remains the explicit
-full formatting, `lint-all`, `test-all`, module-tidy, and generated-drift gate;
+The integrated delivery owner runs `make verify` once. It formats changed
+handwritten files, lints changed packages, and tests the module-local reverse
+importer closure instead of defaulting to `test-all`. `test-all` remains the
+fallback when `go.mod`/`go.sum` change, the package graph cannot be built, or
+the reverse closure is most of the module. Use `make plan` to inspect that
+selection first. `ALLOW_FULL=1 make check` remains the explicit full
+formatting, `lint-all`, `test-all`, root-module tidy, and generated-drift gate;
 do not run its leaves beside it.
 
 `make lint-changed` accepts one `PKG` or a space-separated `PKGS` batch;
-`make test` requires one `PKG` and remains package-scoped.
+`make test-package` requires `PKG` and remains package-scoped.
 `lint-pr` is the PR correctness, architecture, resource, error, context, and
 interface set. Full-module leaves are `lint-all` and `test-all`. `make lint-deep`, `make test-race`,
 `make test-integration`, and `make audit-full-manual` require `ALLOW_HEAVY=1`

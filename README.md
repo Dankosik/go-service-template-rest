@@ -57,7 +57,7 @@ cd my-service
 make template-init \
   MODULE=github.com/your-org/my-service \
   CODEOWNER=@your-org/backend
-make check
+ALLOW_FULL=1 make check
 make run
 ```
 
@@ -121,9 +121,9 @@ flowchart LR
    requests and responses into handwritten handlers.
 3. `internal/<feature>` owns business behavior. Transport, database, and
    provider details stay under `internal/infra`.
-4. Package tests give fast feedback. `make unit-check` validates one
-   package-sized change; `make check` validates the whole repository before
-   delivery.
+4. Package tests give fast feedback. `make prove` validates one
+   package-sized change; `make verify` runs the surface-aware final route;
+   `ALLOW_FULL=1 make check` validates the whole repository before delivery.
 5. CI selects its checks from the changed files. Image publication is opt-in
    and happens only after the matching checks pass.
 
@@ -169,10 +169,9 @@ contract; see the [integration initializer](docs/external-integration-initialize
 | Command | Use it for |
 | --- | --- |
 | `make run` | Start the HTTP service locally |
-| `go test -vet=off ./internal/<package>` | Fast feedback for one changed package |
-| `make unit-check PKG=./pkg FILES='...'` | Format, test, and lint one package-sized change |
+| `make prove PKG=./pkg FILES='...'` | Format, test, and lint one package-sized change |
 | `make plan` / `make verify` | Explain and run the minimal integrated surface plan |
-| `make check` | Run the full-repository aggregate once before delivery |
+| `ALLOW_FULL=1 make check` | Run the full-repository aggregate once before delivery |
 | `make test-integration` | Run the container-backed integration tests |
 
 Use the narrowest check that can catch a problem in the change. The full command

@@ -9,8 +9,9 @@ check that did not exercise its claimed surface.
 
 - `ci.yml` classifies the exact diff once. Its quality, security, secret,
   delivery, and integration leaves are conditional; runtime Go, root/tool
-  dependencies, lint config, initializers, database, messaging, process, race,
-  migrations, runtime image, and image security remain distinct. One `required`
+  dependencies, lint config, initializers, validation routing, database, messaging, process, race,
+  migrations, runtime image, and image security remain distinct. A root
+  Makefile change is validation routing, not every surface. One `required`
   job is always reported and rejects any failed or cancelled applicable leaf.
 - A skipped leaf is not evidence for that surface. The classifier makes the
   skip explicit. Pull requests, merge groups, and main pushes use their exact

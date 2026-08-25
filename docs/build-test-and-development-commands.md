@@ -71,9 +71,7 @@ Use active gopls diagnostics first, then format and test only the changed files
 and package:
 
 ```bash
-go tool -modfile=tools/go.mod goimports -l path/to/changed.go
-go tool -modfile=tools/go.mod gofumpt -l path/to/changed.go
-go test -vet=off ./path/to/changed/package
+make prove PKG=./path/to/changed/package FILES='path/to/changed.go'
 make lint-fast PKG=./path/to/changed/package
 ```
 
@@ -84,16 +82,10 @@ package containing the saved file; press `a` for an explicit full run.
 
 ## Ordinary Go leaves
 
-Edit-loop proof is a focused package test, not a Makefile aggregate:
+Edit-loop and acceptance-unit proof is the lock-wrapped package aggregate:
 
 ```bash
-go test -vet=off ./internal/<package>
-```
-
-One acceptance-unit aggregate, with required package and file lists:
-
-```bash
-make unit-check \
+make prove \
   PKG=./internal/<package> \
   FILES="internal/<package>/a.go internal/<package>/a_test.go"
 ```
@@ -117,10 +109,10 @@ a candidate change during execution invalidates the run.
 The explicit full-repository owner remains available when the claim spans it:
 
 ```bash
-make check
+ALLOW_FULL=1 make check
 ```
 
-`make check` runs formatting, `lint-all`, `test-all`, module tidy, and
+`make check` runs formatting, `lint-all`, `test-all`, root-module tidy, and
 generated-contract drift. Do not append it to ordinary completion or run
 `fmt-check`, `lint-all`, or `test-all` beside it.
 

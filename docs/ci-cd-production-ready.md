@@ -12,14 +12,16 @@ make verify
 Use the full deterministic owner only for a full-repository claim:
 
 ```bash
-make check
+ALLOW_FULL=1 make check
 ```
 
-`make verify` selects a minimal non-overlapping set and records candidate,
-scope, command plan, environment, result, and duration under the worktree's Git
-metadata. `make check` remains the full-repository owner: format, `lint-all`,
-`test-all`, module tidy, and generated-contract drift. Package iteration uses
-`go test -vet=off ./internal/<package>` or `make unit-check`. Heavy leaves
+`make verify` selects a minimal non-overlapping set: affected Go packages
+instead of a default `test-all`, plus the exact contract owners that changed.
+It records candidate, scope, command plan, environment, result, and duration
+under Git-common metadata and reuses focused `prove`/`unit-check` receipts
+while those leaves stay unchanged. `ALLOW_FULL=1 make check` remains the
+full-repository owner: format, `lint-all`, `test-all`, root-module tidy, and
+generated-contract drift. Package iteration uses `make prove`. Heavy leaves
 (`template-init-check`, `govulncheck`, `gosec`, `audit-full-manual`) require
 `ALLOW_HEAVY=1` or CI.
 
@@ -30,9 +32,11 @@ separate Docker-backed leaves. A host-only result does not prove them.
 
 [ci.yml](../.github/workflows/ci.yml) classifies the exact diff once and starts
 only applicable leaves. Runtime Go, root/tool dependencies, lint config,
-initializers, workflows, dependency automation, performance harness, database,
+initializers, validation routing, workflows, dependency automation, performance harness, database,
 messaging, process, race, migrations, runtime image, and image security are
-separate surfaces.
+separate surfaces. A root `Makefile` change selects the validation-routing
+surface, not every gate. Pull-request Go tests use the reverse-importer
+closure; `test-all` and standalone `gosec` remain the main/nightly oracles.
 Instruction-only quality does not install Go. Gitleaks uses the tools-module
 version through a checksum-pinned binary and range scans pull requests, merge
 groups, and main pushes; tags and manual runs retain full-history proof.
@@ -65,7 +69,8 @@ Tag and manual admission use full history. Every mode consumes the reviewed
 baseline; missing base authority widens only to the explicit full-history gate.
 
 Dependency Review rejects new high-severity dependencies on pull requests.
-`govulncheck` and `gosec` run on runtime Go pull requests. Go CodeQL is the
+`govulncheck` runs on runtime Go pull requests. `gosec` runs inside `lint-pr`
+on pull requests and as a standalone main/nightly oracle. Go CodeQL is the
 latency-first main, tag, schedule, and manual gate; Actions CodeQL remains
 pull-request scoped when workflow source changes. These tools observe different
 source and dependency paths.

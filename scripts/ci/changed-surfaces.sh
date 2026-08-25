@@ -8,7 +8,7 @@ names=(
 	db_integration messaging_integration process_integration integration_race
 	integration_race_messaging integration_race_outbox integration_race_webhook
 	performance_harness migrations compose_environment runtime_image image_security
-	publication_metadata secret_scanning documentation integration_records no_validation_required
+	publication_metadata secret_scanning documentation integration_records validation_system no_validation_required
 )
 
 reset() {
@@ -179,10 +179,10 @@ classify() {
 			opencode.json) mark agent_instructions ;;
 		esac
 
-		# The root file still composes every public target. Domain-owned mk files can
-		# replace this conservative rule only after the profile initializer owns them.
 		case "${file}" in
-			Makefile) mark "${names[@]}" ;;
+			Makefile|scripts/ci/changed-surfaces.sh|scripts/ci/verify.sh|scripts/ci/validation-lock.sh|scripts/ci/affected-go-packages.sh|scripts/ci/proof-receipt.sh|scripts/ci/measure.sh)
+				mark validation_system
+				;;
 		esac
 		if [[ ${matched} != true ]]; then unclassified_paths+=("${file}"); fi
 	done
@@ -287,11 +287,17 @@ self_test() {
 	assert_case scripts/dev/benchmark.sh \
 		"shell performance_harness" \
 		"go_source db_integration messaging_integration process_integration integration_race runtime_image image_security"
+	assert_case Makefile \
+		"validation_system" \
+		"go_source go_root_dependencies go_tool_dependencies go_lint_config module_initializer db_integration messaging_integration process_integration integration_race runtime_image image_security github_workflows"
 
 	local output name
 	output="$(printf '%s\n' scripts/ci/changed-surfaces.sh | classify)"
 	grep -qx 'shell=true' <<<"${output}"
+	grep -qx 'validation_system=true' <<<"${output}"
 	grep -qx 'classified=true' <<<"${output}"
+	grep -qx 'go_source=false' <<<"${output}"
+	grep -qx 'db_integration=false' <<<"${output}"
 
 	output="$(printf '%s\n' scripts/ci/template-sync-behavior-check.sh | classify)"
 	grep -qx 'agent_instructions=true' <<<"${output}"

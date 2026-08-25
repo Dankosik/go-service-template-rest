@@ -3,6 +3,62 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+if [[ ${1:-} == --select-from-files ]]; then
+	engine=false
+	selected=' '
+	add_selected() {
+		case "${selected}" in
+		*" $1 "*) return ;;
+		esac
+		selected+=" $1 "
+	}
+	while IFS= read -r file; do
+		[[ -n ${file} ]] || continue
+		case "${file}" in
+		scripts/init-module.sh | scripts/ci/init-module-contract-check.sh | scripts/ci/template-init-check.sh | template-owned.paths | template.lock | env/.env.example | env/config/*)
+			engine=true
+			;;
+		scripts/profiles/authn-oidc-introspection* | *oauthintrospection*)
+			add_selected oidc-introspection
+			;;
+		scripts/profiles/authn-oidc-jwt* | *oidcjwt*)
+			add_selected oidc-jwt
+			;;
+		scripts/profiles/database-* | scripts/profiles/*postgres* | *http-idempotency*)
+			add_selected postgres
+			;;
+		scripts/profiles/jobs-* | */postgresjobs/*)
+			add_selected jobs
+			;;
+		scripts/profiles/webhooks-* | */postgreswebhook/*)
+			add_selected webhooks
+			;;
+		scripts/profiles/inbound-* | */inboundwebhook* | */postgresinboundwebhook/*)
+			add_selected inbound-webhooks
+			;;
+		scripts/profiles/outbox-* | */postgresoutbox/*)
+			add_selected outbox
+			;;
+		scripts/profiles/messaging-* | */natsjs/*)
+			add_selected messaging
+			;;
+		scripts/profiles/object-storage* | */infra/s3/*)
+			add_selected object-storage
+			;;
+		scripts/profiles/outbound-auth* | */oauth2clientcredentials/*)
+			add_selected outbound-auth
+			;;
+		esac
+	done
+	if [[ ${engine} == true || ${selected} == ' ' ]]; then
+		printf '%s\n' minimal oidc-jwt postgres outbound-auth
+	else
+		# shellcheck disable=SC2086
+		printf '%s\n' minimal ${selected} | awk 'NF'
+	fi
+	exit 0
+fi
+
 if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	echo "initializer contract is template-only"
 	exit 0
@@ -151,9 +207,13 @@ assert_harness() {
 assert_profile() {
 	local root="$1"
 	local name="$2"
-	local dependencies
+	local dependencies=""
 
-	dependencies="$(cd "${root}" && go list -deps ./cmd/service)"
+	case "${name}" in
+	oidc-jwt | oidc-introspection)
+		dependencies="$(cd "${root}" && go list -deps ./cmd/service)"
+		;;
+	esac
 	case "${name}" in
 	minimal)
 		test ! -d "${root}/internal/infra/postgres"
@@ -250,9 +310,11 @@ verify_profile() {
 		go test -vet=off -run '^$' ./...
 		GOFLAGS='' go mod tidy -diff
 		if [[ "${name}" == "minimal" ]]; then
-			TOOLS_SMOKE_ALL=1 make tools-dependencies-check
-		else
-			GOFLAGS='' go -C tools mod tidy -diff
+			if [[ ${INIT_MODULE_RESOLVE_TOOLS:-} == 1 ]]; then
+				TOOLS_RESOLUTION_ALL=1 make tools-dependencies-check
+			else
+				make tools-mod-check
+			fi
 		fi
 		make openapi-drift-check sqlc-check
 		git add -A
@@ -319,17 +381,29 @@ test -d "${partial_checkout}/scripts/profiles"
 run_init "${partial_checkout}" github.com/acme/service >/dev/null
 assert_identity "${partial_checkout}" github.com/acme/service service core
 
-verify_profile minimal github.com/acme/service service core
-verify_profile oidc-jwt github.com/acme/service service core AUTHN=oidc-jwt GRPC=enabled
-verify_profile oidc-introspection github.com/acme/service service core AUTHN=oidc-introspection GRPC=enabled
-verify_profile postgres github.com/acme/service service core DATABASE=postgres
-verify_profile http-idempotency github.com/acme/service service core DATABASE=postgres HTTP_IDEMPOTENCY=postgres
-verify_profile jobs github.com/acme/service service core DATABASE=postgres JOBS=postgres
-verify_profile webhooks github.com/acme/service service core DATABASE=postgres JOBS=postgres WEBHOOKS=durable
-verify_profile inbound-webhooks github.com/acme/service service core DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks
-verify_profile outbox github.com/acme/service service core DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream
-verify_profile messaging github.com/acme/service service core MESSAGING=nats-jetstream
-verify_profile object-storage github.com/acme/service service core OBJECT_STORAGE=s3
-verify_profile outbound-auth github.com/acme/service/v2 service all GRPC=enabled OUTBOUND_HTTP=bounded OUTBOUND_AUTH=oauth2-client-credentials AGENT_HARNESS=all
+run_selected_profile() {
+	local name=$1
+	shift
+	if [[ -n ${INIT_MODULE_PROFILES:-} ]]; then
+		case " ${INIT_MODULE_PROFILES} " in
+		*" ${name} "*) ;;
+		*) return 0 ;;
+		esac
+	fi
+	verify_profile "${name}" "$@"
+}
+
+run_selected_profile minimal github.com/acme/service service core
+run_selected_profile oidc-jwt github.com/acme/service service core AUTHN=oidc-jwt GRPC=enabled
+run_selected_profile oidc-introspection github.com/acme/service service core AUTHN=oidc-introspection GRPC=enabled
+run_selected_profile postgres github.com/acme/service service core DATABASE=postgres
+run_selected_profile http-idempotency github.com/acme/service service core DATABASE=postgres HTTP_IDEMPOTENCY=postgres
+run_selected_profile jobs github.com/acme/service service core DATABASE=postgres JOBS=postgres
+run_selected_profile webhooks github.com/acme/service service core DATABASE=postgres JOBS=postgres WEBHOOKS=durable
+run_selected_profile inbound-webhooks github.com/acme/service service core DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks
+run_selected_profile outbox github.com/acme/service service core DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream
+run_selected_profile messaging github.com/acme/service service core MESSAGING=nats-jetstream
+run_selected_profile object-storage github.com/acme/service service core OBJECT_STORAGE=s3
+run_selected_profile outbound-auth github.com/acme/service/v2 service all GRPC=enabled OUTBOUND_HTTP=bounded OUTBOUND_AUTH=oauth2-client-credentials AGENT_HARNESS=all
 
 echo "initializer contract passed"
