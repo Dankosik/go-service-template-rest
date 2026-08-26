@@ -50,7 +50,7 @@ func TestExecuteReadsBackCommittedResultAfterLostCommitResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExecutor(): %v", err)
 	}
-	result, replayed, err := executor.Execute(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (commitResponse, error) {
+	result, replayed, err := executor(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (commitResponse, error) {
 		if _, err := tx.Exec(ctx, "INSERT INTO idempotency_commit_effect (value) VALUES ('committed')"); err != nil {
 			return commitResponse{}, err
 		}
@@ -90,7 +90,7 @@ func TestExecuteReturnsUnknownWithoutRetryWhenCommitDidNotPersist(t *testing.T) 
 		t.Fatalf("NewExecutor(): %v", err)
 	}
 	var calls atomic.Int32
-	_, replayed, err := executor.Execute(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (commitResponse, error) {
+	_, replayed, err := executor(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (commitResponse, error) {
 		calls.Add(1)
 		if _, err := tx.Exec(ctx, "INSERT INTO idempotency_commit_effect (value) VALUES ('rolled-back')"); err != nil {
 			return commitResponse{}, err

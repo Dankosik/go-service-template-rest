@@ -27,11 +27,11 @@ func TestPostgresHTTPIdempotencyReplayMismatchAndScope(t *testing.T) {
 	executor := fixture.executor(t)
 	request := httpIDRequest(t, "caller-a", "key-a", 10)
 
-	first, replayed, err := executor.Execute(fixture.ctx, request, fixture.effect("first"))
+	first, replayed, err := executor(fixture.ctx, request, fixture.effect("first"))
 	if err != nil || replayed {
 		t.Fatalf("first Execute() = replayed %v, error %v", replayed, err)
 	}
-	second, replayed, err := executor.Execute(fixture.ctx, request, func(context.Context, pgx.Tx) (httpIDResponse, error) {
+	second, replayed, err := executor(fixture.ctx, request, func(context.Context, pgx.Tx) (httpIDResponse, error) {
 		return httpIDResponse{}, errors.New("replayed work ran")
 	})
 	if err != nil || !replayed || second != first {
@@ -39,11 +39,11 @@ func TestPostgresHTTPIdempotencyReplayMismatchAndScope(t *testing.T) {
 	}
 
 	changed := httpIDRequest(t, "caller-a", "key-a", 11)
-	if _, _, err := executor.Execute(fixture.ctx, changed, fixture.effect("changed")); !errors.Is(err, httpidempotency.ErrMismatch) {
+	if _, _, err := executor(fixture.ctx, changed, fixture.effect("changed")); !errors.Is(err, httpidempotency.ErrMismatch) {
 		t.Fatalf("changed Execute() error = %v, want ErrMismatch", err)
 	}
 	otherCaller := httpIDRequest(t, "caller-b", "key-a", 10)
-	if _, replayed, err := executor.Execute(fixture.ctx, otherCaller, fixture.effect("other")); err != nil || replayed {
+	if _, replayed, err := executor(fixture.ctx, otherCaller, fixture.effect("other")); err != nil || replayed {
 		t.Fatalf("other caller Execute() = replayed %v, error %v", replayed, err)
 	}
 	fixture.assertEffects(t, 2)
@@ -66,10 +66,10 @@ func TestPostgresHTTPIdempotencyFeatureExecutorBindsTransactionRepository(t *tes
 	work := func(ctx context.Context, effects effectRepository) (response, error) {
 		return response{Value: "created"}, effects.Insert(ctx, "created")
 	}
-	if got, replayed, err := executor.Execute(fixture.ctx, request, work); err != nil || replayed || got.Value != "created" {
+	if got, replayed, err := executor(fixture.ctx, request, work); err != nil || replayed || got.Value != "created" {
 		t.Fatalf("first feature Execute() = %#v, replayed %v, error %v", got, replayed, err)
 	}
-	if got, replayed, err := executor.Execute(fixture.ctx, request, work); err != nil || !replayed || got.Value != "created" {
+	if got, replayed, err := executor(fixture.ctx, request, work); err != nil || !replayed || got.Value != "created" {
 		t.Fatalf("replayed feature Execute() = %#v, replayed %v, error %v", got, replayed, err)
 	}
 	fixture.assertEffects(t, 1)
@@ -90,7 +90,7 @@ func TestPostgresHTTPIdempotencySerializesConcurrentReplicas(t *testing.T) {
 	secondDone := make(chan outcome, 1)
 
 	go func() {
-		_, replayed, err := executor.Execute(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (httpIDResponse, error) {
+		_, replayed, err := executor(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (httpIDResponse, error) {
 			workCalls.Add(1)
 			if _, err := tx.Exec(ctx, "INSERT INTO test_http_idempotency_effects (value) VALUES ('winner')"); err != nil {
 				return httpIDResponse{}, err
@@ -107,7 +107,7 @@ func TestPostgresHTTPIdempotencySerializesConcurrentReplicas(t *testing.T) {
 	}()
 	<-started
 	go func() {
-		_, replayed, err := executor.Execute(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (httpIDResponse, error) {
+		_, replayed, err := executor(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (httpIDResponse, error) {
 			workCalls.Add(1)
 			if _, err := tx.Exec(ctx, "INSERT INTO test_http_idempotency_effects (value) VALUES ('loser')"); err != nil {
 				return httpIDResponse{}, err
@@ -151,7 +151,7 @@ func TestPostgresHTTPIdempotencyRollbackAndExpiryPermitRetry(t *testing.T) {
 	request := httpIDRequest(t, "caller-a", "key-a", 10)
 	wantErr := errors.New("business rejected")
 
-	if _, _, err := executor.Execute(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (httpIDResponse, error) {
+	if _, _, err := executor(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (httpIDResponse, error) {
 		if _, err := tx.Exec(ctx, "INSERT INTO test_http_idempotency_effects (value) VALUES ('rolled-back')"); err != nil {
 			return httpIDResponse{}, err
 		}
@@ -160,7 +160,7 @@ func TestPostgresHTTPIdempotencyRollbackAndExpiryPermitRetry(t *testing.T) {
 		t.Fatalf("rollback Execute() error = %v, want business error", err)
 	}
 	fixture.assertEffects(t, 0)
-	if _, replayed, err := executor.Execute(fixture.ctx, request, fixture.effect("committed")); err != nil || replayed {
+	if _, replayed, err := executor(fixture.ctx, request, fixture.effect("committed")); err != nil || replayed {
 		t.Fatalf("retry Execute() = replayed %v, error %v", replayed, err)
 	}
 
@@ -170,7 +170,7 @@ func TestPostgresHTTPIdempotencyRollbackAndExpiryPermitRetry(t *testing.T) {
 	if deleted, err := fixture.store.Cleanup(fixture.ctx); err != nil || deleted != 1 {
 		t.Fatalf("Cleanup() = %d, %v, want 1", deleted, err)
 	}
-	if _, replayed, err := executor.Execute(fixture.ctx, request, fixture.effect("after-expiry")); err != nil || replayed {
+	if _, replayed, err := executor(fixture.ctx, request, fixture.effect("after-expiry")); err != nil || replayed {
 		t.Fatalf("expired retry Execute() = replayed %v, error %v", replayed, err)
 	}
 	fixture.assertEffects(t, 2)
@@ -181,7 +181,7 @@ func TestPostgresHTTPIdempotencyOversizedResultRollsBack(t *testing.T) {
 	executor := fixture.executor(t)
 	request := httpIDRequest(t, "caller-a", "key-a", 10)
 
-	_, _, err := executor.Execute(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (httpIDResponse, error) {
+	_, _, err := executor(fixture.ctx, request, func(ctx context.Context, tx pgx.Tx) (httpIDResponse, error) {
 		if _, err := tx.Exec(ctx, "INSERT INTO test_http_idempotency_effects (value) VALUES ('oversized')"); err != nil {
 			return httpIDResponse{}, err
 		}
@@ -191,7 +191,7 @@ func TestPostgresHTTPIdempotencyOversizedResultRollsBack(t *testing.T) {
 		t.Fatalf("oversized Execute() error = %v, want ErrInvalidResult", err)
 	}
 	fixture.assertEffects(t, 0)
-	if _, replayed, err := executor.Execute(fixture.ctx, request, fixture.effect("retry")); err != nil || replayed {
+	if _, replayed, err := executor(fixture.ctx, request, fixture.effect("retry")); err != nil || replayed {
 		t.Fatalf("retry after oversized result = replayed %v, error %v", replayed, err)
 	}
 	fixture.assertEffects(t, 1)
@@ -247,7 +247,7 @@ func TestPostgresHTTPIdempotencyRejectsReadOnlyAuthority(t *testing.T) {
 		t.Fatalf("NewExecutor(read only): %v", err)
 	}
 	called := false
-	if _, _, err := executor.Execute(fixture.ctx, httpIDRequest(t, "caller-a", "key-a", 10), func(context.Context, pgx.Tx) (httpIDResponse, error) {
+	if _, _, err := executor(fixture.ctx, httpIDRequest(t, "caller-a", "key-a", 10), func(context.Context, pgx.Tx) (httpIDResponse, error) {
 		called = true
 		return httpIDResult("unsafe"), nil
 	}); !errors.Is(err, httpidempotency.ErrUnavailable) {
@@ -340,7 +340,7 @@ func httpIDResult(value string) httpIDResponse {
 	return httpIDResponse{Value: value, Location: "/effects/" + value}
 }
 
-func (f httpIDFixture) executor(t *testing.T) *postgresidempotency.Executor[pgx.Tx, httpIDResponse] {
+func (f httpIDFixture) executor(t *testing.T) httpidempotency.Executor[pgx.Tx, httpIDResponse] {
 	t.Helper()
 	executor, err := postgresidempotency.NewExecutor(
 		f.store,

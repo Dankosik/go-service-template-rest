@@ -29,50 +29,42 @@ type Store struct {
 	inTx      func(context.Context, pgx.TxOptions, func(pgx.Tx) error) error
 }
 
-// Executor binds a transaction-scoped feature repository before Work runs.
-type Executor[Repository, Response any] struct {
-	store *Store
-	bind  func(pgx.Tx) Repository
-	codec httpidempotency.Codec[Response]
-}
-
+// NewExecutor binds a transaction-scoped feature repository before Work runs.
 func NewExecutor[Repository, Response any](
 	store *Store,
 	bind func(pgx.Tx) Repository,
 	codec httpidempotency.Codec[Response],
-) (*Executor[Repository, Response], error) {
+) (httpidempotency.Executor[Repository, Response], error) {
 	if store == nil || bind == nil || !codec.Valid() {
 		return nil, fmt.Errorf("%w: store, repository binding, and response codec are required", ErrConfig)
 	}
-	return &Executor[Repository, Response]{store: store, bind: bind, codec: codec}, nil
-}
-
-func (e *Executor[Repository, Response]) Execute(
-	ctx context.Context,
-	request httpidempotency.Request,
-	work httpidempotency.Work[Repository, Response],
-) (response Response, replayed bool, err error) {
-	if e == nil || e.store == nil || e.bind == nil || !e.codec.Valid() || work == nil {
-		return response, false, fmt.Errorf("%w: executor and work are required", ErrConfig)
-	}
-	result, replayed, err := e.store.execute(ctx, request, func(ctx context.Context, tx pgx.Tx) ([]byte, error) {
-		response, err = work(ctx, e.bind(tx))
+	return func(
+		ctx context.Context,
+		request httpidempotency.Request,
+		work httpidempotency.Work[Repository, Response],
+	) (response Response, replayed bool, err error) {
+		if work == nil {
+			return response, false, fmt.Errorf("%w: executor and work are required", ErrConfig)
+		}
+		result, replayed, err := store.execute(ctx, request, func(ctx context.Context, tx pgx.Tx) ([]byte, error) {
+			response, err = work(ctx, bind(tx))
+			if err != nil {
+				return nil, err
+			}
+			return codec.Encode(response)
+		})
 		if err != nil {
-			return nil, err
+			return response, false, fmt.Errorf("execute idempotent operation: %w", err)
 		}
-		return e.codec.Encode(response)
-	})
-	if err != nil {
-		return response, false, fmt.Errorf("execute idempotent operation: %w", err)
-	}
-	response, err = e.codec.Decode(result)
-	if err != nil {
-		if replayed {
-			return response, true, fmt.Errorf("%w: decode stored response", httpidempotency.ErrIntegrity)
+		response, err = codec.Decode(result)
+		if err != nil {
+			if replayed {
+				return response, true, fmt.Errorf("%w: decode stored response", httpidempotency.ErrIntegrity)
+			}
+			return response, replayed, fmt.Errorf("decode idempotency response: %w", err)
 		}
-		return response, replayed, fmt.Errorf("decode idempotency response: %w", err)
-	}
-	return response, replayed, nil
+		return response, replayed, nil
+	}, nil
 }
 
 func NewStore(pool *pgxpool.Pool, retention time.Duration) (*Store, error) {
