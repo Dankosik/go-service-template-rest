@@ -5,7 +5,7 @@
 //
 // Usage from any package that owns a repository:
 //
-//	func TestMain(m *testing.M) { os.Exit(pgtest.Main(m, "")) }
+//	func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
 //
 //	func TestOrderRepository(t *testing.T) {
 //		dsn := pgtest.Migrated(t, os.DirFS("../../.."), "migrations")
@@ -55,17 +55,14 @@ var (
 )
 
 // Main starts one PostgreSQL container for the whole test binary, runs m against
-// it, and terminates it afterwards. An empty image uses DefaultImage.
+// it, and terminates it afterwards.
 //
 // It returns an exit code rather than calling os.Exit, so the caller's TestMain
 // stays the one place the process ends.
-func Main(m *testing.M, image string) int {
+func Main(m *testing.M) int {
 	if externalDSN := strings.TrimSpace(os.Getenv(externalDSNEnv)); externalDSN != "" {
 		adminDSN = externalDSN
 		return m.Run()
-	}
-	if strings.TrimSpace(image) == "" {
-		image = DefaultImage
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), containerStartTimeout)
@@ -79,7 +76,7 @@ func Main(m *testing.M, image string) int {
 
 	container, err := tcpostgres.Run(
 		ctx,
-		image,
+		DefaultImage,
 		tcpostgres.WithDatabase("app"),
 		tcpostgres.WithUsername("app"),
 		tcpostgres.WithPassword("app"),

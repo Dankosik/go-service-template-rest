@@ -17,7 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TestMain(m *testing.M) { os.Exit(pgtest.Main(m, "")) }
+func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
 
 func TestPostgresInboundWebhookCommitUnknownRetry(t *testing.T) {
 	dsn := pgtest.Migrated(t, os.DirFS("../../.."), "migrations")

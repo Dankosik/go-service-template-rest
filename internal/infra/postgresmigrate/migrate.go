@@ -99,8 +99,10 @@ func migrate(
 		gooselock.WithUnlockTimeout(1, secondsCeiling(opts.CleanupTimeout)),
 	)
 	if err != nil {
-		_ = db.Close()
-		return result, stageError(FailureConfig, fmt.Errorf("build goose session locker: %w", err))
+		return result, withMigrationCleanup(
+			stageError(FailureConfig, fmt.Errorf("build goose session locker: %w", err)),
+			cleanupMigrationResources(ctx, opts.CleanupTimeout, nil, nil, db),
+		)
 	}
 	stagedLocker := migrationSessionLocker{SessionLocker: locker}
 
@@ -116,20 +118,24 @@ func migrate(
 	if err != nil {
 		if errors.Is(err, goose.ErrNoMigrations) {
 			if pingErr := db.PingContext(executionCtx); pingErr != nil {
-				_ = db.Close()
-				return result, stageError(
-					FailureConnect,
-					fmt.Errorf("ping postgres migration database: %w", pingErr),
+				return result, withMigrationCleanup(
+					stageError(
+						FailureConnect,
+						fmt.Errorf("ping postgres migration database: %w", pingErr),
+					),
+					cleanupMigrationResources(ctx, opts.CleanupTimeout, nil, nil, db),
 				)
 			}
 			return migrateEmptySource(ctx, executionCtx, opts, db, stagedLocker, direction, result)
 		}
-		_ = db.Close()
-		return result, stageError(FailureSource, fmt.Errorf("build goose provider: %w", err))
+		return result, withMigrationCleanup(
+			stageError(FailureSource, fmt.Errorf("build goose provider: %w", err)),
+			cleanupMigrationResources(ctx, opts.CleanupTimeout, nil, nil, db),
+		)
 	}
 	defer func() {
 		if closeErr := provider.Close(); closeErr != nil {
-			retErr = stageError(FailureCleanup, errors.Join(retErr, fmt.Errorf("close goose provider: %w", closeErr)))
+			retErr = withMigrationCleanup(retErr, fmt.Errorf("close goose provider: %w", closeErr))
 		}
 	}()
 	if err := provider.Ping(executionCtx); err != nil {
@@ -213,8 +219,10 @@ func migrateEmptySource(
 ) (RunResult, error) {
 	lockConn, err := acquireMigrationLock(executionCtx, db, locker, opts.LockTimeout)
 	if err != nil {
-		_ = db.Close()
-		return result, err
+		return result, withMigrationCleanup(
+			err,
+			cleanupMigrationResources(parent, opts.CleanupTimeout, nil, nil, db),
+		)
 	}
 
 	cleanup := func() error {
@@ -222,22 +230,19 @@ func migrateEmptySource(
 	}
 	store, err := database.NewStore(database.DialectPostgres, goose.DefaultTablename)
 	if err != nil {
-		return result, stageError(FailureConfig, errors.Join(
-			fmt.Errorf("build goose postgres store: %w", err),
+		return result, withMigrationCleanup(
+			stageError(FailureConfig, fmt.Errorf("build goose postgres store: %w", err)),
 			cleanup(),
-		))
+		)
 	}
 	version, err := emptySourceVersion(executionCtx, lockConn, store)
 	result.Before = version
 	result.After = version
 	if err != nil {
-		return result, stageError(FailureState, errors.Join(err, cleanup()))
+		return result, withMigrationCleanup(stageError(FailureState, err), cleanup())
 	}
 	logMigrationPlan(executionCtx, opts.Logger, direction, version, 0, 0)
-	if cleanupErr := cleanup(); cleanupErr != nil {
-		return result, stageError(FailureCleanup, cleanupErr)
-	}
-	return result, nil
+	return result, withMigrationCleanup(nil, cleanup())
 }
 
 func acquireMigrationLock(
@@ -279,6 +284,13 @@ func validateMigrationOptions(opts MigrationOptions) error {
 		return errors.New("postgres migration cleanup timeout must be > 0")
 	}
 	return nil
+}
+
+func withMigrationCleanup(primary, cleanupErr error) error {
+	if cleanupErr == nil {
+		return primary
+	}
+	return stageError(FailureCleanup, errors.Join(primary, cleanupErr))
 }
 
 func cleanupMigrationResources(
