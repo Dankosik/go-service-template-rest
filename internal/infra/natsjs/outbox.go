@@ -10,9 +10,6 @@ import (
 // NewOutboxAppender builds the service-owned event routing table once. Domain
 // code appends events without ever seeing the selected NATS subject.
 func NewOutboxAppender(maxPayloadBytes int, routes ...Route) (*postgresoutbox.Appender, error) {
-	if len(routes) == 0 {
-		return nil, fmt.Errorf("%w: at least one outbox route is required", ErrRejected)
-	}
 	subjects, err := buildRoutes(routes)
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -85,10 +86,8 @@ func validateOptionalValue(name, value string) error {
 	if !utf8.ValidString(value) {
 		return fmt.Errorf("%w: %s must be valid UTF-8", ErrRejected, name)
 	}
-	for _, character := range value {
-		if unicode.IsControl(character) {
-			return fmt.Errorf("%w: %s contains a control character", ErrRejected, name)
-		}
+	if strings.ContainsFunc(value, unicode.IsControl) {
+		return fmt.Errorf("%w: %s contains a control character", ErrRejected, name)
 	}
 	return nil
 }

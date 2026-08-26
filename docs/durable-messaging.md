@@ -44,7 +44,7 @@ registry, err := natsjs.NewRegistry(natsjs.Route{
 The worker builder registers the typed handler on that registry:
 
 ```go
-err = natsjs.Handle(registry, OrderUpdated,
+err = registry.Handle(OrderUpdated,
     func(ctx context.Context, event domainevent.Typed[order.UpdatedV1]) error {
         return orders.Apply(ctx, event.Payload)
     },
