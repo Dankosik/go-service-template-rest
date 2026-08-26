@@ -59,9 +59,9 @@ func (h *handler) CreateWidget(
 }
 ```
 
-Bootstrap constructs that executor once. `NewExecutor` binds the concrete
-repository to the `pgx.Tx`; `JSONCodec` reconstructs the generated success type
-without feature-owned response storage:
+Bootstrap constructs that executor once. `NewExecutor` returns the neutral
+executor after binding the concrete repository to the `pgx.Tx`; `JSONCodec`
+reconstructs the generated success type without feature-owned response storage:
 
 ```go
 executor, err := postgresidempotency.NewExecutor(
@@ -69,7 +69,7 @@ executor, err := postgresidempotency.NewExecutor(
 	func(tx pgx.Tx) widget.Repository { return postgreswidget.New(tx) },
 	httpidempotency.JSONCodec[openapi.CreateWidget201JSONResponse](http.StatusCreated),
 )
-idempotency := executor.Execute
+idempotency := executor
 ```
 
 The operation-owned semantic input is the fingerprint contract. Keep its

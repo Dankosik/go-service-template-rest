@@ -32,7 +32,7 @@ func TestPostgresHTTPIdempotencyAuthenticatedGeneratedHandlerPath(t *testing.T) 
 	if err != nil {
 		t.Fatalf("NewExecutor(): %v", err)
 	}
-	handler := httpIDAuthenticatedHandler(t, executor.Execute)
+	handler := httpIDAuthenticatedHandler(t, executor)
 
 	first := doHTTPIDRequest(handler, "caller-a", "key-a", "first")
 	if first.Code != http.StatusOK || first.Body.String() != "created:first" {
