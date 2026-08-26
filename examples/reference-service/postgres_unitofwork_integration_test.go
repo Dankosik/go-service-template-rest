@@ -20,7 +20,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	os.Exit(pgtest.Main(m, ""))
+	os.Exit(pgtest.Main(m))
 }
 
 // This file is the proof that article.Store binds to a real transaction

@@ -15,6 +15,8 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+const unreachableMigrationDSN = "postgres://user:secret@127.0.0.1:1/app?sslmode=disable" //nolint:gosec // Deliberately unreachable test DSN.
+
 func TestRootMigrationSource(t *testing.T) {
 	t.Parallel()
 
@@ -25,7 +27,15 @@ func TestRootMigrationSource(t *testing.T) {
 		wantError string
 	}{
 		{
-			name:   "existing directory",
+			name: "canonical migration",
+			source: fstest.MapFS{
+				"migrations":                   {Mode: fs.ModeDir},
+				"migrations/000001_create.sql": {Data: []byte("-- +goose Up\nSELECT 1;\n-- +goose Down\nSELECT 1;\n")},
+			},
+			path: "migrations",
+		},
+		{
+			name:   "empty directory",
 			source: fstest.MapFS{"migrations": {Mode: fs.ModeDir}},
 			path:   "migrations",
 		},
@@ -52,6 +62,78 @@ func TestRootMigrationSource(t *testing.T) {
 			path:      "migrations",
 			wantError: "file does not exist",
 		},
+		{
+			name: "source symlink is rejected",
+			source: fstest.MapFS{
+				"migrations": {Mode: fs.ModeSymlink, Data: []byte("real")},
+				"real":       {Mode: fs.ModeDir},
+			},
+			path:      "migrations",
+			wantError: "symbolic link",
+		},
+		{
+			name: "nested directory is rejected",
+			source: fstest.MapFS{
+				"migrations":        {Mode: fs.ModeDir},
+				"migrations/nested": {Mode: fs.ModeDir},
+			},
+			path:      "migrations",
+			wantError: "nested directory",
+		},
+		{
+			name: "migration symlink is rejected",
+			source: fstest.MapFS{
+				"migrations":                   {Mode: fs.ModeDir},
+				"migrations/000001_create.sql": {Mode: fs.ModeSymlink, Data: []byte("../outside.sql")},
+			},
+			path:      "migrations",
+			wantError: "symbolic link",
+		},
+		{
+			name: "Go migration is rejected",
+			source: fstest.MapFS{
+				"migrations":                  {Mode: fs.ModeDir},
+				"migrations/000001_create.go": {Data: []byte("package migrations")},
+			},
+			path:      "migrations",
+			wantError: "not canonical",
+		},
+		{
+			name: "non-canonical filename is rejected",
+			source: fstest.MapFS{
+				"migrations":                   {Mode: fs.ModeDir},
+				"migrations/000001-create.sql": {Data: []byte("-- +goose Up\nSELECT 1;\n")},
+			},
+			path:      "migrations",
+			wantError: "not canonical",
+		},
+		{
+			name: "zero migration version is rejected",
+			source: fstest.MapFS{
+				"migrations":                   {Mode: fs.ModeDir},
+				"migrations/000000_create.sql": {Data: []byte("-- +goose Up\nSELECT 1;\n")},
+			},
+			path:      "migrations",
+			wantError: "not canonical",
+		},
+		{
+			name: "non-transactional migration is rejected case-insensitively",
+			source: fstest.MapFS{
+				"migrations":                   {Mode: fs.ModeDir},
+				"migrations/000001_create.sql": {Data: []byte("-- +GoOsE no transaction\n-- +goose Up\nSELECT 1;\n")},
+			},
+			path:      "migrations",
+			wantError: "disables transactions",
+		},
+		{
+			name: "environment substitution is rejected case-insensitively",
+			source: fstest.MapFS{
+				"migrations":                   {Mode: fs.ModeDir},
+				"migrations/000001_create.sql": {Data: []byte("-- +gOoSe EnVsUb On\n-- +goose Up\nSELECT 1;\n")},
+			},
+			path:      "migrations",
+			wantError: "environment substitution",
+		},
 	}
 
 	for _, tc := range tests {
@@ -76,7 +158,7 @@ func TestMigrateUpRejectsSourceAndConfigBeforeConnecting(t *testing.T) {
 	t.Parallel()
 
 	_, err := MigrateUp(context.Background(), MigrationOptions{
-		DSN:        "postgres://user:secret@127.0.0.1:1/app?sslmode=disable",
+		DSN:        unreachableMigrationDSN,
 		SourceFS:   fstest.MapFS{},
 		SourcePath: "missing",
 	})
@@ -85,7 +167,7 @@ func TestMigrateUpRejectsSourceAndConfigBeforeConnecting(t *testing.T) {
 	}
 
 	_, err = MigrateUp(context.Background(), MigrationOptions{
-		DSN:        "postgres://user:secret@127.0.0.1:1/app?sslmode=disable",
+		DSN:        unreachableMigrationDSN,
 		SourceFS:   fstest.MapFS{},
 		SourcePath: ".",
 	})
@@ -94,7 +176,19 @@ func TestMigrateUpRejectsSourceAndConfigBeforeConnecting(t *testing.T) {
 	}
 
 	_, err = MigrateUp(context.Background(), MigrationOptions{
-		DSN:        "postgres://user:secret@127.0.0.1:1/app?sslmode=disable",
+		DSN: unreachableMigrationDSN,
+		SourceFS: fstest.MapFS{
+			"migrations":                   {Mode: fs.ModeDir},
+			"migrations/000001_create.sql": {Data: []byte("-- +goose NO TRANSACTION\n-- +goose Up\nSELECT 1;\n")},
+		},
+		SourcePath: "migrations",
+	})
+	if FailureStageOf(err) != FailureSource {
+		t.Fatalf("MigrateUp() forbidden directive stage = %q, want %q; error = %v", FailureStageOf(err), FailureSource, err)
+	}
+
+	_, err = MigrateUp(context.Background(), MigrationOptions{
+		DSN:        unreachableMigrationDSN,
 		SourceFS:   fstest.MapFS{"migrations": {Mode: fs.ModeDir}},
 		SourcePath: "migrations",
 	})
@@ -109,7 +203,7 @@ func TestEmptySourceStillConnects(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 	_, err := MigrateUp(ctx, MigrationOptions{
-		DSN:              "postgres://user:secret@127.0.0.1:1/app?sslmode=disable",
+		DSN:              unreachableMigrationDSN,
 		SourceFS:         fstest.MapFS{"migrations": {Mode: fs.ModeDir}},
 		SourcePath:       "migrations",
 		ConnectTimeout:   50 * time.Millisecond,
@@ -158,6 +252,33 @@ func TestRunErrorClassification(t *testing.T) {
 	pgErr := &pgconn.PgError{Code: "55P03"}
 	if got := SQLStateOf(stageError(FailureExecute, pgErr)); got != "55P03" {
 		t.Fatalf("SQLStateOf() = %q, want 55P03", got)
+	}
+}
+
+func TestMigrationCleanupStageWinsAndPreservesCauses(t *testing.T) {
+	t.Parallel()
+
+	primaryCause := errors.New("primary")
+	cleanupCause := errors.New("cleanup")
+	primary := stageError(FailureState, primaryCause)
+
+	if got := withMigrationCleanup(primary, nil); FailureStageOf(got) != FailureState || !errors.Is(got, primaryCause) {
+		t.Fatalf("withMigrationCleanup(primary, nil) = %v, want original stage and cause", got)
+	}
+
+	err := withMigrationCleanup(primary, cleanupCause)
+	if FailureStageOf(err) != FailureCleanup {
+		t.Fatalf("withMigrationCleanup() stage = %q, want %q", FailureStageOf(err), FailureCleanup)
+	}
+	for _, want := range []error{primaryCause, cleanupCause} {
+		if !errors.Is(err, want) {
+			t.Fatalf("withMigrationCleanup() error = %v, want wrapped %v", err, want)
+		}
+	}
+
+	cleanupOnly := withMigrationCleanup(nil, cleanupCause)
+	if FailureStageOf(cleanupOnly) != FailureCleanup || !errors.Is(cleanupOnly, cleanupCause) {
+		t.Fatalf("withMigrationCleanup(nil, cleanup) = %v, want cleanup stage and cause", cleanupOnly)
 	}
 }
 

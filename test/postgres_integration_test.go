@@ -136,7 +136,7 @@ func assertPostgresPoolMetrics(
 }
 
 func TestMain(m *testing.M) {
-	code := pgtest.Main(m, "")
+	code := pgtest.Main(m)
 	if err := sharedNATSPool.Close(); err != nil {
 		fmt.Fprintf(os.Stderr, "terminate shared NATS container: %v\n", err)
 		code = 1
