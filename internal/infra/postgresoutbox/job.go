@@ -24,16 +24,11 @@ func (PublishJob) Kind() string {
 }
 
 func (PublishJob) InsertOpts() river.InsertOpts {
-	states := append(
-		rivertype.UniqueOptsByStateDefault(),
-		rivertype.JobStateCancelled,
-		rivertype.JobStateDiscarded,
-	)
 	return river.InsertOpts{
 		Queue: Queue,
 		UniqueOpts: river.UniqueOpts{
 			ByArgs:  true,
-			ByState: states,
+			ByState: rivertype.JobStates(),
 		},
 	}
 }

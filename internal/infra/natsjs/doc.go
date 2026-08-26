@@ -2,7 +2,7 @@
 // events.
 //
 // Business composition declares [Route] values, builds a [Registry], registers
-// typed handlers through [Handle], and publishes domain events
+// typed handlers through [Registry.Handle], and publishes domain events
 // values through [Publisher]. Subjects, headers, publication attempts, delivery
 // metadata, acknowledgements, retries, and dead letters do not enter feature
 // handlers.
