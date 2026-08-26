@@ -304,7 +304,7 @@ func cleanupMigrationResources(
 	defer cancel()
 
 	var cleanupErr error
-	if conn != nil {
+	if locker != nil && conn != nil {
 		if err := locker.SessionUnlock(cleanupCtx, conn); err != nil {
 			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("release goose session lock: %w", err))
 		}
