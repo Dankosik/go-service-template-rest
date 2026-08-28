@@ -12,8 +12,9 @@ status: ready
 - Portable scripts keep their current paths and are listed individually in the
   manifest so sibling service scripts are never deleted.
 - `tools/go.mod` and `tools/go.sum` own the standard pinned tool set. Their module
-  identity is repository-neutral and the initialized service retains the full
-  tool set; optional runtime profiles do not prune development tools.
+  identity and minimum Go version are repository-neutral and independent of the
+  runtime module; the initialized service retains the full tool set and optional
+  runtime profiles do not prune development tools.
 - Portable lint and generator configuration is profile-tolerant. Module identity
   is derived at invocation rather than stored as target-specific bytes.
 - Shared Make and script gates are mirrored. Executable CI workflows remain

@@ -259,10 +259,6 @@ root-mod-check:
 tools-mod-check:
 	GOFLAGS= go -C tools mod tidy -diff
 	go -C tools mod verify
-	@test "$$(awk '/^go / {print $$2; exit}' go.mod)" = "$$(awk '/^go / {print $$2; exit}' tools/go.mod)" || { \
-		echo "go.mod and tools/go.mod must use the same Go version"; \
-		exit 1; \
-	}
 
 tools-resolution-check:
 	bash ./scripts/ci/tools-resolution-check.sh

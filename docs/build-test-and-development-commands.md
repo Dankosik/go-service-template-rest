@@ -154,6 +154,8 @@ Use `make lint-deep` only for whole-program dead-code and nil analysis. Use
 iteration or ordinary pre-commit target. It builds one image and reuses it for
 migration rehearsal and image scanning.
 While editing one module, use `make root-mod-check` or `make tools-mod-check`.
+The tools module owns its own minimum Go version so a tooling update does not
+silently raise a service runtime's language/toolchain contract.
 `tools-dependencies-check` adds registered-tool resolution for a tools-module
 change; the combined `make mod-check` owns ordinary root/tools parity.
 
