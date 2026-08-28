@@ -204,7 +204,11 @@ union_classify() {
 	old_files=${tmp}/old-files
 	base_script=${tmp}/changed-surfaces.sh
 	cat >"${files}"
-	grep -vx 'scripts/ci/changed-surfaces.sh' "${files}" >"${old_files}" || true
+	: >"${old_files}"
+	while IFS= read -r file; do
+		[[ ${file} != scripts/ci/changed-surfaces.sh ]] || continue
+		git cat-file -e "${base_ref}:${file}" 2>/dev/null && printf '%s\n' "${file}" >>"${old_files}"
+	done <"${files}"
 	git show "${base_ref}:scripts/ci/changed-surfaces.sh" >"${base_script}" || {
 		echo "classifier base is unavailable: ${base_ref}" >&2
 		return 2
