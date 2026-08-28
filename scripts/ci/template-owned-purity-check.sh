@@ -43,7 +43,6 @@ for required in \
 	"${manifest}" \
 	Makefile \
 	make/template.mk \
-	.golangci.yml \
 	tools/go.mod \
 	tools/go.sum \
 	scripts/template-sync.sh \
@@ -59,7 +58,10 @@ done
 
 for reserved in \
 	README.md \
+	.gitleaks.toml \
 	.gitleaks.baseline.json \
+	.golangci.yml \
+	.redocly.yaml \
 	.github/workflows/ci.yml \
 	.github/workflows/codeql.yml \
 	.github/workflows/cd.yml \

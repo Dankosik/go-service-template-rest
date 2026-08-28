@@ -19,8 +19,9 @@ owns standard commands. A service may add uniquely named commands in
 repository-owned `make/service.mk`. Portable scripts are listed individually so
 the manifest never owns or deletes sibling service scripts. `tools/go.mod` and
 `tools/go.sum` pin the common development tools with a repository-neutral module
-identity. Standard lint configuration keeps a neutral module placeholder;
-the pinned wrapper resolves the current root module at invocation.
+identity. Lint, secret-scan, and OpenAPI policy configuration stays
+repository-owned because its accepted exceptions and current code surface are
+service-specific; the portable wrappers and pinned binaries consume it.
 
 A path may appear in the manifest only while it carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve. That restriction is what makes mirroring safe — there is nothing in an owned file for a derived repository to lose.
 
@@ -45,6 +46,7 @@ These documents stay repository-owned and the sync never touches them:
 | `test/README.md` | This service's integration-test topology and commands |
 | `docs/first-production-feature.md` | Template-only onboarding; not shipped to services |
 | `make/service.mk` | Service-only commands and their variables |
+| `.golangci.yml`, `.gitleaks.toml`, and `.redocly.yaml` | Service code policy, reviewed exceptions, and API lint policy |
 | `.gitleaks.baseline.json` | Reviewed findings for this repository's history |
 | `.github/workflows/*.yml` and `railway.toml` | Repository-specific required-check, publication, and deployment activation |
 

@@ -57,7 +57,8 @@ classify() {
 			internal/openapi/*.gen.go|examples/reference-service/internal/openapi/*.gen.go|internal/infra/*/internal/openapi/*.gen.go|internal/infra/postgres/sqlcgen/*.go|internal/gen/proto/*|examples/grpc-reference-service/internal/gen/proto/*)
 				mark go_source go_generated
 				;;
-			*.go) mark go_source go_handwritten ;;
+				scripts/*.go) mark go_handwritten ;;
+				*.go) mark go_source go_handwritten ;;
 		esac
 		case "${file}" in
 			go.mod|go.sum|examples/*/go.mod|examples/*/go.sum) mark go_root_dependencies ;;
@@ -284,6 +285,9 @@ self_test() {
 	assert_case scripts/integration-init.sh \
 		"integration_initializer shell" \
 		"module_initializer go_source db_integration messaging_integration process_integration integration_race runtime_image image_security"
+	assert_case scripts/openapi-ref-check.go \
+		"go_handwritten" \
+		"go_source go_generated go_testdata go_root_dependencies db_integration messaging_integration process_integration integration_race runtime_image image_security"
 	assert_case .github/dependabot.yml \
 		"dependency_automation" \
 		"github_workflows go_source go_root_dependencies go_tool_dependencies runtime_image image_security"

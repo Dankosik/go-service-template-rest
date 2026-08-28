@@ -31,9 +31,6 @@ Makefile
 make/template.mk
 
 .editorconfig
-.gitleaks.toml
-.golangci.yml
-.redocly.yaml
 buf.gen.yaml
 buf.yaml
 
