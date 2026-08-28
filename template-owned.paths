@@ -1,4 +1,4 @@
-# Template-owned instruction surface.
+# Template-owned portable surface.
 #
 # Every applicable path listed here is mirrored verbatim from this template into
 # a derived repository by `make template-sync`, including deletions inside
@@ -23,9 +23,22 @@
 # marks a directory, mirrored recursively with deletions. Blank lines and lines
 # starting with `#` are ignored.
 #
-# Eval catalogs, instruction-eval checks, template-purity scripts, and sync
-# behavior fixtures stay in the source template. Generated services do not
-# inherit them.
+# Eval catalogs, instruction-eval checks, initializer matrices,
+# template-purity scripts, sync behavior fixtures, service baselines, and CD
+# activation stay in the source or derived repository that owns them.
+
+Makefile
+make/template.mk
+
+.editorconfig
+.gitleaks.toml
+.golangci.yml
+.redocly.yaml
+buf.gen.yaml
+buf.yaml
+
+tools/go.mod
+tools/go.sum
 
 AGENTS.md
 CLAUDE.md
@@ -76,3 +89,26 @@ scripts/harness-skills-sync.sh
 scripts/codex-agents-sync.sh
 scripts/lib/manifest.sh
 scripts/lib/sync-cli.sh
+scripts/integration-init.sh
+scripts/openapi-ref-check.go
+scripts/ci/affected-go-packages.sh
+scripts/ci/changed-surfaces.sh
+scripts/ci/git-changed-paths.sh
+scripts/ci/golangci-lint.sh
+scripts/ci/install-gitleaks.sh
+scripts/ci/integration-record-bootstrap-check.go
+scripts/ci/integration-record-check.sh
+scripts/ci/integration-record-constructor-check.go
+scripts/ci/integration-record-grpc-check.go
+scripts/ci/integration-routing-check.sh
+scripts/ci/measure.sh
+scripts/ci/migration-history-check.sh
+scripts/ci/migration-image-history-check.sh
+scripts/ci/migration-validate.sh
+scripts/ci/native-validation-tool.sh
+scripts/ci/publish-image-metadata.sh
+scripts/ci/runtime-image-build.sh
+scripts/ci/runtime-image-check.sh
+scripts/ci/tools-resolution-check.sh
+scripts/ci/validation-lock.sh
+scripts/ci/verify.sh

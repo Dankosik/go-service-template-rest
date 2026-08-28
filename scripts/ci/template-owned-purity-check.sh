@@ -41,23 +41,36 @@ done
 
 for required in \
 	"${manifest}" \
+	Makefile \
+	make/template.mk \
+	.golangci.yml \
+	tools/go.mod \
+	tools/go.sum \
 	scripts/template-sync.sh \
 	scripts/agent-roles-sync.sh \
 	scripts/harness-skills-sync.sh \
 	scripts/codex-agents-sync.sh \
 	scripts/lib/manifest.sh \
-	scripts/lib/sync-cli.sh; do
+	scripts/lib/sync-cli.sh \
+	scripts/ci/verify.sh \
+	scripts/ci/tools-resolution-check.sh; do
 	contains_path "${required}" || fail "${manifest} must list ${required}"
 done
 
 for reserved in \
 	README.md \
+	.gitleaks.baseline.json \
+	.github/workflows/ci.yml \
+	.github/workflows/codeql.yml \
+	.github/workflows/cd.yml \
 	docs/build-test-and-development-commands.md \
 	docs/ci-cd-production-ready.md \
 	docs/first-production-feature.md \
 	docs/project-structure-and-module-organization.md \
 	docs/railway-deployment-profile.md \
 	docs/repo-architecture.md \
+	make/service.mk \
+	railway.toml \
 	test/README.md; do
 	contains_path "${reserved}" && fail "${reserved} is repository-owned"
 done

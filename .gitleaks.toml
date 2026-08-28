@@ -42,10 +42,8 @@ condition = "AND"
 commits = ["10f72d71cd6182e3de56824d63cde646a45ed278"]
 paths = ['''^scripts/ci/runtime-image-build\.sh$''']
 
-# profile:authn-oidc-jwt:start
 [[allowlists]]
 targetRules = ["private-key"]
 description = "Public deterministic RSA fixtures used only to sign OIDC verifier test tokens"
 condition = "AND"
 paths = ['''^internal/infra/oidcjwt/testdata/test-key-[12]\.pem$''']
-# profile:authn-oidc-jwt:end

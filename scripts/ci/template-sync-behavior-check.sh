@@ -14,7 +14,9 @@ template="${fixture}/template"
 # shellcheck source=scripts/lib/manifest.sh
 source "${root}/scripts/lib/manifest.sh"
 mkdir -p \
-	"${template}/scripts/lib" \
+		"${template}/scripts/lib" \
+		"${template}/scripts/ci" \
+		"${template}/make" \
 	"${template}/.agents/role-classes" \
 	"${template}/.agents/roles" \
 	"${template}/.agents/skills/fixture-skill" \
@@ -30,6 +32,10 @@ cp -p "${root}/.agents/role-classes/mutable-worker.md" \
 	"${template}/.agents/role-classes/"
 cp -p "${root}/.opencode/.gitignore" "${template}/.opencode/.gitignore"
 printf '# fixture template v1\n' >"${template}/AGENTS.md"
+printf '%s\n' 'include make/template.mk' '-include make/service.mk' >"${template}/Makefile"
+printf 'standard-check:\n\t@printf '\''standard v1\\n'\''\n' >"${template}/make/template.mk"
+printf '%s\n' '#!/usr/bin/env bash' 'printf '\''portable v1\n'\''' >"${template}/scripts/ci/portable-check.sh"
+chmod +x "${template}/scripts/ci/portable-check.sh"
 cat >"${template}/.agents/skills/fixture-skill/SKILL.md" <<'EOF'
 ---
 name: fixture-skill
@@ -43,6 +49,8 @@ metadata:
 EOF
 cat >"${template}/template-owned.paths" <<'EOF'
 AGENTS.md
+Makefile
+make/template.mk
 .agents/codex-project.toml
 .agents/role-classes/
 .agents/roles/
@@ -62,6 +70,7 @@ scripts/harness-skills-sync.sh
 scripts/codex-agents-sync.sh
 scripts/lib/manifest.sh
 scripts/lib/sync-cli.sh
+scripts/ci/portable-check.sh
 EOF
 for file in \
 	docs/repo-architecture.md \
@@ -106,9 +115,15 @@ target_generated="${fixture}/target-generated"
 target_pruned="${fixture}/target-pruned"
 target_dirty="${fixture}/target-dirty"
 target_invalid="${fixture}/target-invalid"
-for target in "${target_direct}" "${target_generated}" "${target_pruned}" "${target_dirty}" "${target_invalid}"; do
+target_legacy="${fixture}/target-legacy"
+for target in "${target_direct}" "${target_generated}" "${target_pruned}" "${target_dirty}" "${target_invalid}" "${target_legacy}"; do
 	clone_target "${target}"
 done
+
+git -C "${target_legacy}" rm -q make/template.mk
+printf 'legacy-local:\n\t@printf '\''legacy local\\n'\''\n' >"${target_legacy}/Makefile"
+git -C "${target_legacy}" add Makefile
+git -C "${target_legacy}" commit -qm legacy-makefile
 
 printf '.claude/skills/local-note\n' >>"${target_direct}/.git/info/exclude"
 printf 'keep direct helper content\n' >"${target_direct}/.claude/skills/local-note"
@@ -119,8 +134,19 @@ grep -Fxq 'keep direct helper content' "${target_direct}/.claude/skills/local-no
 	fail "Claude helper changed a local file"
 
 printf '\nfixture template v2\n' >>"${template}/AGENTS.md"
-git -C "${template}" add AGENTS.md
+sed -i.bak 's/standard v1/standard v2/' "${template}/make/template.mk"
+rm -f "${template}/make/template.mk.bak"
+sed -i.bak 's/portable v1/portable v2/' "${template}/scripts/ci/portable-check.sh"
+rm -f "${template}/scripts/ci/portable-check.sh.bak"
+git -C "${template}" add AGENTS.md make/template.mk scripts/ci/portable-check.sh
 git -C "${template}" commit -qm v2
+
+report=$(expect_failure "apply with a legacy Makefile" \
+	bash "${template}/scripts/template-sync.sh" --apply --from "${template}" --repo "${target_legacy}")
+grep -Fq 'legacy Makefile requires explicit service-target extraction' <<<"${report}" ||
+	fail "legacy Makefile was refused for the wrong reason: ${report}"
+test "$(make -s -C "${target_legacy}" --no-print-directory legacy-local)" = 'legacy local' ||
+	fail "legacy Makefile changed before migration"
 
 mkdir -p "${target_direct}/.agents/skills/local-note"
 printf 'local skill\n' >"${target_direct}/.agents/skills/local-note/SKILL.md"
@@ -176,6 +202,22 @@ grep -Fq 'template has uncommitted changes inside its own manifest' <<<"${report
 assert_v1 "${target_dirty}" "dirty-source target"
 git -C "${template}" restore AGENTS.md
 
+mkdir -p "${target_dirty}/make" "${target_dirty}/scripts/ci"
+printf 'local-check:\n\t@printf '\''local service\\n'\''\n' >"${target_dirty}/make/service.mk"
+printf '%s\n' '#!/usr/bin/env bash' 'printf '\''local script\n'\''' >"${target_dirty}/scripts/ci/local-check.sh"
+chmod +x "${target_dirty}/scripts/ci/local-check.sh"
+git -C "${target_dirty}" add make/service.mk scripts/ci/local-check.sh
+git -C "${target_dirty}" commit -qm local-tooling
+
+printf 'dirty portable target\n' >"${target_dirty}/scripts/ci/portable-check.sh"
+report=$(expect_failure "apply with dirty portable target" \
+	bash "${template}/scripts/template-sync.sh" --apply --from "${template}" --repo "${target_dirty}")
+grep -Fq 'uncommitted changes inside the manifest' <<<"${report}" ||
+	fail "dirty portable target was refused for the wrong reason: ${report}"
+grep -Fxq 'dirty portable target' "${target_dirty}/scripts/ci/portable-check.sh" ||
+	fail "dirty portable target changed before refusal"
+git -C "${target_dirty}" restore scripts/ci/portable-check.sh
+
 if ! report=$(bash "${template}/scripts/template-sync.sh" --apply --from "${template}" --repo "${target_dirty}" 2>&1); then
 	fail "valid apply failed: ${report}"
 fi
@@ -183,6 +225,14 @@ if ! report=$(bash "${template}/scripts/template-sync.sh" --check --from "${temp
 	fail "repeat check failed: ${report}"
 fi
 grep -Fq 'fixture template v2' "${target_dirty}/AGENTS.md" || fail "valid apply omitted committed content"
+test "$(make -s -C "${target_dirty}" --no-print-directory standard-check)" = 'standard v2' ||
+	fail "standard Make target was not updated"
+test "$(make -s -C "${target_dirty}" --no-print-directory local-check)" = 'local service' ||
+	fail "service Make target was not preserved"
+test "$(bash "${target_dirty}/scripts/ci/portable-check.sh")" = 'portable v2' ||
+	fail "portable script was not updated"
+test "$(bash "${target_dirty}/scripts/ci/local-check.sh")" = 'local script' ||
+	fail "service script was not preserved"
 
 role="${template}/.agents/roles/worker-agent.toml"
 sed 's/^description = .*/description = "unsafe "quoted" description"/' "${role}" >"${role}.tmp"

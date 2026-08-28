@@ -87,6 +87,10 @@ self_test() {
 	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
 	if grep -q 'test-integration' <<<"${output}"; then return 1; fi
 
+	output=$(bash "$0" --plan --files make/template.mk)
+	grep -q 'make verify-check' <<<"${output}"
+	grep -q 'make changed-surfaces-check' <<<"${output}"
+
 	output=$(bash "$0" --plan --files go.mod)
 	grep -q 'make test-all' <<<"${output}"
 	grep -q 'make root-mod-check' <<<"${output}"

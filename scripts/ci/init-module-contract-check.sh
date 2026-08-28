@@ -147,16 +147,22 @@ assert_identity() {
 	local module="$2"
 	local service_name="$3"
 	local harness="$4"
+	local rendered_lint_config
 
 	grep -Fxq "module ${module}" "${root}/go.mod"
-	grep -Fxq "module ${module}/tools" "${root}/tools/go.mod"
+	grep -Fxq 'module go-service-template-tools' "${root}/tools/go.mod"
 	grep -Fxq 'state = "complete"' "${root}/template.lock"
 	grep -Fxq "module = \"${module}\"" "${root}/template.lock"
 	grep -Fxq 'original_module = "github.com/example/go-service-template-rest"' "${root}/template.lock"
 	grep -Fxq "service_name = \"${service_name}\"" "${root}/template.lock"
 	grep -Fxq 'codeowner = "@acme/platform"' "${root}/template.lock"
 	grep -Fxq "agent_harness = \"${harness}\"" "${root}/template.lock"
-	grep -Fxq "SERVICE_NAME := ${service_name}" "${root}/Makefile"
+	test "$(make -s -C "${root}" --no-print-directory print-service-name)" = "${service_name}"
+	grep -Fq '__MODULE__/internal' "${root}/.golangci.yml"
+	rendered_lint_config=$(cd "${root}" && bash ./scripts/ci/golangci-lint.sh --render-config)
+	grep -Fq "${module}/internal" <<<"${rendered_lint_config}"
+	if grep -Fq '__MODULE__/internal' <<<"${rendered_lint_config}"; then return 1; fi
+	if grep -Fq '__MODULE_REGEX__' <<<"${rendered_lint_config}"; then return 1; fi
 	awk -v key='"observability.otel.service_name":' -v value="\"${service_name}\"" '
 		index($0, key) && index($0, value) { found = 1 }
 		END { exit !found }
@@ -220,6 +226,8 @@ assert_profile() {
 		test ! -d "${root}/internal/infra/bearerauthn"
 		test ! -d "${root}/internal/infra/natsjs"
 		test ! -d "${root}/internal/messagingconfig"
+		test "$(make -s -C "${root}" --no-print-directory run-worker)" = 'not applicable: no messaging worker'
+		test "$(make -s -C "${root}" --no-print-directory template-init)" = 'not applicable: repository initialization is already complete'
 		;;
 	oidc-jwt)
 		test -d "${root}/internal/infra/oidcjwt"
