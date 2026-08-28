@@ -4,6 +4,10 @@ Use the narrowest command that can falsify the claim. The Makefile exposes
 product commands and non-trivial leaf composition; ordinary tooling stays
 direct.
 
+`Makefile` includes template-owned `make/template.mk`. A derived repository may
+add uniquely named service commands in `make/service.mk`; standard targets are
+not override points.
+
 ## Tools
 
 Repository Go tools are pinned by `tools/go.mod` and run without a wrapper:
@@ -11,6 +15,10 @@ Repository Go tools are pinned by `tools/go.mod` and run without a wrapper:
 ```bash
 go tool -modfile=tools/go.mod <tool> [args...]
 ```
+
+GolangCI is the exception: use the Make lint targets or
+`scripts/ci/golangci-lint.sh` so the portable `__MODULE__` policy placeholder is
+resolved to the current root module before the pinned binary reads the config.
 
 Buf and its Protobuf plugins are pinned in the same tools module. Redocly is
 pinned by the Makefile and invoked through `npx` with telemetry disabled.

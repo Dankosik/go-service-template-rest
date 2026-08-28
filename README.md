@@ -77,7 +77,7 @@ code; and records the selection in `template.lock`.
 | Agent workflow | Shared repository rules and focused instructions, plus the selected tool adapter |
 
 [`go.mod`](go.mod) owns runtime and test dependencies. [`tools/go.mod`](tools/go.mod)
-owns development tools.
+owns the portable development-tool set shared by every derived service.
 
 ## Add only what the service needs
 
@@ -160,6 +160,8 @@ migrations/                 PostgreSQL migrations when selected
 test/                       cross-package and process integration tests
 docs/                       architecture, operations, and development guides
 .agents/skills/             reusable methods for coding agents
+make/template.mk            portable standard Make commands
+make/service.mk             optional service-owned Make extensions
 scripts/init-module.sh      profile selection and repository initialization
 ```
 

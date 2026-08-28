@@ -394,14 +394,13 @@ assert_no_profile_markers() {
 
 verify_identity_postconditions() {
 	grep -Fxq "module ${new_module}" go.mod
-	grep -Fxq "module ${new_module}/tools" tools/go.mod
+	grep -Fxq "module go-service-template-tools" tools/go.mod
 	awk -v owner="${codeowner}" -v old="${TEMPLATE_OWNER}" '
 		/^[[:space:]]*#/ { next }
 		index($0, owner) { found = 1 }
 		old != owner && index($0, old) { stale = 1 }
 		END { exit !(found && !stale) }
 	' .github/CODEOWNERS
-	grep -Fxq "SERVICE_NAME := ${service_name}" Makefile
 	awk -v key='"observability.otel.service_name":' -v value="\"${service_name}\"" '
 		index($0, key) && index($0, value) { found = 1 }
 		END { exit !found }
@@ -756,7 +755,7 @@ core | cursor | claude | qwen | grok | opencode | codex | all) ;;
 	;;
 esac
 
-for required_file in go.mod tools/go.mod env/.env.example .github/CODEOWNERS .golangci.yml api/openapi/service.yaml; do
+for required_file in go.mod tools/go.mod Makefile make/template.mk env/.env.example .github/CODEOWNERS .golangci.yml api/openapi/service.yaml; do
 	[[ -f "${required_file}" ]] || {
 		echo "required template file not found: ${required_file}"
 		exit 1
@@ -831,11 +830,6 @@ if [[ -f template.lock ]]; then
 	}
 fi
 
-if [[ "${new_module}" != "${current_module}" ]] && ! grep -Fq "${initial_module}" .golangci.yml; then
-	echo ".golangci.yml does not contain the original module path; refusing to disable depguard during initialization"
-	exit 1
-fi
-
 if [[ -f template.lock ]]; then
 	lock_state="$(lock_value state || true)"
 	case "${lock_state}" in
@@ -860,11 +854,6 @@ if [[ "${new_module}" != "${current_module}" ]]; then
 	go mod edit -module="${new_module}"
 	current_module="${new_module}"
 fi
-tools_module="$(awk '/^module / { print $2; exit }' tools/go.mod)"
-if [[ "${tools_module}" != "${new_module}/tools" ]]; then
-	go -C tools mod edit -module="${new_module}/tools"
-fi
-
 if [[ "${initial_module}" != "${new_module}" ]]; then
 	while IFS= read -r file; do
 		[[ -f "${file}" ]] || continue
@@ -879,14 +868,10 @@ if [[ "${initial_module}" != "${new_module}" ]]; then
 		fi
 	done < <(git ls-files --cached --others --exclude-standard -- '*.go' '*.proto')
 
-	replace_literal .golangci.yml "${initial_module}" "${new_module}"
 fi
 
 if [[ "${source_checkout}" != true ]]; then
 	replace_codeowner_rules "${codeowner}"
-	if [[ -f Makefile ]]; then
-		replace_required_literal Makefile "SERVICE_NAME := service" "SERVICE_NAME := ${service_name}"
-	fi
 	if [[ -f internal/config/observability_config.go ]]; then
 		replace_go_map_value \
 			internal/config/observability_config.go \
@@ -1047,10 +1032,7 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/config/postgres_config.go \
 			internal/config/postgres_config_test.go \
 			internal/infra/telemetry/telemetrytest/metrics.go \
-			scripts/ci/migration-history-check.sh \
-			scripts/ci/migration-image-history-check.sh \
-			scripts/ci/migration-validate.sh \
-			env/docker-compose.yml
+				env/docker-compose.yml
 		cp \
 			scripts/profiles/database-none/startup_dependencies.go.tmpl \
 			cmd/service/internal/bootstrap/startup_dependencies.go
@@ -1059,9 +1041,7 @@ if [[ "${source_checkout}" != true ]]; then
 			"${TEMPLATE_MODULE}" \
 			"${new_module}"
 		strip_profile database-postgres remove
-		go -C tools mod edit -droptool=github.com/sqlc-dev/sqlc/cmd/sqlc
-		go -C tools mod edit -droptool=github.com/pressly/goose/v3/cmd/goose
-	else
+		else
 		strip_profile database-postgres keep
 	fi
 
@@ -1183,10 +1163,8 @@ fi
 			internal/infra/grpcclient \
 			examples/grpc-reference-service \
 			docs/grpc
-		rm -f -- \
-			buf.yaml \
-			buf.gen.yaml \
-			cmd/service/internal/bootstrap/startup_grpc.go \
+			rm -f -- \
+				cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls_test.go \
@@ -1199,10 +1177,7 @@ fi
 			internal/infra/bearerauthn/grpc_tls_contract_test.go \
 			test/grpc_process_integration_test.go
 		strip_profile grpc remove
-		go -C tools mod edit -droptool=github.com/bufbuild/buf/cmd/buf
-		go -C tools mod edit -droptool=google.golang.org/protobuf/cmd/protoc-gen-go
-		go -C tools mod edit -droptool=google.golang.org/grpc/cmd/protoc-gen-go-grpc
-	else
+		else
 		strip_profile grpc keep
 		make proto-generate
 	fi

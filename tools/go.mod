@@ -1,4 +1,4 @@
-module github.com/example/go-service-template-rest/tools
+module go-service-template-tools
 
 go 1.27.0
 

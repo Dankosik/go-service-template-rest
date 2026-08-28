@@ -184,7 +184,7 @@ classify() {
 		esac
 
 		case "${file}" in
-			Makefile|scripts/ci/changed-surfaces.sh|scripts/ci/verify.sh|scripts/ci/validation-lock.sh|scripts/ci/affected-go-packages.sh|scripts/ci/git-changed-paths.sh|scripts/ci/measure.sh)
+				Makefile|make/template.mk|make/service.mk|scripts/ci/changed-surfaces.sh|scripts/ci/verify.sh|scripts/ci/validation-lock.sh|scripts/ci/affected-go-packages.sh|scripts/ci/git-changed-paths.sh|scripts/ci/measure.sh)
 				mark validation_system
 				;;
 		esac
@@ -301,9 +301,15 @@ self_test() {
 	assert_case scripts/dev/benchmark.sh \
 		"shell performance_harness" \
 		"go_source db_integration messaging_integration process_integration integration_race runtime_image image_security"
-	assert_case Makefile \
-		"validation_system" \
-		"go_source go_root_dependencies go_tool_dependencies go_lint_config module_initializer db_integration messaging_integration process_integration integration_race runtime_image image_security github_workflows"
+		assert_case Makefile \
+			"validation_system" \
+			"go_source go_root_dependencies go_tool_dependencies go_lint_config module_initializer db_integration messaging_integration process_integration integration_race runtime_image image_security github_workflows"
+		assert_case make/template.mk \
+			"validation_system" \
+			"go_source go_root_dependencies go_tool_dependencies go_lint_config module_initializer db_integration messaging_integration process_integration integration_race runtime_image image_security github_workflows"
+		assert_case make/service.mk \
+			"validation_system" \
+			"go_source go_root_dependencies go_tool_dependencies go_lint_config module_initializer db_integration messaging_integration process_integration integration_race runtime_image image_security github_workflows"
 
 	local output name
 	output="$(printf '%s\n' scripts/ci/changed-surfaces.sh | classify)"

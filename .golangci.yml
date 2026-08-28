@@ -190,9 +190,7 @@ linters:
         - generic
         - '^.*/internal/openapi\..*ResponseObject$'
         - '^go\.opentelemetry\.io/otel/metric\.MeterProvider$'
-        # profile:inbound-webhooks-standard:start
         - '^.*/internal/inboundwebhook\.Receiver$'
-        # profile:inbound-webhooks-standard:end
         - '^go\.opentelemetry\.io/otel/sdk/metric\.Reader$'
         - '^go\.opentelemetry\.io/otel/sdk/trace\.Sampler$'
     depguard:
@@ -204,7 +202,7 @@ linters:
             - "!**/internal/infra/**/*.go"
             - "!**/internal/gen/proto/**/*.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal/gen/proto/external
+            - pkg: __MODULE__/internal/gen/proto/external
               desc: generated external gRPC types stay inside the named adapter.
         feature_packages_no_adapters:
           list-mode: lax
@@ -217,13 +215,13 @@ linters:
             - "!**/internal/observability/**/*.go"
             - "!**/internal/openapi/**/*.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal/openapi
+            - pkg: __MODULE__/internal/openapi
               desc: feature packages must stay transport-contract agnostic; map generated OpenAPI types in internal/infra/http.
-            - pkg: github.com/example/go-service-template-rest/internal/infra
+            - pkg: __MODULE__/internal/infra
               desc: feature packages must not import concrete infra adapters; wire adapters in bootstrap.
-            - pkg: github.com/example/go-service-template-rest/internal/config
+            - pkg: __MODULE__/internal/config
               desc: runtime configuration belongs to bootstrap and adapters, not feature behavior.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: feature packages must not import composition roots.
             - pkg: github.com/jackc/pgx/v5
               desc: direct Postgres driver usage belongs in internal/infra/postgres.
@@ -234,24 +232,18 @@ linters:
             - "**/internal/config/**/*.go"
             - "!**/internal/config/*_test.go"
           allow:
-            # profile:authn-bearer:start
             # The authn trust rules are a leaf for the same reason otelconfig is:
             # this package must refuse a bad value at load, and the verifier must
             # enforce the same rule at startup and at runtime. Allowing the leaf
             # is what keeps one rule from being written twice.
-            - github.com/example/go-service-template-rest/internal/authntrust
-            # profile:authn-bearer:end
-            # profile:messaging-nats-jetstream:start
-            - github.com/example/go-service-template-rest/internal/messagingconfig
-            # profile:messaging-nats-jetstream:end
-            # profile:inbound-webhooks-standard:start
-            - github.com/example/go-service-template-rest/internal/inboundwebhook/manifest
-            # profile:inbound-webhooks-standard:end
-            - github.com/example/go-service-template-rest/internal/observability/otelconfig
+            - __MODULE__/internal/authntrust
+            - __MODULE__/internal/messagingconfig
+            - __MODULE__/internal/inboundwebhook/manifest
+            - __MODULE__/internal/observability/otelconfig
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: config parsing must not depend on features, runtime adapters, or transport contracts.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: config parsing must not depend on composition roots.
         health_no_runtime_adapters:
           list-mode: lax
@@ -260,9 +252,9 @@ linters:
             - "**/internal/health/**/*.go"
             - "!**/internal/health/*_test.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: health behavior receives probes and must not depend on config, adapters, generated contracts, or other features.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: health behavior must not depend on composition roots.
         failure_is_transport_neutral:
           list-mode: lax
@@ -275,9 +267,9 @@ linters:
               desc: failure identities are transport-neutral; HTTP rendering belongs in internal/problem and internal/infra/http.
             - pkg: google.golang.org/grpc
               desc: failure identities are transport-neutral; gRPC status rendering belongs in internal/infra/grpc.
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: failure is a leaf shared by features and transports and must not depend on repository runtime owners.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: failure must not depend on composition roots.
         problem_is_a_catalog_leaf:
           list-mode: lax
@@ -290,9 +282,9 @@ linters:
           deny:
             - pkg: google.golang.org/grpc
               desc: the Problem catalog is the HTTP rendering of a failure; gRPC status rendering belongs in internal/infra/grpc.
-            - pkg: github.com/example/go-service-template-rest/internal/infra
+            - pkg: __MODULE__/internal/infra
               desc: problem is a leaf shared by the HTTP adapter and by feature packages that may not import an adapter; it must not depend on one itself.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: problem must not depend on composition roots.
         http_no_postgres:
           list-mode: lax
@@ -301,7 +293,7 @@ linters:
             - "**/internal/infra/http/**/*.go"
             - "!**/internal/infra/http/*_test.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal/infra/postgres
+            - pkg: __MODULE__/internal/infra/postgres
               desc: HTTP maps feature behavior and must not call the database adapter directly.
         otelconfig_is_pure_policy:
           list-mode: lax
@@ -310,7 +302,7 @@ linters:
             - "**/internal/observability/otelconfig/**/*.go"
             - "!**/internal/observability/otelconfig/*_test.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: otelconfig is pure OpenTelemetry policy and must not depend on repository runtime packages.
             - pkg: go.opentelemetry.io/otel/sdk
               desc: SDK construction belongs in internal/infra/telemetry.
@@ -328,13 +320,12 @@ linters:
             # The request, trace, and span ids this handler attaches are read
             # through the same context leaf every transport writes them with, so
             # it is the one repository package the logger may reach.
-            - github.com/example/go-service-template-rest/internal/reqctx
+            - __MODULE__/internal/reqctx
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: logctx is the shared process logger and must not depend on repository runtime packages.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: logctx must not depend on composition roots.
-        # profile:authn-bearer:start
         authntrust_is_pure_policy:
           list-mode: lax
           files:
@@ -342,36 +333,30 @@ linters:
             - "**/internal/authntrust/**/*.go"
             - "!**/internal/authntrust/*_test.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: authntrust is a pure trust-rule leaf shared by internal/config and the verifier; a dependency here would put it back out of reach of one of them.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: authntrust must not depend on composition roots.
-        # profile:authn-bearer:end
-        # profile:messaging-nats-jetstream:start
         messagingconfig_is_pure_policy:
           list-mode: lax
           files:
             - "**/internal/messagingconfig/*.go"
             - "!**/internal/messagingconfig/*_test.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: messagingconfig is the pure rule leaf shared by config and the NATS adapter.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: messagingconfig must not depend on composition roots.
-        # profile:messaging-nats-jetstream:end
-        # profile:inbound-webhooks-standard:start
         inbound_webhook_manifest_is_pure_policy:
           list-mode: lax
           files:
             - "**/internal/inboundwebhook/manifest/*.go"
             - "!**/internal/inboundwebhook/manifest/*_test.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: inbound webhook manifest rules must stay usable by config and the runtime adapter.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: inbound webhook manifest rules must not depend on composition roots.
-        # profile:inbound-webhooks-standard:end
-        # profile:authn-oidc-jwt:start
         oidcjwt_core_is_transport_neutral:
           list-mode: lax
           files:
@@ -384,8 +369,6 @@ linters:
               desc: the JWT engine never routes; chi belongs in internal/infra/http.
             - pkg: google.golang.org/grpc
               desc: inbound gRPC policy belongs in bearerauthn, not the JWT engine.
-        # profile:authn-oidc-jwt:end
-        # profile:authn-oidc-introspection:start
         oauthintrospection_core_is_transport_neutral:
           list-mode: lax
           files:
@@ -398,20 +381,16 @@ linters:
               desc: the introspection engine never routes; chi belongs in internal/infra/http.
             - pkg: google.golang.org/grpc
               desc: inbound gRPC policy belongs in bearerauthn, not the introspection engine.
-            - pkg: github.com/example/go-service-template-rest/internal/config
+            - pkg: __MODULE__/internal/config
               desc: the introspection engine must not import configuration.
-            - pkg: github.com/example/go-service-template-rest/internal/infra/oidcjwt
+            - pkg: __MODULE__/internal/infra/oidcjwt
               desc: concrete trust engines must not import each other.
-        # profile:authn-oidc-introspection:end
-        # profile:authn-bearer:start
         bearerauthn_core_is_transport_neutral:
           list-mode: lax
           files:
             - "**/internal/infra/bearerauthn/*.go"
             - "!**/internal/infra/bearerauthn/http.go"
-            # profile:grpc:start
             - "!**/internal/infra/bearerauthn/grpc.go"
-            # profile:grpc:end
             - "!**/internal/infra/bearerauthn/*_test.go"
           deny:
             - pkg: github.com/getkin/kin-openapi
@@ -420,22 +399,19 @@ linters:
               desc: the shared runtime answers a resolver seam and never routes; chi belongs in internal/infra/http.
             - pkg: google.golang.org/grpc
               desc: gRPC interceptors, metadata, and status belong in bearerauthn's grpc.go adapter.
-            - pkg: github.com/example/go-service-template-rest/internal/infra/oidcjwt
+            - pkg: __MODULE__/internal/infra/oidcjwt
               desc: the shared runtime must not import a concrete trust engine.
-            - pkg: github.com/example/go-service-template-rest/internal/infra/oauthintrospection
+            - pkg: __MODULE__/internal/infra/oauthintrospection
               desc: the shared runtime must not import a concrete trust engine.
-            - pkg: github.com/example/go-service-template-rest/internal/config
+            - pkg: __MODULE__/internal/config
               desc: the shared runtime must not import configuration.
-        # profile:authn-bearer:end
         postgres_driver_boundary:
           list-mode: lax
           files:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
-            # profile:outbox-postgres:start
             # The outbox store binds River insertion to its caller-owned pgx.Tx.
             - "!**/internal/infra/postgresoutbox/store*.go"
-            # profile:outbox-postgres:end
             - "!**/internal/infra/postgresidempotency/store*.go"
             # pgtest is a PostgreSQL adapter like the two above, scoped to tests:
             # it creates and drops the per-test database, which is driver work.
@@ -445,18 +421,14 @@ linters:
             # feature and transport packages still cannot import the driver.
             - "!**/cmd/service/internal/bootstrap/startup_dependencies.go"
             - "!**/cmd/service/internal/bootstrap/startup_idempotency.go"
-            # profile:webhooks-durable:start
             # Webhook staging uses River InsertTx on the caller-owned pgx
             # transaction; delivery itself owns no independent SQL schema.
             - "!**/internal/infra/postgreswebhook/*.go"
-            # profile:webhooks-durable:end
-            # profile:inbound-webhooks-standard:start
             - "!**/internal/infra/postgresinboundwebhook/*.go"
             - "!**/cmd/jobs-worker/internal/bootstrap/run.go"
             - "!**/cmd/jobs-worker/builder_webhooks.go"
             - "!**/cmd/jobs-worker/inbound_webhook_bindings.go"
             - "!**/cmd/service/internal/bootstrap/startup_inbound_webhooks.go"
-            # profile:inbound-webhooks-standard:end
           deny:
             - pkg: database/sql
               desc: database driver access belongs in PostgreSQL runtime or migration adapters.
@@ -472,24 +444,20 @@ linters:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
             - "!**/internal/infra/postgresidempotency/store*.go"
-            # profile:inbound-webhooks-standard:start
             - "!**/internal/infra/postgresinboundwebhook/*.go"
-            # profile:inbound-webhooks-standard:end
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen
+            - pkg: __MODULE__/internal/infra/postgres/sqlcgen
               desc: generated sqlc types stay behind the hand-written internal/infra/postgres adapter.
-        # profile:webhooks-durable:start
         outboundtrust_is_pure_policy:
           list-mode: lax
           files:
             - "**/internal/outboundtrust/*.go"
             - "!**/internal/outboundtrust/*_test.go"
           deny:
-            - pkg: github.com/example/go-service-template-rest/internal
+            - pkg: __MODULE__/internal
               desc: outboundtrust is a standard-library-only policy leaf shared by fixed and dynamic outbound HTTP transports.
-            - pkg: github.com/example/go-service-template-rest/cmd
+            - pkg: __MODULE__/cmd
               desc: outboundtrust must not depend on composition roots.
-        # profile:webhooks-durable:end
         approved_router_boundary:
           list-mode: lax
           files:
@@ -531,20 +499,14 @@ linters:
       allow-empty-returns: true
       explicit-mode: true
       enforce-patterns:
-        - '^github\.com/example/go-service-template-rest/internal/openapi\.Problem$'
-        - '^github\.com/example/go-service-template-rest/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig)$'
-        # profile:grpc:start
-        - '^github\.com/example/go-service-template-rest/internal/config\.(GRPCConfig|GRPCServerConfig|GRPCTLSConfig)$'
-        # profile:grpc:end
-        # profile:authn-oidc-jwt:start
+        - '^__MODULE_REGEX__/internal/openapi\.Problem$'
+        - '^__MODULE_REGEX__/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig)$'
+        - '^__MODULE_REGEX__/internal/config\.(GRPCConfig|GRPCServerConfig|GRPCTLSConfig)$'
         # A configured trust value added to PolicyInput must reach the composition
         # root, or a deployment runs with it unset; oidcjwt.PolicyInput says why
         # this entry is what enforces that.
-        - '^github\.com/example/go-service-template-rest/internal/infra/oidcjwt\.PolicyInput$'
-        # profile:authn-oidc-jwt:end
-        # profile:authn-oidc-introspection:start
-        - '^github\.com/example/go-service-template-rest/internal/infra/oauthintrospection\.PolicyInput$'
-        # profile:authn-oidc-introspection:end
+        - '^__MODULE_REGEX__/internal/infra/oidcjwt\.PolicyInput$'
+        - '^__MODULE_REGEX__/internal/infra/oauthintrospection\.PolicyInput$'
     forbidigo:
       analyze-types: true
       forbid:

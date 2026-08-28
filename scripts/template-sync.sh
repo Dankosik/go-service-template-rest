@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mirror the template-owned instruction surface between this template and the
+# Mirror the template-owned portable surface between this template and the
 # repositories derived from it. The manifest `template-owned.paths` owns copied
 # content; generated Claude/Qwen skill links and the managed Codex
 # agent-registry block are derived from that content and travel with the same
@@ -555,6 +555,13 @@ target="${explicit_repo:-$PWD}"
 
 	drift=0
 	report=""
+	legacy_makefile=false
+	if [[ -f "${repo}/Makefile" && ! -e "${repo}/make/template.mk" && ! -e "${repo}/make/service.mk" ]] &&
+		! cmp -s "${source_root}/Makefile" "${repo}/Makefile"; then
+		legacy_makefile=true
+		drift=1
+		report+="  ! legacy Makefile requires explicit service-target extraction into make/service.mk"$'\n'
+	fi
 	for entry in "${paths[@]}"; do
 		if ! entry_report=$(diff_entry "${repo}" "${entry}"); then
 			drift=1
@@ -599,7 +606,7 @@ target="${explicit_repo:-$PWD}"
 	if ((drift == 0)); then
 		printf '   in sync with template %s\n' "${template_revision}"
 		if [[ "${mode}" == "check" ]]; then
-			echo "template-owned instructions are current"
+			echo "template-owned portable files are current"
 		else
 			printf 'template-sync: target already synced to template %s\n' "${template_revision}"
 		fi
@@ -616,6 +623,9 @@ target="${explicit_repo:-$PWD}"
 	# unexpected write or helper failure can leave only sync-produced dirt.
 	if ! git -C "${repo}" rev-parse --git-dir >/dev/null 2>&1; then
 		reject "not a git repository"
+	fi
+	if [[ ${legacy_makefile} == true ]]; then
+		reject "legacy Makefile requires explicit service-target extraction into make/service.mk before portable tooling can replace it"
 	fi
 	conflicts=$(type_conflicts "${repo}")
 	if [[ -n "${conflicts}" ]]; then
