@@ -14,7 +14,9 @@ commands, checks, deployment wiring, secrets, baselines, and provider policy
 remain repository-owned and survive adoption unchanged.
 
 The portable surface includes the shared Make implementation, local validation
-and generation scripts, pinned Go tools, and lint/generation configuration.
+and generation scripts, and pinned Go tools. Lint, secret-scan, and API policy
+configuration remains repository-owned so adoption does not convert existing
+service debt into an implicit policy waiver or unrelated code rewrite.
 Executable GitHub workflows remain repository-owned because changing their job
 topology can change required status contexts. Template-factory checks,
 service-specific Gitleaks baselines, CD activation, Railway configuration,
