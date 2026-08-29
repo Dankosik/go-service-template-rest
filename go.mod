@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.1
 	buf.build/go/protovalidate v1.3.0
-	github.com/KimMachineGun/automemlimit v0.7.5
+	github.com/KimMachineGun/automemlimit v1.0.0
 	github.com/MicahParks/jwkset v0.11.3
 	github.com/MicahParks/keyfunc/v3 v3.8.1
 	github.com/aws/aws-sdk-go-v2 v1.43.7
@@ -13,11 +13,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.37
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.15
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.3
-	github.com/aws/smithy-go v1.27.8
+	github.com/aws/smithy-go v1.27.9
 	github.com/exaring/otelpgx v0.11.1
 	github.com/felixge/httpsnoop v1.1.0
 	github.com/getkin/kin-openapi v0.147.0
-	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-cmp v0.7.0
@@ -37,9 +37,9 @@ require (
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/otlptranslator v1.0.0
-	github.com/riverqueue/river v0.44.0
-	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.44.0
-	github.com/riverqueue/river/rivertype v0.44.0
+	github.com/riverqueue/river v0.44.1
+	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.44.1
+	github.com/riverqueue/river/rivertype v0.44.1
 	github.com/riverqueue/rivercontrib/otelriver v0.12.0
 	github.com/samber/lo v1.53.0
 	github.com/standard-webhooks/standard-webhooks/libraries v0.0.1
@@ -62,7 +62,7 @@ require (
 	golang.org/x/sync v0.22.0
 	golang.org/x/time v0.15.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d
-	google.golang.org/grpc v1.83.0
+	google.golang.org/grpc v1.83.1
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -139,8 +139,8 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
-	github.com/riverqueue/river/riverdriver v0.44.0 // indirect
-	github.com/riverqueue/river/rivershared v0.44.0 // indirect
+	github.com/riverqueue/river/riverdriver v0.44.1 // indirect
+	github.com/riverqueue/river/rivershared v0.44.1 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/sethvargo/go-retry v0.4.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.6 // indirect
