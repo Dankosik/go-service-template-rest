@@ -33,8 +33,10 @@ technical, proof, review, or phase reopen is owner-held recovery: open the named
 fresh task, wait for its canonical transition, repair ledger status through
 Planning when needed, and resume without asking the user to confirm routing,
 delegation, or reopen. Ask only when an `AGENTS.md` user-owned decision or
-authority boundary remains unresolved. Continue until the ledger is done or no
-ready unit or owner-held recovery remains.
+authority boundary remains unresolved. Continue until the ledger is done and
+[Cleanup](../../../docs/spec-first-workflow/shared/cleanup.md) has closed
+execution-only state, or no ready unit, owner-held recovery, or authorized
+cleanup path remains.
 
 Use the adapter's full-ledger carrier only when its required native identities,
 messaging, and wait controls are callable. Otherwise return that exact carrier

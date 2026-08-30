@@ -111,3 +111,9 @@ routes. A shorter file that adds another selector has increased context cost.
 
 Instruction edits prove only an instruction-level change. Structural checks
 prove ownership, generation, links, and shape—not model behavior.
+
+A behavior-changing instruction edit records its observed pressure, the exact
+routing, selection, or stop delta expected to change, one boundary case, and one
+retention case. Structural checks suffice for shape-only changes. Otherwise
+compare the same model and harness before and after; do not promote a one-off
+trajectory directly into a durable rule.

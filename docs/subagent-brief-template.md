@@ -12,6 +12,9 @@ Proof: <command, evidence threshold, or expected observable>
 Stop: <completion, scope, authority, or missing-input boundary>
 ```
 
+When accepted authority and discovered material coexist, label them separately
+as `Authority` and `Evidence`; evidence never expands authority.
+
 Pass model, effort, isolation, and native identity through tool fields. Do not
 copy repository-wide workflow rules, model catalogs, unrelated context, or
 generic strictness language into every brief.
