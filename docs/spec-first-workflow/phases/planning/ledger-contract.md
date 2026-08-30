@@ -33,6 +33,11 @@ cannot be integrated, reviewed, or repaired because context cannot hold it, fan
 out execution lanes or split only on a new independently acceptable Outcome or
 stable Provides. Do not slice layers to shrink context.
 
+A unit is too broad when it requires more than one independently valid candidate
+identity, acceptance verdict, or blocked receipt. Repeated peer targets with
+independent proof or blockers become sibling tasks; ledger Completion aggregates
+them.
+
 An exclusive lock is held only by the unit that mutates that surface. A
 dependency-manifest change stays a lane of the unit that requires the
 dependency unless the manifest change is itself independently acceptable.
@@ -108,7 +113,9 @@ required user/external input or authority is unavailable. A conflicting
 After the final accepted unit, verify the global Completion condition before
 `done`. When the integrated candidate contains two or more accepted units,
 apply required [Review](../../shared/review.md) for that candidate before
-`done`.
+`done`. Then load [Cleanup](../../shared/cleanup.md) and report terminal
+completion only after execution-only state is removed or Cleanup returns its
+exact blocker.
 
 ## Stop Rule
 
