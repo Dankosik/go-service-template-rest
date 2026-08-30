@@ -34,6 +34,7 @@ Give each instruction one disposition before editing it.
 | Safety, authorization, secret, or irreversible-effect boundary | Keep explicit and fail closed in the earliest required owner. |
 | Non-obvious product or team policy | Keep in its narrowest semantic owner. |
 | Conditional method | Put behind its observable trigger. |
+| Structure or process justified only by hypothetical future reuse | Remove; retain only when a current accepted constraint and owner require it. |
 | Behavior guaranteed by a tool, schema, sandbox, or generator | Remove from prose or emit once only where the guarantee is absent. |
 | Fact apparent from canonical code, contract, test, or file layout | Remove. |
 | Restatement of another owner | Replace with a trigger and link. |
