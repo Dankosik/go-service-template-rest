@@ -28,6 +28,12 @@ risks, and unrelated cleanup are `FOLLOW_UP` unless they falsify the current
 Outcome, Boundary, constraint, or Accept-when claim. A `FOLLOW_UP` cannot fail
 the current task.
 
+Unjustified structure is not an alternative-architecture preference. An added
+abstraction, layer, configuration surface, dependency, compatibility path, or
+retained implementation without a current accepted responsibility or constraint
+is a `TASK_DEFECT`; anchor it to the Outcome or constraint left unchanged after
+deletion or collapse.
+
 `PASS` returns the candidate for acceptance. `FAIL` returns anchored
 candidate-caused findings. `NEEDS_PARENT` names proof or action outside reviewer
 authority. An unresolved boundary, or a review that still must accept more than

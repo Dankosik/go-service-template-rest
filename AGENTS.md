@@ -31,9 +31,13 @@ otherwise state the assumption and its reopen condition.
 ## Engineering
 
 Reuse the current owner, repository pattern, standard library, and installed
-dependencies before adding machinery. Match the surrounding code's naming,
-comment density, idiom, and responsibility boundaries. Preserve unrelated work
-and generated/manual authority.
+dependencies before adding machinery. Prefer the smallest causal change that
+satisfies the accepted outcome. A new abstraction, layer, configuration
+surface, or dependency must carry a current accepted constraint, variation,
+dependency direction, or rollout need; hypothetical reuse and future
+flexibility do not count. Match the surrounding code's naming, comment density,
+idiom, and responsibility boundaries. Preserve unrelated work and
+generated/manual authority.
 
 Make failure and replacement decisions explicit. When an operation cannot
 establish the authority or preconditions required before an effect, reject it

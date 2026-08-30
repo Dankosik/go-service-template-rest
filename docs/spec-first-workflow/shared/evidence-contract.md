@@ -23,6 +23,10 @@ normal ladder is an optional focused falsifier, then one surface-aware
 is optional iteration, not a required step before `make verify`. `make plan`
 explains the route; it is not a gate.
 
+Reuse existing proof when it would fail on the changed observable. Add a test or
+fixture only for otherwise-unproved changed behavior; unrelated historical
+coverage remains outside the unit.
+
 The bounded-change actor owns iterative focused checks. The acceptance owner
 assigns every deterministic gate, validates any reused receipt, and runs
 `make verify` once on the integrated candidate. Rerun `make prove` only when
