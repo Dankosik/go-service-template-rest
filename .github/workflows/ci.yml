@@ -193,7 +193,7 @@ jobs:
           needs.changes.outputs.go_lint_config == 'true'
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.13.1
+          version: v2.13.2
           install-only: true
           skip-cache: true
       - name: Fetch Go comparison base
@@ -556,7 +556,7 @@ jobs:
       GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
       TOOL_GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
       TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
-      NEEDS_GO_INTEGRATION: ${{ needs.changes.outputs.db_integration == 'true' || needs.changes.outputs.messaging_integration == 'true' || needs.changes.outputs.process_integration == 'true' || needs.changes.outputs.integration_race == 'true' || needs.changes.outputs.migrations == 'true' }}
+      NEEDS_GO_INTEGRATION: ${{ needs.changes.outputs.db_integration == 'true' || needs.changes.outputs.messaging_integration == 'true' || needs.changes.outputs.process_integration == 'true' || needs.changes.outputs.integration_race == 'true' || needs.changes.outputs.migrations == 'true' || needs.changes.outputs.runtime_image == 'true' || needs.changes.outputs.image_security == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -45,7 +45,7 @@ inputs:
   cosign_version:
     description: Pinned cosign release used to sign and to verify.
     required: false
-    default: v2.6.2
+    default: v3.1.3
   trivy_db_repository:
     description: Vulnerability database source for both Trivy steps.
     required: false
@@ -136,7 +136,7 @@ runs:
     # profile:database-postgres:end
 
     - name: Set up Buildx
-      uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
     - name: Build image
       shell: bash
@@ -192,7 +192,7 @@ runs:
         TRIVY_DB_REPOSITORY: ${{ inputs.trivy_db_repository }}
       with:
         image-ref: ${{ steps.meta.outputs.primary_image }}
-        version: v0.72.0
+        version: v0.74.0
         scanners: vuln
         format: cyclonedx
         output: sbom.cdx.json
