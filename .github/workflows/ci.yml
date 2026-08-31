@@ -556,7 +556,7 @@ jobs:
       GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
       TOOL_GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
       TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
-      NEEDS_GO_INTEGRATION: ${{ needs.changes.outputs.db_integration == 'true' || needs.changes.outputs.messaging_integration == 'true' || needs.changes.outputs.process_integration == 'true' || needs.changes.outputs.integration_race == 'true' || needs.changes.outputs.migrations == 'true' }}
+      NEEDS_GO_INTEGRATION: ${{ needs.changes.outputs.db_integration == 'true' || needs.changes.outputs.messaging_integration == 'true' || needs.changes.outputs.process_integration == 'true' || needs.changes.outputs.integration_race == 'true' || needs.changes.outputs.migrations == 'true' || needs.changes.outputs.runtime_image == 'true' || needs.changes.outputs.image_security == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
