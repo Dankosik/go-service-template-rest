@@ -70,7 +70,7 @@ REQUIRE_LINT_PKGS = @if [ -z "$(strip $(LINT_PKGS))" ]; then printf '%s requires
 REQUIRE_FILES = @if [ -z "$(strip $(FILES))" ]; then printf '%s requires FILES="file.go ..."\n' "$@"; exit 2; fi
 VALIDATION_LOCK := bash ./scripts/ci/validation-lock.sh --
 
-TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+TRIVY_IMAGE ?= aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
 TRIVY_CACHE_VOLUME ?= trivy-cache
 ACTIONLINT_VERSION := 1.7.12
 ACTIONLINT_IMAGE ?= rhysd/actionlint:$(ACTIONLINT_VERSION)@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
