@@ -94,10 +94,11 @@ The image contains `/jobs-worker`, but `railway.toml` does not create or
 configure a second Railway service. An adopter must run that binary from the
 exact service image, use the same write-home PostgreSQL writer, supply the
 worker-only webhook secret manifest, expose only its private diagnostics port,
-and preserve the jobs worker stop-grace contract. Keep webhook emission
-disabled; drain every legacy `/webhook-worker` before migration 000007, then
-require no-row jobs-worker, egress, receiver canary, and secret-rotation
-checkpoints with authenticated evidence.
+and preserve the jobs worker stop-grace contract. Freshly initialized services
+omit the legacy webhook migrations. An existing deployment that applied them
+keeps emission disabled and drains every legacy `/webhook-worker` before
+migration 000007. Then require no-row jobs-worker, egress, receiver canary, and
+secret-rotation checkpoints with authenticated evidence.
 <!-- profile:webhooks-durable:end -->
 
 <!-- profile:grpc:start -->

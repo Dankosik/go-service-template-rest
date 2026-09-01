@@ -100,13 +100,14 @@ jobs pack owns retained execution evidence.
 Reopen those decisions only for a named legal retention, erasure, authenticated
 operator API, customer portal, or per-receiver rate-limit requirement.
 
-Migration `000007_postgres_webhooks_retire.sql` renames the published legacy
-relations instead of dropping them, preserving rollback for the previous
-worker. It is not mixed-version compatible: stop emission and drain every
-dedicated webhook worker before applying it, then start the jobs worker. A
-runtime rollback first applies this migration's Down section. The deprecated
-relations can be physically removed only after the previous runtime leaves the
-rollback window and retained data has an explicit disposition.
+The template source retains migrations `000005` through `000007` for existing
+adopters' rollback lineage; freshly initialized services omit them and start on
+River. For a deployment that applied that lineage, `000007` renames the legacy
+relations instead of dropping them. It is not mixed-version compatible: stop
+emission and drain every dedicated webhook worker before applying it, then start
+the jobs worker. A runtime rollback first applies its Down section. The
+deprecated relations can be physically removed only after the previous runtime
+leaves the rollback window and retained data has an explicit disposition.
 
 Local focused checks:
 

@@ -943,6 +943,7 @@ if [[ "${source_checkout}" != true ]]; then
 			docs/postgres-durable-background-jobs.md
 		strip_profile jobs-postgres remove
 	else
+		rm -f -- migrations/000004_postgres_jobs.sql
 		strip_profile jobs-postgres keep
 		fi
 
@@ -965,6 +966,10 @@ if [[ "${source_checkout}" != true ]]; then
 			fi
 			strip_profile webhooks-durable remove
 		else
+			rm -f -- \
+				migrations/000005_postgres_webhooks.sql \
+				migrations/000006_postgres_webhook_reference_repairs.sql \
+				migrations/000007_postgres_webhooks_retire.sql
 			strip_profile webhooks-durable keep
 		fi
 

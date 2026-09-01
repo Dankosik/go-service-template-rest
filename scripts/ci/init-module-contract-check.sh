@@ -255,12 +255,17 @@ assert_profile() {
 		;;
 	jobs)
 		test -d "${root}/cmd/jobs-worker"
-		test -e "${root}/migrations/000004_postgres_jobs.sql"
+		test ! -e "${root}/migrations/000004_postgres_jobs.sql"
 		test -e "${root}/migrations/000008_river.sql"
 		;;
 	webhooks)
 		test -d "${root}/internal/infra/postgreswebhook"
 		test -d "${root}/cmd/jobs-worker"
+		test ! -e "${root}/migrations/000004_postgres_jobs.sql"
+		test ! -e "${root}/migrations/000005_postgres_webhooks.sql"
+		test ! -e "${root}/migrations/000006_postgres_webhook_reference_repairs.sql"
+		test ! -e "${root}/migrations/000007_postgres_webhooks_retire.sql"
+		test -e "${root}/migrations/000008_river.sql"
 		;;
 	inbound-webhooks)
 		test -d "${root}/internal/inboundwebhook/manifest"
