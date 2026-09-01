@@ -20,7 +20,7 @@ func TestInboundWebhookTypedBindings(t *testing.T) {
 	reg := new(Registry)
 	var seen []byte
 	var handled payload
-	if err := reg.Bind("orders", func(body json.RawMessage) (payload, error) {
+	if err := Bind(reg, "orders", func(body json.RawMessage) (payload, error) {
 		seen = append([]byte(nil), body...)
 		if !json.Valid(body) {
 			return payload{}, ErrDecodeRejected
@@ -43,15 +43,15 @@ func TestInboundWebhookTypedBindings(t *testing.T) {
 		t.Fatal("registry binding lookup is inconsistent")
 	}
 
-	if err := reg.Bind[payload]("orders", nil, nil); !errors.Is(err, ErrInvalidBinding) {
+	if err := Bind[payload](reg, "orders", nil, nil); !errors.Is(err, ErrInvalidBinding) {
 		t.Fatalf("nil binding error = %v", err)
 	}
-	if err := reg.Bind("orders", func(json.RawMessage) (payload, error) { return payload{}, nil }, func(context.Context, VerifiedDelivery, payload) error { return nil }); !errors.Is(err, ErrDuplicateBinding) {
+	if err := Bind(reg, "orders", func(json.RawMessage) (payload, error) { return payload{}, nil }, func(context.Context, VerifiedDelivery, payload) error { return nil }); !errors.Is(err, ErrDuplicateBinding) {
 		t.Fatalf("duplicate binding error = %v", err)
 	}
 
 	other := NewRegistry()
-	if err := other.Bind("payments", func(json.RawMessage) (payload, error) {
+	if err := Bind(other, "payments", func(json.RawMessage) (payload, error) {
 		t.Fatal("other endpoint decoder invoked")
 		return payload{}, nil
 	}, func(context.Context, VerifiedDelivery, payload) error {
@@ -83,7 +83,7 @@ func TestInboundWebhookTypedBindings(t *testing.T) {
 	if err := reg.Dispatch(context.Background(), VerifiedDelivery{EndpointID: "orders", Body: json.RawMessage(`not-json`)}); !errors.Is(err, ErrDecodeRejected) {
 		t.Fatalf("invalid JSON error = %v", err)
 	}
-	if err := reg.Bind("payments", func(json.RawMessage) (payload, error) { return payload{}, nil }, func(context.Context, VerifiedDelivery, payload) error { return nil }); err != nil {
+	if err := Bind(reg, "payments", func(json.RawMessage) (payload, error) { return payload{}, nil }, func(context.Context, VerifiedDelivery, payload) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
 	if err := reg.RequireExact([]string{"orders", "payments"}); err != nil {

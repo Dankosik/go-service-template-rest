@@ -32,7 +32,7 @@ func init() {
 					return err
 				}
 				reg := inboundwebhook.NewRegistry()
-				if err := reg.Bind("orders", func(raw json.RawMessage) (json.RawMessage, error) {
+				if err := inboundwebhook.Bind(reg, "orders", func(raw json.RawMessage) (json.RawMessage, error) {
 					return raw, nil
 				}, func(_ context.Context, delivery inboundwebhook.VerifiedDelivery, _ json.RawMessage) error {
 					inboundTestCalls.Add(1)
