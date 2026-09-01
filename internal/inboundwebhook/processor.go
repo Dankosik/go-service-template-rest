@@ -38,8 +38,7 @@ func NewRegistry() *Registry {
 }
 
 // Bind registers one non-nil decoder and handler for endpointID.
-func Bind[T any](
-	r *Registry,
+func (r *Registry) Bind[T any](
 	endpointID string,
 	decode func(json.RawMessage) (T, error),
 	handle func(context.Context, VerifiedDelivery, T) error,

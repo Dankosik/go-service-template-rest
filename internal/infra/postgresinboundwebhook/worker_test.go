@@ -78,7 +78,7 @@ func pendingReceipt() storedReceipt {
 func testRegistry(t *testing.T, handle func(context.Context, inboundwebhook.VerifiedDelivery, json.RawMessage) error, decodeErr error) *inboundwebhook.Registry {
 	t.Helper()
 	reg := inboundwebhook.NewRegistry()
-	if err := inboundwebhook.Bind(reg, "orders", func(raw json.RawMessage) (json.RawMessage, error) {
+	if err := reg.Bind("orders", func(raw json.RawMessage) (json.RawMessage, error) {
 		if decodeErr != nil {
 			return nil, decodeErr
 		}
