@@ -42,7 +42,7 @@ Evaluate these triggers before loading a phase owner:
 
 | Observable trigger | Owner |
 | --- | --- |
-| Outcome, scope, authority, observable success, or first owner is ambiguous | [Intake](spec-first-workflow/phases/intake.md) |
+| New structured work lacks a complete [Intent](spec-first-workflow/interfaces/intent.md), or outcome, scope, authority, observable success, or first owner is ambiguous | [Intake](spec-first-workflow/phases/intake.md) |
 | Current or external evidence can change a named decision | [Research](spec-first-workflow/phases/research.md) |
 | Structured work lacks a ready behavior delta | [Specification](spec-first-workflow/phases/specification.md) |
 | Implementation would otherwise choose a runtime boundary, truth, material flow, failure/recovery behavior, or rollout mechanism | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) |
@@ -51,9 +51,11 @@ Evaluate these triggers before loading a phase owner:
 | Structured work lacks one ready fixed unit or the smallest dependency-ordered ledger | [Planning](spec-first-workflow/phases/planning.md) |
 | One accepted implementation unit is ready and authorized | [Implementation](spec-first-workflow/phases/implementation.md) |
 
-Specification and Planning are required for structured work unless ready
-equivalent authority already supplies their output. Other phases are
-conditional. Load only the selected owner; do not load a phase merely to
+Intake is required for new structured work unless a complete Intent already
+exists. Specification and Planning are required for structured work unless
+ready equivalent authority already supplies their output. Do not backfill
+active work whose accepted upstream authority predates Intent. Other phases
+are conditional. Load only the selected owner; do not load a phase merely to
 declare it unnecessary. Record `skipped` only when a durable [Transition
 result](spec-first-workflow/shared/transition.md) needs that disposition.
 
