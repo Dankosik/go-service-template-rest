@@ -434,8 +434,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"${module}/internal/infra/billing/internal/openapi"
+	"${module}/internal/infra/httpclient"
 )
 
 func TestHarnessHTTPContract(t *testing.T) {
@@ -450,7 +452,15 @@ func TestHarnessHTTPContract(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	constructed, err := New(Config{BaseURL: "https://billing.example.com"})
+	constructed, err := New(Config{
+		BaseURL: "https://billing.example.com",
+		Limits: httpclient.TransportLimits{
+			ResponseHeaderTimeout: 5 * time.Second,
+			MaxResponseHeaderBytes: 32 << 10,
+			MaxInFlight:            2,
+			AbsoluteBodyBytes:      1 << 20,
+		},
+	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
