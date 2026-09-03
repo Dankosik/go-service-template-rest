@@ -9,6 +9,7 @@ names=(
 	integration_race_messaging integration_race_outbox integration_race_webhook
 	performance_harness migrations compose_environment runtime_image image_security
 	publication_metadata secret_scanning documentation integration_records validation_system no_validation_required
+	docs_contract
 )
 
 reset() {
@@ -115,6 +116,11 @@ classify() {
 		case "${file}" in
 			AGENTS.md|CLAUDE.md|Grok.md|QWEN.md|.agents/*|.claude/*|.codex/*|.cursor/*|.grok/*|.opencode/*|.qwen/*|docs/agent-harness/*|docs/spec-first-workflow/*|docs/prompt-*|docs/skill-authoring.md|docs/validation/*|scripts/agent-roles-sync.sh|scripts/harness-skills-sync.sh|scripts/codex-agents-sync.sh|scripts/template-sync.sh|scripts/ci/template-owned-purity-check.sh|scripts/ci/template-sync-behavior-check.sh)
 				mark agent_instructions
+				;;
+		esac
+		case "${file}" in
+			README.md|.agents/skills/go-reliability/references/request-budget.md|.agents/skills/go-security/references/outbound-egress.md|docs/architecture/boundaries.md|docs/architecture/http.md|docs/benchmarking.md|docs/configuration-source-policy.md|docs/external-integration-initializer.md|docs/first-production-feature.md|docs/production-contract.md|docs/railway-deployment-profile.md|internal/config/observability_config.go|internal/infra/httpclient/*|scripts/init-module.sh|scripts/integration-init.sh|scripts/ci/docs-contract-check.sh|scripts/ci/integration-record-constructor-check.go)
+				mark docs_contract
 				;;
 		esac
 		case "${file}" in
@@ -262,7 +268,7 @@ assert_case() {
 
 self_test() {
 	assert_case README.md \
-		"documentation" \
+		"documentation docs_contract" \
 		"go_source go_root_dependencies go_tool_dependencies go_lint_config db_integration messaging_integration process_integration integration_race runtime_image image_security"
 	assert_case tools/go.mod \
 		"go_tool_dependencies" \
@@ -337,6 +343,9 @@ self_test() {
 
 	output="$(printf '%s\n' scripts/ci/template-sync-behavior-check.sh | classify)"
 	has_line "${output}" 'agent_instructions=true'
+	has_line "${output}" 'shell=true'
+	output="$(printf '%s\n' scripts/ci/docs-contract-check.sh | classify)"
+	has_line "${output}" 'docs_contract=true'
 	has_line "${output}" 'shell=true'
 
 	output="$(printf '%s\n' scripts/integration-init.sh | classify)"

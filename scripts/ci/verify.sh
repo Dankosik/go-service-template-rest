@@ -30,13 +30,12 @@ self_test() {
 
 	output=$(bash "$0" --plan --files README.md)
 	grep -q 'documentation=true' <<<"${output}"
+	grep -q 'make docs-contract-check' <<<"${output}"
 	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
-	if grep -q '^  make ' <<<"${output}"; then return 1; fi
 
 	output=$(bash "$0" --files README.md)
+	grep -q 'docs contract check passed' <<<"${output}"
 	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
-	grep -q 'verification not applicable: no executable checks for changed surfaces' <<<"${output}"
-	if grep -q '^  make ' <<<"${output}"; then return 1; fi
 	if grep -q 'reusing exact passing receipt' <<<"${output}"; then return 1; fi
 
 	output=$(bash "$0" --plan --files tools/go.mod)
@@ -297,6 +296,7 @@ fi
 if is_true github_workflows; then add_command make actionlint "GitHub workflow or action source changed" "make actionlint" cpu false false false; fi
 if is_true dependency_automation; then add_na dependency_automation "GitHub owns Dependabot schema validation; CI dependency review remains applicable"; fi
 if is_true performance_harness; then add_command make performance-harness-check "performance harness changed; inspect without load" "make performance-harness-check" docker false true false; fi
+if is_true docs_contract; then add_command make docs-contract-check "high-risk runtime or documentation contract changed" "make docs-contract-check" cheap false false false; fi
 if is_true documentation; then add_na documentation "no repository-wide documentation validator is configured"; fi
 if is_true compose_environment; then add_command make compose-environment-check "compose environment changed" "make compose-environment-check" docker false true false; fi
 if is_true publication_metadata; then add_command make publish-image-metadata-check "publication metadata changed" "make publish-image-metadata-check" cheap false false false; fi

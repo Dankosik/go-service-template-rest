@@ -118,7 +118,12 @@ func TestHTTPClientConstructionRequiresBothOwners(t *testing.T) {
 		return validTestToken("opaque"), nil
 	}, nil)
 	t.Cleanup(owner.Close)
-	base, err := httpclient.NewExternalHTTPS("https://resource.example.com")
+	base, err := httpclient.NewExternalHTTPS("https://resource.example.com", httpclient.TransportLimits{
+		ResponseHeaderTimeout:  defaultAcquisitionTimeout,
+		MaxResponseHeaderBytes: maxTokenResponseHeaders,
+		MaxInFlight:            maxTokenRequestsInFlight,
+		AbsoluteBodyBytes:      maxTokenResponseBody,
+	})
 	if err != nil {
 		t.Fatalf("NewExternalHTTPS() error = %v", err)
 	}

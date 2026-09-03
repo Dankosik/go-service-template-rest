@@ -434,8 +434,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"${module}/internal/infra/billing/internal/openapi"
+	"${module}/internal/infra/httpclient"
 )
 
 func TestHarnessHTTPContract(t *testing.T) {
@@ -450,7 +452,15 @@ func TestHarnessHTTPContract(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	constructed, err := New(Config{BaseURL: "https://billing.example.com"})
+	constructed, err := New(Config{
+		BaseURL: "https://billing.example.com",
+		Limits: httpclient.TransportLimits{
+			ResponseHeaderTimeout: 5 * time.Second,
+			MaxResponseHeaderBytes: 32 << 10,
+			MaxInFlight:            2,
+			AbsoluteBodyBytes:      1 << 20,
+		},
+	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -1065,15 +1075,15 @@ row_e5_gates() {
 	private_root="$(http_none_fixture)"
 	run_init "${private_root}" NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=private-https AUTH=none
 	replace_text "${private_root}/internal/infra/billing/client.go" \
-		'httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix)' \
-		'httpclient.NewExternalHTTPS(cfg.BaseURL)'
+		'httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix, cfg.Limits)' \
+		'httpclient.NewExternalHTTPS(cfg.BaseURL, cfg.Limits)'
 	assert_record_check_rejected "${private_root}" "mutated private HTTP constructor"
 
 	private_root="$(http_none_fixture)"
 	run_init "${private_root}" NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=private-https AUTH=none
 	replace_text "${private_root}/internal/infra/billing/client.go" \
-		'transport, err := httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix)' \
-		$'_, _ = httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix)\n\ttransport, err := httpclient.NewExternalHTTPS(cfg.BaseURL)'
+		'transport, err := httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix, cfg.Limits)' \
+		$'_, _ = httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix, cfg.Limits)\n\ttransport, err := httpclient.NewExternalHTTPS(cfg.BaseURL, cfg.Limits)'
 	assert_record_check_rejected "${private_root}" "dead private constructor literal"
 
 	private_root="$(http_none_fixture)"
@@ -1082,23 +1092,23 @@ row_e5_gates() {
 		$'\t"github.com/acme/http-none-base/internal/infra/httpclient"' \
 		$'\thttpc "github.com/acme/http-none-base/internal/infra/httpclient"'
 	replace_text "${private_root}/internal/infra/billing/client.go" \
-		'transport, err := httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix)' \
-		$'// httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix)\n\ttransport, err := httpc.NewExternalHTTPS(cfg.BaseURL)'
+		'transport, err := httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix, cfg.Limits)' \
+		$'// httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix, cfg.Limits)\n\ttransport, err := httpc.NewExternalHTTPS(cfg.BaseURL, cfg.Limits)'
 	assert_record_check_rejected "${private_root}" "aliased external constructor with private comment"
 
 	private_root="$(http_none_fixture)"
 	run_init "${private_root}" NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=private-https AUTH=none
 	replace_text "${private_root}/internal/infra/billing/client.go" \
-		'transport, err := httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix)' \
+		'transport, err := httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix, cfg.Limits)' \
 		'transport, err := buildTransport(cfg)'
 	cat >>"${private_root}/internal/infra/billing/client.go" <<'EOF'
 
 func buildTransport(cfg Config) (*httpclient.Client, error) {
-	return httpclient.NewExternalHTTPS(cfg.BaseURL)
+	return httpclient.NewExternalHTTPS(cfg.BaseURL, cfg.Limits)
 }
 
 func (Client) New(cfg Config) {
-	transport, _ := httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix)
+	transport, _ := httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix, cfg.Limits)
 	_ = transport
 }
 EOF

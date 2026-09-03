@@ -190,8 +190,8 @@ The template deliberately does not choose these values:
 - Railway project, environment, service, branch, domain, or region;
 - secrets and database connection references;
 - replica count, CPU, memory, autoscaling, or spend;
-- private reachability for the separate metrics listener when its default
-  loopback bind is changed;
+- private reachability for the separate metrics listener, whose shipped `:9090`
+  address binds every interface, and stricter policy when `pprof` is enabled;
 - alerting, continuous health monitoring, or an external uptime check;
 - release approval, rollback authority, and retention policy.
 

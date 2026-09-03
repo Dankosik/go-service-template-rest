@@ -11,6 +11,9 @@ import (
 const (
 	defaultAcquisitionTimeout = 5 * time.Second
 	defaultEarlyExpiry        = 10 * time.Second
+	maxTokenResponseHeaders   = 32 << 10
+	maxTokenResponseBody      = 1 << 20
+	maxTokenRequestsInFlight  = 1
 )
 
 type acquireToken func(context.Context) (*oauth2.Token, error)

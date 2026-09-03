@@ -85,6 +85,7 @@ VERIFY_SCRIPT := bash ./scripts/ci/verify.sh
 RUNTIME_IMAGE_CHECK_SCRIPT := bash ./scripts/ci/runtime-image-check.sh
 PERFORMANCE_SCRIPT := bash ./scripts/dev/benchmark.sh
 INTEGRATION_RECORD_CHECK_SCRIPT := bash ./scripts/ci/integration-record-check.sh
+DOCS_CONTRACT_CHECK_SCRIPT := bash ./scripts/ci/docs-contract-check.sh
 S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
 MIGRATION_HISTORY_CHECK_SCRIPT := bash ./scripts/ci/migration-history-check.sh
 MIGRATION_VALIDATE_SCRIPT := bash ./scripts/ci/migration-validate.sh
@@ -98,7 +99,7 @@ TEMPLATE ?= ../go-service-template-rest
 # host, or toolchain changes.
 .NOTPARALLEL: check check-unlocked check-go unit-check unit-check-unlocked prove tools-dependencies-check mod-check openapi-check proto-check
 
-.PHONY: help template-init template-init-check integration-init integration-init-check integration-record-check integration-routing-check \
+.PHONY: help template-init template-init-check integration-init integration-init-check integration-record-check docs-contract-check integration-routing-check \
 	tidy fmt mod-check root-mod-check tools-mod-check tools-resolution-check tools-dependencies-check mod-tidy-check fmt-check fmt-files-check prove unit-check unit-check-unlocked plan verify verify-check check check-unlocked check-go check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check affected-go-packages-check integration-routing-self-test validation-lock-self-test compose-environment-check \
 	test test-package test-all test-watch test-race test-integration test-integration-db test-integration-messaging test-integration-process test-integration-race \
 	lint lint-package lint-changed lint-pr lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
@@ -126,6 +127,7 @@ help:
 	@echo "  make lint-fast PKG=./internal/config      # local changed-code signal; not a lint claim"
 	@echo "  make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none"
 	@echo "  make integration-record-check             # exact integration identity/source/output parity"
+	@echo "  make docs-contract-check                   # high-risk runtime/document contract parity"
 	@echo "  make agent-roles-check, make codex-agents-check, make claude-skills-check, or make qwen-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt committed template instructions"
@@ -194,6 +196,9 @@ integration-init-check:
 
 integration-record-check:
 	$(INTEGRATION_RECORD_CHECK_SCRIPT)
+
+docs-contract-check:
+	$(DOCS_CONTRACT_CHECK_SCRIPT)
 
 template-owned-purity-check:
 	@if [ -f ./scripts/ci/template-owned-purity-check.sh ]; then \
