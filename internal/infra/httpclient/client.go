@@ -143,7 +143,7 @@ func (c *Client) DoWithPolicy(request *http.Request, policy OperationPolicy) (*h
 	attempt := request.Clone(operationCtx)
 	return c.do(attempt, policy.MaxBodyBytes, cancel, func() error {
 		if err := request.Context().Err(); err != nil {
-			return err
+			return fmt.Errorf("parent request: %w", err)
 		}
 		if errors.Is(context.Cause(operationCtx), ErrOperationTimeout) {
 			return ErrOperationTimeout
@@ -246,7 +246,10 @@ func (b *boundedBody) Read(buffer []byte) (int, error) {
 func (b *boundedBody) Close() error {
 	err := b.body.Close()
 	b.complete()
-	return err
+	if err != nil {
+		return fmt.Errorf("close outbound HTTP response body: %w", err)
+	}
+	return nil
 }
 
 // BaseURL returns the validated provider base URL.
