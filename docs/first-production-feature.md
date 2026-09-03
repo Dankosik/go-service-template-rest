@@ -78,10 +78,11 @@ it; see `requestViolations` in `internal/infra/http` for the rule that governs
 what may appear there.
 Set `httpx.Handlers.API` to the concrete feature handler in
 `cmd/service/internal/bootstrap`; do not register a parallel manual API route.
-Append the feature's `failure.Mapper` at `runtimeDependencies.DomainErrors` in
-the same package. The two fail differently when forgotten: a missing `API` stops
-the process at startup, while a missing mapper is silent and answers a sanitized
-500 in place of the status the contract documents.
+Append the feature's `failure.Mapper` to the local `domainErrors` slice in
+`cmd/service/internal/bootstrap/run.go`; the same slice feeds the HTTP and gRPC
+boundaries. The two registrations fail differently when forgotten: a missing
+`API` stops the process at startup, while a missing mapper is silent and answers
+a sanitized 500 or `INTERNAL` in place of the status the contract documents.
 
 <!-- profile:grpc:start -->
 ### Native gRPC operation

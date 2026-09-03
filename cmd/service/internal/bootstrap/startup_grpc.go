@@ -73,7 +73,7 @@ func newGRPCRuntime(
 			MeterProvider:  metrics.MeterProvider(),
 			TracerProvider: otel.GetTracerProvider(),
 			// The same slice the HTTP router receives. A service appends its
-			// mappers at runtimeDependencies.DomainErrors, never here.
+			// mappers to the local domainErrors slice in run.go, never here.
 			DomainErrors: domainErrors,
 			Services:     bindings.Services,
 			UnaryPolicy:  bindings.UnaryPolicy,

@@ -50,9 +50,9 @@ func newHTTPHandler(
 			OTelServerName:  cfg.Observability.OTel.ServiceName,
 			LogHealthProbes: cfg.HTTP.AccessLogHealthProbes,
 			// The active profile's dependency failures, classified once here
-			// rather than in every operation. A service appends its own domain
-			// mappers at runtimeDependencies.DomainErrors; see failure.Mapper
-			// for why the seam exists.
+			// rather than in every operation. A service appends its own mappers
+			// to the local domainErrors slice in run.go; see failure.Mapper for
+			// why the seam exists.
 			DomainErrors: domainErrors,
 			// profile:authn-bearer:start
 			Authenticate:          bindings.Authenticate,
