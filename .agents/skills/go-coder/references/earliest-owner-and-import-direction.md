@@ -32,8 +32,8 @@ Narrower rules sit on top — `internal/config` may import only
   change belongs where the value is already known. Adding the import is not the
   smaller diff — it is a larger change to the architecture wearing a one-line
   disguise.
-- Look for an existing seam before adding one. `internal/infra/http.Config`
-  already carries `DomainErrors []problem.Mapper` for classifying the errors a
+- Look for an existing seam before adding one. `internal/infra/http.RouterConfig`
+  already carries `DomainErrors []failure.Mapper` for classifying the errors a
   generated operation returns, plus `Authenticate`, `RateLimit`, and
   `RateLimitKey` for the policies a template cannot guess. A new value on an
   existing seam beats a new package.
