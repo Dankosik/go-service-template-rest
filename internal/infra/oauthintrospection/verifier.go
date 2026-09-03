@@ -23,6 +23,7 @@ const (
 	ProviderTimeout        = 5 * time.Second
 	MaxResponseHeaderBytes = 32 << 10
 	MaxProviderBody        = 1 << 20
+	MaxProviderInFlight    = 32
 )
 
 type providerClient interface {
@@ -55,9 +56,11 @@ func newVerifier(policy Policy, client providerClient, now func() time.Time) *Ve
 }
 
 func newProviderClient(policy Policy) (*httpclient.Client, error) {
-	limits := httpclient.ResponseLimits{
+	limits := httpclient.TransportLimits{
 		ResponseHeaderTimeout:  ProviderTimeout,
 		MaxResponseHeaderBytes: MaxResponseHeaderBytes,
+		MaxInFlight:            MaxProviderInFlight,
+		AbsoluteBodyBytes:      MaxProviderBody,
 	}
 	var (
 		client *httpclient.Client
@@ -65,9 +68,9 @@ func newProviderClient(policy Policy) (*httpclient.Client, error) {
 	)
 	switch policy.targetClass {
 	case authntrust.TargetClassExternalHTTPS:
-		client, err = httpclient.NewExternalHTTPSWithLimits(policy.endpoint, limits)
+		client, err = httpclient.NewExternalHTTPS(policy.endpoint, limits)
 	case authntrust.TargetClassPrivateHTTPS:
-		client, err = httpclient.NewPrivateHTTPSWithLimits(policy.endpoint, policy.privateSuffix, limits)
+		client, err = httpclient.NewPrivateHTTPS(policy.endpoint, policy.privateSuffix, limits)
 	default:
 		return nil, fmt.Errorf("build introspection client: %w", failure(bearerauthn.KindUnavailable))
 	}

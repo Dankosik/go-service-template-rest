@@ -134,8 +134,18 @@ for record in "${records[@]}"; do
 			fi
 		done
 		require_regex "${record}" "${config}" "^[[:space:]]+BaseURL[[:space:]]+string[[:space:]]+\`koanf:\"base_url\"\`" "HTTP base URL field"
+		require_regex "${record}" "${config}" "^[[:space:]]+ResponseHeaderTimeout[[:space:]]+time.Duration[[:space:]]+\`koanf:\"response_header_timeout\"\`" "HTTP response-header timeout field"
+		require_regex "${record}" "${config}" "^[[:space:]]+MaxResponseHeaderBytes[[:space:]]+int64[[:space:]]+\`koanf:\"max_response_header_bytes\"\`" "HTTP response-header byte field"
+		require_regex "${record}" "${config}" "^[[:space:]]+MaxInFlight[[:space:]]+int[[:space:]]+\`koanf:\"max_in_flight\"\`" "HTTP request-concurrency field"
+		require_regex "${record}" "${config}" "^[[:space:]]+MaxResponseBodyBytes[[:space:]]+int64[[:space:]]+\`koanf:\"max_response_body_bytes\"\`" "HTTP response-body byte field"
 		require_literal "${record}" "${adapter}" '/internal/infra/httpclient"' "bounded HTTP owner"
-		bootstrap_mappings+=("BaseURL=cfg.BaseURL")
+		bootstrap_mappings+=(
+			"BaseURL=cfg.BaseURL"
+			"Limits.ResponseHeaderTimeout=cfg.ResponseHeaderTimeout"
+			"Limits.MaxResponseHeaderBytes=cfg.MaxResponseHeaderBytes"
+			"Limits.MaxInFlight=cfg.MaxInFlight"
+			"Limits.AbsoluteBodyBytes=cfg.MaxResponseBodyBytes"
+		)
 		require_literal "${record}" "${documentation}" "Target class: \`${target}\`" "HTTP target class"
 		require_literal "${record}" "internal/infra/${name}/internal/openapi/doc.go" "../../../../../${contract}" "exact OpenAPI source"
 		require_literal "${record}" "internal/infra/${name}/internal/openapi/oapi-codegen.yaml" 'client: true' "client-only OpenAPI generator"
@@ -155,6 +165,10 @@ for record in "${records[@]}"; do
 			fi
 		fi
 		require_literal "${record}" env/.env.example "APP__INTEGRATIONS__${env_name}__BASE_URL=" "HTTP base URL environment key"
+		require_literal "${record}" env/.env.example "APP__INTEGRATIONS__${env_name}__RESPONSE_HEADER_TIMEOUT=" "HTTP response-header timeout environment key"
+		require_literal "${record}" env/.env.example "APP__INTEGRATIONS__${env_name}__MAX_RESPONSE_HEADER_BYTES=" "HTTP response-header byte environment key"
+		require_literal "${record}" env/.env.example "APP__INTEGRATIONS__${env_name}__MAX_IN_FLIGHT=" "HTTP request-concurrency environment key"
+		require_literal "${record}" env/.env.example "APP__INTEGRATIONS__${env_name}__MAX_RESPONSE_BODY_BYTES=" "HTTP response-body byte environment key"
 		;;
 	grpc)
 		auth="$(sed -n '5s/^auth = "\([^"]*\)"$/\1/p' "${record}")"

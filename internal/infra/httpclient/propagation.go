@@ -29,7 +29,8 @@ func (t propagationSanitizer) RoundTrip(request *http.Request) (*http.Response, 
 
 func removeReservedHeaders(header http.Header) {
 	maps.DeleteFunc(header, func(name string, _ []string) bool {
-		return strings.EqualFold(name, "traceparent") ||
+		return strings.EqualFold(name, "accept-encoding") ||
+			strings.EqualFold(name, "traceparent") ||
 			strings.EqualFold(name, "tracestate") ||
 			strings.EqualFold(name, "baggage") ||
 			strings.EqualFold(name, reqctx.RequestIDHeader)

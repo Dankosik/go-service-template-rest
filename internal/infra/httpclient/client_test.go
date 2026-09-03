@@ -1,6 +1,8 @@
 package httpclient
 
 import (
+	"compress/gzip"
+	"context"
 	"crypto/rand"
 	"errors"
 	"io"
@@ -8,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,11 +22,11 @@ func TestFixedTargetPolicy(t *testing.T) {
 		"", "http://example.com", "https://user@example.com", "https://example.com?query=1",
 		"https://127.0.0.1", "https://[::1]",
 	} {
-		if _, err := NewExternalHTTPS(raw); err == nil {
+		if _, err := NewExternalHTTPS(raw, testTransportLimits()); err == nil {
 			t.Errorf("NewExternalHTTPS(%q) succeeded", raw)
 		}
 	}
-	private, err := NewPrivateHTTPS("HTTPS://API.SERVICE.INTERNAL/v1", "service.internal")
+	private, err := NewPrivateHTTPS("HTTPS://API.SERVICE.INTERNAL/v1", "service.internal", testTransportLimits())
 	if err != nil {
 		t.Fatalf("NewPrivateHTTPS() error = %v", err)
 	}
@@ -31,11 +34,11 @@ func TestFixedTargetPolicy(t *testing.T) {
 		t.Fatalf("BaseURL() = %q", got)
 	}
 	private.CloseIdleConnections()
-	if _, err := NewPrivateHTTPS("https://api.example.com", "service.internal"); err == nil {
+	if _, err := NewPrivateHTTPS("https://api.example.com", "service.internal", testTransportLimits()); err == nil {
 		t.Fatal("private target outside suffix succeeded")
 	}
 	for _, suffix := range []string{"", "."} {
-		if _, err := NewPrivateHTTPS("https://api.service.internal", suffix); err == nil {
+		if _, err := NewPrivateHTTPS("https://api.service.internal", suffix, testTransportLimits()); err == nil {
 			t.Errorf("NewPrivateHTTPS() accepted suffix %q", suffix)
 		}
 	}
@@ -69,7 +72,7 @@ func TestDialAddressPolicy(t *testing.T) {
 }
 
 func TestClientRejectsResolvedPrivateAddressAndRedirects(t *testing.T) {
-	client, err := NewExternalHTTPS("https://localhost:443")
+	client, err := NewExternalHTTPS("https://localhost:443", testTransportLimits())
 	if err != nil {
 		t.Fatalf("NewExternalHTTPS() error = %v", err)
 	}
@@ -107,6 +110,7 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 	request.Header.Set("Tracestate", "stale")
 	request.Header.Set("Baggage", "secret=value")
 	request.Header.Set("X-Request-ID", "stale")
+	request.Header.Set("Accept-Encoding", "br")
 	request.Header.Set("X-Provider", "retained")
 	request.Trailer = http.Header{"Baggage": {"secret=trailer"}}
 	response, err := transport.RoundTrip(request)
@@ -117,7 +121,7 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 		t.Fatal("RoundTrip() returned an incomplete response")
 	}
 	_ = response.Body.Close()
-	for _, name := range []string{"Traceparent", "Tracestate", "Baggage", "X-Request-ID"} {
+	for _, name := range []string{"Accept-Encoding", "Traceparent", "Tracestate", "Baggage", "X-Request-ID"} {
 		if got := received.Header.Get(name); got != "" {
 			t.Errorf("received %s = %q", name, got)
 		}
@@ -164,62 +168,63 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 const (
 	fixedHeaderTimeout  = 5 * time.Second
 	fixedMaxHeaderBytes = 32 << 10
+	fixedMaxBodyBytes   = 1 << 20
+	fixedMaxInFlight    = 2
 	headerLimitMargin   = 1024
 	bodyCanary          = "body-must-not-reach-caller"
 )
 
-func TestResponseLimitsAdmissionAndCompatibility(t *testing.T) {
+func testTransportLimits() TransportLimits {
+	return TransportLimits{
+		ResponseHeaderTimeout:  fixedHeaderTimeout,
+		MaxResponseHeaderBytes: fixedMaxHeaderBytes,
+		MaxInFlight:            fixedMaxInFlight,
+		AbsoluteBodyBytes:      fixedMaxBodyBytes,
+	}
+}
+
+func TestTransportLimitsAdmission(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
 	server := newPinnedTLSServer(t, false, func(response http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		response.WriteHeader(http.StatusNoContent)
 	})
-	valid := ResponseLimits{ResponseHeaderTimeout: fixedHeaderTimeout, MaxResponseHeaderBytes: fixedMaxHeaderBytes}
-	for _, limits := range []ResponseLimits{
+	valid := testTransportLimits()
+	for _, limits := range []TransportLimits{
 		{},
-		{ResponseHeaderTimeout: fixedHeaderTimeout},
-		{MaxResponseHeaderBytes: fixedMaxHeaderBytes},
-		{ResponseHeaderTimeout: -time.Second, MaxResponseHeaderBytes: fixedMaxHeaderBytes},
-		{ResponseHeaderTimeout: fixedHeaderTimeout, MaxResponseHeaderBytes: -1},
+		{ResponseHeaderTimeout: fixedHeaderTimeout, MaxResponseHeaderBytes: fixedMaxHeaderBytes, MaxInFlight: 1},
+		{ResponseHeaderTimeout: fixedHeaderTimeout, MaxResponseHeaderBytes: fixedMaxHeaderBytes, AbsoluteBodyBytes: 1},
+		{ResponseHeaderTimeout: fixedHeaderTimeout, MaxInFlight: 1, AbsoluteBodyBytes: 1},
+		{MaxResponseHeaderBytes: fixedMaxHeaderBytes, MaxInFlight: 1, AbsoluteBodyBytes: 1},
 	} {
-		if _, err := NewExternalHTTPSWithLimits("https://example.com", limits); err == nil {
-			t.Fatalf("NewExternalHTTPSWithLimits(%+v) succeeded", limits)
+		if _, err := NewExternalHTTPS("https://example.com", limits); err == nil {
+			t.Fatalf("NewExternalHTTPS(%+v) succeeded", limits)
 		}
-		if _, err := NewPrivateHTTPSWithLimits("https://api.service.internal", "service.internal", limits); err == nil {
-			t.Fatalf("NewPrivateHTTPSWithLimits(%+v) succeeded", limits)
+		if _, err := NewPrivateHTTPS("https://api.service.internal", "service.internal", limits); err == nil {
+			t.Fatalf("NewPrivateHTTPS(%+v) succeeded", limits)
 		}
 	}
 	if calls.Load() != 0 {
 		t.Fatalf("invalid construction issued %d requests", calls.Load())
 	}
 
-	oldExternal, err := NewExternalHTTPS("https://example.com")
+	external, err := NewExternalHTTPS("https://example.com", valid)
 	if err != nil {
 		t.Fatalf("NewExternalHTTPS() error = %v", err)
 	}
-	limitedExternal, err := NewExternalHTTPSWithLimits("https://example.com", valid)
-	if err != nil {
-		t.Fatalf("NewExternalHTTPSWithLimits() error = %v", err)
-	}
-	oldPrivate, err := NewPrivateHTTPS("https://api.service.internal", "service.internal")
+	private, err := NewPrivateHTTPS("https://api.service.internal", "service.internal", valid)
 	if err != nil {
 		t.Fatalf("NewPrivateHTTPS() error = %v", err)
 	}
-	limitedPrivate, err := NewPrivateHTTPSWithLimits("https://api.service.internal", "service.internal", valid)
-	if err != nil {
-		t.Fatalf("NewPrivateHTTPSWithLimits() error = %v", err)
-	}
-	t.Cleanup(oldExternal.CloseIdleConnections)
-	t.Cleanup(limitedExternal.CloseIdleConnections)
-	t.Cleanup(oldPrivate.CloseIdleConnections)
-	t.Cleanup(limitedPrivate.CloseIdleConnections)
+	t.Cleanup(external.CloseIdleConnections)
+	t.Cleanup(private.CloseIdleConnections)
 
-	oldTransport := clientTransport(t, oldExternal)
-	if oldTransport.ResponseHeaderTimeout != 0 || oldTransport.MaxResponseHeaderBytes != 0 {
-		t.Fatal("existing constructor applied response limits")
+	transport := clientTransport(t, external)
+	if transport.ResponseHeaderTimeout != fixedHeaderTimeout || transport.MaxResponseHeaderBytes != fixedMaxHeaderBytes {
+		t.Fatal("constructor did not apply response-header limits")
 	}
-	for _, client := range []*Client{oldExternal, limitedExternal, oldPrivate, limitedPrivate} {
+	for _, client := range []*Client{external, private} {
 		if clientTransport(t, client).Proxy != nil {
 			t.Fatal("transport proxy is not disabled")
 		}
@@ -242,15 +247,12 @@ func TestResponseLimitsAdmissionAndCompatibility(t *testing.T) {
 		t.Fatalf("denied requests reached the server: %d", calls.Load())
 	}
 
-	pinClientToTLSServer(t, oldExternal, server)
-	pinClientToTLSServer(t, limitedExternal, server)
-	for _, client := range []*Client{oldExternal, limitedExternal} {
-		if body := doPinnedRequest(t, client, "/"); body != "" {
-			t.Fatalf("under-limit body = %q", body)
-		}
+	pinClientToTLSServer(t, external, server)
+	if body := doPinnedRequest(t, external, "/"); body != "" {
+		t.Fatalf("under-limit body = %q", body)
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("under-limit calls = %d, want 2", calls.Load())
+	if calls.Load() != 1 {
+		t.Fatalf("under-limit calls = %d, want 1", calls.Load())
 	}
 }
 
@@ -267,9 +269,10 @@ func TestResponseHeaderTimeoutEnforced(t *testing.T) {
 	control := newPinnedTLSServer(t, false, func(response http.ResponseWriter, _ *http.Request) {
 		response.WriteHeader(http.StatusNoContent)
 	})
-	limits := ResponseLimits{ResponseHeaderTimeout: testHeaderTimeout, MaxResponseHeaderBytes: fixedMaxHeaderBytes}
+	limits := testTransportLimits()
+	limits.ResponseHeaderTimeout = testHeaderTimeout
 
-	controlClient, err := NewExternalHTTPSWithLimits("https://example.com", limits)
+	controlClient, err := NewExternalHTTPS("https://example.com", limits)
 	if err != nil {
 		t.Fatalf("control constructor error = %v", err)
 	}
@@ -279,7 +282,7 @@ func TestResponseHeaderTimeoutEnforced(t *testing.T) {
 		t.Fatalf("under-time body = %q", body)
 	}
 
-	blockedClient, err := NewExternalHTTPSWithLimits("https://example.com", limits)
+	blockedClient, err := NewExternalHTTPS("https://example.com", limits)
 	if err != nil {
 		t.Fatalf("blocked constructor error = %v", err)
 	}
@@ -348,12 +351,9 @@ func assertResponseHeaderLimit(t *testing.T, enableHTTP2 bool, wantProto, wantAL
 		}
 		_, _ = io.WriteString(response, bodyCanary)
 	})
-	client, err := NewExternalHTTPSWithLimits("https://example.com", ResponseLimits{
-		ResponseHeaderTimeout:  fixedHeaderTimeout,
-		MaxResponseHeaderBytes: fixedMaxHeaderBytes,
-	})
+	client, err := NewExternalHTTPS("https://example.com", testTransportLimits())
 	if err != nil {
-		t.Fatalf("NewExternalHTTPSWithLimits() error = %v", err)
+		t.Fatalf("NewExternalHTTPS() error = %v", err)
 	}
 	t.Cleanup(client.CloseIdleConnections)
 	pinClientToTLSServer(t, client, server)
@@ -389,6 +389,256 @@ func assertResponseHeaderLimit(t *testing.T, enableHTTP2 bool, wantProto, wantAL
 	if alpn, _ := gotALPN.Load().(string); alpn != wantALPN && (wantALPN != "http/1.1" || alpn != "") {
 		t.Fatalf("over-limit ALPN = %q, want %s", alpn, wantALPN)
 	}
+}
+
+func TestResponseBodyLimit(t *testing.T) {
+	limits := testTransportLimits()
+	limits.AbsoluteBodyBytes = 8
+	server := newPinnedTLSServer(t, false, func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/content-length":
+			response.Header().Set("Content-Length", "9")
+			_, _ = io.WriteString(response, "123456789")
+		case "/chunked":
+			if !flushResponse(t, response) {
+				return
+			}
+			_, _ = io.WriteString(response, "123456789")
+		case "/compressed":
+			response.Header().Set("Content-Encoding", "gzip")
+			compressed := gzip.NewWriter(response)
+			_, _ = io.WriteString(compressed, strings.Repeat("x", 9))
+			_ = compressed.Close()
+		}
+	})
+	client, err := NewExternalHTTPS("https://example.com", limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.CloseIdleConnections)
+	pinClientToTLSServer(t, client, server)
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL()+"/content-length", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Do(request)
+	if response != nil && response.Body != nil {
+		_ = response.Body.Close()
+	}
+	if response != nil || !errors.Is(err, ErrResponseTooLarge) {
+		t.Fatalf("content-length response = %#v, error = %v", response, err)
+	}
+
+	for _, path := range []string{"/chunked", "/compressed"} {
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL()+path, http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("Do(%s) error = %v", path, err)
+		}
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if len(body) != int(limits.AbsoluteBodyBytes) || !errors.Is(readErr, ErrResponseTooLarge) {
+			t.Fatalf("ReadAll(%s) bytes = %d, error = %v", path, len(body), readErr)
+		}
+	}
+}
+
+func TestOperationPolicy(t *testing.T) {
+	limits := testTransportLimits()
+	server := newPinnedTLSServer(t, false, func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/body" {
+			if !flushResponse(t, response) {
+				return
+			}
+			_, _ = io.WriteString(response, "12")
+			return
+		}
+		if !flushResponse(t, response) {
+			return
+		}
+		<-request.Context().Done()
+	})
+	client, err := NewExternalHTTPS("https://example.com", limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(client.CloseIdleConnections)
+	pinClientToTLSServer(t, client, server)
+
+	for _, policy := range []OperationPolicy{
+		{},
+		{Timeout: time.Second},
+		{MaxBodyBytes: 1},
+		{Timeout: time.Second, MaxBodyBytes: limits.AbsoluteBodyBytes + 1},
+	} {
+		request, requestErr := http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL(), http.NoBody)
+		if requestErr != nil {
+			t.Fatal(requestErr)
+		}
+		response, err := client.DoWithPolicy(request, policy)
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
+		if err == nil {
+			t.Fatalf("DoWithPolicy(%+v) succeeded", policy)
+		}
+	}
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL()+"/body", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.DoWithPolicy(request, OperationPolicy{Timeout: time.Second, MaxBodyBytes: 1})
+	if err != nil {
+		t.Fatalf("DoWithPolicy(body) error = %v", err)
+	}
+	body, err := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if string(body) != "1" || !errors.Is(err, ErrResponseTooLarge) {
+		t.Fatalf("ReadAll(body) = %q, %v", body, err)
+	}
+
+	parentCtx, cancelParent := context.WithCancel(t.Context())
+	cancelParent()
+	request, err = http.NewRequestWithContext(parentCtx, http.MethodGet, client.BaseURL(), http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err = client.DoWithPolicy(request, OperationPolicy{Timeout: time.Second, MaxBodyBytes: 1})
+	if response != nil && response.Body != nil {
+		_ = response.Body.Close()
+	}
+	if !errors.Is(err, context.Canceled) || errors.Is(err, ErrOperationTimeout) {
+		t.Fatalf("parent-canceled error = %v", err)
+	}
+
+	request, err = http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL()+"/timeout", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err = client.DoWithPolicy(request, OperationPolicy{Timeout: 100 * time.Millisecond, MaxBodyBytes: 1})
+	if err != nil {
+		t.Fatalf("DoWithPolicy() error = %v", err)
+	}
+	_, err = io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if !errors.Is(err, ErrOperationTimeout) {
+		t.Fatalf("ReadAll() error = %v, want ErrOperationTimeout", err)
+	}
+}
+
+func TestConcurrencyAdmissionReleasesSlot(t *testing.T) {
+	t.Run("cancellation", func(t *testing.T) {
+		limits := testTransportLimits()
+		limits.MaxInFlight = 1
+		var calls atomic.Int32
+		server := newPinnedTLSServer(t, false, func(response http.ResponseWriter, request *http.Request) {
+			if calls.Add(1) == 1 {
+				if !flushResponse(t, response) {
+					return
+				}
+				<-request.Context().Done()
+				return
+			}
+			response.WriteHeader(http.StatusNoContent)
+		})
+		client, err := NewExternalHTTPS("https://example.com", limits)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(client.CloseIdleConnections)
+		pinClientToTLSServer(t, client, server)
+
+		requestCtx, cancel := context.WithCancel(t.Context())
+		request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, client.BaseURL(), http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = response.Body.Close() }()
+
+		overflow, err := http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL(), http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		overflowResponse, err := client.Do(overflow)
+		if overflowResponse != nil && overflowResponse.Body != nil {
+			_ = overflowResponse.Body.Close()
+		}
+		if !errors.Is(err, ErrSaturated) {
+			t.Fatalf("overflow error = %v, want ErrSaturated", err)
+		}
+
+		cancel()
+		if _, err := io.ReadAll(response.Body); !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled body error = %v", err)
+		}
+		if body := doPinnedRequest(t, client, "/"); body != "" {
+			t.Fatalf("recovered body = %q", body)
+		}
+	})
+
+	t.Run("transport error", func(t *testing.T) {
+		limits := testTransportLimits()
+		limits.MaxInFlight = 1
+		var calls atomic.Int32
+		server := newPinnedTLSServer(t, false, func(response http.ResponseWriter, _ *http.Request) {
+			if calls.Add(1) == 1 {
+				hijacker, ok := response.(http.Hijacker)
+				if !ok {
+					t.Error("response writer cannot hijack the test connection")
+					return
+				}
+				connection, _, err := hijacker.Hijack()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				_ = connection.Close()
+				return
+			}
+			response.WriteHeader(http.StatusNoContent)
+		})
+		client, err := NewExternalHTTPS("https://example.com", limits)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(client.CloseIdleConnections)
+		pinClientToTLSServer(t, client, server)
+
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL(), http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.Do(request)
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
+		if err == nil {
+			t.Fatal("broken transport request succeeded")
+		}
+		if body := doPinnedRequest(t, client, "/"); body != "" {
+			t.Fatalf("recovered body = %q", body)
+		}
+	})
+}
+
+func flushResponse(t *testing.T, response http.ResponseWriter) bool {
+	t.Helper()
+	flusher, ok := response.(http.Flusher)
+	if !ok {
+		t.Error("response writer cannot flush test headers")
+		return false
+	}
+	flusher.Flush()
+	return true
 }
 
 func newPinnedTLSServer(t *testing.T, enableHTTP2 bool, handler http.HandlerFunc) *httptest.Server {

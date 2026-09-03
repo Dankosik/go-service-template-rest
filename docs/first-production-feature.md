@@ -284,15 +284,24 @@ private DNS suffix; there is no platform-specific default. The fixed client
 ignores `HTTP_PROXY`/`HTTPS_PROXY` on purpose, because a proxy would dial on
 the client's behalf and bypass the post-DNS address gate; a provider that must
 be reached through a mandatory egress proxy uses a plain `net/http` client.
-Authentication, operation deadlines, response parsing and limits, retries,
-provider errors, and telemetry stay in the provider adapter or official SDK.
-Dynamic or user-controlled URLs require a feature-specific SSRF design.
+Construction also requires provider-wide response-header, decoded-body, and
+request-concurrency ceilings. The provider adapter chooses those values,
+operation deadlines, and any smaller body limit; `DoWithPolicy` enforces the
+smaller non-streaming pair without weakening the transport ceiling.
+Authentication, parsing, retry eligibility, provider errors, and telemetry stay
+in the provider adapter or official SDK. There is no generic streaming escape
+hatch: a real streaming operation must add explicit duration, idle, byte/rate,
+and concurrency bounds. Dynamic or user-controlled URLs require a
+feature-specific SSRF design.
 
 Generate the provider client from its authoritative versioned OpenAPI schema,
 then give it the fixed-target client through oapi-codegen's generated seam:
 
 ```go
-bounded, err := httpclient.NewExternalHTTPS(cfg.OrdersBaseURL)
+bounded, err := httpclient.NewExternalHTTPS(
+    cfg.OrdersBaseURL,
+    cfg.OrdersTransportLimits,
+)
 if err != nil {
     return err
 }
@@ -355,10 +364,18 @@ resource needs cleanup on later startup failure and bounded shutdown.
 Readiness should include only dependencies whose loss makes the instance
 unable to serve; liveness must remain process-local.
 
+Before production promotion, replace the unresolved entries in
+[`production-contract.md`](production-contract.md) with service-owned scope,
+dependency, capacity, durability, trust, SLO, and recovery decisions. Do not
+invent missing platform values; keep promotion blocked until their owner
+supplies them.
+
 Application traffic uses the configured HTTP listener. Prometheus exposition
-uses `observability.metrics.addr` (loopback by default) and is never available
-from the application listener. Add low-cardinality feature metrics or spans
-only where they answer an operational question.
+uses the separate `observability.metrics.addr` diagnostics listener and is
+never available from the application listener. Its shipped `:9090` default
+binds every interface, so deployment must keep it private; enabling `pprof`
+requires stricter network or authentication policy. Add low-cardinality feature
+metrics or spans only where they answer an operational question.
 
 Use focused tests while iterating. Optional package-sized iteration is
 `make prove PKG=./internal/<feature> FILES='internal/<feature>/*.go'`. On the

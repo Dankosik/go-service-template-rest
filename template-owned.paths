@@ -90,6 +90,7 @@ scripts/integration-init.sh
 scripts/openapi-ref-check.go
 scripts/ci/affected-go-packages.sh
 scripts/ci/changed-surfaces.sh
+scripts/ci/docs-contract-check.sh
 scripts/ci/git-changed-paths.sh
 scripts/ci/golangci-lint.sh
 scripts/ci/install-gitleaks.sh

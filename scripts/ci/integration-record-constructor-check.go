@@ -281,10 +281,12 @@ func expressionPath(expression ast.Expr) string {
 
 func validArguments(constructor string, arguments []ast.Expr) bool {
 	if constructor == "NewExternalHTTPS" {
-		return len(arguments) == 1 && selectorIs(arguments[0], "cfg", "BaseURL")
+		return len(arguments) == 2 && selectorIs(arguments[0], "cfg", "BaseURL") &&
+			selectorIs(arguments[1], "cfg", "Limits")
 	}
-	return constructor == "NewPrivateHTTPS" && len(arguments) == 2 &&
-		selectorIs(arguments[0], "cfg", "BaseURL") && selectorIs(arguments[1], "cfg", "PrivateDNSSuffix")
+	return constructor == "NewPrivateHTTPS" && len(arguments) == 3 &&
+		selectorIs(arguments[0], "cfg", "BaseURL") && selectorIs(arguments[1], "cfg", "PrivateDNSSuffix") &&
+		selectorIs(arguments[2], "cfg", "Limits")
 }
 
 func selectorIs(expression ast.Expr, ownerName, fieldName string) bool {

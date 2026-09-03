@@ -20,13 +20,22 @@ type discoveryDocument struct {
 	JWKSURI string `json:"jwks_uri"`
 }
 
+func providerTransportLimits() httpclient.TransportLimits {
+	return httpclient.TransportLimits{
+		ResponseHeaderTimeout:  providerTimeout,
+		MaxResponseHeaderBytes: maxProviderHeaderBytes,
+		MaxInFlight:            maxProviderInFlight,
+		AbsoluteBodyBytes:      maxProviderBody,
+	}
+}
+
 func discoverJWKSURI(ctx context.Context, policy Policy) (string, error) {
 	issuerURL, err := url.Parse(policy.issuer)
 	if err != nil || issuerURL == nil {
 		return "", errors.New("OIDC startup failed at issuer validation")
 	}
 	authority := (&url.URL{Scheme: issuerURL.Scheme, Host: issuerURL.Host}).String()
-	client, err := httpclient.NewExternalHTTPS(authority)
+	client, err := httpclient.NewExternalHTTPS(authority, providerTransportLimits())
 	if err != nil {
 		return "", errors.New("OIDC startup failed at discovery client")
 	}
@@ -57,7 +66,7 @@ func newJWKSClient(jwksURI string) (*http.Client, func(), error) {
 		return nil, nil, errors.New("OIDC startup failed at JWKS URL validation")
 	}
 	authority := (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host}).String()
-	bounded, err := httpclient.NewExternalHTTPS(authority)
+	bounded, err := httpclient.NewExternalHTTPS(authority, providerTransportLimits())
 	if err != nil {
 		return nil, nil, errors.New("OIDC startup failed at JWKS client")
 	}

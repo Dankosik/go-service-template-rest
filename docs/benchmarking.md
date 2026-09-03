@@ -25,6 +25,9 @@ metadata under `.artifacts/bench/http/`.
 Benchmarks are explicit evidence, not default CI gates. Do not add a blocking
 threshold until a stable comparable testbed and a named response owner exist.
 CI runs only a non-load k6 inspection when the performance harness changes.
+Record an accepted service-capacity result and its workload artifact in
+[`production-contract.md`](production-contract.md); the template keeps no
+universal ratio between HTTP concurrency and dependency capacity.
 
 Load one leaf:
 

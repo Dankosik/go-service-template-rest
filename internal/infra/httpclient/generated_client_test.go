@@ -34,12 +34,16 @@ func TestGeneratedClientComposition(t *testing.T) {
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/httpclient"
 )
 
 func TestUsesFixedHTTPClient(t *testing.T) {
-	bounded, err := httpclient.NewExternalHTTPS("https://localhost:443")
+	bounded, err := httpclient.NewExternalHTTPS("https://localhost:443", httpclient.TransportLimits{
+		ResponseHeaderTimeout: 5 * time.Second, MaxResponseHeaderBytes: 32 << 10,
+		MaxInFlight: 2, AbsoluteBodyBytes: 1 << 20,
+	})
 	if err != nil { t.Fatal(err) }
 	t.Cleanup(bounded.CloseIdleConnections)
 	var _ HttpRequestDoer = bounded

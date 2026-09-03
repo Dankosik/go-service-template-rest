@@ -41,6 +41,10 @@ HTTP contracts may use document-local `#...` references. External file and URI
 references are rejected before validation or generation so the initializer
 cannot fetch contract material.
 
-The scaffold constructs transport and generated bindings. A later manual
-operation in the adapter must own mapping, errors, budget, and retry
-eligibility. The initializer does not claim provider compatibility.
+The scaffold constructs transport and generated bindings. Its `Config.Limits`
+must supply positive response-header timeout, response-header bytes,
+request-concurrency, and decoded-body ceilings; zero values fail construction
+before provider I/O. A later manual operation in the adapter must own mapping,
+errors, any smaller deadline/body policy, and retry eligibility. Streaming is a
+separate provider decision. The initializer does not claim provider
+compatibility.

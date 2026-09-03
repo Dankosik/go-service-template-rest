@@ -352,15 +352,24 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type ${field}IntegrationConfig struct {
-	BaseURL string \`koanf:"base_url"\`${suffix_field}${oauth_field}
+	BaseURL                string        \`koanf:"base_url"\`
+	ResponseHeaderTimeout  time.Duration \`koanf:"response_header_timeout"\`
+	MaxResponseHeaderBytes int64         \`koanf:"max_response_header_bytes"\`
+	MaxInFlight            int           \`koanf:"max_in_flight"\`
+	MaxResponseBodyBytes   int64         \`koanf:"max_response_body_bytes"\`${suffix_field}${oauth_field}
 }
 
 func ${NAME}IntegrationDefaults() map[string]any {
 	return map[string]any{
-		"integrations.${NAME}.base_url": "",${suffix_default}${oauth_default}
+		"integrations.${NAME}.base_url":                  "",
+		"integrations.${NAME}.response_header_timeout":    0,
+		"integrations.${NAME}.max_response_header_bytes": 0,
+		"integrations.${NAME}.max_in_flight":              0,
+		"integrations.${NAME}.max_response_body_bytes":   0,${suffix_default}${oauth_default}
 	}
 }
 
@@ -375,6 +384,10 @@ func validate${field}Integration(cfg *IntegrationsConfig) error {
 	endpoint.Scheme = "https"
 	endpoint.Host = strings.ToLower(endpoint.Host)
 	cfg.${field}.BaseURL = endpoint.String()
+	if cfg.${field}.ResponseHeaderTimeout <= 0 || cfg.${field}.MaxResponseHeaderBytes <= 0 ||
+		cfg.${field}.MaxInFlight <= 0 || cfg.${field}.MaxResponseBodyBytes <= 0 {
+		return fmt.Errorf("%w: integrations.${NAME} HTTP limits must be positive", ErrValidate)
+	}
 ${suffix_validate}${oauth_validate}
 	return nil
 }
@@ -449,6 +462,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+$(if [[ "${kind}" == "http" ]]; then echo '	"time"'; fi)
 )
 
 func Test${field}IntegrationRejectsInvalidTarget(t *testing.T) {
@@ -464,7 +478,7 @@ func Test${field}IntegrationRejectsInvalidTarget(t *testing.T) {
 }
 EOF
 	if [[ "${kind}" == "http" ]]; then
-		local extra=""
+		local extra=$'\n\t\tResponseHeaderTimeout: 5 * time.Second,\n\t\tMaxResponseHeaderBytes: 32 << 10,\n\t\tMaxInFlight: 16,\n\t\tMaxResponseBodyBytes: 1 << 20,'
 		if [[ "${TARGET}" == "private-https" ]]; then
 			extra+=$'\n\t\tPrivateDNSSuffix: "svc.cluster.local",'
 		fi
@@ -528,10 +542,10 @@ generate:
   models: true
   client: true
 EOF
-	local ctor="httpclient.NewExternalHTTPS(cfg.BaseURL)"
+	local ctor="httpclient.NewExternalHTTPS(cfg.BaseURL, cfg.Limits)"
 	local extra_field=""
 	if [[ "${TARGET}" == "private-https" ]]; then
-		ctor="httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix)"
+		ctor="httpclient.NewPrivateHTTPS(cfg.BaseURL, cfg.PrivateDNSSuffix, cfg.Limits)"
 		extra_field=$'\n\tPrivateDNSSuffix string'
 	fi
 	local auth_import=""
@@ -585,6 +599,7 @@ import (
 // Config is the validated runtime tuple for this integration.
 type Config struct {
 	BaseURL string${extra_field}
+	Limits  httpclient.TransportLimits
 $(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 		cat <<'INNER'
 	OAuth struct {
@@ -800,13 +815,15 @@ EOF
 write_adapter_test() {
 	local dir="$1"
 	local kind="$2"
-	local valid_target auth_setup
+	local valid_target auth_setup test_imports=""
 	if [[ "${kind}" == "http" ]]; then
+		test_imports=$'\t"time"\n\n\t"'"${module}"$'/internal/infra/httpclient"'
 		if [[ "${TARGET}" == "private-https" ]]; then
 			printf -v valid_target '\t\tBaseURL: "https://%s.svc.cluster.local",\n\t\tPrivateDNSSuffix: "svc.cluster.local",' "${NAME}"
 		else
 			printf -v valid_target '\t\tBaseURL: "https://%s.example.com",' "${NAME}"
 		fi
+		valid_target+=$'\n\t\tLimits: httpclient.TransportLimits{ResponseHeaderTimeout: 5 * time.Second, MaxResponseHeaderBytes: 32 << 10, MaxInFlight: 16, AbsoluteBodyBytes: 1 << 20},'
 	else
 		printf -v valid_target '\t\tTarget: "dns:///%s.example.com:443",' "${NAME}"
 	fi
@@ -825,6 +842,7 @@ package ${NAME}
 
 import (
 	"testing"
+${test_imports}
 )
 
 func TestNewRejectsEmptyTarget(t *testing.T) {
@@ -891,11 +909,18 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"${module}/internal/infra/${NAME}"
+	"${module}/internal/infra/httpclient"
 )
 
 func init${field}(cfg config.${field}IntegrationConfig) (*${NAME}.Client, error) {
 	client, err := ${NAME}.New(${NAME}.Config{
 		BaseURL: cfg.BaseURL,
+		Limits: httpclient.TransportLimits{
+			ResponseHeaderTimeout:  cfg.ResponseHeaderTimeout,
+			MaxResponseHeaderBytes: cfg.MaxResponseHeaderBytes,
+			MaxInFlight:            cfg.MaxInFlight,
+			AbsoluteBodyBytes:      cfg.MaxResponseBodyBytes,
+		},
 $(if [[ "${TARGET}" == "private-https" ]]; then echo '		PrivateDNSSuffix: cfg.PrivateDNSSuffix,'; fi)
 $(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 			cat <<'INNER'
@@ -1034,6 +1059,10 @@ Authentication: \`${AUTH}\`
 
 $(if [[ "${TRANSPORT}" == "http" ]]; then
 		echo "- \`integrations.${NAME}.base_url\`"
+		echo "- \`integrations.${NAME}.response_header_timeout\`"
+		echo "- \`integrations.${NAME}.max_response_header_bytes\`"
+		echo "- \`integrations.${NAME}.max_in_flight\`"
+		echo "- \`integrations.${NAME}.max_response_body_bytes\`"
 		if [[ "${TARGET}" == "private-https" ]]; then
 			echo "- \`integrations.${NAME}.private_dns_suffix\`"
 		fi
@@ -1049,9 +1078,11 @@ $(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 INNER
 	fi)
 
-The scaffold constructs transport and generated bindings only. A later manual
-operation in this adapter must own request/response mapping, errors, budget,
-and retry eligibility. The initializer does not claim provider compatibility.
+The scaffold constructs transport and generated bindings only. HTTP limits are
+required and remain service-owned production-contract values. A later manual
+operation in this adapter must own request/response mapping, errors, any smaller
+deadline/body policy, and retry eligibility. The initializer does not claim
+provider compatibility.
 EOF
 }
 
@@ -1068,10 +1099,23 @@ ytext = yaml.read_text()
 etext = env.read_text()
 
 if transport == "http":
-    fields = [f"    base_url: \"\""]
+    fields = [
+        f"    base_url: \"\"",
+        "    response_header_timeout: 0s",
+        "    max_response_header_bytes: 0",
+        "    max_in_flight: 0",
+        "    max_response_body_bytes: 0",
+    ]
     if target == "private-https":
         fields.append(f"    private_dns_suffix: \"\"")
-    env_keys = [f"APP__INTEGRATIONS__{name.upper()}__BASE_URL="]
+    prefix = f"APP__INTEGRATIONS__{name.upper()}__"
+    env_keys = [
+        f"{prefix}BASE_URL=",
+        f"{prefix}RESPONSE_HEADER_TIMEOUT=",
+        f"{prefix}MAX_RESPONSE_HEADER_BYTES=",
+        f"{prefix}MAX_IN_FLIGHT=",
+        f"{prefix}MAX_RESPONSE_BODY_BYTES=",
+    ]
     if target == "private-https":
         env_keys.append(f"APP__INTEGRATIONS__{name.upper()}__PRIVATE_DNS_SUFFIX=")
 else:
@@ -1143,8 +1187,14 @@ add_snapshot_keys() {
 	local entries
 	entries="$(mktemp)"
 	if [[ "${TRANSPORT}" == "http" ]]; then
-		printf '\t\t"integrations.%s.base_url": sameSnapshotValue("https://%s.snapshot.example"),\n' \
+		printf '\t\t"integrations.%s.base_url":                  sameSnapshotValue("https://%s.snapshot.example"),\n' \
 			"${NAME}" "${NAME}" >"${entries}"
+		cat >>"${entries}" <<EOF
+		"integrations.${NAME}.response_header_timeout":    {source: "5s", want: 5 * time.Second},
+		"integrations.${NAME}.max_response_header_bytes": {source: "32768", want: int64(32 << 10)},
+		"integrations.${NAME}.max_in_flight":              {source: "16", want: 16},
+		"integrations.${NAME}.max_response_body_bytes":   {source: "1048576", want: int64(1 << 20)},
+EOF
 		if [[ "${TARGET}" == "private-https" ]]; then
 			printf '\t\t"integrations.%s.private_dns_suffix": sameSnapshotValue("svc.cluster.local"),\n' \
 				"${NAME}" >>"${entries}"
@@ -1243,6 +1293,13 @@ PY
 			"${env_key}" \
 			"APP__INTEGRATIONS__$(printf '%s' "${NAME}" | tr '[:lower:]' '[:upper:]')__PRIVATE_DNS_SUFFIX" \
 			"svc.cluster.local"
+	fi
+	if [[ "${TRANSPORT}" == "http" ]]; then
+		local limit_prefix="${env_key%BASE_URL}"
+		install_named_test_env_key "${env_key}" "${limit_prefix}RESPONSE_HEADER_TIMEOUT" "5s"
+		install_named_test_env_key "${env_key}" "${limit_prefix}MAX_RESPONSE_HEADER_BYTES" "32768"
+		install_named_test_env_key "${env_key}" "${limit_prefix}MAX_IN_FLIGHT" "16"
+		install_named_test_env_key "${env_key}" "${limit_prefix}MAX_RESPONSE_BODY_BYTES" "1048576"
 	fi
 	if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 		install_named_oauth_test_env "${env_key}"

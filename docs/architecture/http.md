@@ -26,8 +26,11 @@ evidence and the business effect in one PostgreSQL transaction.
 The shipped API is health-only. A new operation first decides whether it is
 public, protected by OpenAPI security plus authentication and 401/403 Problem
 responses, or blocked pending policy. Browser CORS remains fail-closed.
-Diagnostics default to `127.0.0.1:9090`; non-loopback exposure needs a private
-scrape network or authenticated design. The deployment edge owns public ingress.
+Diagnostics stay off the application listener. The shipped diagnostics address
+and exposure contract are owned by [Configuration Source Policy](../configuration-source-policy.md#opentelemetry-environment-policy):
+`:9090` binds every interface, so deployment must keep the listener private.
+Enabling `pprof` requires a stricter network or authenticated design. The
+deployment edge owns public ingress.
 
 For a new capability, update `api/openapi/service.yaml`, regenerate
 `internal/openapi`, implement feature behavior, and satisfy the generated

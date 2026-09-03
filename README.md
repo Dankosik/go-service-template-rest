@@ -95,7 +95,7 @@ Pass profile options to `make template-init`. Unset options use the minimal
 | Transactional outbox | `DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream` | Transactional event recording and a separate relay ([guide](docs/postgres-transactional-outbox.md)) |
 | Native gRPC | `GRPC=enabled` | Generated clients and servers, health checks, streaming, and bounded drain ([guide](docs/grpc.md)) |
 | Authentication | `AUTHN=oidc-jwt` or `AUTHN=oidc-introspection` | HTTP and gRPC bearer-token verification ([guide](docs/authentication.md)) |
-| Bounded outbound HTTP | `OUTBOUND_HTTP=bounded` | An HTTP client locked to one upstream, with response-size limits |
+| Bounded outbound HTTP | `OUTBOUND_HTTP=bounded` | A fixed-authority HTTPS client with mandatory header, decoded-body, and request-concurrency ceilings |
 | Machine authentication | `OUTBOUND_AUTH=oauth2-client-credentials` | OAuth 2.0 client-credentials adapters ([guide](docs/outbound-machine-authentication.md)) |
 | Object storage | `OBJECT_STORAGE=s3` | An S3-compatible client locked to one configured endpoint ([guide](docs/s3-compatible-object-storage.md)) |
 | Worked example | `REFERENCE_EXAMPLE=keep` | A complete feature slice under `examples/reference-service` |

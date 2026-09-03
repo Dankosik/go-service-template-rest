@@ -14,7 +14,7 @@ authority.
 | `internal/<feature>/` | Use cases, business types, ports, invariants, and domain errors. | HTTP details, drivers, runtime config, process lifecycle. |
 | `internal/failure/` | Transport-neutral client-visible failure codes and mapper ordering. | Feature error identities, HTTP envelopes, gRPC statuses, or I/O. |
 | `internal/infra/http/` | HTTP server, middleware, mapping, route policy, and transport-edge observability. | Business rules or config loading. |
-| `internal/infra/httpclient/` | Always-available fixed HTTPS authority validation, post-DNS address admission, correlation stripping, and pooled-client cleanup. | Provider auth, operation budgets, response limits, retries, telemetry, error mapping, or readiness. |
+| `internal/infra/httpclient/` | Always-available fixed HTTPS authority validation, post-DNS address admission, correlation stripping, mandatory transport ceilings, smaller operation policies, and pooled-client cleanup. | Provider auth, retry eligibility, provider parsing, telemetry, error mapping, readiness, or streaming policy. |
 | `internal/infra/postgres/` | PostgreSQL admission, commit-outcome policy, and repository code over `pgxpool`. | Pool lifecycle, migrations, HTTP behavior, config precedence. |
 | `internal/infra/postgresmigrate/` | Migration execution for `cmd/migrate`. | Runtime pool ownership or application startup. |
 | `internal/infra/telemetry/` | OpenTelemetry SDK setup and Prometheus export. | Feature semantics, startup logging, request routing. |
@@ -45,8 +45,8 @@ adapters. Concrete engines implement its verifier contract.
 `internal/authntrust/` owns only the pure provider-URL, target-class, and
 token-profile predicates shared by config and those engines. It owns no
 configured value, credential verification, policy object, or authorization
-decision. `internal/infra/httpclient` enforces caller-supplied response-header
-guards without choosing provider budgets or parsing bodies.
+decision. `internal/infra/httpclient` enforces caller-supplied transport and
+operation ceilings without choosing their values or parsing bodies.
 <!-- profile:authn-bearer:end -->
 <!-- profile:authn-oidc-jwt:start -->
 `internal/infra/oidcjwt` owns JWT/JWKS discovery, verification, and refresh.
