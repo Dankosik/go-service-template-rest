@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -18,9 +19,9 @@ import (
 const diagnosticsReadHeaderTimeout = 5 * time.Second
 
 // DiagnosticsServer builds the private listener a background binary serves:
-// process liveness, readiness, and the metrics scrape.
+// process liveness, readiness, the metrics scrape, and gated runtime profiles.
 //
-// It carries no Addr, because both callers serve it on a listener they bound
+// It carries no Addr, because callers serve it on a listener they bound
 // themselves and http.Server.Addr is ignored on that path. Binding separately is
 // what makes an address already in use a startup failure rather than a
 // diagnostics server that stopped later for no stated reason.
@@ -30,10 +31,10 @@ const diagnosticsReadHeaderTimeout = 5 * time.Second
 // know which conditions exist, and keeps this file from naming binaries a build
 // profile may have removed.
 //
-// cmd/service does not use this. Its diagnostics listener additionally serves
-// build identity and the gated runtime profiles, and takes its timeouts from
-// configuration; see newDiagnosticsServer in cmd/service/internal/bootstrap.
-func DiagnosticsServer(ready func() bool, metrics *telemetry.Metrics) *http.Server {
+// cmd/service does not use this server. Its diagnostics listener additionally
+// serves build identity and takes its timeouts from configuration, but it uses
+// [RegisterPprofHandlers] for the same profile-routing contract.
+func DiagnosticsServer(ready func() bool, metrics *telemetry.Metrics, pprofEnabled bool) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.WriteHeader(http.StatusOK)
@@ -46,10 +47,26 @@ func DiagnosticsServer(ready func() bool, metrics *telemetry.Metrics) *http.Serv
 		writer.WriteHeader(http.StatusOK)
 	})
 	mux.Handle("GET /metrics", metrics.Handler())
+	if pprofEnabled {
+		RegisterPprofHandlers(mux)
+	}
 	return &http.Server{
 		Handler:           mux,
 		ReadHeaderTimeout: diagnosticsReadHeaderTimeout,
 	}
+}
+
+// RegisterPprofHandlers mounts runtime profiles on an explicitly owned mux.
+// Callers gate this function with runtime configuration and keep the listener
+// private. They must never serve http.DefaultServeMux: importing net/http/pprof
+// registers the same sensitive handlers there as a package side effect.
+func RegisterPprofHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
+	mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("POST /debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
 }
 
 // DiagnosticsListener is a bound and serving [DiagnosticsServer]. It owns its
@@ -79,13 +96,14 @@ func ListenDiagnostics(
 	component string,
 	ready func() bool,
 	metrics *telemetry.Metrics,
+	pprofEnabled bool,
 ) (*DiagnosticsListener, error) {
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("listen for %s diagnostics: %w", component, err)
 	}
 	served := &DiagnosticsListener{
-		server:    DiagnosticsServer(ready, metrics),
+		server:    DiagnosticsServer(ready, metrics, pprofEnabled),
 		component: component,
 		done:      make(chan struct{}),
 	}

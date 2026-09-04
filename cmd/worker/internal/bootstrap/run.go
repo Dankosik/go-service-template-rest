@@ -107,6 +107,8 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	}
 	cleanupSafe, deadline, err := runWorkerLifecycle(signalCtx, startupCtx, cfg, log, metrics, client, worker)
 	cleanupDeadline = deadline
+	// A spent shutdown budget is not successful cleanup. If the handler did not
+	// join, leave its dependencies intact and let the process exit own them.
 	if !cleanupSafe {
 		handlerCleanup = nil
 	}

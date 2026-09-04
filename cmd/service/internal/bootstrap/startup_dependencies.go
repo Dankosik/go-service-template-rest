@@ -85,7 +85,9 @@ func readinessProbeBudget(cfg config.Config) time.Duration {
 // outlived the HTTP drain while holding a connection would park the process here
 // until the platform SIGKILLs it — taking the shutdown telemetry with it. A
 // connection still held at this point is a leaked handler, not a slow close, and
-// reporting it beats waiting for it.
+// reporting it beats waiting for it. If ctx wins, the close goroutine may still
+// be blocked; returning is safe only because this process exits next and never
+// reuses the pool.
 func (d runtimeDependencies) Close(ctx context.Context) {
 	if d.postgres == nil {
 		return
