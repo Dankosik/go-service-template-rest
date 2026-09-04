@@ -50,6 +50,7 @@ func runWorkerLifecycle(
 		"worker",
 		func() bool { return healthSvc.Cached() == nil },
 		metrics,
+		cfg.Observability.Pprof.Enabled,
 	)
 	if err != nil {
 		return true, time.Time{}, err

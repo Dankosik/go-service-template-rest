@@ -237,7 +237,10 @@ func taskFailureError(recorded *taskFailure) error {
 // A task that outlives ctx is reported rather than waited on: blocking here
 // would hold up the rest of shutdown — including the telemetry flush that has to
 // record this exact outcome — behind work that has already ignored its
-// cancellation once.
+// cancellation once. That is bounded abandonment, not successful cleanup: it
+// is safe only for a process-lifetime owner that exits next. A reusable owner
+// must reach the join before it reuses or closes dependencies the tasks can
+// still access.
 func (s *Supervisor) Shutdown(ctx context.Context) error {
 	s.stopOnce.Do(func() {
 		// Serializing this store with Go makes every accepted group.Go happen

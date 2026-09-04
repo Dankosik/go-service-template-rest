@@ -74,6 +74,8 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("initialize outbox postgres: %w", err)
 	}
+	// False means bounded shutdown returned without joining an owner. Keep its
+	// dependencies alive until process exit instead of closing them underneath it.
 	cleanupSafe := true
 	defer func() {
 		if cleanupSafe {
@@ -173,6 +175,7 @@ func runLifecycle(
 		"outbox",
 		func() bool { return relayReady(ready.Load(), client.Ready(), readiness.Cached()) },
 		metrics,
+		cfg.Observability.Pprof.Enabled,
 	)
 	if err != nil {
 		return true, time.Time{}, err

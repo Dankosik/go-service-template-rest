@@ -70,6 +70,8 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "jobs_worker")
 	metrics := telemetry.New()
 	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "jobs_worker")
+	// False means bounded shutdown returned without joining River. Its pool and
+	// telemetry stay alive until process exit instead of being closed under it.
 	cleanupSafe := true
 	var cleanupDeadline time.Time
 	defer func() {
@@ -159,6 +161,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		"jobs-worker",
 		ready.Load,
 		metrics,
+		cfg.Observability.Pprof.Enabled,
 	)
 	if err != nil {
 		return stopStartedRiver(err)
