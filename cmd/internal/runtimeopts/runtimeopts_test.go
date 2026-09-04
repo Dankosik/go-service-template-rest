@@ -198,7 +198,7 @@ func TestLogDegradedSignalIncludesSafeClassification(t *testing.T) {
 func TestMessagingMappingRetainsBlankAddressesForAdapterValidation(t *testing.T) {
 	t.Parallel()
 
-	cfg := config.MessagingConfig{
+	cfg := config.MessagingConfig{ //nolint:gosec // Contains fixture paths, not credential material.
 		URLs: "nats://one, , nats://two,", CredentialsFile: "/run/secrets/nats.creds", RootCAFile: "/run/secrets/nats-ca.pem",
 		AllowPlaintext: true, AllowUnauthenticated: true, Stream: "EVENTS", MaxPayloadBytes: 1024,
 	}
