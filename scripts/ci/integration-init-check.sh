@@ -1024,7 +1024,9 @@ row_e5_gates() {
 	assert_record_check_rejected "${mutant}" "missing integration record"
 
 	mutant="$(clone_base "${base}" gate-config)"
-	replace_text "${mutant}/internal/config/billing_integration_config.go" 'BaseURL string' 'RemovedBaseURL string'
+	replace_text "${mutant}/internal/config/billing_integration_config.go" \
+		'BaseURL                string' \
+		'RemovedBaseURL         string'
 	assert_record_check_rejected "${mutant}" "mutated config"
 
 	mutant="$(clone_base "${base}" gate-adapter)"
