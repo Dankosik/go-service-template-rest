@@ -110,6 +110,9 @@ run_init() {
 			HOME="${HOME}" \
 			PATH="${PATH}" \
 			TMPDIR="${TMPDIR:-/tmp}" \
+			GOMAXPROCS="${GOMAXPROCS:-${VALIDATION_JOBS:-2}}" \
+			VALIDATION_JOBS="${VALIDATION_JOBS:-2}" \
+			VALIDATION_PARALLEL_TESTS="${VALIDATION_PARALLEL_TESTS:-2}" \
 			"${base_profile_env[@]}" \
 			"$@" \
 			"${command[@]}"
@@ -376,26 +379,23 @@ mkdir -p "${fail_bin}"
 real_go="$(command -v go)"
 cat >"${fail_bin}/go" <<EOF
 #!/usr/bin/env bash
-if grep -Fxq 'state = "initializing"' template.lock 2>/dev/null; then
-	count=0
-	[[ ! -f "${tmp}/go-calls" ]] || count=\$(cat "${tmp}/go-calls")
-	count=\$((count + 1))
-	printf '%s\n' "\${count}" >"${tmp}/go-calls"
-	if [[ "\${count}" == 2 ]]; then
-		exit 97
-	fi
+if [[ "\${1-}" == tool && "\${2-}" == -modfile=tools/go.mod && "\${3-}" == sqlc && "\${4-}" == generate ]] &&
+	grep -Fxq 'state = "initializing"' template.lock 2>/dev/null; then
+	exit 97
 fi
 exec "${real_go}" "\$@"
 EOF
 chmod +x "${fail_bin}/go"
-if run_init "${partial_checkout}" github.com/acme/service "PATH=${fail_bin}:${PATH}" >/dev/null 2>&1; then
+if run_init "${partial_checkout}" github.com/acme/service DATABASE=postgres HTTP_IDEMPOTENCY=postgres "PATH=${fail_bin}:${PATH}" >/dev/null 2>&1; then
 	echo "initializer contract: injected partial failure unexpectedly succeeded" >&2
 	exit 1
 fi
 grep -Fxq 'state = "initializing"' "${partial_checkout}/template.lock"
 test -d "${partial_checkout}/scripts/profiles"
-run_init "${partial_checkout}" github.com/acme/service >/dev/null
+run_init "${partial_checkout}" github.com/acme/service DATABASE=postgres HTTP_IDEMPOTENCY=postgres >/dev/null
 assert_identity "${partial_checkout}" github.com/acme/service service core
+unformatted=$(cd "${partial_checkout}" && gofmt -l internal/config cmd/service/internal/bootstrap)
+[[ -z ${unformatted} ]] || { echo "resumed initialization left unformatted Go files: ${unformatted}" >&2; exit 1; }
 
 run_selected_profile() {
 	local name=$1

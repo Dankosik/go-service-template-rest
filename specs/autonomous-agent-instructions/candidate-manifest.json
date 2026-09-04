@@ -1,0 +1,18 @@
+{
+  "candidate_sha256": "1a68f25851d6d390c80340651c50061365b85a0bf58ab787c1ed16b1e60e49f4",
+  "files": {
+    ".agents/contracts/specialist-contract.md": "70fbc3c8541f3263634962f86c1bc036fecca5e9f51f0877427e2af8e2f65eec",
+    "AGENTS.md": "4e37e50d21bac32863a5055ad7c491f9260963cf4b2d5bba711bdbce17bfe585",
+    "docs/agent-harness/codex.md": "0be8086a472d52667442b822b91cfb78f1c2b52d5d6eaac80073c132b7d56ad6",
+    "docs/prompt-maintenance.md": "9a6ab8b8f1835e092fc5517cef73f7173f7d14b18e684182e799fc06ac5f7ee9",
+    "docs/skill-authoring.md": "9af081ab61644b71be98274d1059795cfd596e5b4e3a5cd08ab3124fd07fbbb8",
+    "docs/spec-first-workflow.md": "da4aa27e56d0d32225714d05d55e0194e257c43c201c295b90ef244b3d0ec7c6",
+    "docs/spec-first-workflow/phases/implementation.md": "aaf44f438797b11d1aa17eb53b8ae4d70e4b9d575aa2b2d26b44707b01c9e96d",
+    "docs/spec-first-workflow/phases/intake.md": "fd4769d795634c99bc4b75ff4b18d985094dfb5b7f528914ef838a10346b4a3e",
+    "docs/spec-first-workflow/phases/system-integration-design.md": "d92892ef131fad3b9152a0fccbaf56beb26d7fd1111572e615182a6f5d1b9613",
+    "docs/spec-first-workflow/shared/external-effects.md": "62255742d423b06686b57b3b2f5e8f46444741dd8cd07018d73098652ef74112",
+    "docs/spec-first-workflow/shared/read-only-delegation.md": "88b2c4a2ec3469eebfd40a07b14aff601622293118df3e1a144fdc531b7f026a",
+    "docs/spec-first-workflow/shared/resume.md": "764c30890cb0c256757edce3fd688cf0f0e6ab7cb4369aeea436886664e1846b",
+    "docs/spec-first-workflow/shared/transition.md": "8457ec31526946592cda373796798e57cdefc8f07e3ee80eaec0ccbf498b2466"
+  }
+}

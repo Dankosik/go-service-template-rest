@@ -24,7 +24,57 @@ synthetic ledger transition.
 Reopen only the smallest owner invalidated by current evidence and preserve
 unaffected decisions and proof. Stop at an explicit phase boundary, unavailable
 required external input, new authority boundary, or required durable handoff.
-That stop applies to the current phase actor. A durable Orchestrator continues
-through an authorized agent-owned handoff by opening the next owner, waiting for
-its transition, and resuming the same unit without asking the user to confirm
-technical routing.
+That stop applies to the current phase actor; an explicit user stop still
+bounds the whole request.
+
+## Cross-Phase Continuation
+
+For an outcome spanning phases, the root coordinator retains the accepted
+outcome and active phase identity. Dispatch one selected phase actor through
+the [Agent Harness](../../agent-harness.md), wait for its reviewed Transition
+Result, re-read the authoritative result, and open the next applicable owner.
+A ready phase handoff continues the request without technical confirmation.
+Persist coordination only under [Artifacts](artifacts.md); phase results remain
+the decision authority.
+
+The phase actor owns its decision, artifact, repair, and movement evidence. When
+native nesting cannot support a needed specialist or independent reviewer, the
+coordinator dispatches that bounded request on the actor's behalf and relays the
+result. This request is not phase movement; only the phase actor returns its
+reviewed Transition Result. The coordinator does not substitute its own review
+or decision for the actor's.
+
+At ready Planning, select [Implementation](../phases/implementation.md)'s carrier.
+For a persisted ledger, the existing root may bind as `LEDGER_ORCHESTRATOR`
+when its authorized native controls suffice; that role becomes the sole ledger
+writer. For a fixed unit, dispatch its Acceptance-Unit Lead. Preserve the
+separate phase, review, and acceptance owners without requiring a new
+user-visible task. If no authorized carrier supports the required next action,
+report the exact capability gap and retain the resumable result.
+
+## Parent-Owned Recovery
+
+A delegated blocker, missing proof, or technical-policy gap remains work for
+the requesting parent, including a root-local Lead. Without a separate parent,
+the current task owner retains that responsibility. Identify the dependent
+action and smallest decision or evidence owner. Close the input directly when
+the parent's role and active phase permit it; otherwise dispatch that owner
+through an authorized carrier and consume its result. Keep required phase,
+review, and acceptance boundaries intact.
+
+When technical recommendations conflict, the responsible decision owner
+compares evidence and constraints, obtains a discriminating probe or specialist
+judgment when needed, and resolves each material objection against the accepted
+drivers. Converge on an evidence-supported choice and reopen condition; do not
+use a vote or unanimity as proof. When equivalent options survive, the decision
+owner chooses the simplest one satisfying the constraints. If a blocker repeats
+with unchanged evidence, change the probe,
+source, capability, or owner rather than circulating the same unresolved brief.
+
+Continue independent authorized work, then resume the blocked unit from the
+resolved input. A terminal child result does not complete the parent's outcome.
+Escalate user-owned decisions or unavailable external inputs and authority only
+through [Decision Ownership](../../../AGENTS.md#decision-ownership). If required
+evidence or native capability remains unavailable after authorized recovery,
+report the exact limitation and incomplete claim; do not invent success or ask
+the user to choose a technical mechanism.

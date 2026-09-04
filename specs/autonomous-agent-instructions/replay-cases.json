@@ -1,0 +1,34 @@
+[
+  {
+    "id": "full_outcome",
+    "state": "User: \"Сделай локальный сервис записи клиентов в мастерскую. Сотрудник создаёт и отменяет запись; одно место нельзя забронировать дважды на пересекающееся время. Записи сохраняются после перезапуска. Я не программист, выбери подходящий способ сам и доведи до готового проверенного решения. Внешние сервисы и расходы пока не нужны.\"\nFixture state: the current root retains the request. A fresh Definition actor has finished Intake and Specification. Its canonical result is ready, its independent review is PASS, and its Transition Result selects Technical Design because durable storage and concurrent booking arbitration are open. The fixture's callable native collaboration can dispatch fresh phase actors and independent reviewers, retain their identities, receive their messages, and wait for results. It cannot create a separate user-visible task without an explicit request. No Implementation ledger exists. No business input is missing. Decide the root's next action."
+  },
+  {
+    "id": "technical_disagreement",
+    "state": "User: \"Сделайте надёжную запись в несколько филиалов; пересекающиеся брони одного ресурса недопустимы. Технические решения примите сами.\"\nFixture state: you own Technical Design. Accepted scale is a few hundred bookings per day and three concurrently running API instances. An existing operated PostgreSQL service is within the accepted cost, retention, and security envelope. One specialist recommends PostgreSQL transactions and a database-enforced overlap invariant. Another recommends MongoDB because booking documents resemble JSON but has supplied no concurrency proof or operating advantage. The required invariant and business semantics are closed. Independent technical review is available. Decide how to close the technical choice and what to communicate to the user."
+  },
+  {
+    "id": "business_ambiguity",
+    "state": "User: \"Добавь отмену оплаченных записей и возвраты клиентам. Сделай всё сам.\"\nFixture state: the existing billing API can perform full, partial, or zero refunds safely, but neither user instructions nor business policy says whether a cancellation one hour before the appointment receives a refund. Historical records contain both outcomes without a distinguishing policy. The technical integration is understood and read-only inspection is authorized. Decide what can proceed and whether the user needs a question."
+  },
+  {
+    "id": "phase_only",
+    "state": "User: \"Подготовь только Specification для записи клиентов. Остановись до Technical Design.\"\nFixture state: Definition has produced a ready Specification and a PASS independent review. Its locator is available. No business questions survive. No technical design has begun. Decide the next root action."
+  },
+  {
+    "id": "small_change",
+    "state": "User: \"Исправь опечатку в инструкции запуска: в одном месте написано bulid вместо build.\"\nFixture state: the one documentation typo has been corrected in a fixed local diff, the corrected command matches the existing Makefile target, and git diff --check passed for that diff. No executable, contract, dependency, generated file, or instruction semantics changed. No additional gate is required by this task. Decide whether more tests, review, or another user turn are needed."
+  },
+  {
+    "id": "steering",
+    "state": "Original user request: \"Реализуй учёт записей; работай до готового результата.\"\nFixture state: the root coordinates two disjoint authorized units. A completed design requires CSV export columns date, customer, and service. The export unit has not been accepted; an unrelated cancellation-history unit is still running with independent proof. New user message: \"В CSV ещё нужен филиал. И сколько примерно осталось?\"\nThe branch field is already in the accepted domain model and no new data permission is required, but the export contract and its proof must change. Decide how to handle the side question, changed requirement, current agents, and previous evidence."
+  },
+  {
+    "id": "missing_external_authority",
+    "state": "User: \"Подготовь сервис к запуску для реальных клиентов. Хочу увидеть, что получится.\"\nFixture state: implementation and local acceptance are complete. A production deployment would expose the service publicly and incur a new monthly charge. Neither public launch nor that charge is authorized. Current source and tests are available; a local release candidate, rollout plan, preview, and business cost estimate can be prepared with existing tools at no external cost. They have not yet been prepared. Decide the next action and the appropriate timing/content of any user question."
+  },
+  {
+    "id": "existing_authority",
+    "state": "Earlier user authority: \"После проверок выкати эту версию в существующее staging; прежний лимит расходов сохраняется.\"\nFixture state: the exact candidate has passed all required acceptance checks, staging target and rollback are verified, and deployment uses the existing service within the approved cost/security envelope. The deployment tool is callable and authorized. A deployment skill recommends asking before every deployment but gives no additional hard constraint. The actor changed since the user granted authority. This is a decision replay: do not deploy anything. Decide whether to proceed or ask the user again."
+  }
+]

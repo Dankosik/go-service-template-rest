@@ -11,4 +11,8 @@ V1](../../docs/spec-first-workflow/interfaces/review-result-v1.md). Missing
 policy returns to that domain's Decision branch or nearest decision owner. Load
 [specialist arbitration](specialist-arbitration.md) only for ambiguous overlap.
 
-Stay inside the selected domain and return only its judgment, proof, or gap.
+Stay inside the selected domain and return only its judgment, proof, or gap to
+the requesting parent. A gap names the missing input, dependent action, nearest
+owner, and next discriminating evidence or decision. Preserve unknowns instead
+of inventing values or proof. The parent applies [Parent-Owned
+Recovery](../../docs/spec-first-workflow/shared/transition.md#parent-owned-recovery).

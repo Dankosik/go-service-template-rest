@@ -2,6 +2,10 @@
 
 Use after compaction, interruption, or an actor/session change.
 
+For mid-task steering, reopen the earliest affected decision, invalidate only
+its dependent work and proof, and continue unaffected work. A side question or
+status request does not reset the task or require replaying completed phases.
+
 1. Inspect the current workspace and Git status. Read `tasks.md` first when
    implementation or validation is active; for a split ledger, read the index
    and only the files of the current ready frontier.

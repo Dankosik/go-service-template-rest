@@ -18,4 +18,5 @@ Lanes](read-only-delegation/generative-candidates.md).
 
 Every lane returns [Lane Result V1](../interfaces/lane-result-v1.md). Evidence
 may expose a new owner decision, but a lane does not expand scope or become the
-authority it inspected.
+authority it inspected. The root consumes gaps through [Parent-Owned
+Recovery](transition.md#parent-owned-recovery).

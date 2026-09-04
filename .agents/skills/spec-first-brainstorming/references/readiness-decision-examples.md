@@ -20,14 +20,16 @@ fail
 Why
 "Make uploads faster" does not state the affected actor, upload type, current latency, desired threshold, dominant pain, or whether the problem is throughput, tail latency, reliability, UX feedback, or backend capacity.
 
-Minimum Data Needed
-- Which upload workflow is affected.
-- Current observed latency or failure mode.
-- Desired user or operator outcome.
-- Whether the performance issue blocks product behavior, operational safety, or user satisfaction.
+Parent-Owned Research
+- Identify upload paths and current latency or failure modes from repository and runtime evidence.
+- Determine whether throughput, tail latency, reliability, UX feedback, or backend capacity explains the symptom.
+
+User-Owned Questions, Only If Request And Evidence Leave Them Unresolved
+- Which user or operator outcome should improve, and which workflow matters when several are plausible?
+- What business constraint or commitment must the improvement satisfy?
 ```
 
-Copy: the fail asks for discriminators, not a full spec.
+Copy: the parent investigates technical discriminators; only unresolved requester meaning becomes a user question.
 
 Input:
 ```text

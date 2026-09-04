@@ -183,7 +183,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			*.md|docs/*) mark documentation ;;
+			*.md|docs/*|specs/*.json|specs/*.patch) mark documentation ;;
 		esac
 		case "${file}" in
 			.editorconfig|.gitattributes|.gitignore|.nvmrc|LICENSE|railway.toml|.codegraph/.gitignore|.github/CODEOWNERS|.github/assets/*|.github/ISSUE_TEMPLATE/*) mark no_validation_required ;;
@@ -267,6 +267,12 @@ assert_case() {
 }
 
 self_test() {
+	assert_case specs/example/candidate-manifest.json \
+		"documentation" \
+		"go_source shell validation_system"
+	assert_case specs/example/instruction-delta.patch \
+		"documentation" \
+		"go_source shell validation_system"
 	assert_case README.md \
 		"documentation docs_contract" \
 		"go_source go_root_dependencies go_tool_dependencies go_lint_config db_integration messaging_integration process_integration integration_race runtime_image image_security"

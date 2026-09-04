@@ -80,7 +80,9 @@ A promoted method skill binds four elements to the same domain judgment:
 Every `every affected X` instruction names its traversal start and terminal
 closure. Done means every enumerated record has a disposition and rejecting
 proof or an exact gap; a lexical claim that all paths were considered is not a
-materialized story.
+materialized story. Local completion may return a blocker to the parent through
+the [shared specialist contract](../.agents/contracts/specialist-contract.md);
+it neither completes the enclosing task nor requests a user technical decision.
 
 The canonical [specialist neighbor map](../.agents/contracts/specialist-neighbors.json)
 owns catalog collisions. Keep neighboring triggers distinct and route concrete

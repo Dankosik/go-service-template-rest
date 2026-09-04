@@ -12,15 +12,14 @@ sequences, or when the stated goal is deduplication with no narrower pressure.
   identity, audit or notification, nil versus empty, who may mutate a shared
   slice or map after the call, cleanup order, which error wins. Repetition whose
   branches carry different contracts is not debt.
-- Error identity is a caller-visible contract, and the gate covers less of it
-  than it appears to. `errorlint` fails `==`, `switch`, and type assertions on
-  errors; `wrapcheck` fails an unwrapped external error. None of them sees a
-  `map[error]T` lookup — verified against this repository's `.golangci.yml` — so
-  a "table instead of a chain" refactor silently stops matching wrapped errors.
-- On Go 1.27.0, `fmt.Errorf` accepts more than one `%w` and `errors.Join` wraps a
-  set. A cleanup that must carry a cleanup failure alongside the operation
-  failure can keep both identities inspectable; dropping one to `%v` is a loss to
-  justify, not a default.
+- Error identity is a caller-visible contract. A `map[error]T` lookup uses key
+  equality, so replacing `errors.Is` checks with a lookup can stop matching
+  wrapped errors. Inspect the target's `.golangci.yml` before attributing
+  coverage to a linter; its presence does not prove this semantic distinction.
+- Resolve supported multi-error APIs through [Go Modern
+  Version](../../go-modern-version/SKILL.md). A cleanup that must carry its own
+  failure alongside the operation failure preserves both required inspectable
+  identities; dropping one to `%v` needs an accepted semantic reason.
 - Side effects that must follow a durable boundary stay visible at the call site.
   A loop over steps is a good shape when the steps are peers and a poor one when
   their order is the contract.

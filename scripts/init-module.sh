@@ -253,14 +253,30 @@ remove_outbox_migrations() {
 # markers, discovering them instead of listing them. A file missing from a
 # hand-written list fails silently: the generated service keeps configuration it
 # has no dependency for, or stops compiling because a marked type is gone but its
-# users are not. Reformats the Go files it touched, because removing a block can
-# leave a doubled or trailing blank line that `make fmt-check` rejects.
+# users are not. Discover marker-bearing files once; later profiles inspect
+# only the surviving files. Keep formatting after each profile: it affects
+# whitespace retained by subsequent removals and leaves resumable output.
+profile_candidates=()
+profile_candidates_loaded=false
+
 strip_profile() {
 	local profile="$1"
 	local mode="$2"
 	local profile_file
 	local stripped_go_files=("")
 	local profile_files=("")
+	local present=()
+	if [[ ${profile_candidates_loaded} != true ]]; then
+		while IFS= read -r profile_file; do
+			[[ -n ${profile_file} ]] && profile_candidates+=("${profile_file}")
+		done < <(grep -rlE 'profile:[a-z0-9-]+:(start|end)' "${PROFILE_ROOTS[@]}" 2>/dev/null || true)
+		profile_candidates_loaded=true
+	fi
+	((${#profile_candidates[@]})) || return 0
+	for profile_file in "${profile_candidates[@]}"; do
+		[[ -f ${profile_file} ]] && present+=("${profile_file}")
+	done
+	((${#present[@]})) || return 0
 
 	while IFS= read -r profile_file; do
 		[[ -n "${profile_file}" ]] || continue
@@ -268,7 +284,7 @@ strip_profile() {
 	done < <(grep -rl \
 		-e "profile:${profile}:start" \
 		-e "profile:${profile}:end" \
-		"${PROFILE_ROOTS[@]}" 2>/dev/null || true)
+		-- "${present[@]}" 2>/dev/null || true)
 
 	for profile_file in "${profile_files[@]}"; do
 		[[ -n "${profile_file}" ]] || continue
@@ -289,7 +305,6 @@ strip_profile() {
 			stripped_go_files+=("${profile_file}")
 		fi
 	done
-
 	if ((${#stripped_go_files[@]} > 1)); then
 		gofmt -w "${stripped_go_files[@]:1}"
 	fi
@@ -770,7 +785,6 @@ current_module="$(awk '/^module / { print $2; exit }' go.mod)"
 
 detected_module="$(detect_module_from_origin || true)"
 new_module="${1:-}"
-source_checkout=false
 
 if [[ "${detected_module}" == "${TEMPLATE_SOURCE}" && "${current_module}" == "${TEMPLATE_MODULE}" ]]; then
 	if [[ -n "${new_module}" ]]; then
@@ -870,364 +884,361 @@ if [[ "${initial_module}" != "${new_module}" ]]; then
 
 fi
 
-if [[ "${source_checkout}" != true ]]; then
-	replace_codeowner_rules "${codeowner}"
-	if [[ -f internal/config/observability_config.go ]]; then
-		replace_go_map_value \
-			internal/config/observability_config.go \
-			"observability.otel.service_name" \
-			"${service_name}"
-	fi
-	if [[ -f cmd/service/internal/bootstrap/run.go ]]; then
-		replace_required_literal \
-			cmd/service/internal/bootstrap/run.go \
-			"\"service.name\", \"service\"" \
-			"\"service.name\", \"${service_name}\""
-	fi
+replace_codeowner_rules "${codeowner}"
+if [[ -f internal/config/observability_config.go ]]; then
+	replace_go_map_value \
+		internal/config/observability_config.go \
+		"observability.otel.service_name" \
+		"${service_name}"
+fi
+if [[ -f cmd/service/internal/bootstrap/run.go ]]; then
 	replace_required_literal \
-		env/.env.example \
-		"APP__OBSERVABILITY__OTEL__SERVICE_NAME=service" \
-		"APP__OBSERVABILITY__OTEL__SERVICE_NAME=${service_name}"
-	replace_required_literal \
-		api/openapi/service.yaml \
-		"title: \"${TEMPLATE_API_TITLE}\"" \
-		"title: \"${service_name}\""
-	write_derived_readme "${service_name}" "${new_module}"
-	if [[ "${outbox}" == "none" ]]; then
-		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
+		cmd/service/internal/bootstrap/run.go \
+		"\"service.name\", \"service\"" \
+		"\"service.name\", \"${service_name}\""
+fi
+replace_required_literal \
+	env/.env.example \
+	"APP__OBSERVABILITY__OTEL__SERVICE_NAME=service" \
+	"APP__OBSERVABILITY__OTEL__SERVICE_NAME=${service_name}"
+replace_required_literal \
+	api/openapi/service.yaml \
+	"title: \"${TEMPLATE_API_TITLE}\"" \
+	"title: \"${service_name}\""
+write_derived_readme "${service_name}" "${new_module}"
+if [[ "${outbox}" == "none" ]]; then
+	rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
+	rm -f -- \
+		internal/infra/natsjs/outbox.go \
+		internal/infra/natsjs/outbox_test.go \
+		test/postgres_outbox_*_test.go \
+		docs/postgres-transactional-outbox.md
+	remove_outbox_migrations
+	strip_profile outbox-postgres remove
+else
+	# Existing adopters retain 000001 for rollback; a new service starts on River.
+	rm -f -- migrations/000001_postgres_outbox.sql
+	strip_profile outbox-postgres keep
+fi
+
+if [[ "${http_idempotency}" == "none" ]]; then
+	rm -rf -- internal/httpidempotency internal/infra/postgresidempotency
+	rm -f -- \
+		cmd/service/internal/bootstrap/startup_idempotency.go \
+		cmd/service/internal/bootstrap/startup_idempotency_test.go \
+		internal/config/http_idempotency_config.go \
+		internal/config/http_idempotency_config_test.go \
+		internal/infra/http/idempotency.go \
+		internal/infra/http/idempotency_test.go \
+		internal/problem/idempotency_problem_test.go \
+		migrations/000003_postgres_http_idempotency.sql \
+		migrations/000009_postgres_http_idempotency_simplify.sql \
+		internal/infra/postgres/queries/postgres_http_idempotency.sql \
+		internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
+		test/postgres_http_idempotency_http_integration_test.go \
+		test/postgres_http_idempotency_integration_test.go \
+		docs/postgres-http-idempotency.md
+	strip_profile http-idempotency-postgres remove
+	remove_http_idempotency_profile_lint
+else
+	strip_profile http-idempotency-postgres keep
+fi
+
+	if [[ "${jobs}" == "none" ]]; then
+	rm -rf -- cmd/jobs-worker
 		rm -f -- \
-			internal/infra/natsjs/outbox.go \
-			internal/infra/natsjs/outbox_test.go \
-			test/postgres_outbox_*_test.go \
-			docs/postgres-transactional-outbox.md
-		remove_outbox_migrations
-		strip_profile outbox-postgres remove
-	else
-		# Existing adopters retain 000001 for rollback; a new service starts on River.
-		rm -f -- migrations/000001_postgres_outbox.sql
-		strip_profile outbox-postgres keep
+		internal/config/jobs_config.go \
+		internal/config/jobs_config_test.go \
+		internal/config/jobs_worker_config.go \
+		internal/config/jobs_worker_config_test.go \
+		migrations/000004_postgres_jobs.sql \
+		test/postgres_jobs_*_test.go \
+		docs/postgres-durable-background-jobs.md
+	strip_profile jobs-postgres remove
+else
+	rm -f -- migrations/000004_postgres_jobs.sql
+	strip_profile jobs-postgres keep
 	fi
 
-	if [[ "${http_idempotency}" == "none" ]]; then
-		rm -rf -- internal/httpidempotency internal/infra/postgresidempotency
+	if [[ "${webhooks}" == "none" ]]; then
+		rm -rf -- internal/infra/postgreswebhook
 		rm -f -- \
-			cmd/service/internal/bootstrap/startup_idempotency.go \
-			cmd/service/internal/bootstrap/startup_idempotency_test.go \
-			internal/config/http_idempotency_config.go \
-			internal/config/http_idempotency_config_test.go \
-			internal/infra/http/idempotency.go \
-			internal/infra/http/idempotency_test.go \
-			internal/problem/idempotency_problem_test.go \
-			migrations/000003_postgres_http_idempotency.sql \
-			migrations/000009_postgres_http_idempotency_simplify.sql \
-			internal/infra/postgres/queries/postgres_http_idempotency.sql \
-			internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
-			test/postgres_http_idempotency_http_integration_test.go \
-			test/postgres_http_idempotency_integration_test.go \
-			docs/postgres-http-idempotency.md
-		strip_profile http-idempotency-postgres remove
-		remove_http_idempotency_profile_lint
-	else
-		strip_profile http-idempotency-postgres keep
-	fi
-
-		if [[ "${jobs}" == "none" ]]; then
-		rm -rf -- cmd/jobs-worker
-			rm -f -- \
-			internal/config/jobs_config.go \
-			internal/config/jobs_config_test.go \
-			internal/config/jobs_worker_config.go \
-			internal/config/jobs_worker_config_test.go \
-			migrations/000004_postgres_jobs.sql \
-			test/postgres_jobs_*_test.go \
-			docs/postgres-durable-background-jobs.md
-		strip_profile jobs-postgres remove
-	else
-		rm -f -- migrations/000004_postgres_jobs.sql
-		strip_profile jobs-postgres keep
-		fi
-
-		if [[ "${webhooks}" == "none" ]]; then
-			rm -rf -- internal/infra/postgreswebhook
-			rm -f -- \
-				docs/outbound-webhook-delivery.md \
-				internal/config/webhooks_config.go \
-				internal/config/webhooks_config_test.go \
-				migrations/000005_postgres_webhooks.sql \
-				migrations/000006_postgres_webhook_reference_repairs.sql \
-				migrations/000007_postgres_webhooks_retire.sql \
-				test/postgres_webhook_*_test.go
-			if [[ "${inbound_webhooks}" == "none" ]]; then
-				rm -f -- \
-					cmd/jobs-worker/builder_webhooks.go \
-					cmd/jobs-worker/builder_webhooks_test.go
-			else
-				rm -f -- cmd/jobs-worker/builder_webhooks_test.go
-			fi
-			strip_profile webhooks-durable remove
-		else
-			rm -f -- \
-				migrations/000005_postgres_webhooks.sql \
-				migrations/000006_postgres_webhook_reference_repairs.sql \
-				migrations/000007_postgres_webhooks_retire.sql
-			strip_profile webhooks-durable keep
-		fi
-
+			docs/outbound-webhook-delivery.md \
+			internal/config/webhooks_config.go \
+			internal/config/webhooks_config_test.go \
+			migrations/000005_postgres_webhooks.sql \
+			migrations/000006_postgres_webhook_reference_repairs.sql \
+			migrations/000007_postgres_webhooks_retire.sql \
+			test/postgres_webhook_*_test.go
 		if [[ "${inbound_webhooks}" == "none" ]]; then
-			rm -rf -- internal/inboundwebhook internal/infra/postgresinboundwebhook
 			rm -f -- \
-				cmd/jobs-worker/inbound_webhook_bindings.go \
-				cmd/jobs-worker/builder_inbound_testworker.go \
-				cmd/jobs-worker/builder_webhooks_inbound_test.go \
-				cmd/jobs-worker/internal/bootstrap/run_inbound_test.go \
-				cmd/service/internal/bootstrap/startup_inbound_webhooks.go \
-				cmd/service/internal/bootstrap/startup_inbound_webhooks_test.go \
-				cmd/service/internal/bootstrap/service_api.go \
-				internal/config/inbound_webhooks_config.go \
-				internal/config/inbound_webhooks_config_test.go \
-				internal/infra/http/inbound_webhook.go \
-				internal/infra/http/inbound_webhook_test.go \
-				migrations/000010_postgres_inbound_webhooks.sql \
-				internal/infra/postgres/queries/postgres_inbound_webhooks.sql \
-				internal/infra/postgres/sqlcgen/postgres_inbound_webhooks.sql.go \
-				docs/inbound-webhook-receipt.md \
-				test/postgres_inbound_webhook_integration_test.go \
-				test/inbound_webhook_process_integration_test.go
-			if [[ "${webhooks}" == "none" ]]; then
-				rm -f -- \
-					cmd/jobs-worker/builder_webhooks.go \
-					cmd/jobs-worker/builder_webhooks_test.go
-			fi
-			strip_profile inbound-webhooks-standard remove
-			if [[ -f cmd/jobs-worker/builder_webhooks.go ]]; then
-				temporary="$(rewrite_temp_for cmd/jobs-worker/builder_webhooks.go)"
-				sed 's/ && !inbound_webhook_test_worker//' cmd/jobs-worker/builder_webhooks.go >"${temporary}"
-				mv "${temporary}" cmd/jobs-worker/builder_webhooks.go
-			fi
+				cmd/jobs-worker/builder_webhooks.go \
+				cmd/jobs-worker/builder_webhooks_test.go
 		else
-			strip_profile inbound-webhooks-standard keep
+			rm -f -- cmd/jobs-worker/builder_webhooks_test.go
 		fi
-
-	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" && "${inbound_webhooks}" == "none" ]]; then
-		rm -f -- migrations/000008_river.sql
-	fi
-
-	# All PostgreSQL capability profiles derive from the same SQLC package. Resolve
-	# their source sets before one regeneration so any sibling can remain alone.
-	if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then
-		rm -rf -- internal/infra/postgres/queries internal/infra/postgres/sqlcgen
+		strip_profile webhooks-durable remove
 	else
-		make sqlc-generate
-	fi
-	rmdir migrations 2>/dev/null || true
-
-	if [[ "${database}" == "none" ]]; then
-		# The migration runner and directory belong to the PostgreSQL profile.
-		rm -rf -- cmd/migrate internal/infra/postgres internal/infra/postgresmigrate migrations
-		# Matched rather than listed. Every test/postgres_*_test.go is PostgreSQL
-		# integration proof by construction, and a new one that a hand-written list
-		# missed leaves an import of a package this profile just deleted — which
-		# surfaces as Go trying to resolve the generated module from the network.
-		remove_postgres_integration_tests
 		rm -f -- \
-			cmd/internal/runtimeopts/postgres.go \
-			cmd/service/internal/bootstrap/startup_dependencies.go \
-			cmd/service/internal/bootstrap/startup_dependencies_test.go \
-			cmd/service/internal/bootstrap/startup_rejections_test.go \
-			internal/config/postgres_config.go \
-			internal/config/postgres_config_test.go \
-			internal/infra/telemetry/telemetrytest/metrics.go \
-				env/docker-compose.yml
-		cp \
-			scripts/profiles/database-none/startup_dependencies.go.tmpl \
-			cmd/service/internal/bootstrap/startup_dependencies.go
-		replace_literal \
-			cmd/service/internal/bootstrap/startup_dependencies.go \
-			"${TEMPLATE_MODULE}" \
-			"${new_module}"
-		strip_profile database-postgres remove
-		else
-		strip_profile database-postgres keep
+			migrations/000005_postgres_webhooks.sql \
+			migrations/000006_postgres_webhook_reference_repairs.sql \
+			migrations/000007_postgres_webhooks_retire.sql
+		strip_profile webhooks-durable keep
 	fi
 
-	if [[ "${authn}" == "none" ]]; then
-		# authntrust exists only to be shared by the verifier and internal/config's
-		# authn validation. With the profile off it has no caller at all, so it
-		# leaves with them rather than becoming an unreferenced leaf.
-		rm -rf -- internal/infra/bearerauthn internal/infra/oidcjwt internal/infra/oauthintrospection internal/authntrust
+	if [[ "${inbound_webhooks}" == "none" ]]; then
+		rm -rf -- internal/inboundwebhook internal/infra/postgresinboundwebhook
 		rm -f -- \
-			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
-			cmd/service/internal/bootstrap/startup_authn.go \
-			cmd/service/internal/bootstrap/startup_authn_profile.go \
-			internal/config/authn_config.go \
-			internal/config/authn_config_test.go \
-			internal/infra/http/authn_router_test.go \
-			internal/infra/http/introspection_disclosure_test.go \
-			internal/infra/httpclient/authn_policy_test.go \
-			docs/authentication.md
-		replace_literal api/openapi/service.yaml \
-			'security: [{bearerAuth: []}]' \
-			'security: []'
-		strip_profile authn-bearer remove
-		strip_profile authn-oidc-jwt remove
-		strip_profile authn-oidc-introspection remove
-	elif [[ "${authn}" == "oidc-introspection" ]]; then
-		cp \
-			scripts/profiles/authn-oidc-introspection/startup_authn_profile.go.tmpl \
-			cmd/service/internal/bootstrap/startup_authn_profile.go
-		replace_literal cmd/service/internal/bootstrap/startup_authn_profile.go \
-			"${TEMPLATE_MODULE}" \
-			"${new_module}"
-		rm -rf -- internal/infra/oidcjwt
-		rm -f -- \
-			internal/authntrust/token_profile.go \
-			internal/authntrust/token_profile_test.go
-		strip_profile authn-bearer keep
-		strip_profile authn-oidc-jwt remove
-		strip_profile authn-oidc-introspection keep
+			cmd/jobs-worker/inbound_webhook_bindings.go \
+			cmd/jobs-worker/builder_inbound_testworker.go \
+			cmd/jobs-worker/builder_webhooks_inbound_test.go \
+			cmd/jobs-worker/internal/bootstrap/run_inbound_test.go \
+			cmd/service/internal/bootstrap/startup_inbound_webhooks.go \
+			cmd/service/internal/bootstrap/startup_inbound_webhooks_test.go \
+			cmd/service/internal/bootstrap/service_api.go \
+			internal/config/inbound_webhooks_config.go \
+			internal/config/inbound_webhooks_config_test.go \
+			internal/infra/http/inbound_webhook.go \
+			internal/infra/http/inbound_webhook_test.go \
+			migrations/000010_postgres_inbound_webhooks.sql \
+			internal/infra/postgres/queries/postgres_inbound_webhooks.sql \
+			internal/infra/postgres/sqlcgen/postgres_inbound_webhooks.sql.go \
+			docs/inbound-webhook-receipt.md \
+			test/postgres_inbound_webhook_integration_test.go \
+			test/inbound_webhook_process_integration_test.go
+		if [[ "${webhooks}" == "none" ]]; then
+			rm -f -- \
+				cmd/jobs-worker/builder_webhooks.go \
+				cmd/jobs-worker/builder_webhooks_test.go
+		fi
+		strip_profile inbound-webhooks-standard remove
+		if [[ -f cmd/jobs-worker/builder_webhooks.go ]]; then
+			temporary="$(rewrite_temp_for cmd/jobs-worker/builder_webhooks.go)"
+			sed 's/ && !inbound_webhook_test_worker//' cmd/jobs-worker/builder_webhooks.go >"${temporary}"
+			mv "${temporary}" cmd/jobs-worker/builder_webhooks.go
+		fi
 	else
-		rm -rf -- internal/infra/oauthintrospection
-		rm -f -- \
-			internal/authntrust/introspection.go \
-			internal/authntrust/introspection_test.go
-		strip_profile authn-bearer keep
-		strip_profile authn-oidc-jwt keep
-		strip_profile authn-oidc-introspection remove
+		strip_profile inbound-webhooks-standard keep
 	fi
 
-	if [[ "${outbound_auth}" == "none" ]]; then
-		rm -rf -- internal/infra/oauth2clientcredentials
-		rm -f -- \
-			internal/config/outbound_auth_config.go \
-			internal/config/outbound_auth_config_test.go \
-			docs/outbound-machine-authentication.md
-		strip_profile outbound-auth-oauth2-client-credentials remove
-	else
-		strip_profile outbound-auth-oauth2-client-credentials keep
-	fi
+if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" && "${inbound_webhooks}" == "none" ]]; then
+	rm -f -- migrations/000008_river.sql
+fi
 
-	if [[ "${object_storage}" == "none" ]]; then
-		rm -rf -- internal/objectstorage internal/infra/s3
-		rm -f -- \
-			cmd/service/internal/bootstrap/startup_object_storage.go \
-			cmd/service/internal/bootstrap/startup_object_storage_test.go \
-			internal/config/object_storage_config.go \
-			internal/config/object_storage_config_test.go \
-			test/s3conformance/conformance_test.go \
-			docs/s3-compatible-object-storage.md
-		strip_profile object-storage remove
-	else
-		strip_profile object-storage keep
-	fi
+# All PostgreSQL capability profiles derive from the same SQLC package. Resolve
+# their source sets before one regeneration so any sibling can remain alone.
+if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then
+	rm -rf -- internal/infra/postgres/queries internal/infra/postgres/sqlcgen
+else
+	make sqlc-generate
+fi
+rmdir migrations 2>/dev/null || true
 
-	if [[ "${authn}" == "none" && "${object_storage}" == "none" ]]; then
-		strip_profile bootstrap-config remove
+if [[ "${database}" == "none" ]]; then
+	# The migration runner and directory belong to the PostgreSQL profile.
+	rm -rf -- cmd/migrate internal/infra/postgres internal/infra/postgresmigrate migrations
+	# Matched rather than listed. Every test/postgres_*_test.go is PostgreSQL
+	# integration proof by construction, and a new one that a hand-written list
+	# missed leaves an import of a package this profile just deleted — which
+	# surfaces as Go trying to resolve the generated module from the network.
+	remove_postgres_integration_tests
+	rm -f -- \
+		cmd/internal/runtimeopts/postgres.go \
+		cmd/service/internal/bootstrap/startup_dependencies.go \
+		cmd/service/internal/bootstrap/startup_dependencies_test.go \
+		cmd/service/internal/bootstrap/startup_rejections_test.go \
+		internal/config/postgres_config.go \
+		internal/config/postgres_config_test.go \
+		internal/infra/telemetry/telemetrytest/metrics.go \
+			env/docker-compose.yml
+	cp \
+		scripts/profiles/database-none/startup_dependencies.go.tmpl \
+		cmd/service/internal/bootstrap/startup_dependencies.go
+	replace_literal \
+		cmd/service/internal/bootstrap/startup_dependencies.go \
+		"${TEMPLATE_MODULE}" \
+		"${new_module}"
+	strip_profile database-postgres remove
 	else
-		strip_profile bootstrap-config keep
-	fi
+	strip_profile database-postgres keep
+fi
+
+if [[ "${authn}" == "none" ]]; then
+	# authntrust exists only to be shared by the verifier and internal/config's
+	# authn validation. With the profile off it has no caller at all, so it
+	# leaves with them rather than becoming an unreferenced leaf.
+	rm -rf -- internal/infra/bearerauthn internal/infra/oidcjwt internal/infra/oauthintrospection internal/authntrust
+	rm -f -- \
+		cmd/service/internal/bootstrap/authn_bootstrap_test.go \
+		cmd/service/internal/bootstrap/startup_authn.go \
+		cmd/service/internal/bootstrap/startup_authn_profile.go \
+		internal/config/authn_config.go \
+		internal/config/authn_config_test.go \
+		internal/infra/http/authn_router_test.go \
+		internal/infra/http/introspection_disclosure_test.go \
+		internal/infra/httpclient/authn_policy_test.go \
+		docs/authentication.md
+	replace_literal api/openapi/service.yaml \
+		'security: [{bearerAuth: []}]' \
+		'security: []'
+	strip_profile authn-bearer remove
+	strip_profile authn-oidc-jwt remove
+	strip_profile authn-oidc-introspection remove
+elif [[ "${authn}" == "oidc-introspection" ]]; then
+	cp \
+		scripts/profiles/authn-oidc-introspection/startup_authn_profile.go.tmpl \
+		cmd/service/internal/bootstrap/startup_authn_profile.go
+	replace_literal cmd/service/internal/bootstrap/startup_authn_profile.go \
+		"${TEMPLATE_MODULE}" \
+		"${new_module}"
+	rm -rf -- internal/infra/oidcjwt
+	rm -f -- \
+		internal/authntrust/token_profile.go \
+		internal/authntrust/token_profile_test.go
+	strip_profile authn-bearer keep
+	strip_profile authn-oidc-jwt remove
+	strip_profile authn-oidc-introspection keep
+else
+	rm -rf -- internal/infra/oauthintrospection
+	rm -f -- \
+		internal/authntrust/introspection.go \
+		internal/authntrust/introspection_test.go
+	strip_profile authn-bearer keep
+	strip_profile authn-oidc-jwt keep
+	strip_profile authn-oidc-introspection remove
+fi
+
+if [[ "${outbound_auth}" == "none" ]]; then
+	rm -rf -- internal/infra/oauth2clientcredentials
+	rm -f -- \
+		internal/config/outbound_auth_config.go \
+		internal/config/outbound_auth_config_test.go \
+		docs/outbound-machine-authentication.md
+	strip_profile outbound-auth-oauth2-client-credentials remove
+else
+	strip_profile outbound-auth-oauth2-client-credentials keep
+fi
+
+if [[ "${object_storage}" == "none" ]]; then
+	rm -rf -- internal/objectstorage internal/infra/s3
+	rm -f -- \
+		cmd/service/internal/bootstrap/startup_object_storage.go \
+		cmd/service/internal/bootstrap/startup_object_storage_test.go \
+		internal/config/object_storage_config.go \
+		internal/config/object_storage_config_test.go \
+		test/s3conformance/conformance_test.go \
+		docs/s3-compatible-object-storage.md
+	strip_profile object-storage remove
+else
+	strip_profile object-storage keep
+fi
+
+if [[ "${authn}" == "none" && "${object_storage}" == "none" ]]; then
+	strip_profile bootstrap-config remove
+else
+	strip_profile bootstrap-config keep
+fi
 
 if [[ "${outbound_auth}" == "oauth2-client-credentials" ]]; then
-	strip_profile outbound-auth-http keep
+strip_profile outbound-auth-http keep
 else
-	rm -f -- \
-		internal/infra/oauth2clientcredentials/http.go \
-		internal/infra/oauth2clientcredentials/http_test.go
-	strip_profile outbound-auth-http remove
+rm -f -- \
+	internal/infra/oauth2clientcredentials/http.go \
+	internal/infra/oauth2clientcredentials/http_test.go
+strip_profile outbound-auth-http remove
 fi
 
 if [[ "${outbound_auth}" == "oauth2-client-credentials" && "${grpc}" == "enabled" ]]; then
-	strip_profile outbound-auth-grpc keep
+strip_profile outbound-auth-grpc keep
 else
-	rm -f -- \
-		internal/infra/oauth2clientcredentials/grpc.go \
-		internal/infra/oauth2clientcredentials/grpc_test.go
-	strip_profile outbound-auth-grpc remove
+rm -f -- \
+	internal/infra/oauth2clientcredentials/grpc.go \
+	internal/infra/oauth2clientcredentials/grpc_test.go
+strip_profile outbound-auth-grpc remove
 fi
 
-	if [[ "${messaging}" == "none" ]]; then
-		rm -rf -- cmd/worker internal/domainevent internal/infra/natsjs internal/messagingconfig
+if [[ "${messaging}" == "none" ]]; then
+	rm -rf -- cmd/worker internal/domainevent internal/infra/natsjs internal/messagingconfig
+	rm -f -- \
+		cmd/internal/runtimeopts/messaging.go \
+		cmd/service/internal/bootstrap/startup_messaging.go \
+		cmd/service/internal/bootstrap/startup_messaging_test.go \
+		docs/durable-messaging.md \
+		internal/config/messaging_config.go \
+		internal/config/messaging_config_test.go \
+		internal/config/configtest/messaging.go \
+		test/nats_messaging_*_test.go \
+		test/postgres_outbox_natsjs_integration_test.go
+	strip_profile messaging-nats-jetstream remove
+else
+	strip_profile messaging-nats-jetstream keep
+fi
+
+if [[ "${grpc}" == "none" ]]; then
+	rm -rf -- \
+		internal/gen/proto \
+		internal/infra/grpc \
+		internal/infra/grpcclient \
+		examples/grpc-reference-service \
+		docs/grpc
 		rm -f -- \
-			cmd/internal/runtimeopts/messaging.go \
-			cmd/service/internal/bootstrap/startup_messaging.go \
-			cmd/service/internal/bootstrap/startup_messaging_test.go \
-			docs/durable-messaging.md \
-			internal/config/messaging_config.go \
-			internal/config/messaging_config_test.go \
-			internal/config/configtest/messaging.go \
-			test/nats_messaging_*_test.go \
-			test/postgres_outbox_natsjs_integration_test.go
-		strip_profile messaging-nats-jetstream remove
+			cmd/service/internal/bootstrap/startup_grpc.go \
+		cmd/service/internal/bootstrap/startup_grpc_test.go \
+		cmd/service/internal/bootstrap/startup_grpc_tls.go \
+		cmd/service/internal/bootstrap/startup_grpc_tls_test.go \
+		cmd/service/internal/bootstrap/startup_readiness_test.go \
+		docs/grpc.md \
+		internal/config/grpc_config.go \
+		internal/config/grpc_config_test.go \
+		internal/infra/bearerauthn/grpc.go \
+		internal/infra/bearerauthn/grpc_test.go \
+		internal/infra/bearerauthn/grpc_tls_contract_test.go \
+		test/grpc_process_integration_test.go
+	strip_profile grpc remove
 	else
-		strip_profile messaging-nats-jetstream keep
-	fi
+	strip_profile grpc keep
+	make proto-generate
+fi
 
-	if [[ "${grpc}" == "none" ]]; then
-		rm -rf -- \
-			internal/gen/proto \
-			internal/infra/grpc \
-			internal/infra/grpcclient \
-			examples/grpc-reference-service \
-			docs/grpc
-			rm -f -- \
-				cmd/service/internal/bootstrap/startup_grpc.go \
-			cmd/service/internal/bootstrap/startup_grpc_test.go \
-			cmd/service/internal/bootstrap/startup_grpc_tls.go \
-			cmd/service/internal/bootstrap/startup_grpc_tls_test.go \
-			cmd/service/internal/bootstrap/startup_readiness_test.go \
-			docs/grpc.md \
-			internal/config/grpc_config.go \
-			internal/config/grpc_config_test.go \
-			internal/infra/bearerauthn/grpc.go \
-			internal/infra/bearerauthn/grpc_test.go \
-			internal/infra/bearerauthn/grpc_tls_contract_test.go \
-			test/grpc_process_integration_test.go
-		strip_profile grpc remove
-		else
-		strip_profile grpc keep
-		make proto-generate
-	fi
+# configtest remains in every profile because internal/config's test helpers
+# delegate environment isolation to it. Its messaging corpus still leaves
+# with the messaging profile above.
 
-	# configtest remains in every profile because internal/config's test helpers
-	# delegate environment isolation to it. Its messaging corpus still leaves
-	# with the messaging profile above.
+# internal/waittest is deliberately not removed by any profile. It once left
+# with gRPC and messaging together, because every importer was one of their
+# integration tests; cmd/internal/runtimeopts' diagnostics test now reserves
+# its listen address through the same package, and that binary ships in every
+# profile. A package with an unconditional importer is not an unreferenced
+# leaf, so removing it would break the minimal service rather than trim it.
 
-	# internal/waittest is deliberately not removed by any profile. It once left
-	# with gRPC and messaging together, because every importer was one of their
-	# integration tests; cmd/internal/runtimeopts' diagnostics test now reserves
-	# its listen address through the same package, and that binary ships in every
-	# profile. A package with an unconditional importer is not an unreferenced
-	# leaf, so removing it would break the minimal service rather than trim it.
+# The template's own closed spec bundles are decisions about developing the
+# template, not about this service. specs/README.md already says a completed
+# bundle is deleted rather than kept as an example, and AGENTS.md tells every
+# harness that task-local artifacts own accepted task decisions — so shipping
+# them would hand a new service authoritative-looking records that describe a
+# repository it does not have. They stay readable upstream.
+rm -rf -- specs
 
-	# The template's own closed spec bundles are decisions about developing the
-	# template, not about this service. specs/README.md already says a completed
-	# bundle is deleted rather than kept as an example, and AGENTS.md tells every
-	# harness that task-local artifacts own accepted task decisions — so shipping
-	# them would hand a new service authoritative-looking records that describe a
-	# repository it does not have. They stay readable upstream.
-	rm -rf -- specs
+strip_unselected_harness "${agent_harness}"
 
-	strip_unselected_harness "${agent_harness}"
+# Upstream project furniture. The hero image is referenced only by the README
+# initialization overwrites, and the issue forms route bug reports for the
+# template rather than for this service.
+rm -rf -- .github/assets .github/ISSUE_TEMPLATE
 
-	# Upstream project furniture. The hero image is referenced only by the README
-	# initialization overwrites, and the issue forms route bug reports for the
-	# template rather than for this service.
-	rm -rf -- .github/assets .github/ISSUE_TEMPLATE
+if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" ]]; then
+	rm -rf -- internal/infra/httpclient
+fi
 
-	if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" ]]; then
-		rm -rf -- internal/infra/httpclient
-	fi
+if [[ "${reference_example}" == "remove" ]]; then
+	rm -rf -- examples
+fi
 
-	if [[ "${reference_example}" == "remove" ]]; then
-		rm -rf -- examples
-	fi
-
-	# Authentication selection changes canonical OpenAPI security and removes
-	# generator-only marker comments. Regenerate after the profile is resolved so
-	# the initialized service starts with byte-current embedded contract output.
-	if [[ -d internal/openapi ]]; then
-		go generate ./internal/openapi
-	fi
-
+# Authentication selection changes canonical OpenAPI security and removes
+# generator-only marker comments. Regenerate after the profile is resolved so
+# the initialized service starts with byte-current embedded contract output.
+if [[ -d internal/openapi ]]; then
+	go generate ./internal/openapi
 fi
 
 go mod tidy

@@ -12,16 +12,17 @@ child cannot spawn. Keep the semantic tree; change only the carrier.
   prompt in that session is the launch. Do not require
   `--agent orchestrator`, a prepared CLI prompt, or a second process.
   `--agent orchestrator` remains an optional explicit bind.
-- Bind this session as LEDGER_ORCHESTRATOR when a persisted Implementation
-  ledger has sibling units to schedule or owner-held recovery to route. It
+- Bind this session as LEDGER_ORCHESTRATOR when
+  [Implementation](../spec-first-workflow/phases/implementation.md#carrier)
+  selects that carrier. It
   fills the independent ready frontier and does not implement, review, or
   call `spawn_subagent` for unit work. Dispatch every ready unit before
   waiting, within current capacity. Land each candidate serially from the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
   and record the Lead-owned verdict without re-adjudicating it.
-- Bind this session as ACCEPTANCE_UNIT_LEAD when exactly one fixed
-  implementation unit is in scope. Direct Work stays on this session and is
-  not ledger orchestration.
+- Bind this session as ACCEPTANCE_UNIT_LEAD when Implementation selects the
+  root-local Lead. Direct Work stays on this session and is not ledger
+  orchestration.
 - Each sibling Acceptance-Unit Lead is a new primary session, not a
   subagent. Create it with `grok --agent acceptance-unit-lead
   --always-approve --output-format json`, a unit locator through

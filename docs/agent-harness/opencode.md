@@ -18,9 +18,10 @@ those control planes.
   `orchestrator`.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Spawn one fresh `acceptance-unit-lead` per ready unit
-  through Task. That Lead owns proof, review, and the canonical transition;
-  this session only routes. Land each Accepted candidate onto the current
-  checkout serially from the ledger receipt.
+  through Task. That Lead owns proof, review, and the acceptance verdict.
+  This session lands the candidate and records the verdict through the
+  [Ledger Contract's acceptance transition](../spec-first-workflow/phases/planning/ledger-contract.md#acceptance-transition)
+  from the Lead's immutable Acceptance Result.
 - Bind that teammate to `acceptance-unit-lead`. Task `subagent_type` is a free
   string. `.opencode/plugins/task-subagents.js` appends the project catalog to
   the Task blurb. Pass `acceptance-unit-lead` anyway if the blurb is stale. Do

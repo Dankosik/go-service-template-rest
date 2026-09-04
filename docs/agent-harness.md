@@ -51,7 +51,8 @@ critical quality tier instead of creating another semantic role.
 Do not mix control planes inside one outcome. A task, subagent, worktree,
 model, or Goal is a carrier; it never expands authorization or transfers unit
 ownership. Use a durable Goal only when the work is genuinely long-running or
-resumable and the installed harness supports it.
+resumable and the selected adapter's native authorization and capability
+requirements are met.
 
 All adapters preserve the same ledger, unit ownership, review, and transition
 semantics. Select topology from callable native controls, not the product name.
