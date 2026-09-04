@@ -17,8 +17,75 @@ if [[ ${1:-} == --files ]]; then
 	provided_files=("$@")
 fi
 
+fingerprint_candidate() {
+	local file mode record hash head
+	local -a hash_files=() records=()
+	head=$(git rev-parse HEAD)
+	while IFS= read -r file; do
+		if [[ -L ${file} ]]; then
+			hash=$(readlink "${file}" | git hash-object --stdin)
+			records+=("mode 120000  ${file}"$'\n'"symlink ${hash}")
+		elif [[ -f ${file} ]]; then
+			if [[ -x ${file} ]]; then mode=100755; else mode=100644; fi
+			records+=("mode ${mode}  ${file}")
+			hash_files+=("${file}")
+		else
+			records+=("deleted  ${file}")
+		fi
+	done <"${files_path}"
+	: >"${tmp}/file-hashes"
+	if ((${#hash_files[@]})); then
+		shasum -a 256 -- "${hash_files[@]}" >"${tmp}/file-hashes" || return
+	fi
+	{
+		printf 'head=%s\n' "${head}"
+		printf 'base_ref=%s\nresolved_base_sha=%s\nmerge_base_sha=%s\n' "${base_ref}" "${resolved_base_sha}" "${merge_base_sha}"
+		for record in "${records[@]}"; do
+			printf '%s\n' "${record}"
+			case "${record}" in
+			'mode 100644 '* | 'mode 100755 '*)
+				IFS= read -r hash || return 1
+				printf '%s\n' "${hash}"
+				;;
+			esac
+		done
+	} <"${tmp}/file-hashes" | shasum -a 256 | awk '{print $1}'
+}
+
 self_test() {
 	local output
+	(
+		tmp=$(mktemp -d)
+		trap 'rm -rf -- "${tmp}"' EXIT
+		cd "${tmp}"
+		git init -q
+		git -c user.name=verify-test -c user.email=verify-test@example.invalid -c commit.gpgsign=false commit -qm fixture --allow-empty
+		printf 'plain\n' >plain
+		printf 'executable\n' >executable
+		chmod +x executable
+		ln -s plain link
+		files_path=${tmp}/files
+		printf '%s\n' plain executable link deleted >"${files_path}"
+		base_ref=HEAD
+		resolved_base_sha=$(git rev-parse HEAD)
+		merge_base_sha=${resolved_base_sha}
+		original=$(fingerprint_candidate)
+		chmod +x plain
+		[[ $(fingerprint_candidate) != "${original}" ]]
+		chmod -x plain
+		printf 'changed\n' >plain
+		[[ $(fingerprint_candidate) != "${original}" ]]
+		printf 'plain\n' >plain
+		rm link
+		ln -s executable link
+		[[ $(fingerprint_candidate) != "${original}" ]]
+		rm link
+		ln -s plain link
+		printf 'new\n' >deleted
+		[[ $(fingerprint_candidate) != "${original}" ]]
+		rm deleted
+		[[ $(fingerprint_candidate) == "${original}" ]]
+	)
 	bash "${ROOT_DIR}/scripts/ci/git-changed-paths.sh" --self-test
 
 	if CI='' ALLOW_FULL='' make test-all >"${TMPDIR:-/tmp}/verify-full-guard.$$" 2>&1; then
@@ -33,7 +100,16 @@ self_test() {
 	grep -q 'make docs-contract-check' <<<"${output}"
 	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
 
-	output=$(bash "$0" --files README.md)
+	local scratch
+	scratch=$(mktemp -d)
+	output=$(TMPDIR="${scratch}" VERIFY_FORCE=1 bash "$0" --files README.md)
+	# Both the unlocked planner and its locked child own temporary files.
+	[[ -z $(find "${scratch}" -mindepth 1 -print -quit) ]] || {
+		echo "verification leaked temporary files" >&2
+		rm -rf -- "${scratch}"
+		return 1
+	}
+	rmdir "${scratch}"
 	grep -q 'docs contract check passed' <<<"${output}"
 	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
 	if grep -q 'reusing exact passing receipt' <<<"${output}"; then return 1; fi
@@ -191,13 +267,6 @@ add_command() {
 
 add_na() {
 	not_applicable[${#not_applicable[@]}]="$1: $2"
-}
-
-is_generated_go() {
-	case "$1" in
-		internal/openapi/*.gen.go|examples/reference-service/internal/openapi/*.gen.go|internal/infra/*/internal/openapi/*.gen.go|internal/infra/postgres/sqlcgen/*.go|internal/gen/proto/*.go|examples/grpc-reference-service/internal/gen/proto/*.go) return 0 ;;
-		*) return 1 ;;
-	esac
 }
 
 root_dependencies=false
@@ -373,24 +442,6 @@ if [[ ${requires_docker} == true ]]; then
 	"${docker_command}" info >/dev/null 2>&1 || blocked "Docker is required and the daemon is unavailable"
 fi
 
-fingerprint_candidate() {
-	local file mode
-	{
-		printf 'head=%s\n' "$(git rev-parse HEAD)"
-		printf 'base_ref=%s\nresolved_base_sha=%s\nmerge_base_sha=%s\n' "${base_ref}" "${resolved_base_sha}" "${merge_base_sha}"
-		while IFS= read -r file; do
-			if [[ -L ${file} ]]; then
-				printf 'mode 120000  %s\nsymlink %s\n' "${file}" "$(readlink "${file}" | git hash-object --stdin)"
-			elif [[ -f ${file} ]]; then
-				if [[ -x ${file} ]]; then mode=100755; else mode=100644; fi
-				printf 'mode %s  %s\n' "${mode}" "${file}"
-				shasum -a 256 "${file}"
-			else
-				printf 'deleted  %s\n' "${file}"
-			fi
-		done <"${files_path}"
-	} | shasum -a 256 | awk '{print $1}'
-}
 
 candidate=$(fingerprint_candidate)
 command_summary=none
@@ -421,6 +472,7 @@ fi
 if [[ ${locked} != true ]]; then
 	args=(bash "$0" --locked)
 	if ((${#provided_files[@]})); then args+=(--files "${provided_files[@]}"); fi
+	rm -rf -- "${tmp}"
 	exec bash ./scripts/ci/validation-lock.sh -- "${args[@]}"
 fi
 

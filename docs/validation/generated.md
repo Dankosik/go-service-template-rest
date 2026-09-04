@@ -1,6 +1,8 @@
 # Generated Contract Validation
 
-Edit the canonical source, regenerate, then run its aggregate:
+Edit the canonical source and regenerate. Map the required proof to these
+commands through Validation Routing and the Evidence Contract; the table does
+not add a separate run when the selected `make verify` plan covers that proof:
 
 | Authority | Generate | Prove |
 | --- | --- | --- |

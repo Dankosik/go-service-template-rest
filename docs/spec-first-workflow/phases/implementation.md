@@ -11,11 +11,12 @@ or isolated candidate handoff is required.
 Use the Ledger Orchestrator when several acceptance units may become ready,
 concurrent mutable candidates must be coordinated, dependency unlocking must
 continue after individual completions, execution must survive session or actor
-changes, or canonical ledger transitions require one routing owner.
+changes, an isolated candidate handoff needs a separate routing owner, or
+canonical ledger transitions require one routing owner. Durable recovery or
+isolated handoff can require this carrier even for one unit.
 
 The Orchestrator never implements unit work. The Lead does not schedule sibling
-acceptance units. Do not bind the Orchestrator for a single unit. Do not bind
-one Lead when sibling units still need scheduling.
+acceptance units. Do not bind one Lead when sibling units still need scheduling.
 
 ## Execution
 
@@ -43,7 +44,9 @@ indefinitely.
 
 Execution lanes are not acceptance units. Workers do not accept, transition, or
 review the parent unit. Lanes do not spawn; a brief that still needs partition
-returns to the Lead.
+returns to the Lead. For a lane's technical or proof gap, the Lead applies
+[Parent-Owned Recovery](../shared/transition.md#parent-owned-recovery) and
+resumes the same unit after the required input closes.
 
 ## Candidate Freeze And Proof
 

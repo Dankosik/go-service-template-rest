@@ -129,21 +129,35 @@ comparable_keys() {
 }
 
 compare_metadata() {
-	local baseline="$1" current="$2" key baseline_value current_value
-	while IFS= read -r key; do
-		baseline_value="$(metadata_value "${baseline}" "${key}")" || {
-			echo "baseline metadata is missing unique key ${key}" >&2
-			return 1
+	local keys
+	keys=$(comparable_keys)
+	awk -v keys="${keys//$'\n'/ }" '
+		BEGIN { n = split(keys, required, " ") }
+		{
+			separator = index($0, "=")
+			if (!separator) next
+			key = substr($0, 1, separator - 1)
+			count[side, key]++
+			value[side, key] = substr($0, separator + 1)
 		}
-		current_value="$(metadata_value "${current}" "${key}")" || {
-			echo "current metadata is missing unique key ${key}" >&2
-			return 1
+		END {
+			for (i = 1; i <= n; i++) {
+				key = required[i]
+				if (count["baseline", key] != 1) {
+					print "baseline metadata is missing unique key " key
+					exit 1
+				}
+				if (count["current", key] != 1) {
+					print "current metadata is missing unique key " key
+					exit 1
+				}
+				if ("x" value["baseline", key] != "x" value["current", key]) {
+					printf "benchmark metadata mismatch for %s: baseline=%c%s%c current=%c%s%c\n", key, 39, value["baseline", key], 39, 39, value["current", key], 39
+					exit 1
+				}
+			}
 		}
-		if [[ "${baseline_value}" != "${current_value}" ]]; then
-			echo "benchmark metadata mismatch for ${key}: baseline='${baseline_value}' current='${current_value}'" >&2
-			return 1
-		fi
-	done < <(comparable_keys)
+	' side=baseline "$1" side=current "$2" >&2
 }
 
 capture() (
@@ -437,6 +451,20 @@ self_test() (
 	while IFS= read -r key; do printf '%s=value\n' "${key}"; done < <(comparable_keys) >"${baseline}"
 	cp "${baseline}" "${current}"
 	compare_metadata "${baseline}" "${current}"
+	compare_metadata "${baseline}" "${baseline}"
+	printf 'benchmark_count=duplicate\n' >>"${current}"
+	if compare_metadata "${baseline}" "${current}" >/dev/null 2>&1; then
+		die "duplicate benchmark metadata key was accepted"
+	fi
+	: >"${current}"
+	if compare_metadata "${baseline}" "${current}" >/dev/null 2>&1; then
+		die "empty benchmark metadata was accepted"
+	fi
+	sed 's/^benchmark_count=.*/benchmark_count=01/' "${baseline}" >"${current}"
+	sed 's/^benchmark_count=.*/benchmark_count=1/' "${baseline}" >"${tmp}/numeric.meta"
+	if compare_metadata "${tmp}/numeric.meta" "${current}" >/dev/null 2>&1; then
+		die "textually different benchmark metadata was accepted"
+	fi
 	awk 'BEGIN { changed = 0 } /^workload_id=/ { print "workload_id=other"; changed = 1; next } { print } END { if (!changed) exit 2 }' \
 		"${baseline}" >"${current}"
 	if compare_metadata "${baseline}" "${current}" >/dev/null 2>&1; then

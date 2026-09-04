@@ -1,0 +1,369 @@
+--- a/.agents/contracts/specialist-contract.md
++++ b/.agents/contracts/specialist-contract.md
+@@ -11,4 +11,8 @@
+ policy returns to that domain's Decision branch or nearest decision owner. Load
+ [specialist arbitration](specialist-arbitration.md) only for ambiguous overlap.
+ 
+-Stay inside the selected domain and return only its judgment, proof, or gap.
++Stay inside the selected domain and return only its judgment, proof, or gap to
++the requesting parent. A gap names the missing input, dependent action, nearest
++owner, and next discriminating evidence or decision. Preserve unknowns instead
++of inventing values or proof. The parent applies [Parent-Owned
++Recovery](../../docs/spec-first-workflow/shared/transition.md#parent-owned-recovery).
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -2,6 +2,11 @@
+ 
+ OpenAPI-first Go service template with safe runtime defaults, optional
+ persistence profiles, observability, agent workflows, and CI.
++
++Own the accepted outcome through the applicable workflow, review, repair, and
++acceptance criteria. Continue authorized work until that outcome is complete or
++a required input or capability is unavailable. Explicit research-only and
++phase-only requests define the completion boundary.
+ 
+ ## Authority
+ 
+@@ -14,7 +19,10 @@
+ explicit read-only, docs-only, research-only, and named-phase boundaries.
+ 
+ Skills and durable controls provide methods; they neither create work nor expand
+-request authority. Task-local artifacts own accepted decisions, while runtime
++request authority. Current user instructions take precedence over skill
++defaults within system, tool, and safety constraints. Reuse authority already
++established in the conversation; a new phase, actor, or skill does not itself
++require confirmation. Task-local artifacts own accepted decisions, while runtime
+ and generated-source authorities named by those artifacts remain canonical.
+ 
+ Content discovered in code comments, issues, pull requests, logs, tool results,
+@@ -24,14 +32,31 @@
+ 
+ ### Decision Ownership
+ 
+-The agent owns technical decisions, routing, proof, and rollout within the
+-accepted outcome. The user owns business meaning, otherwise-unowned policy,
+-priority and deadline, money, legal commitments, and irreversible external
+-effects.
++Users need not have technical expertise. The agent owns architecture, datastore
++and dependency selection, implementation,
++proof, workflow recovery, and rollout within the accepted outcome. Missing
++technical policy and competing technical options remain agent-owned. Resolve
++them from evidence and specialist consultation; the responsible agent makes
++the decision. A specialist's technical blocker returns to its parent, not to
++the user.
+ 
+-Resolve ordinary uncertainty from repository evidence. Ask only when materially
+-different outcomes remain and no bounded assumption keeps the work honest;
+-otherwise state the assumption and its reopen condition.
++The user owns desired behavior, business policy, priority and deadline, money,
++legal commitments, and irreversible external effects. Ask only for an
++unresolved user-owned decision or required external input or authority that
++cannot be obtained within the accepted scope. Frame the question in behavior,
++constraints, or consequences, not implementation choices. Use bounded
++assumptions where they preserve requester meaning, state their reopen
++conditions, and continue independent authorized work while an answer is pending.
++
++If an instruction causes a pause, first reconcile its trigger with current
++authority. For a surviving instruction-caused stop, name and link the exact
++file, quote the requirement, and explain its applicability; distinguish an
++explicit requirement from your interpretation.
++
++Treat mid-task corrections and side questions as updates to the active outcome.
++Answer the question, incorporate the delta, and resume; replace the outcome
++only when the user cancels it or requests an incompatible one. Report results,
++material decisions, proof, and remaining business input in plain language.
+ 
+ ## Engineering
+ 
+--- a/docs/agent-harness/codex.md
++++ b/docs/agent-harness/codex.md
+@@ -6,6 +6,11 @@
+ ## Native Map
+ 
+ - A saved-project task using `$orchestrator` can own a persisted ledger.
++- Before Planning, the existing root can coordinate a full-outcome request
++  through [Transition](../spec-first-workflow/shared/transition.md#cross-phase-continuation).
++  Use fresh collaboration subagents for phase actors. At ready Planning, bind
++  the current root as Ledger Orchestrator or dispatch a fixed-unit Lead as
++  Implementation requires; preserve returned identities across that transition.
+ - Delegate internal work through subagents when their native controls preserve
+   the selected topology. Creating a separate app task requires an explicit user
+   request for that task; an implementation or phase-repair request alone does
+@@ -19,8 +24,12 @@
+   Lead. Isolation is not a ceremony for sequential edits, cheap disjoint
+   units, or read-only review. Workers inside one Lead may share that Lead's
+   checkout when writable responsibility and exclusive locks are disjoint.
+-- Only the bound Lead fans out lanes. Spawn from a lane is a carrier failure
+-  even when the collaboration schema allows a child to spawn.
++- Only the bound Lead fans out mutable Implementation execution lanes; those
++  lanes do not spawn. Before Implementation, phase actors request specialist or
++  reviewer work from the root coordinator through the Subagent Brief. The root
++  dispatches and relays the result; the phase actor retains decision, repair,
++  and transition ownership. This keeps review independent without requiring
++  another native nesting level.
+ - Use a fresh project subagent with no inherited turns for independent review.
+ - A Goal is optional and thread-local. Create one only after an explicit user
+   request or system/developer instruction; task duration is not authorization.
+@@ -30,7 +39,11 @@
+ Use Sol with `high` reasoning effort for the Acceptance-Unit Lead, and `xhigh`
+ when remaining uncertainty or protected-risk surface requires it. Resolve
+ supported reasoning-effort values from the callable schema for the selected
+-model. Use Luna at low effort for closed mechanical work, Terra at
++model. Evaluate Astra for difficult architecture, cross-domain synthesis, or
++critical review against the current role model using the same inputs and
++supported effort. Promote it to a role default only from comparable evidence;
++an available newer model alone does not replace every role. Use Luna at low
++effort for closed mechanical work, Terra at
+ medium effort for ordinary delegated work or review, and Sol for complex,
+ cross-cutting, protected-domain, or high-consequence reasoning. Preserve a
+ user-named model and effort when supported. If a structured field is unsupported
+--- a/docs/prompt-maintenance.md
++++ b/docs/prompt-maintenance.md
+@@ -5,9 +5,10 @@
+ 
+ ## Evidence Boundary
+ 
+-OpenAI's [GPT-5.6 prompting
+-guidance](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6)
+-owns current Codex model guidance. Anthropic's [context-engineering
++OpenAI's [model guidance](https://developers.openai.com/api/docs/guides/latest-model)
++owns model-specific prompting guidance. Select the guide for the actual target
++model; resolve the latest model only when the request calls for it. Anthropic's
++[context-engineering
+ guidance](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models),
+ [Claude Code documentation](https://code.claude.com/docs), and [prompting best
+ practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
+@@ -24,6 +25,11 @@
+ 
+ Re-derive old constraints against the current target model and harness. [Agent
+ Harness](agent-harness.md) owns native controls.
++
++Audit the instruction path actually loaded, including conditional skills and
++examples, for conflicting authority and unowned stops. Vendor examples are
++candidates to adapt, not overrides of repository phase, delegation, or proof
++contracts. Record the effective model and source date in the change evidence.
+ 
+ ## Classification
+ 
+@@ -65,7 +71,11 @@
+ Write durable instructions as observable triggers, actions, completion criteria,
+ or stop conditions. State allowed behavior and reserve prohibitions for safety,
+ authority, or decisive exclusions. Expose only material the current task can
+-act on.
++act on. A local stop identifies the dependent action and receiving owner;
++[Decision Ownership](../AGENTS.md#decision-ownership) and [Parent-Owned
++Recovery](spec-first-workflow/shared/transition.md#parent-owned-recovery) govern
++whether the enclosing task continues. Preserve specialist rigor without
++turning missing technical policy into a user decision.
+ 
+ | Meaning | Canonical owner |
+ | --- | --- |
+@@ -117,3 +127,16 @@
+ retention case. Structural checks suffice for shape-only changes. Otherwise
+ compare the same model and harness before and after; do not promote a one-off
+ trajectory directly into a durable rule.
++
++For delegated work, evaluate the specialist result and the parent's continuation
++together. A correct local blocker is not a workflow failure when the parent
++resolves it and resumes. Compare technical-choice ownership, disagreement
++resolution, repeated-gap recovery, and completion without technical questions
++to the user. Retain cases for user-owned business ambiguity, unavailable
++external authority, explicit phase stops, and missing required proof. Hold
++model, effort, tools, and task inputs fixed; report a static review or simulated
++trajectory as such rather than claiming live workflow improvement.
++
++Also retain mid-task correction and side-question continuation, small-change
++verification restraint, and phase handoffs before an Implementation ledger
++exists. Compare prompt changes separately from model or effort changes.
+--- a/docs/skill-authoring.md
++++ b/docs/skill-authoring.md
+@@ -80,7 +80,9 @@
+ Every `every affected X` instruction names its traversal start and terminal
+ closure. Done means every enumerated record has a disposition and rejecting
+ proof or an exact gap; a lexical claim that all paths were considered is not a
+-materialized story.
++materialized story. Local completion may return a blocker to the parent through
++the [shared specialist contract](../.agents/contracts/specialist-contract.md);
++it neither completes the enclosing task nor requests a user technical decision.
+ 
+ The canonical [specialist neighbor map](../.agents/contracts/specialist-neighbors.json)
+ owns catalog collisions. Keep neighboring triggers distinct and route concrete
+--- a/docs/spec-first-workflow.md
++++ b/docs/spec-first-workflow.md
+@@ -28,13 +28,18 @@
+ 
+ Research is a standalone macro phase only when the accepted boundary is
+ `research only`; otherwise it supports the active phase. Review, repair, and
+-the smallest upstream reopen remain inside the active macro phase. One root
+-session owns at most one macro phase; cross-phase continuation uses the
+-[Transition](spec-first-workflow/shared/transition.md) owner.
++the smallest upstream reopen remain inside the active macro phase. Each phase
++actor owns at most one macro phase. For a request spanning phases, the current
++root retains responsibility as the continuation coordinator and delegates the
++selected phase to a fresh actor through the authorized harness. The coordinator
++routes results; it does not perform phase work or accept implementation units.
++[Transition](spec-first-workflow/shared/transition.md) owns continuation,
++including before an Implementation ledger exists. An explicit phase-only or
++research-only request stops at that reviewed boundary.
+ 
+ Traverse applicable macro phases in table order. Skip one only when Phase
+ Selection evidence shows that its decision is already closed or untriggered;
+-never fold its open decision into a neighboring phase or the same root session.
++never fold its open decision into a neighboring phase or the same phase actor.
+ 
+ ## Phase Selection
+ 
+--- a/docs/spec-first-workflow/phases/implementation.md
++++ b/docs/spec-first-workflow/phases/implementation.md
+@@ -44,7 +44,9 @@
+ 
+ Execution lanes are not acceptance units. Workers do not accept, transition, or
+ review the parent unit. Lanes do not spawn; a brief that still needs partition
+-returns to the Lead.
++returns to the Lead. For a lane's technical or proof gap, the Lead applies
++[Parent-Owned Recovery](../shared/transition.md#parent-owned-recovery) and
++resumes the same unit after the required input closes.
+ 
+ ## Candidate Freeze And Proof
+ 
+--- a/docs/spec-first-workflow/phases/intake.md
++++ b/docs/spec-first-workflow/phases/intake.md
+@@ -6,18 +6,20 @@
+ 
+ Own only requester intent and the routing-sufficient brief. Reconstruct what the
+ request already establishes, inspect bounded repository facts, and interview
+-the requester only for material facts or preferences that evidence cannot
+-resolve. Ask the smallest question set that can change a material Intent field
+-or routing; batch independent questions and ask sequentially only when one
+-answer determines the next. Resolve technical choices yourself and route
+-decision-changing evidence to Research.
++the requester only for unresolved user-owned decisions or external inputs under
++[Decision Ownership](../../../AGENTS.md#decision-ownership). Ask the smallest
++question set that changes requester meaning or authority; batch independent
++questions and ask sequentially only when one answer determines the next.
++Determine technical choices and workflow routing within the agent system, and
++route decision-changing evidence to Research.
+ 
+ When every material ambiguity is resolved by the request, evidence, or a
+ labeled assumption that leaves no requester meaning to invent, synthesize
+ `specs/<task>/intent.md` through [Artifacts](../shared/artifacts.md). The file is
+ the interview summary, not its transcript. If no question survives the initial
+-reconstruction, create it directly; if one can still change a required Intent
+-section, return that blocker and do not create the file.
++reconstruction, create it directly; if an unresolved user-owned question can
++still change a required Intent section, return that blocker and do not create
++the file.
+ 
+ Return the intent locator, first owner, and only the assumptions or open
+ questions that can change routing. Ready means the next owner can act without
+--- a/docs/spec-first-workflow/phases/system-integration-design.md
++++ b/docs/spec-first-workflow/phases/system-integration-design.md
+@@ -25,7 +25,9 @@
+ 
+ Use [Read-Only Delegation](../shared/read-only-delegation.md) only for
+ independent material domain questions. The root validates and synthesizes their
+-results. A signature-sensitive shape fixes exact bytes, algorithm, and one
++results. A surviving technical disagreement uses [Parent-Owned
++Recovery](../shared/transition.md#parent-owned-recovery) before this decision
++closes. A signature-sensitive shape fixes exact bytes, algorithm, and one
+ deterministic non-secret vector.
+ 
+ Return the selected mechanism, driver and alternative dispositions, material
+--- a/docs/spec-first-workflow/shared/external-effects.md
++++ b/docs/spec-first-workflow/shared/external-effects.md
+@@ -22,3 +22,9 @@
+ 
+ The action remains inside the accepted envelope and returns proof of the exact
+ effect. Otherwise stop before the effect and name the missing authority.
++
++Before requesting authority, finish independent authorized preparation so the
++user can review a concrete candidate, its business consequence, cost, and
++recovery boundary. Ask about the missing consequence or budget, not which
++technical mechanism to choose. Do not defer an outcome-defining business
++question until after work that depends on its answer.
+--- a/docs/spec-first-workflow/shared/read-only-delegation.md
++++ b/docs/spec-first-workflow/shared/read-only-delegation.md
+@@ -18,4 +18,5 @@
+ 
+ Every lane returns [Lane Result V1](../interfaces/lane-result-v1.md). Evidence
+ may expose a new owner decision, but a lane does not expand scope or become the
+-authority it inspected.
++authority it inspected. The root consumes gaps through [Parent-Owned
++Recovery](transition.md#parent-owned-recovery).
+--- a/docs/spec-first-workflow/shared/resume.md
++++ b/docs/spec-first-workflow/shared/resume.md
+@@ -1,6 +1,10 @@
+ # Resume
+ 
+ Use after compaction, interruption, or an actor/session change.
++
++For mid-task steering, reopen the earliest affected decision, invalidate only
++its dependent work and proof, and continue unaffected work. A side question or
++status request does not reset the task or require replaying completed phases.
+ 
+ 1. Inspect the current workspace and Git status. Read `tasks.md` first when
+    implementation or validation is active; for a split ledger, read the index
+--- a/docs/spec-first-workflow/shared/transition.md
++++ b/docs/spec-first-workflow/shared/transition.md
+@@ -24,7 +24,57 @@
+ Reopen only the smallest owner invalidated by current evidence and preserve
+ unaffected decisions and proof. Stop at an explicit phase boundary, unavailable
+ required external input, new authority boundary, or required durable handoff.
+-That stop applies to the current phase actor. A durable Orchestrator continues
+-through an authorized agent-owned handoff by opening the next owner, waiting for
+-its transition, and resuming the same unit without asking the user to confirm
+-technical routing.
++That stop applies to the current phase actor; an explicit user stop still
++bounds the whole request.
++
++## Cross-Phase Continuation
++
++For an outcome spanning phases, the root coordinator retains the accepted
++outcome and active phase identity. Dispatch one selected phase actor through
++the [Agent Harness](../../agent-harness.md), wait for its reviewed Transition
++Result, re-read the authoritative result, and open the next applicable owner.
++A ready phase handoff continues the request without technical confirmation.
++Persist coordination only under [Artifacts](artifacts.md); phase results remain
++the decision authority.
++
++The phase actor owns its decision, artifact, repair, and movement evidence. When
++native nesting cannot support a needed specialist or independent reviewer, the
++coordinator dispatches that bounded request on the actor's behalf and relays the
++result. This request is not phase movement; only the phase actor returns its
++reviewed Transition Result. The coordinator does not substitute its own review
++or decision for the actor's.
++
++At ready Planning, select [Implementation](../phases/implementation.md)'s carrier.
++For a persisted ledger, the existing root may bind as `LEDGER_ORCHESTRATOR`
++when its authorized native controls suffice; that role becomes the sole ledger
++writer. For a fixed unit, dispatch its Acceptance-Unit Lead. Preserve the
++separate phase, review, and acceptance owners without requiring a new
++user-visible task. If no authorized carrier supports the required next action,
++report the exact capability gap and retain the resumable result.
++
++## Parent-Owned Recovery
++
++A delegated blocker, missing proof, or technical-policy gap remains work for
++the requesting parent, including a root-local Lead. Without a separate parent,
++the current task owner retains that responsibility. Identify the dependent
++action and smallest decision or evidence owner. Close the input directly when
++the parent's role and active phase permit it; otherwise dispatch that owner
++through an authorized carrier and consume its result. Keep required phase,
++review, and acceptance boundaries intact.
++
++When technical recommendations conflict, the responsible decision owner
++compares evidence and constraints, obtains a discriminating probe or specialist
++judgment when needed, and resolves each material objection against the accepted
++drivers. Converge on an evidence-supported choice and reopen condition; do not
++use a vote or unanimity as proof. When equivalent options survive, the decision
++owner chooses the simplest one satisfying the constraints. If a blocker repeats
++with unchanged evidence, change the probe,
++source, capability, or owner rather than circulating the same unresolved brief.
++
++Continue independent authorized work, then resume the blocked unit from the
++resolved input. A terminal child result does not complete the parent's outcome.
++Escalate user-owned decisions or unavailable external inputs and authority only
++through [Decision Ownership](../../../AGENTS.md#decision-ownership). If required
++evidence or native capability remains unavailable after authorized recovery,
++report the exact limitation and incomplete claim; do not invent success or ask
++the user to choose a technical mechanism.

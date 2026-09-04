@@ -5,11 +5,10 @@ Symptom: the behavior under test is a schedule, a timeout, a backoff, a
 cancellation, a shutdown ordering, or a handoff between goroutines.
 
 ## Decide
-- `synctest.Test(t, func(t *testing.T) { ... })` is the entry point in
-  `testing/synctest` on this toolchain (Go 1.27.0; GA since 1.25). The Go 1.24
-  spelling — `synctest.Run` behind `GOEXPERIMENT=synctest` — no longer applies,
-  and the current form is already used in
-  `internal/infra/postgresoutbox/relay_test.go` and eleven other files.
+- Resolve the target module's supported test APIs through [Go Modern
+  Version](../../go-modern-version/SKILL.md). Use that version's
+  `testing/synctest` interface when available and suitable; inspect local tests
+  for reusable fixtures instead of assuming another checkout's examples exist.
 - Inside a bubble `time.Sleep` is how the fake clock advances, not something to
   avoid. Time moves only when every goroutine in the bubble is durably blocked,
   so a sleep asks the clock to jump to the next scheduled wakeup. The identical
@@ -28,9 +27,9 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
   the offender is the bubble frame missing the `(durable)` marker —
   `[chan receive, synctest bubble 1]` beside healthy neighbours reading
   `[chan receive (durable), synctest bubble 1]`.
-- Goroutine exit needs no separate assertion inside a bubble: `Test` waits for
-  every bubble goroutine. Package-wide that job belongs to
-  `goleak.VerifyTestMain(m)` in `TestMain`, already run in seven packages here.
+- `synctest.Test` waits for every bubble goroutine, providing evidence of their
+  exit. For goroutines outside the bubble, inspect the target package's existing
+  lifecycle assertions and leak checks before adding proof.
 - When the code genuinely leaves the bubble — a container, a subprocess, a real
   socket — drop synctest for an explicit ready signal and a buffered result
   channel, keeping a real timeout only as a failure diagnostic.

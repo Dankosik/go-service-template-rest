@@ -244,8 +244,13 @@ jobs:
           FALLBACK: ${{ steps.affected-go.outputs.fallback }}
         run: |
           set -euo pipefail
-          if [[ "${FALLBACK}" == true || "${TEST_PACKAGES}" == "./..." || -z "${TEST_PACKAGES}" ]]; then
+          if [[ "${FALLBACK}" == true || "${TEST_PACKAGES}" == "./..." ]]; then
             bash ./scripts/ci/measure.sh quality-pr-format-test -- make fmt-check test-all
+          elif [[ -z "${TEST_PACKAGES}" ]]; then
+            if [[ -n "${FORMAT_FILES}" ]]; then
+              bash ./scripts/ci/measure.sh quality-pr-format -- make fmt-files-check FILES="${FORMAT_FILES}"
+            fi
+            echo "no ordinary Go test packages; applicable integration gates remain selected"
           elif [[ -n "${FORMAT_FILES}" ]]; then
             bash ./scripts/ci/measure.sh quality-pr-format-test -- make fmt-files-check FILES="${FORMAT_FILES}" test-package PKG="${TEST_PACKAGES}"
           else

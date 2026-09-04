@@ -6,6 +6,17 @@ public prose.
 ## Native Map
 
 - A saved-project task using `$orchestrator` can own a persisted ledger.
+- Before Planning, the existing root can coordinate a full-outcome request
+  through [Transition](../spec-first-workflow/shared/transition.md#cross-phase-continuation).
+  Use fresh collaboration subagents for phase actors. At ready Planning, bind
+  the current root as Ledger Orchestrator or dispatch a fixed-unit Lead as
+  Implementation requires; preserve returned identities across that transition.
+- Delegate internal work through subagents when their native controls preserve
+  the selected topology. Creating a separate app task requires an explicit user
+  request for that task; an implementation or phase-repair request alone does
+  not authorize it. Check both native authorization and capability before
+  selecting a carrier. If no authorized carrier preserves the required
+  topology, report that exact gap before dispatch.
 - A Local Acceptance-Unit Lead applies Implementation's execution topology
   and uses shared `worker-agent` lanes for delegated mutable work.
 - A Worktree task is the isolation control when [Agent
@@ -13,23 +24,32 @@ public prose.
   Lead. Isolation is not a ceremony for sequential edits, cheap disjoint
   units, or read-only review. Workers inside one Lead may share that Lead's
   checkout when writable responsibility and exclusive locks are disjoint.
-- Only the bound Lead fans out lanes. Spawn from a lane is a carrier failure
-  even when the collaboration schema allows a child to spawn.
+- Only the bound Lead fans out mutable Implementation execution lanes; those
+  lanes do not spawn. Before Implementation, phase actors request specialist or
+  reviewer work from the root coordinator through the Subagent Brief. The root
+  dispatches and relays the result; the phase actor retains decision, repair,
+  and transition ownership. This keeps review independent without requiring
+  another native nesting level.
 - Use a fresh project subagent with no inherited turns for independent review.
-- A Goal is optional and thread-local; use one only for a genuinely long-running
-  or resumable stage.
+- A Goal is optional and thread-local. Create one only after an explicit user
+  request or system/developer instruction; task duration is not authorization.
 
 ## Models
 
 Use Sol with `high` reasoning effort for the Acceptance-Unit Lead, and `xhigh`
-when remaining uncertainty or protected-risk surface requires it. `ultra` is
-a Codex workflow mode, not a reasoning-effort value, and must not be sent in
-the effort field. Use Luna at low effort for closed mechanical work, Terra at
-balanced effort for ordinary delegated work or review, and Sol for complex,
+when remaining uncertainty or protected-risk surface requires it. Resolve
+supported reasoning-effort values from the callable schema for the selected
+model. Evaluate Astra for difficult architecture, cross-domain synthesis, or
+critical review against the current role model using the same inputs and
+supported effort. Promote it to a role default only from comparable evidence;
+an available newer model alone does not replace every role. Use Luna at low
+effort for closed mechanical work, Terra at
+medium effort for ordinary delegated work or review, and Sol for complex,
 cross-cutting, protected-domain, or high-consequence reasoning. Preserve a
-user-named model. If a structured field is unsupported or rejected, retain the
-native evidence and use the effective configured value; do not encode a model
-name only in prompt text.
+user-named model and effort when supported. If a structured field is unsupported
+or rejected, retain the native evidence and report the mismatch. Use the
+effective configured value only when the request allows that fallback; do not
+encode a model name only in prompt text.
 
 ## Dispatch And Coordination
 
@@ -50,7 +70,7 @@ dependencies to the affected sibling and inform the parent when they change a
 shared assumption or acceptance state. Keep same-task corrections with the same
 agent while its context remains useful; do not resend the full brief.
 
-When initial task creation cannot carry the selected model or effort, bootstrap
+When authorized initial task creation cannot carry the selected model or effort, bootstrap
 with role and scope only, require exact `READY_FOR_DISPATCH`, then send one
 technical follow-up using the supported structured fields. Do not repeat an
 ambiguously delivered dispatch. Use a fresh agent when a clean context or
@@ -75,10 +95,11 @@ Reconcile unknown create or handoff state from native task state, the canonical
 ledger, and Git candidate identity. Zero or multiple exact matches remain an
 unknown outcome; do not redispatch or repeat Handoff blindly. If implementation
 invalidates an upstream decision, the Lead repairs the smallest owner when it
-can, or the Orchestrator opens a fresh task for that phase and resumes the same
-unit. A phase task may stop after its durable handoff, but the saved Orchestrator
-keeps its identity, waits for that task, re-reads the transition, and continues.
-It does not ask the user to confirm an agent-owned route or phase reopen. Add no
+can, or the Orchestrator dispatches that phase to a fresh authorized carrier
+selected through the Native Map. A phase actor may stop after its durable
+handoff, but the Orchestrator keeps its identity, waits for that actor, re-reads
+the transition, and resumes the same unit. It does not ask the user to confirm
+technical routing within existing authority. Add no
 scheduler, journal, or recovery database.
 
 Archive a child only after its result and candidate are safe and no continuation

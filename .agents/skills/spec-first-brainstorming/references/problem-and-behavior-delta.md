@@ -4,7 +4,7 @@
 Load this when the frame cannot yet say who is affected, what currently happens, what should happen instead, or which downstream design choices remain undecided.
 
 ## The Move
-Name one affected actor before the mechanism — the precise one: an API client, operator, support agent, tenant admin, or automation, not "users." Separate current behavior from desired behavior as observable facts; "current behavior is missing the feature" hides the delta in a feature name. Preserve the user's concern while stripping unapproved architecture, API, storage, rollout, and task choices, and close with the boundary sentence that tells downstream specialists what must still be decided. When the problem cannot be stated without inventing facts, mark readiness `fail` and ask for the smallest missing fact.
+Name one affected actor before the mechanism — the precise one: an API client, operator, support agent, tenant admin, or automation, not "users." Separate current behavior from desired behavior as observable facts; "current behavior is missing the feature" hides the delta in a feature name. Preserve the user's concern while stripping unapproved architecture, API, storage, rollout, and task choices, and close with the boundary sentence that tells downstream specialists what must still be decided. When the problem cannot be stated without inventing facts, mark readiness `fail` and return the smallest missing fact to its owner under [Decision Ownership](../../../../AGENTS.md#decision-ownership); repository and technical facts stay with the parent for investigation.
 
 ## Inspect
 Input:

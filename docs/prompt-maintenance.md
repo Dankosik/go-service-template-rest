@@ -5,9 +5,10 @@ roles, or skills.
 
 ## Evidence Boundary
 
-OpenAI's [GPT-5.6 prompting
-guidance](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6)
-owns current Codex model guidance. Anthropic's [context-engineering
+OpenAI's [model guidance](https://developers.openai.com/api/docs/guides/latest-model)
+owns model-specific prompting guidance. Select the guide for the actual target
+model; resolve the latest model only when the request calls for it. Anthropic's
+[context-engineering
 guidance](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models),
 [Claude Code documentation](https://code.claude.com/docs), and [prompting best
 practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
@@ -24,6 +25,11 @@ contract.
 
 Re-derive old constraints against the current target model and harness. [Agent
 Harness](agent-harness.md) owns native controls.
+
+Audit the instruction path actually loaded, including conditional skills and
+examples, for conflicting authority and unowned stops. Vendor examples are
+candidates to adapt, not overrides of repository phase, delegation, or proof
+contracts. Record the effective model and source date in the change evidence.
 
 ## Classification
 
@@ -65,7 +71,11 @@ not compete in autonomous discovery.
 Write durable instructions as observable triggers, actions, completion criteria,
 or stop conditions. State allowed behavior and reserve prohibitions for safety,
 authority, or decisive exclusions. Expose only material the current task can
-act on.
+act on. A local stop identifies the dependent action and receiving owner;
+[Decision Ownership](../AGENTS.md#decision-ownership) and [Parent-Owned
+Recovery](spec-first-workflow/shared/transition.md#parent-owned-recovery) govern
+whether the enclosing task continues. Preserve specialist rigor without
+turning missing technical policy into a user decision.
 
 | Meaning | Canonical owner |
 | --- | --- |
@@ -117,3 +127,16 @@ routing, selection, or stop delta expected to change, one boundary case, and one
 retention case. Structural checks suffice for shape-only changes. Otherwise
 compare the same model and harness before and after; do not promote a one-off
 trajectory directly into a durable rule.
+
+For delegated work, evaluate the specialist result and the parent's continuation
+together. A correct local blocker is not a workflow failure when the parent
+resolves it and resumes. Compare technical-choice ownership, disagreement
+resolution, repeated-gap recovery, and completion without technical questions
+to the user. Retain cases for user-owned business ambiguity, unavailable
+external authority, explicit phase stops, and missing required proof. Hold
+model, effort, tools, and task inputs fixed; report a static review or simulated
+trajectory as such rather than claiming live workflow improvement.
+
+Also retain mid-task correction and side-question continuation, small-change
+verification restraint, and phase handoffs before an Implementation ledger
+exists. Compare prompt changes separately from model or effort changes.

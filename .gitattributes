@@ -4,5 +4,6 @@
 internal/openapi/openapi.gen.go linguist-generated=true
 *.gen.go linguist-generated=true
 
-# Unified-diff fixtures necessarily prefix tab-indented context with one space.
+# Unified-diff artifacts necessarily prefix tab-indented context with one space.
 scripts/ci/fixtures/*.patch whitespace=-blank-at-eol,-space-before-tab
+specs/**/*.patch whitespace=-blank-at-eol,-space-before-tab

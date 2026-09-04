@@ -58,27 +58,11 @@ admit_name() {
 	local name="$1"
 	[[ "${name}" =~ ^[a-z][a-z0-9_]*$ ]] || return 1
 	[[ "${name}" != *"__"* ]] || return 1
-	local tmp
-	tmp="$(mktemp -d)"
-	cat >"${tmp}/main.go" <<'EOF'
-package main
-
-import (
-	"go/token"
-	"os"
-)
-
-func main() {
-	name := os.Args[1]
-	if !token.IsIdentifier(name) || token.IsKeyword(name) {
-		os.Exit(1)
-	}
-}
-EOF
-	(cd "${tmp}" && go mod init integration-init-name >/dev/null 2>&1 && go run . "${name}")
-	local status=$?
-	rm -rf "${tmp}"
-	return "${status}"
+	# The shape above leaves only Go's reserved keywords to exclude.
+	case "${name}" in
+	break | case | chan | const | continue | default | defer | else | fallthrough | for | func | go | goto | if | import | interface | map | package | range | return | select | struct | switch | type | var) return 1 ;;
+	esac
+	return 0
 }
 
 lock_value() {

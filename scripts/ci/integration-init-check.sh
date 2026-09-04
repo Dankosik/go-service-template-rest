@@ -624,6 +624,15 @@ row_e3_input() {
 		exit 1
 	fi
 	assert "invalid name unchanged" same_text "${before}" "$(snapshot_tree "${root}")"
+	local keyword output
+	for keyword in break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var; do
+		if output=$(cd "${root}" && bash scripts/integration-init.sh "${keyword}" http "api/external/${keyword}/openapi.yaml" external-https none 2>&1); then
+			echo "Go keyword ${keyword} was accepted as NAME" >&2
+			exit 1
+		fi
+		grep -Fq 'NAME must be a lower-case Go package identifier' <<<"${output}"
+	done
+	assert "keyword rejections unchanged" same_text "${before}" "$(snapshot_tree "${root}")"
 	if (
 		cd "${root}"
 		make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none EXTRA=1
