@@ -11,7 +11,7 @@ Load this when the obligation touches REST/OpenAPI, auth or tenant boundaries, i
 - Prove transactions on durable state: every row present or every row absent after a representative mid-step failure, plus the error class the caller must still recognize.
 - Prove cache behavior at the origin rather than in the response: origin call count, cache write/delete/bypass, tenant-scoped key, and the fallback signal when the cache is unreachable.
 - Separate retry classes — transient-then-success, exhausted, non-retryable, and poison for async flows — because each has a different terminal state.
-- Prove cancellation twice: the recognizable context-derived error, and the absence of a success side effect after cancellation.
+- Cancellation: Place cancellation relative to the effect boundary and assert the accepted error, durable state, and recovery outcome; do not assume cancellation reverses an already committed effect.
 - Prove shutdown with a lifecycle observable — drain marker, joined goroutine, flushed or abandoned work — not with elapsed time.
 - Prove migrations on compatibility and resumability: the old application against the new schema, a backfill that resumes, and a destructive step that stays blocked until verified.
 

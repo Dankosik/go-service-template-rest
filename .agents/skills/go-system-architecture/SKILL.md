@@ -1,6 +1,6 @@
 ---
 name: go-system-architecture
-description: "System architecture: Use for boundaries, topology, protocol, truth, consistency, failure, or migration. Own runtime interactions; Skip Go placement."
+description: "Runtime boundary design. Use when a change adds or changes a component crossing, protocol, source of truth, consistency expectation, failure model, or migration topology."
 metadata:
   invocation: model
   kind: method
@@ -14,18 +14,17 @@ Architecture is decided by **forces**: every component, boundary, and protocol i
 
 Boundary crossings are where systems break, so each one names its authority, protocol, consistency expectation, failure behavior, and migration story — whatever stays unnamed gets invented under incident pressure by whoever is on call.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
-every material crossing from accepted behavior, current components and
-contracts, sources of truth, flows, consumers, and rollout topology. At each
-crossing name authority, protocol, interaction, consistency, failure, migration,
-and forced consequence; then choose the smallest coherent runtime boundaries.
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From every new or changed runtime crossing through its migration and terminal
+failure disposition, build `Crossing{from, to, authority, protocol,
+interaction, consistency, failure, migration, forced_consequence, proof}` from
+accepted behavior, current components, contracts, sources of truth, consumers,
+and rollout topology. Choose the smallest coherent runtime boundaries.
 
 [Distributed system design](../../../docs/universal-disciplines/distributed-system-design/SKILL.md)
 owns the general force, estimate, and failure-model method.
 
 Load the [decision selector](references/index.md) for the affected current-state
 leaf or a new service call, protocol, migration, or consumer-class change.
-Complete when every crossing is
-dispositioned and implementation has no boundary, ownership, sequence, proof,
-or rollout condition left to invent. Hand placement, data mechanics, and
-business policy to their matching owners.
+Complete when every crossing is dispositioned and implementation has no
+boundary, authority, sequence, proof, or rollout condition left to invent.

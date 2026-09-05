@@ -19,7 +19,7 @@ or what a handler is allowed to conclude about who is calling.
 - Mainstream client identifiers use `client_id`, `azp`, `appid`, or `cid`. The
   verifier accepts one value or several identical values and rejects a conflict.
   The explicit `rfc9068` token profile additionally requires `typ=at+jwt`,
-  `client_id`, `iat`, and `jti`; those are not ordinary-profile defaults.
+  `sub`, `client_id`, `iat`, and `jti`; those are not ordinary-profile defaults.
 - Initial Discovery and JWKS admission fail startup closed. Later refresh
   failures never replace the last valid set; a request that needs the failed
   refresh answers `KindUnavailable`, while dynamic provider health does not

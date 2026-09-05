@@ -1,6 +1,6 @@
 ---
 name: go-distributed
-description: "Recovery: Use for cross-service consistency, sagas, replay, ordering, compensation, redrive, or reconciliation. Own recovery; Skip local concurrency."
+description: "Durable recovery. Use when cross-service consistency, replay, ordering, compensation, redrive, or reconciliation must survive process or owner boundaries."
 metadata:
   invocation: model
   kind: method
@@ -12,9 +12,10 @@ A cross-service flow is defined by its **recovery**.
 
 `flow contract -> durable steps -> partial failure -> ordering and duplicates -> compensation -> redrive -> reconciliation -> proof`
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
-every durable step from accepted flows, producers, consumers, persistence or
-broker boundaries, recovery paths, and success semantics. Replay duplicate
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From every accepted producer effect through terminal reconciliation, build
+`DurableStep{identity, authority, commit, duplicate, reorder, unknown,
+compensate, redrive, reconcile, proof}`. Replay duplicate
 delivery, reordering, partial completion, process loss, redrive, and mixed
 versions. Each step is idempotent under redelivery or has a named compensation;
 ordering exists only where a key serializes it; reconciliation distinguishes
@@ -34,6 +35,7 @@ only when another owner already performed an effect. For **Review**, replay each
 affected step against its pack contract. Complete when every step has an
 invariant, recovery or compensation, reconciliation action, and focused proof.
 
-Hand business identity to `go-domain-invariant`, local access to `go-db-cache`,
-broker guarantees to [reliable messaging](../../../docs/universal-disciplines/reliable-messaging/SKILL.md),
-and multi-mechanism topology to [distributed system design](../../../docs/universal-disciplines/distributed-system-design/SKILL.md).
+Load [reliable messaging](../../../docs/universal-disciplines/reliable-messaging/SKILL.md)
+for broker guarantees and [distributed system
+design](../../../docs/universal-disciplines/distributed-system-design/SKILL.md)
+when multiple coordination mechanisms change topology.

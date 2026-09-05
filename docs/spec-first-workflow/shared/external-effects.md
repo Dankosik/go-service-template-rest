@@ -22,3 +22,9 @@ rotation before reuse.
 
 The action remains inside the accepted envelope and returns proof of the exact
 effect. Otherwise stop before the effect and name the missing authority.
+
+Before requesting authority, finish independent authorized preparation so the
+user can review a concrete candidate, its business consequence, cost, and
+recovery boundary. Ask about the missing consequence or budget, not which
+technical mechanism to choose. Do not defer an outcome-defining business
+question until after work that depends on its answer.
