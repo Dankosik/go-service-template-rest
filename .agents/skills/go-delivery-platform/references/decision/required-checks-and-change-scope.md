@@ -8,16 +8,23 @@ check that did not exercise its claimed surface.
 ## Decide
 
 - `ci.yml` classifies the exact diff once. Its quality, security, secret,
-  delivery, and integration leaves are conditional; one `required` job is
-  always reported and rejects any failed or cancelled applicable leaf.
+  delivery, and integration leaves are conditional; runtime Go, root/tool
+  dependencies, lint config, initializers, validation routing, database, messaging, process, race,
+  migrations, runtime image, and image security remain distinct. A root
+  Makefile change is validation routing, not every surface. One `required`
+  job is always reported and rejects any failed or cancelled applicable leaf.
 - A skipped leaf is not evidence for that surface. The classifier makes the
-  skip explicit, while tag dispatch marks Go and release surfaces applicable so
-  integration cannot be path-skipped.
+  skip explicit. Pull requests, merge groups, and main pushes use their exact
+  comparison base; tags, manual runs, and the weekly audit select every surface.
+  Generated Go, compose, publication metadata, and each race owner remain
+  independently visible.
 - OpenAPI and Protobuf breaking comparisons run only on pull requests with the
   event's exact base SHA. A missing base OpenAPI contract means no comparison,
   not proof of compatibility.
-- CodeQL reports one stable `codeql-required` context over its conditional Go
-  and Actions analyses. Main, tag, schedule, and manual runs execute both.
+- CodeQL reports one stable `codeql-required` context. Go source and dependency
+  changes run Go analysis on pull requests and merge groups before admission as
+  well as on main, tags, schedules, and manual runs. Actions analysis remains
+  conditional on workflow source.
 - Both workflows handle `merge_group` before their aggregate contexts are
   required for merge queue events.
 

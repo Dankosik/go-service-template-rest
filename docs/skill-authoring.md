@@ -62,25 +62,26 @@ Co-locate a concept's rule, consequences, review signals, and proof. Keep
 `SKILL.md` below 500 lines. Before splitting a skill, disclose a reference and
 verify that a real trigger boundary remains.
 
-## Method Skills: Behavioral Compression V2
+## Method Skills
 
 A `model/method` skill exists to change one technical judgment the base model
 otherwise makes inconsistently.
 
-A promoted method skill binds four elements to the same domain judgment:
+State the domain judgment, the non-obvious criteria that change it, a plausible
+wrong default when useful, and a checkable completion condition. Use familiar
+domain terms without requiring the same word or document shape in every skill.
 
-1. **Operator** — one pretrained technical term repeated in the description and
-   opening.
-2. **Materialized story** — finite typed domain records the agent must build
-   before packing the decision or findings into a shared result interface.
-3. **Falsifier** — one plausible wrong default paired with the correct
-   replacement behavior.
-4. **Done** — one local, checkable, exhaustive completion criterion.
+Require a fixed sequence or typed domain records only when ordering, comparison
+of multiple paths, or a decision/review handoff needs them. Name that trigger
+in the method. For a single local path, a grounded decision and matching proof
+can suffice; do not add a record solely to satisfy a common skill format.
+When exhaustive path coverage matters, name its traversal start and terminal
+closure, and give each affected path a disposition with proof or an exact gap.
 
-Every `every affected X` instruction names its traversal start and terminal
-closure. Done means every enumerated record has a disposition and rejecting
-proof or an exact gap; a lexical claim that all paths were considered is not a
-materialized story.
+For delegated Decision or Review results, use the
+[shared specialist contract](../.agents/contracts/specialist-contract.md).
+Local completion neither completes the enclosing task nor turns a technical
+gap into a user decision. Preserve required workflow result interfaces.
 
 The canonical [specialist neighbor map](../.agents/contracts/specialist-neighbors.json)
 owns catalog collisions. Keep neighboring triggers distinct and route concrete

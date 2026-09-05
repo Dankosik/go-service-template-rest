@@ -28,13 +28,18 @@ ownership, reversibility, or proof.
 
 Research is a standalone macro phase only when the accepted boundary is
 `research only`; otherwise it supports the active phase. Review, repair, and
-the smallest upstream reopen remain inside the active macro phase. One root
-session owns at most one macro phase; cross-phase continuation uses the
-[Transition](spec-first-workflow/shared/transition.md) owner.
+the smallest upstream reopen remain inside the active macro phase. Each phase
+actor owns at most one macro phase. For a request spanning phases, the current
+root retains responsibility as the continuation coordinator and delegates the
+selected phase to a fresh actor through the authorized harness. The coordinator
+routes results; it does not perform phase work or accept implementation units.
+[Transition](spec-first-workflow/shared/transition.md) owns continuation,
+including before an Implementation ledger exists. An explicit phase-only or
+research-only request stops at that reviewed boundary.
 
 Traverse applicable macro phases in table order. Skip one only when Phase
 Selection evidence shows that its decision is already closed or untriggered;
-never fold its open decision into a neighboring phase or the same root session.
+never fold its open decision into a neighboring phase or the same phase actor.
 
 ## Phase Selection
 
@@ -42,7 +47,7 @@ Evaluate these triggers before loading a phase owner:
 
 | Observable trigger | Owner |
 | --- | --- |
-| Outcome, scope, authority, observable success, or first owner is ambiguous | [Intake](spec-first-workflow/phases/intake.md) |
+| New structured work lacks a complete [Intent](spec-first-workflow/interfaces/intent.md), or outcome, scope, authority, observable success, or first owner is ambiguous | [Intake](spec-first-workflow/phases/intake.md) |
 | Current or external evidence can change a named decision | [Research](spec-first-workflow/phases/research.md) |
 | Structured work lacks a ready behavior delta | [Specification](spec-first-workflow/phases/specification.md) |
 | Implementation would otherwise choose a runtime boundary, truth, material flow, failure/recovery behavior, or rollout mechanism | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) |
@@ -51,9 +56,13 @@ Evaluate these triggers before loading a phase owner:
 | Structured work lacks one ready fixed unit or the smallest dependency-ordered ledger | [Planning](spec-first-workflow/phases/planning.md) |
 | One accepted implementation unit is ready and authorized | [Implementation](spec-first-workflow/phases/implementation.md) |
 
-Specification and Planning are required for structured work unless ready
-equivalent authority already supplies their output. Other phases are
-conditional. Load only the selected owner; do not load a phase merely to
+Intake is required for new structured work unless a complete Intent already
+exists. Specification and Planning are required for structured work unless
+ready equivalent authority already supplies their output. Do not backfill
+active work whose accepted upstream authority predates Intent: that authority
+remains its requester-meaning input, including on a narrow reopen. Missing or
+changed requester meaning still reopens Intake. Other phases are conditional.
+Load only the selected owner; do not load a phase merely to
 declare it unnecessary. Record `skipped` only when a durable [Transition
 result](spec-first-workflow/shared/transition.md) needs that disposition.
 
