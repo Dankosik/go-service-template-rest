@@ -16,4 +16,7 @@ Authorized residual risks record acceptance authority and a reopen condition;
 unavailable proof fields name the gap instead of inventing evidence.
 
 Merge rows only when claim, trigger, oracle, proof boundary, and reopen path are
-the same.
+the same. Rows track proof obligations, not separate executions: different rows
+may share one command and passing receipt when it discriminates each claim.
+Deduplicate runs and invalidate evidence through the [Evidence
+Contract](../shared/evidence-contract.md#execution-evidence).

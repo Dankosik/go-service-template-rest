@@ -12,7 +12,7 @@ Global constraints: <shared execution constraints; omit when none>
 ## Tasks
 
 - [ ] T<ID>: <one independently acceptable postcondition>
-  - Depends on: <ID and consumed output or gate | none>
+  - Depends on: <ID and consumed output or gate | none; annotate acceptance or a named external effect when later than implementation>
   - Provides: <stable output or final outcome>
   - Packet: tasks/<ID>-<slug>.md
   - Execution: <native task or agent locator; omit until dispatched or when unavailable>

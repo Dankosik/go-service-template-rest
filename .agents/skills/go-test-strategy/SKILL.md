@@ -28,7 +28,12 @@ boundaries, and current proof surfaces.
 
 Reachability: Ground each scenario in a supported use, plausible failure,
 or adversarial path. Preserve the data relationships and event ordering
-that make the risk real.
+that make the risk real. Before expanding a fixture shared across producers or
+consumers, trace one minimal example from source to expected result: source
+cardinality, entity ownership, and absent or partial values must match the
+accepted contract at each boundary. Reuse sufficient existing examples; resolve
+an unclear relationship or oracle through its smallest owner while retaining
+unaffected scenarios.
 
 Stability: Choose assertions that survive behavior-preserving refactoring.
 Assert internal structure or interactions only when they carry an

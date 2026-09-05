@@ -9,7 +9,7 @@ Outcome:
 <one falsifiable independently acceptable current-to-target change>
 
 Consumes:
-- <repository-relative path#section, stable ID, or dependency output/gate> — <decision or output used here>
+- <repository-relative path#section, stable ID, or dependency output/gate> — <decision or output used here; gate at acceptance or a named external effect when later than implementation>
 
 Provides:
 - <stable output consumed later or final result>
@@ -37,6 +37,14 @@ Reopen if:
 Use narrow source anchors for large inputs; name the repository for a source
 outside the current checkout. Resolve variable paths deterministically and
 record an unavailable required environment or input as a dependency gate.
+
+Unannotated dependencies gate implementation. Keep gate annotations consistent
+with the ledger's Depends on entries. When earlier preparation is justified,
+Boundary names the work and local proof permitted from accepted inputs and the
+stop before the pending gate. Accept when retains all required integration
+proof; preparation does not satisfy it. [Ready
+Frontier](../phases/planning/ledger-contract.md#ready-frontier) owns dispatch and
+resumption.
 
 Acceptance: Outcome, Provides, and Accept when describe successful work.
 Record inability to complete as Blocked, not as an alternative success.
