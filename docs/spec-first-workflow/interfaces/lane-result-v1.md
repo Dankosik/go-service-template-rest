@@ -1,6 +1,6 @@
 # Lane Result V1
 
-Every material read-only lane returns:
+Every material read-only evidence lane returns:
 
 ```text
 conclusion: <answer or no supported conclusion>

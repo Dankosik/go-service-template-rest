@@ -1,6 +1,6 @@
 interface:
   display_name: "Ledger Orchestrator"
-  short_description: "Route ready ledger units to completion"
+  short_description: "Fill the independent ready frontier to completion"
   default_prompt: "Use $orchestrator as LEDGER_ORCHESTRATOR with the current harness adapter to execute this saved Git project's ready Implementation ledger to completion or a true external boundary."
 policy:
   allow_implicit_invocation: false

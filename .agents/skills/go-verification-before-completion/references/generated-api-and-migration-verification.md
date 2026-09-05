@@ -7,41 +7,33 @@ output, a SQL query, or a migration.
 
 ## Decide
 
-`go-coder`'s generated-source reference owns which file is canonical and which
-command regenerates it, including the fact that a `*-check` target regenerates in
-place and leaves the rewritten files in your tree. What matters for the claim is
-the boundary of each proof:
+Use `go-coder`'s [generated-source reference](../../go-coder/references/generated-source-of-truth-and-drift.md)
+to identify the target's canonical source, generator, and command side effects.
+Select commands through [Validation Routing](../../../../docs/validation-routing.md).
+Inspect their current implementation and actual exercised surfaces before
+assigning these proof boundaries:
 
-- `make openapi-check` is drift, reference compile, runtime contract, lint, and
-  validation. It says nothing about **compatibility with the previous spec** —
-  that is `make openapi-breaking BASE_OPENAPI=…`, which errors out without the
-  base, and which `make pr-check BASE_REF=…` supplies by extracting the base spec
-  from git. Add it only when the claim is about not breaking existing clients.
+- Generated drift, runtime contract tests, lint, and spec validation do not
+  establish compatibility with the previous API. That claim needs the matching
+  breaking-change check against the accepted base contract.
 - `make sqlc-check` catches generated output that no longer matches its queries,
   including output left behind after its sources were removed. Data-access tests
   pass over stale generated files, so they cannot stand in for it.
-- The reversal rehearsal is not exclusive to `migration-validate`.
-  `TestPostgresMigrateRepositorySourceRehearsal` in `./test` runs up, up again
-  (asserting the second is a no-op), down to zero, and up again over the live
-  `migrations/` corpus — and `test-integration` runs `./test/...` unfiltered, so a
-  green integration run already covers reversal. What `migration-validate` adds is
-  the production image: it runs that image's `/migrate` entrypoint against a
-  disposable Compose Postgres and requires the container to reach `/health/ready`,
-  report the expected version, and exit 0 on SIGTERM. Cite it for a
-  *deployable-migration* claim, not merely a reversible-schema one.
+- A source migration rehearsal can prove apply, reapply, reversal, and reapply
+  only when the target owns and actually executes those assertions against its
+  current migration corpus. A production-image rehearsal adds evidence about
+  the shipped migration entrypoint and runtime. Reuse existing rehearsal proof
+  for the matching claim; do not infer either level from the target name.
 - Neither proves that repository and domain code behave correctly over the new
   schema. That is a separate result from the tests covering the affected surface.
-- The rehearsal skips itself when the repository owns no `migrations/` directory,
-  and `migration-history-check` returns success without comparing anything while
-  `scripts/profiles/` exists (it is authored in place here, so append-only history
-  is a generated-service check). Confirm each one had something to examine before
-  citing it.
+- A no-migrations, disabled-profile, or history-check exemption is not migration
+  evidence. Confirm what the target actually examined before citing success.
 
 ## Reject
 
 Reject a compile or a passing unit test as evidence about generated artifacts:
-stale generated code compiles and its tests pass, and the linters never see it —
-`.golangci.yml` excludes the generated paths outright. Reject a drift check that
+stale generated code can compile and pass tests regardless of lint exclusions.
+Reject a drift check that
 ended by modifying files as a clean result; the artifacts are reconciled only
 once the check reruns without changing anything.
 
