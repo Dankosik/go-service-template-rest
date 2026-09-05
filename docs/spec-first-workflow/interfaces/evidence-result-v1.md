@@ -19,8 +19,8 @@ A summary inherits the weakest status among the claims it covers. When required
 proof cannot run, record the intended proof, reason, narrower evidence, and
 unverified remainder.
 
-Reuse a prior receipt only when `candidate`, `scope`, `command`, and
-`environment` are unchanged and `result` is `pass`. The Lead may accept a
-worker receipt that matches those four fields. A reviewer does not rerun the
-same command; it either accepts the receipt or runs a distinct adversarial
-falsifier.
+The [Evidence Contract](../shared/evidence-contract.md#execution-evidence) owns
+reuse eligibility for scoped results and whole-candidate receipts. Keep a reused
+record's original candidate and exercised scope. The Lead validates its
+applicability to the current claim; a reviewer reuses valid evidence or runs a
+missing or distinct adversarial falsifier.

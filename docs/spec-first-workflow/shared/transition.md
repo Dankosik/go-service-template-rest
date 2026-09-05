@@ -84,10 +84,23 @@ owner chooses the simplest one satisfying the constraints.
 For uncertain recovery, name the next discriminating result and a bounded work
 window in existing task state before another attempt. On that checkpoint or a
 repeated result with no new evidence, compare actual progress with the intended
-result. Change the probe, source, capability, or owner rather than circulating
-the same unresolved brief. Time spent and more status messages do not close a
-gap. A work-window limit changes strategy; it neither waives proof nor creates
-a new task boundary, user approval, or success claim. Retain useful partial work.
+result. Continue while findings close or a concrete available probe can
+distinguish remaining causes. Changing reviewer, owner, or reasoning effort
+does not reset a no-progress recovery; reworded concerns, elapsed time, and
+repeated status reports are not new evidence.
+
+For the same unresolved finding without new evidence, use one focused
+independent diagnosis when needed, not another whole-unit review. The
+responsible decision owner resolves the finding against the accepted contract
+and resulting evidence. Reuse that diagnosis until new evidence invalidates it;
+another actor or higher effort alone is not a new recovery path. Confirmed
+defects and missing mandatory proof still prevent acceptance.
+
+When no available authorized probe or recovery can obtain the required evidence,
+retain `Blocked` with the exact unverified claim, limitation, and input or
+capability that would permit resumption. Do not redispatch the unchanged gap.
+A work-window limit changes strategy; it neither waives proof nor creates a
+new task boundary, user approval, or success claim. Retain useful partial work.
 
 Continue independent authorized work, then resume the blocked unit from the
 resolved input. A terminal child result does not complete the parent's outcome.

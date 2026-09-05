@@ -34,9 +34,20 @@ design is ready; an unavailable required input stays a gap with its owner.
 ## Execution Evidence
 
 Attach commit or tree identity only across a checkout or integration
-boundary; the current bounded diff is enough for local work. Reuse a receipt
-only while `candidate`, `scope`, `command`, and `environment` are unchanged and
-the result is `pass`. Do not rerun unchanged evidence as ceremony.
+boundary; the current bounded diff is enough for local work. Distinguish scoped
+evidence from a whole-candidate validation receipt.
+
+Reuse a passing scoped result when its covered code, relevant dependencies,
+command, inputs, and environment are unchanged for the claim. A new commit
+or tree identity alone does not invalidate it. Check the relevant delta and
+retain the original candidate and scope; do not relabel it as a run on the new
+tree. When equivalence is uncertain, rerun the affected check.
+
+Whole-candidate aggregate receipts retain the validation tool's exact base,
+candidate, plan, input, and environment requirements under [Validation
+Routing](../../validation-routing.md). Scoped reuse does not create an aggregate
+receipt or prove a fresh runtime observation. Do not rerun unchanged evidence
+as ceremony.
 
 Before execution, choose one minimal proof plan across all claims; one receipt
 may support several. Do not run a leaf included in a selected aggregate or add

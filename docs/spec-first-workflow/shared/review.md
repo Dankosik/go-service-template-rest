@@ -47,17 +47,19 @@ writable owner. The reviewer remains read-only and does not prescribe or
 perform the repair.
 
 For Implementation, retain that reviewer across bounded repairs while findings
-close or new discriminating evidence advances the diagnosis. A repeated cycle
-with the same unresolved finding and no new evidence requires a fresh reviewer
-through [Parent-Owned Recovery](transition.md#parent-owned-recovery), not another
-recheck by the same reviewer. Use fresh review when the original analysis is
-materially doubtful or the scope/freshness conditions below fail. Recheck count
-alone does not require replacement; every blocking finding still must close.
+close or new discriminating evidence advances the diagnosis. For repeated
+findings without new evidence, apply [Parent-Owned
+Recovery](transition.md#parent-owned-recovery)'s focused diagnosis and disposition;
+do not restart whole-unit review by rotating reviewers. Use fresh review when
+the original analysis is materially doubtful or the scope/freshness conditions
+below fail. Recheck count alone does not require replacement; every blocking
+finding still must close.
 
 For non-Implementation reviews, allow at most one bounded delta recheck per
 review result. If that still FAILs, one fresh reviewer inspects the repaired
 candidate, or reopen if Outcome is invalid. Do not start a third cycle on the
-same candidate.
+same candidate. Parent-Owned Recovery still governs repeated findings without
+new evidence; reviewer replacement does not restart that allowance.
 
 If the same-reviewer identity is unavailable, one fresh review covers the
 bounded repair delta and invalidated proof, not the original unit, unless the

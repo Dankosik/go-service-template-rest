@@ -34,7 +34,8 @@ Cached unit results support unchanged code behavior, not a claim that Docker,
 database, image, or other external state was exercised now. Use `-count=1` when
 fresh environment interaction is the claim. A focused package or reproducer
 does not prove unrelated packages, lint, drift, regression, or race behavior.
-Reuse a receipt only when candidate, scope, command, and environment match.
+Apply the [Evidence Contract](../../../../docs/spec-first-workflow/shared/evidence-contract.md#execution-evidence)
+when deciding whether a scoped result or aggregate receipt remains reusable.
 
 ## Prove
 

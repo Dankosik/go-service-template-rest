@@ -150,11 +150,15 @@ handoff, or attempted action is not ledger state.
 
 Keep `status: ready` while another unit or owner-held recovery is executable;
 an agent-owned technical, review, proof, or Planning repair with available
-authority is owner-held recovery even when the current unit result is `Blocked`.
+authority and a concrete next discriminating action is owner-held recovery even
+when the current unit result is `Blocked`. Apply [Parent-Owned
+Recovery](../../shared/transition.md#parent-owned-recovery) to exhausted recovery;
+changing the assigned actor or effort alone does not make a gap executable.
 Owner-held recovery or a Planning reopen for one unit does not pause or cancel
 unrelated ready or running units.
 Use `blocked` only when no ready unit or owner-held recovery remains because a
-required user/external input or authority is unavailable. A conflicting
+required input, evidence, native capability, or authority is unavailable after
+authorized recovery; retain the exact resumption condition. A conflicting
 `status: blocked` reopens Planning; it is not a user confirmation question.
 After the final accepted unit, verify the global Completion condition before
 `done`. Apply [Review](../../shared/review.md)'s integrated-candidate trigger to
