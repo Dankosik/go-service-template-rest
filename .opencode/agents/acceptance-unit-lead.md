@@ -2,6 +2,7 @@
 description: "Unit: Use when bound ACCEPTANCE_UNIT_LEAD. Own one implementation unit end to end; Skip other units."
 mode: all
 model: xai/grok-4.6
+variant: xhigh
 permission:
   task:
     "*": deny

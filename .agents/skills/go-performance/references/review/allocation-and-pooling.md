@@ -15,7 +15,7 @@ calls, or a claim about GC pressure.
   defect, and a benchmark that never misses is not the production shape.
 - Churn and retention need different evidence: `-benchmem` and `alloc_space`
   show allocation churn; `inuse_space` shows what stays live.
-  `make bench-profile BENCH_PROFILE=memory` prints both views, and a smaller
+Use `go test -memprofile` and inspect both `alloc_space` and `inuse_space`; a smaller
   in-use heap is not evidence that churn fell.
 - Two hazards are worth a finding on their own. A pooled object returned while
   still holding request data leaks it into the next request — this is a
@@ -35,7 +35,7 @@ calls, or a claim about GC pressure.
 
 ## Prove
 
-Old-versus-new `-benchmem` through `make bench-baseline` / `make bench` /
-`make bench-compare`, plus a case that does not keep the pool hot when the claim
+Old-versus-new `go test -bench -benchmem` samples compared with `benchstat`,
+plus a case that does not keep the pool hot when the claim
 is about reuse. For a live GC or heap claim, use the runtime metrics
 `otelruntime` already exports rather than extrapolating from a benchmark.

@@ -10,6 +10,8 @@ Load when a Go review touches detached or background work, `context.WithoutCance
 - `Read` may return `n > 0` together with a terminal error. Consume those bytes before handling the error, or the final chunk is silently lost.
 - `defer` releases at function scope. Inside a loop that opens a resource per iteration, close within the iteration or move the body into a helper whose scope is one resource.
 - A close error matters where close is the flush: writers, files, protocols. On a read-only response body it is usually noise that must not mask the earlier read or status error.
+- When the operation and completion or cleanup fail independently, preserve
+  both with `errors.Join`; a later `Close` must not replace the primary failure.
 
 ## Inspect
 A page loop with `defer resp.Body.Close()` — the defect is not the unchecked error `errcheck` reports, it is that every body stays open until the enclosing function returns.
@@ -26,4 +28,6 @@ A page loop with `defer resp.Body.Close()` — the defect is not the unchecked e
 ## Prove
 - Fail a fake reader, scanner, or iterator after it yields partial data and assert the function returns an error rather than a short success.
 - Count closes with a fake body when loop lifetime is the defect.
+- Fail both the operation and its completion step and assert both causes remain
+  inspectable.
 - Cancel the parent and assert detached work still ends on its own bound.

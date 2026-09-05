@@ -10,4 +10,5 @@ candidate: <identity when isolated or none>
 gap: <remaining blocker or none>
 ```
 
-The result is input to the Acceptance-Unit Lead, not acceptance or ledger state.
+The result is input to the Acceptance-Unit Lead, not acceptance, review, or
+ledger state.

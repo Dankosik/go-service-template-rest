@@ -7,19 +7,15 @@ Callable Task fields outrank public prose.
 
 - This session is Cursor. Load only this adapter. Sibling bootstrap files
   select other harnesses; do not follow their adapter choice.
-- The ordinary user-facing Cursor session is the Orchestrator carrier. A
-  user prompt here is the launch. Do not require `/orchestrator`, a Custom
-  Mode, or a nested Task for routing. `/orchestrator` remains an optional
-  explicit bind; a Custom Mode that pins that skill keeps the playbook on
-  every turn. Cursor reads `.agents/skills` directly.
-- When a persisted Implementation ledger is ready, this session binds as
-  LEDGER_ORCHESTRATOR: it routes ready units and owner-held recovery. It
-  does not implement, review, or accept unit work.
+- `/orchestrator` binds the current session as Ledger Orchestrator. Cursor
+  reads `.agents/skills` directly.
 - Dispatch every mutually independent ready unit before waiting, within
-  current capacity. Spawn one fresh `acceptance-unit-lead` per ready unit
-  through Task. That Lead owns implementation, proof, review, and the
-  canonical transition; this session only routes. Land each Accepted
-  candidate onto the current checkout serially from the ledger receipt.
+  current capacity. Assign an `acceptance-unit-lead` through Task, reusing a
+  completed related Lead only under the shared ledger contract. That Lead owns
+  proof, any required review, and the acceptance verdict;
+  this session lands only `Accepted` candidates serially from the
+  [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
+  and records that verdict without re-adjudicating it.
 - Bind that teammate to `acceptance-unit-lead`. Do not substitute
   `generalPurpose`, `explore`, `shell`, or generic worker semantics.
 - Full-ledger work requires Task plus returned agent identities. If Task
@@ -31,24 +27,25 @@ Callable Task fields outrank public prose.
 - The main session and its direct Task children may spawn one descendant hop.
   A grandchild cannot spawn. The Lead fans out any independently writable
   subset itself.
-- Isolated candidate state uses a Git worktree, or Task `environment:
-  "cloud"` when a separate VM and branch are useful. Isolation is not a
-  ceremony for every edit.
+- When [Agent Harness](../agent-harness.md) selects isolation, use a Git
+  worktree, or Task `environment: "cloud"` when a separate VM and branch are
+  useful. Workers inside one Lead may share the Lead checkout when writable
+  responsibility and exclusive locks are disjoint. Isolation is not a
+  ceremony for sequential work, cheap disjoint units, or bounded read-only
+  review.
 - Independent review uses one fresh `reviewer-agent` with no `resume` and no
   worktree isolation. `readonly: true` is the role default.
 - `/goal` is optional and rolling out; use it only for genuinely long-running
-  or resumable work. Direct Work stays on this session and is not ledger
-  orchestration.
+  or resumable work.
 
 ## Models And Dispatch
 
-Project agents pin `grok-4.6` with the role's effort in frontmatter. Use
-`grok-4.6[effort=high]` for this Orchestrator session and
-`grok-4.6[effort=xhigh]` on each Lead. Child lanes inherit the Lead pin
-unless a role pins a different effort. The repository cannot set the
-primary-session model picker; prefer Grok 4.6 there. Preserve a
-user-selected model. Carry model through the Task `model` field as `inherit`
-unless raising effort; do not encode a model name only in prompt text.
+Project agents default to `inherit`. Use inherit or a faster configured model
+for a closed, strongly owned Lead unit; use the strongest configured model
+when remaining uncertainty, protected-risk surface, or high consequence
+requires it, including the adjudicator. Use inherit or a faster configured
+model for mechanical lanes. Preserve a user-selected model. Carry model through the
+Task `model` field; do not encode a model name only in prompt text.
 
 Pass the [delegation interface](../agent-harness.md#delegation-interface)
 through Task fields: `subagent_type`, `prompt`, `description`, `model`,
@@ -56,25 +53,29 @@ through Task fields: `subagent_type`, `prompt`, `description`, `model`,
 `environment` when cloud isolation is required. Retain every returned agent
 ID before waiting. Never wait on a lane that returned no identity. Dispatch
 independent ready lanes in one parent message before waiting, within current
-capacity. Concurrent mutable lanes require disjoint files, resources,
-interfaces, and assumptions. Consume and integrate results serially under
-the Lead.
+capacity. Concurrent mutable units and lanes require disjoint packet
+mutable owners and exclusive locks. Consume and integrate results serially
+under the Lead.
 
-Continue the same agent while its context helps; use a fresh agent for
-independent review, an invalidated base, a stall, or a changed strategy. A
-missing identity is a carrier failure, not a completed lane.
+Apply shared [Context And Lifetime](../agent-harness.md#context-and-lifetime).
+New execution/evidence lanes and initial independent review omit `resume`;
+do not fork the parent's conversation. Resume a returned agent ID only for
+continuation admitted by Context And Lifetime or Review. A missing identity
+is a carrier failure, not a completed lane.
+Shared Nested Execution applies within Cursor's two-level limit; additional
+worker subsets return to the Lead. Use native background Task when review and
+non-mutating checks should overlap; acceptance still waits for required results.
 
 ## Review And Recovery
 
-An independent implementation review uses a fresh `reviewer-agent` with
+Start a required independent implementation review with a fresh `reviewer-agent` and
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
-as its Method. When Review requires integrated-candidate review, this
+as its Method; shared Review owns continuation. When Review requires integrated-candidate review, this
 session binds one fresh `reviewer-agent` to that boundary and still does not
-accept units. Raise its Task `model` field to `grok-4.6[effort=xhigh]`
-only for a justified highest-consequence boundary. Keep the fixed
-candidate unchanged.
+accept units. Raise its Task `model` field only for a justified
+highest-consequence boundary. Keep the fixed candidate unchanged.
 
 If implementation invalidates an upstream decision, the Lead repairs the
-smallest owner when it can, or this session opens a fresh
-`acceptance-unit-lead` for that phase, waits for its canonical transition,
-and resumes the same unit. Add no scheduler, journal, or recovery database.
+smallest owner when it can, or this session dispatches a fresh actor governed
+by the reopened phase, consumes its Transition Result, and resumes the same
+implementation unit. Add no scheduler, journal, or recovery database.

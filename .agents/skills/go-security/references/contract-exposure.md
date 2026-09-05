@@ -23,7 +23,7 @@ becomes reachable by a caller class it was not serving before.
   This file owns whether the operation is protected at all.
 - The authentication surface is a removable template profile. The
   `# profile:authn-oidc-jwt:start` and `:end` markers are stripped by
-  `scripts/init-module.sh` and gated by `scripts/ci/template-init-check.sh`, so
+  `scripts/init-module.sh` and gated by `scripts/ci/init-module-contract-check.sh`, so
   an edit inside them has to leave both the kept and the stripped tree valid.
 - Browser reachability is a decision, not a default. This service answers JSON
   behind an edge: `SecurityHeaders` sets `nosniff` and nothing else, and the
