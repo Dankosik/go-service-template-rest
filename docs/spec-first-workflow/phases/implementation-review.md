@@ -35,11 +35,12 @@ risks, and unrelated cleanup are `FOLLOW_UP` unless they falsify the current
 Outcome, Boundary, constraint, or Accept-when claim. A `FOLLOW_UP` cannot fail
 the current task.
 
-Unjustified structure is not an alternative-architecture preference. An added
-abstraction, layer, configuration surface, dependency, compatibility path, or
-retained implementation without a current accepted responsibility or constraint
-is a `TASK_DEFECT`; anchor it to the Outcome or constraint left unchanged after
-deletion or collapse.
+For a structure `TASK_DEFECT`, name the current constraint violated and the
+concrete unnecessary responsibility, dependency, duplication, or retained path.
+Apply the accepted simplicity and dependency constraints, including
+[Engineering](../../../AGENTS.md#engineering). A shorter equivalent design alone
+does not establish a violation. An alternative organization that preserves
+current responsibilities and constraints is `FOLLOW_UP`.
 
 `PASS` returns the candidate for acceptance. `FAIL` returns anchored
 candidate-caused findings. `NEEDS_PARENT` names proof or action outside reviewer
@@ -58,6 +59,10 @@ Use when shared Review selects an integrated candidate. Falsify
 only whole-spec coverage, cross-unit compatibility, assembly of the candidate,
 and the ledger's global Completion. Do not reopen accepted unit-local findings
 unless the integrated candidate invalidated them. Each surviving finding names
-the smallest affected unit as repair owner and uses `INTEGRATION_DEFECT` when
-the failure is in a seam or assembly rather than an accepted unit-local output.
+the smallest affected existing unit's Lead as repair owner when its accepted
+boundary covers the repair. Use `INTEGRATION_DEFECT` when the failure is in a
+seam or assembly rather than an accepted unit-local output. Reopen Planning only
+when no existing unit can own the repair without changing an accepted Outcome,
+Boundary, or proof criterion. Preserve unaffected unit acceptance; the repaired
+interaction still requires its claim-matched proof and applicable review.
 `PASS` returns the integrated candidate for ledger completion.

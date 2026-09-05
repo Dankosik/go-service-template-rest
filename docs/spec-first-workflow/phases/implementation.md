@@ -15,16 +15,16 @@ changes, an isolated candidate handoff needs a separate routing owner, or
 canonical ledger transitions require one routing owner. Durable recovery or
 isolated handoff can require this carrier even for one unit.
 
-The Orchestrator never implements unit work. The Lead does not schedule sibling
-acceptance units. Do not replace the Orchestrator with a Lead while sibling
-units still need scheduling. The Orchestrator may reassign a finished Lead
-under the [Planning Ledger Contract](planning/ledger-contract.md#ready-frontier).
+The Orchestrator never implements unit work; the Lead does not schedule sibling
+acceptance units. Scheduling, related-Lead reuse, and canonical transitions
+belong to the [Planning Ledger Contract](planning/ledger-contract.md) when a
+persisted ledger exists.
 
 ## Execution
 
-The Acceptance-Unit Lead owns the fixed unit through integration, claim-matched
-proof, required independent review, and one accepted or blocked result. Load
-the current task packet and consumed outputs; repair only within that boundary.
+The Acceptance-Unit Lead owns the fixed unit through one accepted or blocked
+result. Load the current task packet and consumed outputs; repair only within
+that boundary.
 Reopen the smallest upstream owner only when evidence invalidates accepted
 behavior, architecture, the task boundary, or its proof criterion. Additional
 callers, error handling, cleanup, and internal placement needed to satisfy the
@@ -42,8 +42,11 @@ and exercise the first runnable path before building the rest of the harness.
 The Lead implements a coherent unit directly by default. Delegate a subset
 only when it enables independent concurrent progress, supplies a missing
 capability, or keeps the remaining context reliably bounded. A serial handoff
-that duplicates the Lead's context needs one of those reasons. Use the existing
-brief; no separate delegation assessment is required.
+that duplicates the Lead's context needs one of those reasons. Independent lanes
+need stable accepted interfaces, disjoint writable owners and locks, focused
+proof, and results the Lead can integrate without a missing decision. Use the
+existing brief; no separate delegation assessment is required. Dispatch useful
+independent lanes before waiting and integrate their results serially.
 
 When changed generated contracts or shared interfaces feed several lanes,
 one owner first establishes the canonical source, regenerates any outputs, and
@@ -54,24 +57,17 @@ inputs before expanding dependent implementation and test matrices. This is
 intra-unit iteration, not another task or review; it does not establish behavior
 acceptance.
 
-Delegate parallel execution lanes when their expected independent progress
-outweighs dispatch and integration cost. Eligible subsets have disjoint writable
-responsibility, no shared exclusive lock, stable accepted interfaces,
-independently checkable focused proof, and a result the Lead can integrate
-without delegating a missing decision. Dispatch selected independent lanes
-before waiting. Integrate returned lane results serially under the Lead. When
-the Lead cannot reliably hold the whole edit surface, fan out lanes while
-keeping acceptance and any required review at the unit boundary.
+Execution lanes are not acceptance units. [Agent
+Harness](../../agent-harness.md) owns lane lifetime, nesting, isolation, capacity,
+and subtree reconciliation; load it when delegating or replacing a lane.
 
-Use [Agent Harness](../../agent-harness.md#delegation-interface)'s stall criteria
-and recovery route before replacing a lane or absorbing its work.
-
-Executors diagnose and repair code and focused-check failures within the
-accepted contract, ownership, proof boundary, and agreed resource budget without
-returning each attempt to the Lead. A failed compile or changed local candidate
-does not require a new execution agreement. Return a contract conflict,
-inadequate oracle, unresolved material risk, or stalled diagnosis with evidence
-and a proposal. The Lead resolves the gap and retains acceptance responsibility.
+Executors diagnose and repair code and focused-check failures within the accepted
+contract and resource budget without returning each attempt to the Lead. A failed
+compile or changed local candidate does not require a new execution agreement.
+Return contract conflicts, inadequate oracles, unresolved material risks, or
+stalled diagnosis with evidence and a proposal. The Lead applies [Parent-Owned
+Recovery](../shared/transition.md#parent-owned-recovery) and resumes the same unit
+after the required input closes.
 
 Use the existing validation lock for resource scheduling. Where independent
 repositories share a constrained host without a common lock, agree one bounded
@@ -81,14 +77,6 @@ expires or the resource scope or budget changes. Acquire and release the
 applicable command lock for each run, including failed runs; do not hold it
 while editing or awaiting review. A work window never bypasses locks, candidate
 freeze, heavy-check authority, or the agreed resource limits.
-
-Execution lanes are not acceptance units. Workers do not accept, transition, or
-review the parent unit. Apply shared [Nested
-Execution](../../agent-harness.md#nested-execution) through the selected adapter;
-when native limits prevent descendants, return the subset to the nearest
-capable parent. For a lane's technical or proof gap, the Lead applies
-[Parent-Owned Recovery](../shared/transition.md#parent-owned-recovery) and
-resumes the same unit after the required input closes.
 
 ## Candidate Freeze And Proof
 
@@ -104,31 +92,29 @@ Do not mutate the candidate while its lanes are active. If repair needs an edit,
 stop or join lanes using that candidate first, then rerun only invalidated proof and review.
 Acceptance waits for all mandatory results on the repaired candidate.
 
-Executors run the task's focused proof. The Lead assesses its sufficiency,
-reuses current evidence, and runs any required unit Integrated check before
-acceptance. The Orchestrator records that verdict without repeating the checks
-or review. [Evidence Contract](../shared/evidence-contract.md) assigns the final
-delivery aggregate; unit acceptance alone does not trigger it.
+Select proof through [Validation Routing](../../validation-routing.md) and the
+[Evidence Contract](../shared/evidence-contract.md), which owns executor, Lead,
+and delivery-check responsibilities. Shared Review selects whether independent
+review is required; load [Implementation Review](implementation-review.md) only
+for that review.
 
-The same Lead owns every candidate-caused repair. [Review](../shared/review.md)
-selects bounded delta recheck versus a fresh reviewer. During orchestrated
-execution, return [Acceptance Result
-V1](../interfaces/acceptance-result-v1.md) instead of writing the ledger.
+The same Lead owns candidate-caused repair. During orchestrated execution,
+return [Acceptance Result V1](../interfaces/acceptance-result-v1.md) instead of
+writing the ledger.
 
 If reaching Accept-when reveals an undeclared companion dependency, reopen
 Planning rather than absorbing the companion or shipping a layer. For explicitly
 permitted preparation behind a pending gate, follow the [Ready
 Frontier](planning/ledger-contract.md#ready-frontier) stop and resume rules.
 
-Load only methods exposed by the changed surface. Apply [Validation
-Routing](../../validation-routing.md), the [Evidence
-Contract](../shared/evidence-contract.md), and [Implementation
-Review](implementation-review.md). Load the [Planning Ledger
-Contract](planning/ledger-contract.md) only when a persisted ledger exists, and
-[remote preflight](../shared/deployment-proof-preflight.md) only before a
-matching external action.
+Load other methods only for the changed surface, and [remote
+preflight](../shared/deployment-proof-preflight.md) only before a matching
+external action.
 
 Done when current evidence, Lead self-review, and any required independent
 review establish the unit's postcondition on the real path. Otherwise return
 the exact unverified claim and owner. Reopen through
 [Transition](../shared/transition.md) only when an accepted input is invalid.
+Once these conditions hold, return the result. Expand proof or review only for
+a concrete failure, invalidated evidence, or unresolved required claim; optional
+improvements do not extend the completed unit.
