@@ -1,25 +1,36 @@
 ---
 name: go-chi
-description: "Chi transport: Use for router composition, middleware, OpenAPI wiring, fallbacks, CORS, labels, or routing review. Own chi decisions; Skip client API semantics, system topology, or general Go defects."
+description: "Chi route composition. Use when a change adds, mounts, moves, or reviews routes, middleware, fallbacks, CORS, or bounded route identity."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Chi
 
-The router is a **composition**: one route tree where middleware order is semantics, not decoration.
+A chi server is one **route tree**. Middleware order and scope are observable
+semantics.
 
-`route tree -> middleware order and scope -> handler boundary -> fallbacks -> labels -> proof`
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For every changed route, mount, middleware, fallback, or route label, build:
 
-What runs before what decides what is protected, limited, and observed: authentication before body consumption, limits before expensive work, recovery around everything that can panic. Every fallback — not found, method not allowed, preflight, panic — is an explicit route node with an owner, and route labels stay a bounded set so telemetry cardinality remains a decision rather than an accident.
+`RouteNode{node, owner, parent_scope, before_after_order, handler_boundary, fallback, label_source, proof}`
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct the affected route nodes from the composition root, generated and manual routes, middleware, fallbacks, and bounded labels; place them on one route tree, then reason about scope and order.
+Emit each affected `RouteNode` inside the returned Decision or Review result.
+When rejecting a proposed node, disposition it and emit the accepted replacement
+record. A prose conclusion that does not fill every field is incomplete.
 
-Most of that tree already has an owner here: `internal/infra/http/router.go` builds the chain, the root mount, and the fallback policy, and `internal/infra/http/middleware_access_log.go` owns route identity. Read the affected owner before proposing a node.
+Start at `internal/infra/http/router.go`. Follow generated and manual
+composition until each affected request reaches an operation handler or the
+router fallback. `internal/infra/http/middleware_access_log.go` owns route
+identity. No affected node or alternate serving path may remain implicit.
 
-## Choose The Branch
+Reject a second router that bypasses the existing hardened or generated path.
+The `proof` field names a route-tree walk for topology and an explicit order
+oracle: cite the current chain-order proof when order is unchanged, or use a
+before/after recorder when order changes. A status-only test proves neither.
 
-The branch decides what you return. Load the [reference selector](references/index.md) when the diff touches the middleware chain or route tree, a router fallback (`NotFound`, `MethodNotAllowed`, `Allow`, preflight), or a log/metric/span label derived from the request path.
-
-- **Decision** — select when transport policy is absent or changing. Complete when shared Decision dispositions cover every affected route node with its position in the tree, forced consequence, and focused proof.
-- **Review** — select when changed chi code must conform to accepted transport policy. Complete when the shared finding envelope accounts for every affected node.
-
-Hand resource or status semantics to `go-api-contract` and system topology to `go-system-architecture`.
+Complete when every changed node appears in the returned records with one owner
+and position, no parallel serving path remains, and the proof fails for the
+wrong topology, order, fallback, or label source. Load the [reference
+selector](references/index.md) only for the changed node pressure.

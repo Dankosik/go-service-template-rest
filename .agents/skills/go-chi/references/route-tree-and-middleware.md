@@ -1,9 +1,6 @@
 # Route Tree And Middleware
 
-## Behavior Change Thesis
-When loaded for symptom `middleware placement or order, a new top-level path, generated-handler wiring, or a second router`, this file makes the model compose onto the existing chain and the contract-owned route tree instead of likely mistake `build a parallel router, register a manual route on the root, or read the generated middleware slice as first-runs-first`.
-
-## When To Load
+## Load When
 Load when a change adds or moves middleware, adds a path, wires a generated handler, or introduces a router beside the one `internal/infra/http/router.go` builds.
 
 ## What Already Owns This

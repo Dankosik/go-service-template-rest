@@ -1,9 +1,6 @@
 # Fallbacks And Method Policy
 
-## Behavior Change Thesis
-When loaded for symptom `404, 405, Allow, OPTIONS, HEAD, preflight, or method probing`, this file makes the model reuse the router's existing fallback owner and keep `Allow` derived from the live route tree instead of likely mistake `register a custom MethodNotAllowed handler and lose Allow, or compute Allow from a literal list or the live request's route context`.
-
-## When To Load
+## Load When
 Load when a change touches fallback responses, method discovery, the `Allow` header, `HEAD` or `OPTIONS` behavior, or cross-origin preflight.
 
 ## What Already Owns This

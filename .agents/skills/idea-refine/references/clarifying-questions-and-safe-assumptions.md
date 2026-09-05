@@ -1,15 +1,12 @@
 # Clarifying Questions And Safe Assumptions
 
-## Behavior Change Thesis
-When loaded for symptom "the idea is underspecified but not truly blocked," this file makes the model choose one or two gating questions plus labeled safe assumptions instead of turning idea refinement into a long discovery questionnaire or inventing certainty.
-
-## When To Load
+## Load When
 Load this when the prompt is thin, the model is tempted to ask many questions, or a small assumption would allow a useful first refinement.
 
 ## The Move
 Ask only a question whose answer could change the recommended direction, target actor, or MVP boundary; cover ordinary missing detail with labeled safe assumptions the user can correct, and keep refining after either — the user receives progress, never a homework list. When the missing fact is high-impact policy, money movement, identity, privacy, safety, destructive action, or irreversible state, ask instead of assuming; implementation questions wait until the product direction is chosen.
 
-## Imitate
+## Inspect
 Input: "Make onboarding better."
 
 ```markdown

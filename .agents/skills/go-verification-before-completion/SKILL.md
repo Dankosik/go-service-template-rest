@@ -1,16 +1,30 @@
 ---
 name: go-verification-before-completion
-description: "Claim-scoped proof: Use when correctness/readiness/completion needs current evidence. Own claim-command matching, scope, and gaps; Skip changes, unknown cause, unresolved strategy, or active implementation."
+description: "Evidence boundaries for claims. Use for verification-only work or when existing evidence may not prove the requested scope."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Verification Before Completion
 
-A completion claim is only as true as its **freshest matching evidence**: every claim maps to a command run against the current state at the claim's own scope, and anything staler, narrower, or inferred stays unverified.
+An **evidence boundary** is the behavior a proof would fail on. A completion
+claim cannot be wider than that boundary.
 
-`intended claims -> claim-to-command map -> scope match -> fresh or validly reused evidence -> per-claim status -> gaps`
+`claim -> observable -> command or procedure -> result -> exercised scope -> gap`
 
-Use [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md) for completion authority.
+Apply the shared [Evidence
+Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md). For
+every claim, name the observable whose absence or incorrectness would make the
+selected proof fail. Record the exact command or procedure, relevant
+preconditions, result, cached or fresh state, and scope actually exercised.
 
-Reconstruct every claim the answer intends to make from the accepted outcome, proposed response, changed scope, and named rollout/readiness assertions; map each claim to current proof of equal scope and reject stale or narrower evidence. Reuse successful proof while the relevant content, environment or precondition, claim scope, provenance, and risk surface remain unchanged; attach a commit/tree identity only when proof crosses a checkout or integration boundary. A report from a worker, prior session, tool, or pasted log names the proof target rather than supplying it — rerun the claim-scoped command against this tree. Load [the reference selector](references/index.md) only when one concrete proof pressure can change the command or conclusion.
+A passing command proves only the surfaces it observed. File presence, status,
+an implementation summary, a skipped integration suite, a test pattern matching
+zero tests, or an unrelated aggregate cannot carry the claim.
 
-Return one evidence-permitted status per claim — `verified`, `partially verified`, or `not verified` — with commands and the next action; the closing summary carries the weakest status among the claims it covers. Verification reports evidence and gaps, and repair belongs to the owning skill. Route unknown root cause to `go-systematic-debugging` and unset rollout criteria to `go-delivery-platform`.
+Complete when every claim is supported at its stated scope, weakened to the
+evidence boundary, or returned with one named missing proof and owner. Return
+[Evidence Result
+V1](../../../docs/spec-first-workflow/interfaces/evidence-result-v1.md). Load a
+matching [reference](references/index.md) only when the boundary is non-obvious.

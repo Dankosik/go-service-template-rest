@@ -1,25 +1,42 @@
 ---
 name: orchestrator
-description: "Ledger: Use for ready ledger; Own routes/reopens; Skip units."
+description: "Ledger routing: Use only as LEDGER_ORCHESTRATOR for a ready persisted Implementation ledger. Own routing; Skip unit work."
+metadata:
+  invocation: role
+  kind: carrier
+disable-model-invocation: true
 ---
 
 # Ledger Orchestrator
 
-Route one user-launched ready Implementation ledger in its saved Codex App Git
-project to exhaustion or a Role Tree terminal condition.
+Apply the [Planning Ledger
+Contract](../../../docs/spec-first-workflow/phases/planning/ledger-contract.md)
+and the current adapter selected by [Agent
+Harness](../../../docs/agent-harness.md). Treat `tasks.md` as a dependency
+graph, not an ordered list.
 
-1. Bind `LEDGER_ORCHESTRATOR`, start its routing Goal, and before routing load
-   the [Role Tree](../../../docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree),
-   [Artifact Model](../../../docs/spec-first-workflow/shared/artifact-model.md),
-   [Resume And Handoff](../../../docs/spec-first-workflow/shared/resume-and-handoff.md),
-   and [native protocol](../../../docs/agent-harness.md#codex-app-native-orchestration-protocol).
-2. Re-read the ledger after every canonical transition. Dispatch one ready unit,
-   or several Leads only for a ledger-proven wave.
-3. Carry the launch's reversible native-control authority intact into every
-   Lead; the Role Tree remains canonical.
-4. Apply the native protocol through dispatch, wait, Handoff, recovery, and
-   terminal cleanup.
+Only this carrier writes canonical ledger state during orchestrated execution.
+At each cycle, apply the contract's ready-frontier and capacity rules; dispatch
+every ready unit to an `acceptance-unit-lead` before waiting, using only the
+contract's permitted Lead reuse.
 
-Completion: the ledger is exhausted, or the exact Role Tree terminal condition
-is recorded with no ready unit or authorized recovery. Remain routing-only:
-artifacts own semantic state, Codex owns task lifecycle, and Git owns candidates.
+Process each Lead's immutable [Acceptance Result
+V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md) through
+the contract's acceptance transition. Land only `Accepted` candidates serially,
+record the Lead-owned verdict without re-adjudication, and immediately refill
+before the next landing. Route `Blocked` to recovery without landing.
+
+Route the smallest upstream repair back to the same unit. Do not cancel
+unrelated running units when one unit reopens or discovers a lock. Apply
+[Parent-Owned Recovery](../../../docs/spec-first-workflow/shared/transition.md#parent-owned-recovery)
+to technical, proof, review, and phase gaps; repair ledger status through
+Planning when needed. Continue until the ledger is done and
+[Cleanup](../../../docs/spec-first-workflow/shared/cleanup.md) has closed
+execution-only state, or no ready unit, owner-held recovery, or authorized
+cleanup path remains.
+
+Use the adapter's full-ledger carrier only when its required native identities,
+messaging, and wait controls are callable. Otherwise return that exact carrier
+gap before dispatch; never silently contract the ledger into a different
+workflow. Do not implement unit work or keep a parallel artifact, task, or Git
+journal.

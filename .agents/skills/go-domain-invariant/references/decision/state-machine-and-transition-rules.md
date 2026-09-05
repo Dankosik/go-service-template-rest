@@ -1,9 +1,6 @@
 # State Machine And Transition Rules
 
-## Behavior Change Thesis
-When loaded for symptom "a feature has lifecycle states, terminal states, or invalid transitions", this file makes the model define forbidden movement and terminal policy instead of likely mistake "list the allowed transitions only, which leaves every unlisted move silently legal."
-
-## Decision Rubric
+## Decide
 - Model a lifecycle only where allowed behavior differs by state. A command whose legality never depends on current state belongs in the invariant register instead.
 - Per transition: trigger, guard, allowed next state, **forbidden next states**, and violation outcome. The forbidden set is the part a reader cannot reconstruct from the allowed set, because an unlisted move reads as unspecified rather than rejected.
 - Name terminal states and say what may reopen them — replay, reconciliation, support action, or nothing. A terminal state with no stated reopen policy is the one an admin path quietly reopens later.
@@ -22,5 +19,5 @@ Retry later.
 ```
 Failure: an unnamed state hiding an ambiguous external outcome. Name pending, ambiguous-commit, reconciliation, manual intervention, or reject.
 
-## Validation Shape
+## Prove
 Proof should cover one allowed transition, one forbidden transition rejected, the terminal or reopen case when one exists, and the duplicate or stuck-state case when replay can reach it.

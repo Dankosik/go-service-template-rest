@@ -1,15 +1,12 @@
 # Problem Vs Solution Framing
 
-## Behavior Change Thesis
-When loaded for symptom "the user names a feature, tool, vendor, AI mechanism, or feature bundle before naming the pain," this file makes the model recover the product problem instead of repeating the requested solution as the recommendation.
-
-## When To Load
+## Load When
 Load this when the prompt says "we need X," "add Y," or "use Z" and the underlying user/operator breakdown is still blurry.
 
 ## The Move
 Treat the proposed feature as evidence about the pain and convert it into one concrete user/operator situation — who cannot decide or act, at which moment, at what cost. The frame is right when two materially different solutions could address the same pain; keep it upstream of architecture, API, data, and task breakdown. Name the pain before choosing any mechanism, including a cooler one, and keep "AI" a candidate mechanism unless the pain itself is model governance, trust, or review. One concrete workflow story unblocks framing faster than a discovery interview.
 
-## Imitate
+## Inspect
 Input: "We need an AI incident cockpit with Slack summaries, timelines, and service maps."
 
 ```markdown
