@@ -1,67 +1,23 @@
 # Invariant Register Patterns
 
-## Behavior Change Thesis
-When loaded for symptom "rules are descriptive, ownerless, or missing enforcement points", this file makes the model write falsifiable owner-backed invariant rows instead of likely mistake "list broad business logic bullets with no source of truth, pass/fail signal, or violation outcome."
-
-## When To Load
-Load this when a domain spec needs invariant statements, owner assignment, source-of-truth authority, enforcement-point choices, or a review of hidden or descriptive-only business rules.
-
-## Decision Rubric
-- Write one invariant per condition that must remain true; split bundled "and" rules when failure outcomes differ.
-- Use `local_hard_invariant` only when one owned boundary can prevent the violation synchronously. Use `cross_service_process_invariant` when correctness depends on async steps, derived surfaces, or reconciliation.
-- Name an owner with authority to keep the rule true. "Database", "handler", and "tests" are mechanisms, not owners.
-- State the enforcement point at the domain level first, such as transition guard, policy decision, persistence constraint, process contract, or reconciliation rule.
-- Require an observable pass/fail signal and violation outcome before handing the rule to API, data, reliability, security, or QA work.
-- If the rule depends on tenant, actor, object ownership, or source-of-truth authority, include that in the invariant instead of treating it as surrounding implementation detail.
-
-## Imitate
-```text
-INV-SKILL-CANONICAL-001
-Statement: A repository skill change is authoritative only when it is made under `.agents/skills`.
-Type: local_hard_invariant
-Owner: repository skill source-of-truth policy
-Source of truth: docs/skill-authoring.md
-Enforcement point: repository checks and reviewer discipline
-Observable pass/fail: no active tooling or docs treat top-level `skills/` as canonical
-Violation outcome: reject the change or repair the source-of-truth drift before validation closes
-Downstream handoff: tooling docs and validation must point at `.agents/skills`
-```
-
-Copy the shape: one falsifiable rule, one owner, one authority source, one pass/fail signal, and one consequence.
-
-```text
-INV-SUBAGENT-READONLY-001
-Statement: Subagents may produce advisory research or review output but must not edit repository files, mutate git state, or change the task ledger or implementation handoff.
-Type: local_hard_invariant
-Owner: orchestrator workflow contract
-Source of truth: AGENTS.md
-Enforcement point: orchestration routing and fan-in reconciliation
-Observable pass/fail: delegated lanes return read-only findings and no repository diff or git mutation is accepted from them
-Violation outcome: reject the mutation as authoritative and reconcile in the orchestrator-owned flow
-Downstream handoff: review and validation must not claim agent-backed coverage for write-capable delegated work
-```
-
-Copy the policy boundary: advisory authority and mutation authority are different business concepts.
+## Decide
+- One row per condition that must stay true. Split a bundled `and` rule when its halves fail differently.
+- Each row states: the rule in accepted business terms; the **false case** — the input, sequence, or replay that would violate it; the owner with authority to keep it true; the source of truth; the enforcement point; the violation outcome; and the proof that fails when the rule breaks. A row without a false case is a wish, not an invariant.
+- The owner is the actor or policy with authority over the rule, which is usually not the component that first detects the violation. `docs/repo-architecture.md#source-of-truth` records accepted authority; `#domain-vocabulary` records a term whose two readings would change an outcome. Define a term only then.
+- Choose the enforcement point by what must still hold under a concurrent writer and a mixed-version deploy. A rule a second transaction can break — uniqueness, terminal state, monotonic sequence, non-negative balance — is a database constraint; application ordering is a convention two callers race. `migrations/000001_postgres_outbox.sql` is the repository's precedent: terminal exclusivity is `outbox_events_terminal_check`, at-most-one-claimable-per-key is a partial unique index, and `outbox_ordering_heads.last_sequence` is retained past cleanup so the rejection outlives the rows it was derived from.
+- Reserve the register for rules whose violation changes correctness, authority, or accepted behavior. Ordinary field validation stays out.
+- `invariant-violation-semantics.md` owns the outcome vocabulary. `go-data-architecture` owns the constraint's shape and migration safety; this file owns which rule must survive.
 
 ## Reject
 ```text
-Keep skills organized and up to date.
-```
-
-Failure: no owner, no boundary, no pass/fail signal, and no violation outcome.
-
-```text
 INV-001: The API validates the request and writes a row to the database.
 ```
+Failure: transport and storage mechanics replaced the rule. Nothing here can be false, so nothing can be proven.
 
-Failure: transport and storage mechanics replaced the business rule. Rewrite as the allowed behavior and only then hand off implementation surfaces.
+```text
+Eventual consistency makes this hold.
+```
+Failure: an unowned repair path. Either one boundary prevents the violation synchronously, or the row names the reconciliation that restores the rule and how long it may be false.
 
-## Agent Traps
-- Do not make every validation rule an invariant; reserve the register for rules whose violation changes correctness, authority, or accepted behavior.
-- Do not hide tenant, actor, or object ownership inside a generic "authorized" note when it decides whether a transition is allowed.
-- Do not assign ownership to the first component that detects a violation if another domain policy owns the rule.
-- Do not use "eventual consistency" as an escape hatch for a hard invariant; either classify it as process-level with reconciliation or reject the design.
-- Do not add downstream API status codes, table constraints, or retry budgets until the rule and violation outcome are stable.
-
-## Validation Shape
-Every critical invariant row should imply at least one positive proof, one negative proof, and one edge proof. If a reviewer cannot name those from the row, the invariant is still too vague.
+## Prove
+Every row should imply a positive proof, a proof that its false case is rejected, and — when replay or concurrency can reach it — a proof that the enforcement point still holds with two writers.

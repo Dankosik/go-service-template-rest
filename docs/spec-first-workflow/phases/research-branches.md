@@ -1,38 +1,75 @@
 # Research Branches
 
-Load only the branch selected by [Research](research.md#branch-selection).
+Load only the branch selected by [Research](research.md).
 
 ## Current-State Or Semantic Baseline
 
-When current state can change accepted behavior or a later decision, establish the smallest decision-relevant baseline across every current surface that can independently change the answer, including as applicable repository authority, generated-source authority and artifact drift, observed runtime behavior, caller or operator evidence, persisted or deployed state, external consumers, mixed-version constraints, and the first unsupported edge. Record a required surface that cannot be observed as an unknown with its decision effect. Trace an affected value or contract from origin through persistence, transport, consumer, and derived output only as far as the decision requires; preserve grain or cardinality, identifiers, units, absence or error states, version authority, and lossy transformations. Matching names, historical intent, or receiver capability do not prove equivalent semantics or runtime use. Inspect ADRs, issues, incidents, or runbooks only when replacing unexplained brownfield behavior and only for a still-current constraint; history alone is not a current contract.
+Inspect only surfaces that can independently change the decision: repository
+and generated authority, runtime behavior, callers/operators, persisted or
+deployed state, external consumers, and mixed versions. Trace affected values
+only as far as required, preserving grain, identifiers, units, absence/error
+states, version authority, and lossy transformations. Matching names or
+historical intent do not prove semantic equivalence or runtime use. Record an
+unobservable required surface as an unknown with its decision effect.
 
 ## Current External Contract
 
-For an external platform, unfamiliar mechanism, new infrastructure/dependency, or non-trivial design choice, search current web and repository sources before design. Verify each decision-changing contract or behavior claim against its current primary authority: official provider documentation or contract, the applicable standard, or maintainer source. Resolve version and applicability explicitly. When practical fit, integration behavior, operability, or failure modes can change the decision, complete contract authority with applicable implementation evidence (maintainer code or credible real implementations) and credible engineering or operational evidence; record local applicability, context differences, and unavailable evidence as exact gaps.
-
-When a decision depends on Go, toolchain, standard-library, module, runtime, or
-dependency behavior, establish the current repository Go version and consult
-current authoritative sources for only that decision. Do not expand this into
-a full Go review.
+Verify each decision-changing external claim against current primary authority:
+official provider documentation or contract, the applicable standard, or
+maintainer source. Resolve version and applicability. Add implementation or
+operational evidence only when local fit or failure behavior remains uncertain.
+For Go, toolchain, stdlib, runtime, or dependency behavior, establish the
+repository version and inspect only the authority needed for that decision.
 
 ## Solution Discovery Evidence
 
-When the way to realize a behavior remains unresolved, do not anchor discovery on a user-proposed pattern, product, or implementation. Derive vendor-neutral search terms from the required behavior, invariants, workload, failure and recovery model, quality scenarios, constraints, and unacceptable trade-offs. Use pattern catalogs and reference architectures to expand vocabulary, not as proof of local production fit. Name the responsibility or decision slot each candidate occupies and classify it as a substitute, prerequisite, complement, or defense-in-depth mechanism. Characterize candidate evidence only to expose decision implications among substitutes at the same live decision level. Research may eliminate a candidate contradicted by authority or infeasible under a hard constraint; it does not compose, rank, or select the target architecture. System / Integration Design owns deriving task-specific drivers, constructing viable target-state mechanisms from this evidence, comparing them, and selecting one architecture. Record separately any product, library, managed service, transport, or topology roles used to realize the candidate.
+Derive vendor-neutral terms from behavior, invariants, workload, failure and
+recovery, constraints, and unacceptable trade-offs. Classify each candidate as
+a substitute, prerequisite, complement, or defense-in-depth mechanism; compare
+only same-level substitutes. Research may eliminate a candidate contradicted by
+authority or a hard constraint, but System Design selects the mechanism.
 
-For a live solution choice, scan only the relevant rungs: existing repository or organization reuse, Go stdlib, native database/broker/platform/provider capability, already approved and operated infrastructure, managed service, mature maintained OSS, and custom implementation. Do not force every rung or a fixed candidate count. Tutorials, examples, and reference architectures may demonstrate an integration shape, but do not alone establish production fit. For each surviving substitute, collect only applicable evidence that can change local approval: accountable owner, support, and on-call; availability, entitlement, region, quota, and SLA; compatibility, boundary fit, and provisioning; security guidance, advisories, unsafe defaults, and data custody; pricing unit and material cost at the accepted workload; lifecycle, deprecation, and upgrade policy; adoption and migration feasibility; and portability, exit, and failback limitations. For external code also require current evidence for maintenance/releases, license, security or vulnerability posture, API stability, transitive cost, domain adoption, and repository/boundary fit. If required evidence is unavailable, block or carry the exact proof gap.
+Prior art: Seek established system design patterns, original technical
+papers, first-hand engineering writeups, and postmortems relevant to
+the problem and its constraints.
 
-Stop only when further searches by problem, decision force, failure mode, and known alias are unlikely to reveal a materially different viable candidate at the live decision level; source depth alone does not establish candidate-space saturation.
+Follow leads: Expand searches through discovered terminology and
+references; investigate promising approaches and their failure modes.
+
+Scan only relevant rungs: repository reuse, Go stdlib, native platform,
+approved infrastructure, managed service, mature OSS, and custom code. For a
+surviving external option record only evidence that can change approval:
+ownership/support, availability/quota/SLA, compatibility, security and data
+custody, pricing unit at accepted workload, lifecycle, migration, portability,
+and exit/failback. For external code also cover maintenance, license,
+vulnerabilities, API stability, and transitive cost.
+
+Transfer: Explain what each material precedent teaches, which assumptions
+match our context, and where the analogy breaks.
+
+Saturation: Stop when further searches add no material alternatives,
+trade-offs, failure modes, or applicability constraints; disclose
+remaining evidence gaps.
 
 ## Empirical Claim Or Probe
 
-For empirical or runtime evidence, record the version or configuration when relevant, method or command, environment, workload or sample, timestamp, result, and known limits. When a decision depends on a performance, capacity, reliability, cost, quality, or version-specific empirical claim, also establish a comparable current baseline and representative workload or data envelope, including only distributions that can change the result; do not infer causality from a single snapshot or profile. If authoritative sources cannot resolve such a claim or establish its applicability to the current version, configuration, workload, or data envelope, and an authorized safe representative surface is available, run the smallest reversible or read-only probe that can discriminate the live implications; otherwise carry the exact blocker or later proof obligation.
+Record version/configuration, command or method, environment, representative
+workload or sample, timestamp, result, and limits. Performance, capacity,
+reliability, cost, quality, or version claims also need a comparable baseline.
+When authority cannot resolve applicability and an authorized safe surface
+exists, run the smallest discriminating probe; otherwise carry the exact proof
+gap.
 
 ## Conflict Or Freshness
 
-When decision-changing research depends on conflicting sources, freshness-sensitive external behavior, or an approval-critical claim for a hard-to-reverse choice, obtain an independent read-only semantic challenge of the synthesis before specification or design consumes it. Evidence gathering alone cannot issue that verdict. If authoritative evidence cannot resolve a material conflict, block or return it to the evidence owner instead of choosing by confidence.
-
-For freshness-sensitive evidence, record `valid as of` plus an objective refresh trigger or earliest downstream checkpoint.
+For material conflict or a freshness-sensitive hard-to-reverse choice, obtain
+an independent semantic challenge before downstream use. Unresolved authority
+conflict blocks or returns to its evidence owner. Record `valid as of` plus an
+objective refresh trigger.
 
 ## Downstream Input Closure
 
-When research already identifies a concrete external input required by a downstream phase, apply the router's [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure): record its owner, authoritative source, required shape, availability, and earliest required checkpoint without inventing later design inputs. When an implication requires proof, name the current observable or proving surface and setup availability/derivability, or the missing-proof owner; test design still owns scenario and proof-level selection.
+Record the input owner, authoritative source, required shape, availability, and
+earliest checkpoint. For a proof implication, name the current observable and
+setup availability or the missing-proof owner; Test Design still selects the
+scenario and proof level.

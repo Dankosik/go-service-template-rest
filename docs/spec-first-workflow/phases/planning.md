@@ -1,155 +1,37 @@
 # Planning
 
-Turn accepted decisions into the smallest executable sequence. Planning chooses order and proof placement; it does not invent behavior or design.
+Use when structured work lacks one ready fixed implementation unit or the
+smallest dependency-ordered ledger. Own order, unit boundaries, dependencies,
+and proof placement; never invent behavior, design, ownership, or proof strategy.
 
-## Read When
+Consume ready behavior, design, proof, rollout, risk, repository-owner, and
+validation inputs. Reconcile every accepted implementation-changing obligation
+to one independently acceptable task, named task deltas, proved
+no-implementation, or scope exit.
 
-- Work has multiple dependent steps, owners, generated-source order, or validation checkpoints.
-- Another actor/session needs a durable implementation ledger.
-- Existing `tasks.md` needs repair.
+Delta: Make the current-to-target change explicit and anchor its accepted
+mechanism and ownership. Leave routine coding choices to Implementation.
 
-Direct changes may use an inline plan.
+Before expanding task packets, establish each Outcome, dependency, and
+Accept-when, then apply [Task Review / Readiness's atomicity
+criterion](task-review-readiness.md#atomicity-gate) as author self-check. Correct
+unit boundaries in the same plan before detailing their packets; this adds no
+intermediate artifact or review gate. The completed plan still receives the
+independent review below.
 
-## Inputs
+Return one fixed inline unit when no durable boundary exists. Otherwise persist
+[Task Ledger V1](../interfaces/task-ledger-v1.md), keep dependency, status, and
+results in `tasks.md`, and put each task packet in `tasks/<ID>-<slug>.md` using
+[Task Packet V1](../interfaces/task-packet-v1.md). The packet defines what must
+become true; Implementation chooses how. Apply the [Planning Ledger
+Contract](planning/ledger-contract.md). Load [Conditional Planning Branches](planning/conditional-branches.md)
+only for integration-first uncertainty or broad contract fan-out, and [Planning
+Proof And Readiness](planning/proof-and-readiness.md) before declaring
+readiness.
 
-- Ready spec and any required design/test/rollout context.
-- Current source owners, generated/mirror commands, and repository validation commands.
-- Accepted risks and proof obligations.
-
-## Method
-
-1. Build a de-duplicated working set of implementation-changing accepted obligations from the ready inputs. Normalize restatements of the same obligation across specification, design, test, and rollout sources; discard rationale, rejected alternatives, non-normative examples, and future ideas. Treat two statements as one obligation only when their authority, required postcondition, execution-changing constraints, and proof consequence are equivalent. A non-equivalent normative conflict reopens its narrow upstream owner; Planning does not resolve it by normalization.
-2. Give every obligation exactly one reconciliation disposition: one task, several named task deltas with a distinct postcondition and proof for each, or a proved no-implementation disposition. Compile those dispositions into the smallest coherent task outcomes under the task-boundary rule below.
-3. Reconcile both directions: every task delta and proof maps to one obligation disposition, every obligation disposition is represented, and task boundaries follow valid postconditions rather than source-document structure.
-4. Link-check the working set against the current repository and accepted deployment topology. For each accepted change to a contract, schema, canonical/generated authority, identifier, composition point, migration, or rollout state, confirm the accepted ownership record against every current producer, consumer, mirror, proof carrier, configuration/documentation surface, and replacement surface within its impact boundary. Give each reached surface one auditable boundary disposition: coupled into the outcome task, assigned to named task deltas whose intermediate states and handoffs satisfy the split rule, or proved unchanged. A required surface without accepted ownership or placement reopens its narrow design owner; Planning does not choose it.
-5. Record a planned wave only when multiple ready acceptance units will actually run concurrently and current evidence establishes their independence.
-6. Prove that the next acceptance unit or real wave is executable from closed inputs; later tasks need owners and dependencies, not prematurely materialized inputs.
-
-When integration is the primary uncertainty, make the next acceptance unit the smallest
-production-grade end-to-end slice. The slice establishes one supported behavior
-through the real production entry point, every uncertain integration seam, and
-the final observable response, effect, or authoritative state, together with
-the narrow failure or negative path required to falsify that integration.
-Scaffolding, interface-only work, TODOs, mock success, and test-only wiring do
-not satisfy the slice outcome; fixtures or test doubles may support proof only
-behind an accepted seam. Prove that slice before expanding from it. Otherwise
-keep local or already-proven work on its existing direct path.
-
-When one mechanical contract change fans out so broadly that no bounded slice
-can remain valid and green, plan `expand -> migrate -> contract`: add the
-compatible new form, move bounded caller batches while both forms work, then
-remove the old form after every consumer has moved. Keep the contract cleanup
-in the same ledger and block it on every migration batch. Use one atomic task
-when it can stay valid and provable; do not add compatibility machinery merely
-to split work.
-
-## Outputs
-
-A compact `tasks.md`:
-
-```markdown
-# Goal
-status: draft | ready | blocked | done
-Completion: <observable successful condition>
-Blocked stop: <what remains incomplete, evidence to record, and owner to reopen>
-Global constraints: <exact constraints shared by multiple tasks; omit when none>
-
-- [ ] T1: <verifiable postcondition; execution-changing accepted constraints>
-  - Source: <narrow stable spec/design/test/rollout anchor(s)>
-  - Owner/surface/resources: <canonical owner for each writable surface; initial authorized writable paths or bounded discovery rule; mutable, exclusive, or non-concurrent resources, or none>
-  - Depends on: <ID — output handoff, exact consumed state, or exact safety/proof gate; needed to start, complete, or prove; or none>
-  - Handoff: <for an output dependency: exact produced output and consumed input/acceptance condition; omit when none>
-  - Alias of: <task ID and exact accepted receipt consumed; use only when this entry has no implementation delta; omit otherwise>
-  - External input/gate: <required non-ledger input or rollout gate; named owner; objective availability checkpoint; omit when none>
-  - Proof: <claim; command/check; expected observable>
-  - Reopen if: <concrete objective future invalidation condition; upstream owner; omit when none>
-```
-
-Add only fields that change execution. Put a constraint in `Global constraints` only when its exact meaning applies across multiple tasks; keep task-specific constraints in the task outcome. Write each task title as the postcondition that becomes true. Put paths and symbols in `Owner/surface/resources` and commands in `Proof`; neither creates a task boundary.
-
-A split boundary is valid only when the completed task leaves the repository, and every deployment or migration state it creates or assumes, internally consistent, supported by the accepted compatibility or rollback policy, independently reviewable, and provable without unfinished companion work. Group the canonical source, generated or mirrored output, required tests and fixtures, migration/runtime compatibility, required documentation, and replacement cleanup needed for that state in the same task. As an oversized-task preflight, identify distinct ownership, review, failure/recovery, rollback, and proof domains inside the outcome. A useful split isolates a distinct owner, review/proof, failure/recovery, or rollback domain; creates a required handoff; enables an actual wave with positive independence evidence; or leaves an independently shippable accepted outcome. Keep the work in the same task when none of those benefits applies. Do not use file count, estimated minutes, or desired Worker count as a sizing rule.
-
-An **acceptance unit** is the smallest fixed candidate that one actor can
-implement, prove, review when triggered, and integrate without a consumer
-depending on an intermediate state. The ledger's acceptance-unit map is
-authoritative: every implementation task is a singleton unit unless exactly one
-recorded `Acceptance units` entry contains its task ID; membership in more than
-one entry is invalid. Group adjacent ready tasks only when they share the same
-canonical owner, editable boundary, proof preconditions, and final-state
-validity; record a compact entry only for a grouped unit:
-
-```markdown
-## Acceptance units
-- A1: T2, T3 — <shared owner, boundary, and proof reason>
-```
-
-The unit is the Worker, final-proof, review, and integration boundary; it is not
-another task lifecycle. A task whose only postcondition is receipt of another
-task's accepted result is a **receipt alias**: record `Alias of`, give it no
-writable surface or proof command, and close it mechanically when the named
-receipt is present. Receipt aliases never create a Worker, reviewer, validation
-run, or integration commit.
-
-For sequential work, `Depends on` is the complete ordering authority; do not create one-task waves. Record an edge only when the downstream task consumes the upstream task's output or state, or must cross its safety or proof gate, and name whether the edge is required to start, complete, or prove the downstream task. Document order, review preference, and convenient sequencing are not dependencies. For an output edge, record the produced/consumed contract once in `Handoff`; in `Depends on`, write only `<ID> — output handoff — needed to <start|complete|prove>`. For a state or safety/proof gate, omit `Handoff` and name the consumed state or gate in `Depends on`.
-
-Add one compact `Planned waves` section only when at least two ready acceptance units will actually run concurrently:
-
-```markdown
-## Planned waves
-- W1: A1, T4
-  - Base: <same accepted commit, tree, or recorded frozen base>
-  - Independence: <current anchors showing pairwise-disjoint writable surfaces and mutable resources, preserved canonical/generated and migration/rollout coupling, and no interface or assumption produced by one member and consumed by another>
-```
-
-Use a singleton task ID for its implied unit and a grouped unit ID where one is
-recorded. Only positive evidence establishes a wave. A unit whose independence
-is unavailable remains dependency-scheduled until current evidence establishes
-the boundary. Implementation may narrow a planned wave when current evidence
-changes.
-
-Cite the narrowest stable source anchor and state enough of the relevant accepted obligation in the task outcome to make execution unambiguous; do not copy source prose. State the verifiable postcondition and only execution-changing accepted constraints, including preserved or forbidden behavior and any accepted state-transition, data-flow, failure/recovery, privacy, or security boundary. Do not prescribe discretionary coding steps; name an exact method or order only when accepted design, generated-source, migration, rollout, or proof dependencies fix it. Do not make implementation recover an execution-critical constraint, invariant, non-goal, exact value, interface, or proof expectation from a broad document link or chat history.
-
-`Owner/surface/resources` names the canonical owner for every writable surface, the initial authorized writable paths or bounded discovery rule, and every mutable, exclusive, or non-concurrent external or proof resource that can affect execution, such as a database, port, environment, migration target, destructive fixture, lock, or generated pair; use `none` when there is no such resource. A discovery rule may resolve exact files only inside an already accepted owner; it names the inspection bound and deterministic placement rule and grants write authority only to the resolved companion surfaces. If the owning repository, package, or generated authority is still a choice, reopen its design owner. `Owner/surface/resources` records authoritative implementation, data, generated-source, and external ownership plus the writable and mutable-resource envelope; it does not select an execution carrier. Root-local versus Worker execution, checkout or worktree, model, and harness control remain Implementation decisions under [Implementation Worker Execution](implementation-worker-execution.md). `External input/gate` records later non-ledger availability; if it is mandatory for the next unit and unavailable, it belongs in `Blocked stop`.
-
-Every Go implementation task carries the owning package or a bounded discovery
-rule, the canonical source and any derived generated surfaces, accepted Go
-semantic constraints, and the narrowest repository-native proof command with
-its expected observable. Do not make the Worker rediscover these from broad
-context.
-
-A known decision-changing ambiguity or missing input required by a mandatory path through the current completion condition belongs in `Blocked stop` and blocks readiness now. `Reopen if` is optional and records only a concrete objective future condition that would invalidate an input accepted at readiness; omit it when none exists, and do not use it to defer a known question to implementation.
-
-Name the claim before its check. A command is not proof unless its expected observable can establish that claim. Prefer the smallest repository-native automated check unless the accepted proof strategy requires manual observation or automation cannot establish the required observable.
-
-Attach each proof to the earliest task whose completed output makes its claim true, and require that proof before accepting the task. A later proof task is valid only for a cross-task, deployed, migration, or environment claim that cannot exist earlier; it names the exact accepted upstream outputs it consumes and proves only that integrated claim. It may inspect the complete integrated candidate, but its acceptance boundary remains its recorded singleton or grouped unit; wider evidence does not accept upstream units or widen the current verdict. Evidence that invalidates an accepted upstream input follows the workflow's narrow reopen contract.
-
-Planning must make these explicit where relevant:
-
-- canonical source before generated/mirrored output;
-- accepted regression-proof order inside the task whose outcome makes the behavior true, including test-plan scenario IDs; a deliberately failing intermediate check is not a completed task boundary;
-- accepted performance workload/scale boundaries, hot-path amplification or resource constraints, and matching benchmark, load, profile, query-count, or other claim-matched proof;
-- migrations/backfills/rollout order and rollback gates;
-- cleanup of replaced code, tests, fixtures, config, docs, skills, or mirrors;
-- fresh validation and negative proof for retired identifiers;
-- a positive independence basis only for an actual parallel wave;
-- one successful completion condition distinct from blocked stop.
-
-Preserve an accepted example or scenario when it defines required behavior or proof. Use local obligation keys only when dense inputs cannot otherwise be audited from narrow source anchors. A no-implementation disposition must cite either current authoritative evidence that the obligation is already satisfied or an accepted upstream decision that no implementation change is required, plus its proving surface or objective recheck condition. When one obligation requires several task deltas, its single reconciliation disposition lists those task IDs; each task carries only its distinct postcondition, proof obligation, and actual interface or handoff. Put an unchanged constraint shared by several tasks once in `Global constraints`. Keep reconciliation inline unless the mapping is too dense to audit without a compact table; do not create a separate traceability artifact by default.
-
-Before readiness, walk the next acceptance unit or actual parallel wave through its proof using current inputs. Also resolve any later decision that could invalidate that work. A later unavailable input keeps its dependent task pending with an owner and checkpoint; it blocks readiness only when the next accepted result would otherwise be unusable or when final completion is being claimed.
-
-## Readiness Review
-
-Apply focused root self-review before implementation. Run independent [Task Review / Readiness](task-review-readiness.md) only when the shared review trigger applies.
-
-Repair planning-owned findings directly. Reopen an earlier owner when a task would need to choose product behavior, source of truth, runtime mechanism, package ownership, test strategy, or rollout policy.
-
-Task review and planning-owned disposition are internal checkpoints. Fresh review follows only `FAIL` repair or material candidate change.
-
-## Stop Rule
-
-The ledger is ready only when every implementation-changing accepted obligation has one auditable reconciliation disposition and only statements equivalent in authority, required postcondition, execution-changing constraints, and proof consequence have been normalized. The accepted ownership record must link-check against every current producer, consumer, canonical/generated or mirrored output, proof carrier, migration/rollout state, configuration/documentation surface, and replacement surface within each accepted change's impact boundary; each reached surface must be coupled into the outcome task, assigned to named task deltas whose intermediate states and handoffs satisfy the split rule, or proved unchanged. No required surface may lack accepted ownership or placement.
-
-Every task must leave repository and deployment or migration state internally valid, independently reviewable, and acceptable with its own claim-matched proof. Every writable owner or bounded discovery rule, mutable resource, external gate, canonical order, dependency or handoff, and objective reopen condition that changes execution must be concrete and recorded once; every dependency must be justified by a consumed output or state or by a safety or proof gate.
-
-A carrier-neutral executor dry-run of the next acceptance unit or actual wave must reach acceptance using only the complete fixed ledger, cited current inputs, and available mandatory gates—without chat history, unfinished companion work, or a new product or behavior, mechanism, placement, ownership, test/proof strategy, rollout, concurrency, or execution-carrier decision. Every actual wave must carry current positive pairwise independence evidence. Later work remains owned and dependency-ordered; later unavailable inputs have named owners and objective checkpoints and cannot invalidate the next accepted result. Any triggered review must return `PASS` or dispositioned `CONCERNS`.
+Apply [Task Review / Readiness](task-review-readiness.md) through shared
+[Review](../shared/review.md). Ready when the next unit can reach acceptance from
+closed inputs without chat history, companion work, or a new decision, or a
+persisted packet permits bounded preparation under the [Ready
+Frontier](planning/ledger-contract.md#ready-frontier). Reopen the smallest
+upstream owner of an input missing for the next authorized action.
