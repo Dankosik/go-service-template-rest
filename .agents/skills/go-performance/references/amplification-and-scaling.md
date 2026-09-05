@@ -1,17 +1,12 @@
 # Amplification And Scaling
 
-## When To Load
+## Load When
 
 Load this before selecting or reviewing a mechanism whose work grows with
 input, cardinality, traffic, round trips, copies, fan-out, retries, retained
 memory, or contention.
 
-## Behavior Change Thesis
-
-Choosing topology without its multiplier and measuring only a small success
-path both miss maximum or failure states where repeated work dominates.
-
-## Decision Rubric
+## Decide
 
 - Express dominant time and space complexity in workload variables. Name a
   decision-relevant worst, average, or amortized case, and expose nested scans,
@@ -53,14 +48,14 @@ path both miss maximum or failure states where repeated work dominates.
 - Clearing unbounded, retained, or superlinear work from a toy or success-only
   result, a bounded changed component, eventual completion, or same-order input.
 
-## Validation Shape
+## Prove
 
 Before implementation, record the structural boundary that rejects the losing
 mechanism and the workload for later measurement. After implementation, prefer
 an assertion on the growing count at the contract maximum, plus the narrowest
 matching benchmark when a latency, throughput, allocation, or capacity claim is
 made. A fake store proves local shape only; real database round-trip and pool
-cost use `make bench-db` with a named `BENCH_DB_WORKLOAD_ID`.
+cost use an integration-tagged `go test -bench` run with a named fixture.
 
 Hand retry and degradation policy to `go-reliability`, concurrency correctness
 to `go-concurrency`, and query, index, or plan attribution to

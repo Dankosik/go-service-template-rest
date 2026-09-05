@@ -1,25 +1,21 @@
 # Proving Layer And Oracle
 
-## Behavior Change Thesis
-When loaded to turn an approved obligation into a Go test, this file makes the
-model choose an oracle it could have written from the behavior statement alone —
-the common defect is an assertion read back off the implementation (the cache key
-it builds, the SQL text it emits, the message it formats), which passes while the
-behavior is wrong and fails when a refactor leaves the behavior intact.
-
-## When To Load
+## Load When
 Symptom: an approved requirement, invariant, review finding, or bug report has to
 become named Go tests, or the layer that should carry the proof is unsettled.
 
-## Decision Rubric
+## Decide
 - Name the observable before the package: returned value, persisted row, response
   status and body, count of effects performed, wrapped error category, or a
   goroutine that exited. The observable picks the layer, never the reverse.
 - Two questions disqualify an oracle. Could this assertion have been written from
   the approved behavior alone, without reading the implementation? If not it is
-  derived, and it restates the code instead of judging it. Can you name a wrong
-  implementation that still passes? If yes it is loose — `err != nil`,
-  `code >= 400`, and a non-empty slice all accept outcomes the contract rejects.
+  derived, and it restates the code instead of judging it. Could a plausible
+  regression in this scenario's named obligation pass the oracle? If yes,
+  strengthen the discriminator or report the narrower evidence without closing
+  the unmet obligation. Broad assertions such as
+  `err != nil`, `code >= 400`, or a non-empty slice are insufficient when the
+  contract requires a more specific outcome.
 - Prove duplicate-request semantics through the identity returned and the number
   of effects performed, not the reservation key, fingerprint, or row the current
   code happens to use.
@@ -45,11 +41,11 @@ become named Go tests, or the layer that should carry the proof is unsettled.
 - A name like `TestCreate` over one stating condition and outcome: the failure
   line then reports which call broke, not which behavior regressed.
 
-## Validation Shape
+## Prove
 - Run the named test with `-count=1 -vet=off`, matching the repository's own test
-  commands and leaving vet to `make lint`.
+  commands and leaving vet to `make lint-package` or `make lint-all`.
 - Add the package command when helpers, fixtures, or shared setup changed.
 - A plain `go test` run over a fuzz target executes the seed corpus only, so it
-  proves the seeds and not exploration; `make test-fuzz-smoke` is the bounded run
+  proves the seeds and not exploration; a focused `go test -fuzz` is the bounded run
   that explores.
 - Report the observable each test rejects. A count of added tests is not evidence.

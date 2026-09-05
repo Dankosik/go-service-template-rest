@@ -1,21 +1,12 @@
 # Secrets And Disclosure
 
-## When To Load
+## Load When
 
 Load this when a secret, credential, personal field, or internal detail can
 reach a response, a log, a trace, a metric label, a config file, or the
 repository.
 
-## Behavior Change Thesis
-
-Without this file, the finding is "do not log secrets" and the fix is a
-redaction helper. This repository already draws the boundaries; the defects that
-survive are the ones that cross them — a secret-shaped key added to YAML, an
-upstream cause wrapped into a client-visible error, and a caller-controlled
-value promoted to a metric label, which is a disclosure sink and an unbounded
-series at the same time.
-
-## Decision Rubric
+## Decide
 
 - `internal/config/secret_policy.go` rejects secret-like keys — `password`,
   `token`, `secret`, `authorization`, `dsn` — in a config file at load time.
@@ -43,11 +34,11 @@ series at the same time.
   runs gitleaks against the change with `.gitleaks.toml` and
   `.gitleaks.baseline.json`, so a plausible value either fails the gate or
   teaches the next reader to reuse it. Obviously fake placeholders do neither.
-- Treating a scanner as proof of a privacy or access rule: `make go-security`
-  runs `govulncheck` and `gosec`, which cover dependency and pattern classes and
-  say nothing about who may read a field.
+- Treating scanners as proof of a privacy or access rule: `make govulncheck`
+  and `make gosec` cover dependency and pattern classes independently and say
+  nothing about who may read a field.
 
-## Validation Shape
+## Prove
 
 Assert the raw value is absent from the error, the log, the response, and the
 telemetry, rather than asserting a redactor was called. `make secret-scan`

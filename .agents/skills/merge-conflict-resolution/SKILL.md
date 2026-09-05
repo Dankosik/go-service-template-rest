@@ -1,6 +1,9 @@
 ---
 name: merge-conflict-resolution
-description: "Merge conflicts: Use for an active merge, rebase, cherry-pick, or revert conflict. Own intent, resolution, proof, and continuation; report only under read-only authorization; Skip when no conflict is active."
+description: "Active merge conflicts. Use when an in-progress merge, rebase, cherry-pick, or revert has conflicted hunks that require intent reconstruction, resolution, proof, and continuation."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Merge Conflict Resolution

@@ -1,18 +1,29 @@
 ---
 name: go-idiomatic
-description: "Go idiom: Use when changed Go risks errors, context, nil/zero, method sets, aliasing, or resource lifetimes. Own semantics; Skip readability, whole-diff structure, or package ownership."
+description: "Semantic ownership. Use when errors, context, nil or zero values, method sets, aliasing, or resource lifetimes change what a Go caller observes."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Idiomatic
 
-Go correctness lives in **semantics**, not style: errors, context, nil and zero values, receivers and method sets, aliasing, and resource lifetimes each carry a contract the compiler does not check for you.
+Go correctness follows **semantic ownership**: who owns error identity, work
+lifetime, mutable backing storage, release, and the admissible zero state.
 
-`changed symbols -> semantic obligations -> error flow -> context and resource lifetime -> nil/zero and method sets -> aliasing -> proof`
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For every changed boundary, build one ownership story from producer through
+caller-visible observation. Name who may inspect the error, cancel the work,
+mutate aliased state, release the resource, construct a non-zero value, and
+reach each method through the stored type.
 
-An error is handled exactly once and wrapped where the cause belongs in this package's contract; a context bounds the work it was handed to; a type's zero value either works or its construction is part of the documented contract; and a shared backing array, a copied builder, or a nil pointer inside an interface is a semantic defect wearing a style costume.
+Configured linters prove mechanical shape, not that `%w` exposes the right
+cause, `Close` occurs in the owning scope, a clone has sufficient depth, or a
+typed nil is absent to its caller. A Decision assigns each obligation to one
+owner and observable contract. A Review tries the plausible wrong default at
+the actual caller boundary.
 
-`make lint` already decides the mechanical half of this domain. A finding worth reporting here is one the configured linters cannot reach.
-
-Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct semantic obligations from changed symbols, callers, context and resource lifetimes, nil/zero states, errors, method sets, and mutable-value aliasing, then inspect Go semantics rather than style. Complete when the shared finding envelope accounts for every obligation.
-
-Load the [review selector](references/index.md) when a changed symbol carries a contract the configured linters cannot see — error identity, release scope, aliasing authority, or nil/zero observability. Hand placement to `go-implementation-ownership` and behavior-preserving readability to `go-language-simplifier`.
+Complete when every changed semantic boundary has one owner, preserved
+caller-visible behavior, and focused proof or a named gap. Load the [reference
+selector](references/index.md) only when its stated pressure is observable in
+changed symbols or callers.
