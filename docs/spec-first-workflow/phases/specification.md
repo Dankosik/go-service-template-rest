@@ -10,10 +10,9 @@ and current findings. Disposition every material requester-meaning item as accep
 behavior, deliberately unchanged behavior, a non-goal, or an upstream open
 decision; never silently replace requester meaning. Reconstruct affected actors
 and surfaces; record changed, removed, deliberately unchanged, and non-goal
-behavior. Apply [Material
-Rule](../rubrics/material-rule.md) to each materially affected rule so scope,
-policy, invariants, compatibility, truth/finality, failure, replay/recovery, and
-success meaning cannot diverge across two reasonable implementations.
+behavior. Start with a coherent behavioral outline and apply Outcome,
+Necessity, and Composition below before expanding per-rule detail. Develop
+the same specification throughout; the outline adds no artifact or review gate.
 
 Load only a method whose pressure changes observable meaning:
 
@@ -32,6 +31,12 @@ requirements.
 Composition: Check interacting rules together through a representative
 user-visible scenario; resolve conflicts in terminology, precedence,
 and outcomes.
+
+Then apply [Material Rule](../rubrics/material-rule.md) to each materially
+affected rule so scope, policy, invariants, compatibility, truth/finality,
+failure, replay/recovery, and success meaning cannot diverge across two
+reasonable implementations. Recheck any outline conclusions invalidated by
+that detail; the completed contract remains the independent review boundary.
 
 Return a compact behavioral contract and reference unchanged code, contracts,
 tests, mockups, or evidence. Persist `spec.md` only through

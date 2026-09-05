@@ -53,9 +53,8 @@ before waiting. Integrate returned lane results serially under the Lead. When
 the Lead cannot reliably hold the whole edit surface, fan out lanes while
 keeping acceptance and any required review at the unit boundary.
 
-An identified lane that produces no material result at a stall signal is a
-carrier failure. Replace it or finish that subset directly. Do not wait
-indefinitely.
+Use [Agent Harness](../../agent-harness.md#delegation-interface)'s stall criteria
+and recovery route before replacing a lane or absorbing its work.
 
 Executors diagnose and repair code and focused-check failures within the
 accepted contract, ownership, and proof boundary without returning each attempt

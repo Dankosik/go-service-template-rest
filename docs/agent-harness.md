@@ -24,8 +24,13 @@ responsibility and exclusive locks are disjoint. Do not create worktrees for
 sequential work, cheap disjoint units, or bounded read-only review.
 
 Count live Leads, mutable descendants, and in-flight review or validation lanes
-against capacity. Leave spare slots for unlock and landing. A silent identified
-lane is not progress; replace or absorb it.
+against capacity. Leave spare slots for unlock and landing.
+
+Silence alone does not establish a stall. Use native failure state, a missed
+agreed checkpoint, or repeated attempts without new evidence to trigger
+[Parent-Owned Recovery](spec-first-workflow/shared/transition.md#parent-owned-recovery).
+Preserve useful work and reconcile the affected subtree before replacement or
+scope reassignment.
 
 Carry model, reasoning effort, isolation, native identity, and task lifecycle in
 tool fields rather than prompt prose. Exclusive locks determine scheduling and
@@ -56,7 +61,8 @@ Lifetime follows responsibility, not model size:
 | Orchestrator | The ledger; recover from canonical state when context is no longer reliable. |
 | Architect or phase owner | Its macro phase; a different phase or independent design uses a fresh actor. |
 | Lead | Its unit, with related-unit reuse only under the Planning Ledger Contract. |
-| Execution or evidence lane | One bounded brief and corrections of that same result, including on smaller models. |
+| Execution lane | One bounded brief and corrections of that same result, including on smaller models. |
+| Evidence lane | One bounded evidence brief and related follow-ups under the conditions below. |
 
 Start every execution or evidence lane, including nested descendants, with a
 fresh history using the selected adapter's native controls. Supply the accepted
@@ -66,12 +72,20 @@ Subagent Brief. Clean history excludes the parent's conversation; it does not
 remove applicable instructions, tools, permissions, or current repository files.
 Reviewer freshness remains governed by shared Review.
 
-Keep corrections with the same worker while its result, responsibility, and
-proof boundary hold and its context remains useful. A different outcome,
-writable responsibility, or independent question requires a new agent, even
-when the old one is idle. Lead reuse does not extend to its execution lanes.
-Once the parent consumes a completed result, end that worker's assignment;
-resume it only for a correction within the same brief.
+Keep implementation corrections with the same worker while its outcome,
+writable responsibility, and proof boundary remain unchanged and its context
+remains useful. Once the parent consumes its completed result, end that worker's
+assignment; resume it only for a correction within the same brief.
+
+An evidence agent may answer a related follow-up for the same parent decision
+within the same evidence boundary when its context remains useful and
+independence is unnecessary. Supply the changed question and inputs; recheck
+earlier assumptions affected by that delta.
+
+Use a fresh agent for a different implementation outcome or writable
+responsibility, an unrelated investigation, or a question requiring independent
+judgment. Lead reuse does not extend to its execution lanes. Reviewer reuse
+remains governed by [Review](spec-first-workflow/shared/review.md).
 
 For stalled diagnosis or unreliable context, preserve the current edits and
 material findings, reconcile and stop the old subtree, and give a fresh agent

@@ -42,11 +42,11 @@ controls through native fields or the role carrier; the fixed brief carries
 only the missing execution-changing facts.
 
 Apply [Context And Lifetime](../agent-harness.md#context-and-lifetime) for
-freshness and ledger-controlled Lead reuse. A new small task starts a fresh
+freshness and permitted reuse. A new lane starts a fresh
 named agent, without `subagent_type: "fork"` or continuation. Ordinary agents
 do not inherit parent conversation or command output, so their briefs must
 locate canonical inputs and supply absent facts. Retain the returned agent
-identity. For a valid same-brief correction, including a review correction,
+identity. For a permitted continuation under Context And Lifetime or Review,
 use `SendMessage` with `to` set to that identity and `message` set to the delta;
 this runtime can revive a retained completed agent. `Agent` has no `resume`
 field. A lost continuation returns its exact gap to the parent.
