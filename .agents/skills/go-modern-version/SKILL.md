@@ -1,6 +1,6 @@
 ---
 name: go-modern-version
-description: "Go version idioms. Use before creating or editing handwritten Go when the target module version determines which current language and standard-library forms are available."
+description: "Go version idioms. Use when the module's Go version can change a language or standard-library choice in the planned diff, or modernization is requested."
 metadata:
   invocation: model
   kind: method
@@ -11,24 +11,26 @@ metadata:
 Modern Go is a **version surface**: the module's Go version determines which
 language and standard-library forms are available.
 
-Before the first handwritten Go edit in each affected module, run the pinned
-JetBrains inventory from the repository root against an existing Go file or its
-`go.mod`:
+Read the affected module's `go.mod`. When version availability affects the
+planned choice or modernization is requested, query the pinned JetBrains
+inventory from the repository root against that module's Go file or `go.mod`:
 
 ```bash
 go tool -modfile=tools/go.mod go-modern-guidelines list --file-path <path>
 ```
 
-Read the complete output once per resolved version without filtering or
-truncation. Build one
-`Modernization{file, go_version, applicable_ids, disposition}` record for every
-changed handwritten Go file. Call `explain <id...>` only for returned guidelines
-that may affect the planned diff.
+Reuse the inventory for the same resolved version. Read and explain only
+guidelines that may affect the diff. Text-only edits or edits with no
+version-dependent choice need no inventory. For a modernization spanning
+multiple files, record applicable guideline IDs and a disposition per affected
+file; a single local choice needs only its rationale and focused proof.
 
 The wrong default is copying nearby legacy syntax after the target version
 supports a clearer form. Apply the modern form unless it changes behavior,
 error identity, nil or empty meaning, aliasing, ordering, performance contracts,
 or source ownership; those semantic owners take precedence.
 
-Complete when every record is applied, not applicable, or blocked with an exact
-reason, and the changed package's focused lint accepts the result.
+Complete when the chosen forms are available at the module's version and the
+affected behavior is preserved with focused proof. A modernization sweep also
+accounts for each affected file as applied, not applicable, or blocked with an
+exact reason. Use the active workflow's validation plan.

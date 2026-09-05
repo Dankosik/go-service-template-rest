@@ -12,6 +12,24 @@ independent pressure:
 - a production seam is required solely for proof -> Go Code / Ownership Design;
 - rollout proof -> accepted [Release Closure](../rubrics/release-closure.md).
 
+## Feasibility
+
+Separate local state/correctness proof from scale, platform-performance, and
+production qualification. Attach each environmental requirement to the claim
+that needs it; later qualification inputs do not hold an independently provable
+local result. Local proof never substitutes for that qualification.
+
+When a novel control or platform determines whether the plan can execute,
+resolve that uncertainty before declaring the affected plan ready. Use existing
+evidence or the smallest authorized disposable Research probe: demonstrate one
+normal control path and one controlled fault at the hardest boundary before
+expanding the matrix. This probe establishes control feasibility, not product
+acceptance; Implementation still owns deliverable test and fixture code.
+Check available resources and basic budget fit first. Compilation or a written
+command alone cannot prove a new barrier works. Reuse a sufficient witness;
+ordinary tests with known controls need no extra probe. If the witness needs
+unavailable authority or a production change, carry that exact gap instead.
+
 ## Output
 
 Return [Test Plan V1](../interfaces/test-plan-v1.md) inline, or persist

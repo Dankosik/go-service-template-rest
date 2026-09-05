@@ -4,6 +4,10 @@ Select the domain by the absent/changing decision or violated accepted contract.
 Use **Decision** for policy and **Review** for conformance. Load one domain
 reference by default and another only for an independent pressure.
 
+Interpret domain proof requirements through the [Evidence
+Contract](../../docs/spec-first-workflow/shared/evidence-contract.md#design-proof)
+for the claim and active phase.
+
 A Decision returns [Decision Result
 V1](../../docs/spec-first-workflow/interfaces/decision-result-v1.md). A Review
 returns the shared [Review Result

@@ -41,14 +41,15 @@ condition. Keep reconciliation inline unless it is too dense to audit.
 
 Walk the next inline acceptance unit or ledger task packet through its proof
 using current inputs. Resolve any later decision that could invalidate that
-work. A later unavailable input remains owned and pending; it blocks now only
-when the next accepted result would otherwise be unusable or final completion
-is being claimed.
+work. For a packet permitting preparation under the [Ready
+Frontier](ledger-contract.md#ready-frontier), rehearse only through its declared
+stop and verify that the later gate still blocks acceptance or its named effect.
 
-Readiness passes only when that rehearsal can reach acceptance using the fixed
-plan, cited current inputs, and available mandatory gates without chat history,
-unfinished companion work, or a new behavior, mechanism, placement, ownership,
-proof, rollout, concurrency, or carrier decision. Do not persist waves. The
+Readiness passes when that rehearsal reaches acceptance or the permitted
+preparation stop using the fixed plan, cited current inputs, and gates required
+for those actions, without chat history or a new behavior, mechanism, placement,
+ownership, proof, rollout, concurrency, or carrier decision. Pending mandatory
+acceptance proof remains required. Do not persist waves. The
 Orchestrator recomputes the unit frontier after each result or canonical
 transition and immediately dispatches newly ready units; a Lead decides
 intra-unit parallelism from current evidence.

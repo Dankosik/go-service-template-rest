@@ -18,8 +18,11 @@ the lock-wrapped `unit-check`. Go's build/test cache and golangci-lint's cache
 reuse unchanged inputs; do not layer a second package receipt on top of them.
 Skip `make prove` when the change is already ready for completion.
 
-The integrated delivery owner runs `make verify` once. It formats changed
-handwritten files, lints changed packages, and tests the module-local reverse
+The integrated delivery owner runs `make verify` once on the final delivery
+candidate, not once per ledger unit. Earlier unit acceptance requires its own
+focused and explicitly required Integrated checks; it does not claim completed
+delivery. `make verify` formats changed handwritten files, lints changed
+packages, and tests the module-local reverse
 importer closure instead of defaulting to `test-all`. `test-all` remains the
 fallback when `go.mod`/`go.sum` change, the package graph cannot be built, or
 the reverse closure is most of the module. Use `make plan` only to diagnose
