@@ -148,7 +148,7 @@ classify() {
 			internal/infra/postgreswebhook/*|test/postgres_webhook*|test/webhook_network*) mark integration_race integration_race_webhook ;;
 		esac
 		case "${file}" in
-			cmd/migrate/*|internal/infra/postgresmigrate/*|migrations/*|scripts/ci/migration-*)
+			cmd/migrate/*|internal/infra/postgresmigrate/*|migrations/*|env/migrations/*|scripts/ci/migration-*)
 				mark migrations db_integration
 				;;
 		esac
@@ -309,6 +309,9 @@ self_test() {
 	assert_case internal/infra/postgres/queries/widgets.sql \
 		"sqlc db_integration" \
 		"go_source messaging_integration process_integration integration_race runtime_image image_security"
+	assert_case env/migrations/000001_init.up.sql \
+		"migrations db_integration" \
+		"go_source shell runtime_image image_security"
 	assert_case internal/infra/natsjs/client.go \
 		"go_source messaging_integration integration_race" \
 		"db_integration migrations runtime_image image_security"
