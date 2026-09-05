@@ -109,9 +109,9 @@ load only the owner it selects.
 
 ## Go Change Surface
 
-Before the first handwritten Go edit in each module, load [Go Modern
-Version](.agents/skills/go-modern-version/SKILL.md); it owns
-version-available language and standard-library choices.
+Use the affected module's Go version for language and standard-library choices.
+Load [Go Modern Version](.agents/skills/go-modern-version/SKILL.md) when that
+version can change a choice in the planned diff or modernization is requested.
 
 For Go changes, apply only the skills whose descriptions match a pressure in
 the changed surface; each selected skill owns its method and reopen condition.

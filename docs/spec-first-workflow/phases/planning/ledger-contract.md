@@ -44,18 +44,51 @@ dependency unless the manifest change is itself independently acceptable.
 
 ## Ready Frontier
 
-A unit is ready when every declared dependency output or gate is accepted, no
-active unit overlaps its [Task Packet](../../interfaces/task-packet-v1.md)
-mutable owners or exclusive locks, no active unit may change an accepted
-interface or assumption it consumes, required authority, environment, and
-focused proof are available, and it can reach one acceptance verdict without
-another unfinished unit.
+Place a dependency at the first action that consumes it: implementation, unit
+acceptance, or a named external effect. [Task Packet
+V1](../../interfaces/task-packet-v1.md) owns gate annotations and the default for
+unannotated dependencies. A reviewed contract may support local preparation
+while a working provider still gates integration acceptance or applied state
+gates rollout. Planning owns this distinction; dispatch cannot weaken an
+existing dependency. Merging into an auto-deploy branch is an effect boundary.
+
+A unit is ready to execute when dependencies for its next action are accepted,
+no active unit overlaps its mutable owners or exclusive locks, no active unit
+may change an accepted interface or assumption it consumes, and the authority,
+environment, and focused proof for that action are available. Ordinarily it
+must be able to reach acceptance without another unfinished unit.
+
+When the packet's Boundary explicitly permits bounded preparation, its Lead
+may build an isolated candidate and run local proof while a named later gate
+is pending. Behavior, design, interfaces, and the local oracle must already be
+closed; preparation cannot guess missing decisions. The pending gate needs an
+owner able to supply it without consuming this unit's unaccepted output.
+At the declared stop,
+preserve the candidate, join or stop its lanes, and return `Blocked` naming the
+pending gate through the existing acceptance result. It provides no accepted
+output and cannot be landed as an accepted unit. Reconcile ownership and release
+execution resources; do not redispatch the same preparation until the named
+gate changes. When it closes, resume the same unit, rerun invalidated evidence,
+and complete every unit-required check before `Accepted`.
 
 Dispatch the complete ready frontier before waiting, within current capacity.
 A unit may be ready and still wait: start it concurrently only when owners and
 locks are free and isolation cost is smaller than the unit's work; otherwise
 start it serially on the current checkout when that checkout is free.
 Overlapping owners or locks stay serial.
+
+The Orchestrator may assign the next ready related unit to the same Lead after
+its previous unit is accepted and landed, its lanes have stopped, and no repair
+or handoff remains. Reuse useful context when it saves startup work; use a new
+Lead when the subject, context load, or required native configuration makes
+that more reliable. Do not hold independent ready work waiting for a preferred
+Lead. The reassigned Lead loads the new packet and current checkout/base and
+consumed outputs; previous task assumptions and verdicts do not transfer. Each
+unit keeps its own proof, review disposition, and acceptance result. Only the
+Orchestrator chooses the next unit and updates its Execution locator; a reused
+Lead owns one active unit and cannot serve as its independent reviewer.
+If an earlier unit later reopens, serialize its repair or transfer its Lead
+ownership before dispatch; reuse never creates two active scopes for one Lead.
 
 After every result, integration, blocker, or accepted transition, re-read
 canonical ledger state, release completed locks, recompute the frontier, and
@@ -66,6 +99,13 @@ Capacity is a ceiling, not a fan-out target. It counts live Leads, their
 mutable workers, and in-flight review or validation lanes. Leave spare slots
 for unlock, review, and landing. Do not fill the ceiling with Leads that still
 need children. Do not persist waves.
+
+When eligible work exceeds capacity, first reserve the lanes required to finish
+active units. Then prefer ready units whose accepted outputs unblock waiting
+work in the current ledger. Preparation must not occupy capacity or locks needed
+to produce its missing dependency. Use known dependencies; do not add duration
+estimation or a scheduling phase. Dispatch other eligible work whenever capacity
+and locks permit.
 
 A discovered exclusive lock or overlapping mutable owner updates the live
 frontier immediately. Stop only units that now conflict. Do not cancel
@@ -110,16 +150,23 @@ handoff, or attempted action is not ledger state.
 
 Keep `status: ready` while another unit or owner-held recovery is executable;
 an agent-owned technical, review, proof, or Planning repair with available
-authority is owner-held recovery even when the current unit result is `Blocked`.
+authority and a concrete next discriminating action is owner-held recovery even
+when the current unit result is `Blocked`. Apply [Parent-Owned
+Recovery](../../shared/transition.md#parent-owned-recovery) to exhausted recovery;
+changing the assigned actor or effort alone does not make a gap executable.
 Owner-held recovery or a Planning reopen for one unit does not pause or cancel
 unrelated ready or running units.
 Use `blocked` only when no ready unit or owner-held recovery remains because a
-required user/external input or authority is unavailable. A conflicting
+required input, evidence, native capability, or authority is unavailable after
+authorized recovery; retain the exact resumption condition. A conflicting
 `status: blocked` reopens Planning; it is not a user confirmation question.
 After the final accepted unit, verify the global Completion condition before
-`done`. When the integrated candidate contains two or more accepted units,
-apply required [Review](../../shared/review.md) for that candidate before
-`done`. Then load [Cleanup](../../shared/cleanup.md) and report terminal
+`done`. Apply [Review](../../shared/review.md)'s integrated-candidate trigger to
+remaining cross-unit risks; record its verdict or not-required disposition in
+the existing Completion result. Unit count does not add a review gate. The
+delivery owner runs the final aggregate through [Evidence
+Contract](../../shared/evidence-contract.md), not after every ledger transition.
+Then load [Cleanup](../../shared/cleanup.md) and report terminal
 completion only after execution-only state is removed or Cleanup returns its
 exact blocker.
 

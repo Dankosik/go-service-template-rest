@@ -27,6 +27,12 @@ required external input, new authority boundary, or required durable handoff.
 That stop applies to the current phase actor; an explicit user stop still
 bounds the whole request.
 
+A mechanical locator or receipt refresh after an accepted repair does not
+reopen unaffected decisions. Check the exact delta, update current identities,
+and retain the earlier verdict only for its unchanged semantic scope. Changed
+meaning, mechanism, oracle, risk, or dependency admission still requires its
+owner and applicable review; a changed hash alone is not that decision.
+
 ## Cross-Phase Continuation
 
 For an outcome spanning phases, the root coordinator retains the accepted
@@ -52,6 +58,12 @@ separate phase, review, and acceptance owners without requiring a new
 user-visible task. If no authorized carrier supports the required next action,
 report the exact capability gap and retain the resumable result.
 
+Keep one active continuation coordinator. If an authorized separate Orchestrator
+takes over, transfer the current continuation state to it; the former coordinator
+does not add a second routine polling or status-relay loop. Preserve a usable
+result-delivery route and resume supervision for a terminal result, required
+intervention, or explicit user request. Leads and reviewers retain their roles.
+
 ## Parent-Owned Recovery
 
 A delegated blocker, missing proof, or technical-policy gap remains work for
@@ -67,9 +79,28 @@ compares evidence and constraints, obtains a discriminating probe or specialist
 judgment when needed, and resolves each material objection against the accepted
 drivers. Converge on an evidence-supported choice and reopen condition; do not
 use a vote or unanimity as proof. When equivalent options survive, the decision
-owner chooses the simplest one satisfying the constraints. If a blocker repeats
-with unchanged evidence, change the probe,
-source, capability, or owner rather than circulating the same unresolved brief.
+owner chooses the simplest one satisfying the constraints.
+
+For uncertain recovery, name the next discriminating result and a bounded work
+window in existing task state before another attempt. On that checkpoint or a
+repeated result with no new evidence, compare actual progress with the intended
+result. Continue while findings close or a concrete available probe can
+distinguish remaining causes. Changing reviewer, owner, or reasoning effort
+does not reset a no-progress recovery; reworded concerns, elapsed time, and
+repeated status reports are not new evidence.
+
+For the same unresolved finding without new evidence, use one focused
+independent diagnosis when needed, not another whole-unit review. The
+responsible decision owner resolves the finding against the accepted contract
+and resulting evidence. Reuse that diagnosis until new evidence invalidates it;
+another actor or higher effort alone is not a new recovery path. Confirmed
+defects and missing mandatory proof still prevent acceptance.
+
+When no available authorized probe or recovery can obtain the required evidence,
+retain `Blocked` with the exact unverified claim, limitation, and input or
+capability that would permit resumption. Do not redispatch the unchanged gap.
+A work-window limit changes strategy; it neither waives proof nor creates a
+new task boundary, user approval, or success claim. Retain useful partial work.
 
 Continue independent authorized work, then resume the blocked unit from the
 resolved input. A terminal child result does not complete the parent's outcome.

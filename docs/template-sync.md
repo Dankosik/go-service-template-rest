@@ -4,6 +4,13 @@ This template is the single source of truth for its portable instruction and
 tooling surface. A repository derived from it adopts those changes by running a
 script, not by hand-merging files and not by asking an agent to copy them.
 
+Selected Claude and Qwen profiles update the template-owned project
+`settings.json` depth leaves and mirror their native Lead carriers. OpenCode carries
+its depth in `opencode.json`; Codex generates its runtime from
+`.agents/codex-project.toml`. Keep credentials and personal machine overrides
+outside these portable files. Native configuration keys are not interchangeable
+between harnesses.
+
 ## Read When
 
 - Changing any portable instruction or tooling file and deciding whether derived repositories must receive that change.
@@ -12,7 +19,19 @@ script, not by hand-merging files and not by asking an agent to copy them.
 
 ## The Ownership Split
 
-`template-owned.paths` is the manifest. Every applicable path it lists is mirrored verbatim into a derived repository, including deletions inside listed directories. A complete target `template.lock` filters harness-specific entries through its durable `agent_harness` choice; repositories without a lock retain the legacy `all` behavior. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates and validates the checked-in Codex, Claude, Qwen, Grok, Cursor, and OpenCode carriers before propagation. `.grok/agents` also keeps the handwritten `orchestrator` and `acceptance-unit-lead` primary-session agents. `.cursor/agents` keeps the handwritten `acceptance-unit-lead` Task agent. `.opencode/agents` keeps the handwritten `orchestrator` and `acceptance-unit-lead` agents. `.agents/codex-project.toml` owns portable Codex runtime defaults. Selected target-local generated views are rebuilt after mirroring: `.claude/skills` and `.qwen/skills` expose the same canonical skill set, while `.codex/config.toml` is generated exactly from the portable runtime and role registry. Cursor, Grok, and OpenCode read `.agents/skills` directly. Machine-specific Codex settings belong only in user or system config.
+`template-owned.paths` is the manifest. Applicable paths are mirrored verbatim, including deletions inside listed directories, except for the managed settings leaves described below. A complete target `template.lock` filters harness-specific entries through its durable `agent_harness` choice; repositories without a lock retain the legacy `all` behavior. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates and validates the checked-in Codex, Claude, Qwen, Grok, Cursor, and OpenCode carriers before propagation. `.grok/agents` also keeps the handwritten `orchestrator` and `acceptance-unit-lead` primary-session agents. `.cursor/agents` keeps the handwritten `acceptance-unit-lead` Task agent. `.opencode/agents` keeps the handwritten `orchestrator` and `acceptance-unit-lead` agents. `.agents/codex-project.toml` owns portable Codex runtime defaults. Selected target-local generated views are rebuilt after mirroring: `.claude/skills` and `.qwen/skills` expose the same canonical skill set, while `.codex/config.toml` is generated exactly from the portable runtime and role registry. Cursor, Grok, and OpenCode read `.agents/skills` directly. Machine-specific Codex settings belong only in user or system config.
+
+In `.claude/settings.json`, only `env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`
+is template-owned; in `.qwen/settings.json`, only `model.maxSubagentDepth`
+is template-owned. All other JSON belongs to the consumer, including hooks,
+permissions, other environment variables, and model choices. Check compares
+only those leaves; apply replaces or adds them while retaining unrelated JSON
+bytes. Missing files or parent objects are created. Python 3 and the committed
+`scripts/template-settings-sync.py` helper are required before writes. Malformed
+JSON, duplicate keys, non-JSON numeric constants, or a non-object document or
+managed parent refuse the sync without logging settings values. Existing
+dirty-file, symlink, type, and ignored-content protections still apply to the
+settings files.
 
 `Makefile` is the portable entry point and includes `make/template.mk`, which
 owns standard commands. A service may add uniquely named commands in
@@ -23,9 +42,9 @@ identity. Lint, secret-scan, and OpenAPI policy configuration stays
 repository-owned because its accepted exceptions and current code surface are
 service-specific; the portable wrappers and pinned binaries consume it.
 
-A path may appear in the manifest only while it carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve. That restriction is what makes mirroring safe — there is nothing in an owned file for a derived repository to lose.
+A path may appear in the manifest only while its managed content carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. Apart from the two explicit settings leaves, ownership covers the entire file. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve.
 
-The one target-local exception is a service capability skill under
+Another target-local exception is a service capability skill under
 `.agents/skills/<name>/` with a `.service-owned` marker. The sync
 preserves that directory, requires a real `SKILL.md`, refuses an ownership
 collision with a template skill of the same name, excludes it from the sync
@@ -90,6 +109,15 @@ recipe for a standard target is drift, not an override mechanism.
 
 ## Uncommitted Work
 
+For instruction adoption without a tooling migration, add `--instructions-only`
+to either command. It selects manifest-owned bootstrap files, documentation,
+skills, roles, and the chosen harness configuration and generated views. It
+preserves Makefiles, scripts, tool dependencies, the manifest, retired full-sync
+receipts, and unselected harness data. A legacy Makefile or dirty tooling does
+not block that mode; dirty selected instructions and the other safety checks
+still do. Generated views use the committed source helpers. Its successful
+check proves instruction parity only, not full portable-tooling parity.
+
 The sync never commits. Its result remains a normal reviewable working-tree
 change in one target.
 
@@ -131,6 +159,7 @@ changes.
 | `.claude`, `.qwen`, or `.codex` has an unsafe path shape, or the Codex managed markers are malformed | A generated view could fail after manifest writes |
 | Ignored content exists inside the template manifest or a target owned, generated, or pruned path | It could leak into a target or be silently deleted |
 | The committed canonical inputs and generated projections disagree | Apply would fail or create drift after target writes |
+| Managed harness settings contain malformed JSON or unsafe object shapes, or Python 3 is unavailable | The depth update cannot preserve the consumer's other settings safely |
 | A required repository-owned instruction is missing | Mirrored instructions would point at an absent local authority |
 | A marked service-owned skill is malformed or collides with a template skill | The sync cannot preserve one unambiguous local owner |
 | A manifest path is gitignored in the target | The mirror writes it, git refuses to track it, and drift never clears |

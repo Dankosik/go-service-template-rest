@@ -2,6 +2,10 @@
 
 Use only the fields that can change the delegated result or stop decision.
 
+Describe the result the parent needs to consume, rather than an activity such
+as "explore" or "review". When its purpose is not obvious, name the decision or
+next action it informs in Outcome.
+
 ```text
 Mode: decide | implement | investigate | verify | review
 Outcome: <one checkable result>

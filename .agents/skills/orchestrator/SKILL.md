@@ -17,7 +17,8 @@ graph, not an ordered list.
 
 Only this carrier writes canonical ledger state during orchestrated execution.
 At each cycle, apply the contract's ready-frontier and capacity rules; dispatch
-every ready unit to one fresh `acceptance-unit-lead` before waiting.
+every ready unit to an `acceptance-unit-lead` before waiting, using only the
+contract's permitted Lead reuse.
 
 Process each Lead's immutable [Acceptance Result
 V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md) through
