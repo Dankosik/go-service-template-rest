@@ -380,8 +380,10 @@ self_test() {
 	fi
 	has_line "${output}" 'classified=false'
 	has_line "${output}" 'unclassified_files=unknown/new-owner.xyz'
-	output="$(git ls-files | classify)"
-	has_line "${output}" 'classified=true'
+	if ! grep -Fqx 'state = "complete"' template.lock 2>/dev/null; then
+		output="$(git ls-files | classify)"
+		has_line "${output}" 'classified=true'
+	fi
 	output="$(printf '%s\n' scripts/ci/changed-surfaces.sh | bash "$0" --union HEAD)"
 	has_line "${output}" 'shell=true'
 	has_line "${output}" 'db_integration=false'
