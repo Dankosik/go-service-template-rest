@@ -13,10 +13,15 @@ smaller sub-budget only when the dependency must fail early enough to leave time
 for remaining work. A handler observing `ctx.Err()` returns; it does not invent
 another status.
 
-Config validates PostgreSQL acquire/statement bounds against the request
-timeout. `Pool.Acquire` distinguishes a live caller whose acquire sub-budget
-expired (`ErrSaturated`, 503) from an already-spent caller budget (504). Preserve
-that distinction in metrics and errors.
+PostgreSQL pool acquisition currently waits within the caller context. The
+template provides no separate acquire timeout or saturation error. A live
+caller waiting for the pool is therefore bounded by its enclosing operation or
+request deadline; do not map an arbitrary acquire failure to 503.
+
+Add a dependency-specific admission or acquire sub-budget only when measured
+pool contention shows that waiting consumes unrelated request capacity. The
+mechanism must cover every relevant repository path and preserve the difference
+between parent deadline expiry and local saturation.
 
 Cancellation alone may not bound the server during network failure: pgx sends a
 separate cancel request, so server-side statement and idle-transaction bounds
