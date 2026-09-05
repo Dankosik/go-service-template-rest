@@ -69,7 +69,7 @@ classify() {
 			.golangci.yml) mark go_lint_config ;;
 		esac
 		case "${file}" in
-			.redocly.yaml|api/openapi/*|api/external/*/openapi.yaml|examples/reference-service/api/openapi.yaml|examples/reference-service/internal/openapi/*|internal/openapi/*|internal/infra/*/internal/openapi/*)
+			.redocly.yaml|api/openapi/*|api/external/*/openapi.yaml|examples/reference-service/api/openapi.yaml|examples/reference-service/internal/openapi/*|internal/api/templates/*.tmpl|internal/openapi/*|internal/infra/*/internal/openapi/*)
 				mark openapi
 				;;
 		esac
@@ -318,6 +318,9 @@ self_test() {
 	assert_case internal/api/openapi.gen.go \
 		"go_source go_generated" \
 		"go_handwritten shell runtime_image image_security"
+	assert_case internal/api/templates/strict-http.tmpl \
+		"openapi" \
+		"go_source go_handwritten shell runtime_image image_security"
 	assert_case internal/infra/billing/client.gen.go \
 		"go_source go_generated" \
 		"go_handwritten shell runtime_image image_security"
