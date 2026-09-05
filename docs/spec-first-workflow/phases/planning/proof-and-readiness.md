@@ -28,7 +28,7 @@ Make these explicit when triggered:
   frontier without a new concurrency decision, naming only surfaces this unit
   mutates;
 - Integrated check omitted unless this unit's postcondition requires
-  post-landing proof the focused check cannot give;
+  assembled-unit proof the focused check cannot give; require it before Accepted;
 - one successful completion condition distinct from blocked stop.
 
 Preserve an accepted example only when it defines behavior or proof. Use local

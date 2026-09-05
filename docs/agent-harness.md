@@ -8,9 +8,9 @@ selected adapter owns how the current harness provides it.
 
 Give a delegated agent only the semantic fields in the [Subagent Brief
 Template](subagent-brief-template.md). Isolate concurrent mutation only when it
-is cheaper than waiting for the current checkout. Shared live checkout is
-allowed only with disjoint mutable owners and no exclusive lock. Overlapping
-owners or locks stay serial. Read-only lanes may share the current checkout.
+is cheaper than waiting for the current checkout. Concurrent mutation may share
+a checkout only when mutable owners and exclusive-lock resources do not overlap.
+Overlapping work stays serial. Read-only lanes may share the current checkout.
 Workers inside one Lead may share the Lead's checkout only when writable
 responsibility and exclusive locks are disjoint. Do not create worktrees for
 sequential work, cheap disjoint units, or bounded read-only review.

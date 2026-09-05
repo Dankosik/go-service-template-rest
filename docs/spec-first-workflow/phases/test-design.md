@@ -22,13 +22,13 @@ exact non-command procedure and why automation cannot establish the oracle.
 ## Review
 
 Apply shared [Review](../shared/review.md) before returning `ready`. The reviewer
-checks that every material obligation has one feasible disposition and
-discriminating oracle. A missing obligation, observable, proof level, owner, or
-mandatory input is `FAIL`; only bounded downstream risk over accepted behavior
-may be `CONCERNS`.
+checks every material obligation's disposition through Test Plan V1 and requires
+a discriminating oracle for obligations needing proof. A missing obligation,
+observable, proof level, owner, or mandatory design input is `FAIL`; only bounded
+downstream risk over accepted behavior may be `CONCERNS`.
 
 Done when claims and proof rows reconcile in both directions and every
 non-residual row has a discriminating scenario, deterministic controls,
-independent oracle, proving layer, and runnable proof. Planning may choose only
-order and placement. Reopen Specification or Design when proof would decide
+independent oracle, proving layer, and a feasible proof plan. Planning may choose
+only order and placement. Reopen Specification or Design when proof would decide
 behavior, failure/rollout policy, mechanism, or ownership.

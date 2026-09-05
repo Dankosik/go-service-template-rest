@@ -10,8 +10,8 @@ Use installed Qwen task and agent controls as native authority.
   Team controls are callable. Dispatch every mutually independent ready unit
   before waiting, within current capacity. Create one named Acceptance-Unit
   Lead teammate per ready unit; the Lead owns proof, review, and the
-  acceptance verdict, while the team lead lands each candidate serially from
-  the
+  acceptance verdict, while the team lead lands only `Accepted` candidates
+  serially from the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
   and records that verdict without re-adjudicating it.
 - Bind that teammate to the canonical `acceptance-unit-lead` carrier in its

@@ -105,7 +105,8 @@ cursor. Never wait on a lane that returned no identity. Dispatch all independent
 ready lanes before waiting, within current capacity; capacity is a ceiling, not
 a fan-out target. Concurrent mutable units and lanes require disjoint packet
 mutable owners and exclusive locks. Consume and integrate results serially
-under the Lead. Land candidates onto the shared checkout serially from the
+under the Lead. Land only `Accepted` candidates onto the shared checkout serially
+from the
 [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
 and record the Lead-owned verdict without re-adjudicating it.
 
@@ -122,8 +123,9 @@ ambiguously delivered dispatch. Use a fresh agent when a clean context or
 changed strategy is more reliable.
 
 For isolated work, validate the actual worktree and base before accepting its
-bytes. A Worktree Lead returns an Acceptance Result with a fixed candidate
-and exact `HANDOFF_READY`. The Orchestrator, or a root-local Lead, lands that
+bytes. For an `Accepted` isolated candidate, the Worktree Lead returns an
+Acceptance Result with the fixed candidate and exact `HANDOFF_READY`.
+The Orchestrator, or a root-local Lead, lands that
 candidate serially and records the verdict without re-adjudicating it.
 Handoff is routing evidence, not acceptance.
 

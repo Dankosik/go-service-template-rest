@@ -19,7 +19,7 @@ those control planes.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Spawn one fresh `acceptance-unit-lead` per ready unit
   through Task. That Lead owns proof, review, and the acceptance verdict.
-  This session lands the candidate and records the verdict through the
+  This session lands only `Accepted` candidates and records verdicts through the
   [Ledger Contract's acceptance transition](../spec-first-workflow/phases/planning/ledger-contract.md#acceptance-transition)
   from the Lead's immutable Acceptance Result.
 - Bind that teammate to `acceptance-unit-lead`. Task `subagent_type` is a free
@@ -89,6 +89,6 @@ accept units. Raise its agent model pin only for a justified
 highest-consequence boundary. Keep the fixed candidate unchanged.
 
 If implementation invalidates an upstream decision, the Lead repairs the
-smallest owner when it can, or this session opens a fresh
-`acceptance-unit-lead` for that phase, waits for its canonical transition,
-and resumes the same unit. Add no scheduler, journal, or recovery database.
+smallest owner when it can, or this session dispatches a fresh actor governed
+by the reopened phase, consumes its Transition Result, and resumes the same
+implementation unit. Add no scheduler, journal, or recovery database.

@@ -9,19 +9,17 @@ when its owner and wiring checks together establish that path. Status, file or
 symbol presence, unrelated checks, and implementation summaries do not qualify
 alone.
 
-Record the structured [Evidence Result V1](../interfaces/evidence-result-v1.md)
-fields. Attach commit or tree identity only across a checkout or integration
+Attach commit or tree identity only across a checkout or integration
 boundary; the current bounded diff is enough for local work. Reuse a receipt
 only while `candidate`, `scope`, `command`, and `environment` are unchanged and
 the result is `pass`. Do not rerun unchanged evidence as ceremony.
 
-Before execution, collapse every claim into one minimal proof plan. One receipt
-may support several claims. Do not run a leaf when a selected aggregate contains
-it, and do not add an aggregate whose additional surfaces are irrelevant. The
+Before execution, choose one minimal proof plan across all claims; one receipt
+may support several. Do not run a leaf included in a selected aggregate or add
+an aggregate whose additional surfaces are irrelevant. The
 normal ladder is an optional focused falsifier, then one surface-aware
-`make verify`; do not automatically append a full-repository gate. `make prove`
-is optional iteration, not a required step before `make verify`. `make plan`
-explains the route; it is not a gate.
+`make verify`; `make prove` is optional iteration, and a full-repository gate
+is never automatic. `make plan` explains the route; it is not a gate.
 
 Reuse existing proof when it would fail on the changed observable. Add a test or
 fixture only for otherwise-unproved changed behavior; unrelated historical

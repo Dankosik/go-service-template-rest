@@ -9,6 +9,9 @@ validation inputs. Reconcile every accepted implementation-changing obligation
 to one independently acceptable task, named task deltas, proved
 no-implementation, or scope exit.
 
+Delta: Make the current-to-target change explicit and anchor its accepted
+mechanism and ownership. Leave routine coding choices to Implementation.
+
 Return one fixed inline unit when no durable boundary exists. Otherwise persist
 [Task Ledger V1](../interfaces/task-ledger-v1.md), keep dependency, status, and
 results in `tasks.md`, and put each task packet in `tasks/<ID>-<slug>.md` using

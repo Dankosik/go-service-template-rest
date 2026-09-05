@@ -16,7 +16,9 @@ authoritative inputs, mode, read-only boundary, and stop condition. When an
 expensive-to-reverse decision has a real open fork, load [Generative Candidate
 Lanes](read-only-delegation/generative-candidates.md).
 
-Every lane returns [Lane Result V1](../interfaces/lane-result-v1.md). Evidence
+Evidence lanes return [Lane Result V1](../interfaces/lane-result-v1.md), domain
+decisions [Decision Result V1](../interfaces/decision-result-v1.md), and
+independent reviews [Review Result V1](../interfaces/review-result-v1.md). Evidence
 may expose a new owner decision, but a lane does not expand scope or become the
 authority it inspected. The root consumes gaps through [Parent-Owned
 Recovery](transition.md#parent-owned-recovery).

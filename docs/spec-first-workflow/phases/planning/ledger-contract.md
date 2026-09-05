@@ -81,8 +81,14 @@ the ledger.
 During orchestrated execution, only the Orchestrator writes canonical ledger
 state. Each Lead returns one immutable [Acceptance Result
 V1](../../interfaces/acceptance-result-v1.md). The Orchestrator validates unit
-and candidate identity, lands the candidate serially without semantic edits,
-checks that landing did not materially change the reviewed bytes or
+identity and candidate identity when present.
+
+For `Blocked`, record the gap and route recovery without landing. Preserve
+partial work and reconcile live ownership before releasing locks or
+redispatching. Unrelated runnable work continues.
+
+For `Accepted`, the Orchestrator lands the candidate serially without semantic
+edits, checks that landing did not materially change the reviewed bytes or
 preconditions, records the Lead-owned verdict without re-adjudicating it, then
 releases locks and refills the frontier. When several results are waiting, land
 one, refill, then land the next. Do not drain the landing mailbox before

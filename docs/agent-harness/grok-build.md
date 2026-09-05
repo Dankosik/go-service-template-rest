@@ -17,7 +17,8 @@ child cannot spawn. Keep the semantic tree; change only the carrier.
   selects that carrier. It
   fills the independent ready frontier and does not implement, review, or
   call `spawn_subagent` for unit work. Dispatch every ready unit before
-  waiting, within current capacity. Land each candidate serially from the
+  waiting, within current capacity. Land only `Accepted` candidates serially from
+  the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
   and record the Lead-owned verdict without re-adjudicating it.
 - Bind this session as ACCEPTANCE_UNIT_LEAD when Implementation selects the
@@ -81,6 +82,6 @@ accept units. Raise the reviewer role model pin only for a justified
 highest-consequence boundary. Keep the fixed candidate unchanged.
 
 If implementation invalidates an upstream decision, the Lead repairs the
-smallest owner when it can, or the Orchestrator opens a fresh Lead for that
-phase, waits for its canonical transition, and resumes the same unit. Add no
-scheduler, journal, or recovery database.
+smallest owner when it can, or the Orchestrator dispatches a fresh actor governed
+by the reopened phase, consumes its Transition Result, and resumes the same
+implementation unit. Add no scheduler, journal, or recovery database.

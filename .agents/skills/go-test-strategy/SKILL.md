@@ -8,17 +8,35 @@ metadata:
 
 # Go Test Strategy
 
-Proof is designed around **falsifiers**: for every obligation, the scenario that fails on the wrong behavior, the deterministic controls that make it repeatable, and the independent oracle that cannot be fooled by the code under test.
+Design **falsifiers** for every obligation needing proof: a scenario rejecting
+wrong behavior, deterministic controls for repeatability, and an independent
+oracle the code under test cannot fool.
 
-`risk scenario -> fail-before discriminator -> deterministic controls -> independent oracle -> proving layer -> gate and reopen condition`
+`risk scenario -> behavioral discriminator -> deterministic controls -> independent oracle -> proving layer -> gate and reopen condition`
 
-A test earns existence through a failure it can catch; determinism is designed with controls and fixtures rather than hoped for; and exact source text is an oracle only when the text itself is the accepted external artifact — string presence otherwise proves nothing about behavior.
+Each test must be capable of catching a failure. Design determinism with
+controls and fixtures.
+Exact source text is an oracle only when it is the accepted external artifact;
+otherwise string presence proves no behavior.
 
 Load the [shared specialist contract](../../contracts/specialist-contract.md).
-For every accepted behavior at risk, build `ProofObligation{wrong_behavior,
-fail_before, controls, fixture, oracle, layer, command, cleanup, reopen}` from
+For every accepted behavior at risk needing proof, build
+`ProofObligation{wrong_behavior,
+discriminator, controls, fixture, oracle, layer, command, cleanup, reopen}` from
 approved behavior, handoffs, affected contract, state, trust and lifecycle
 boundaries, and current proof surfaces.
+
+Reachability: Ground each scenario in a supported use, plausible failure,
+or adversarial path. Preserve the data relationships and event ordering
+that make the risk real.
+
+Stability: Choose assertions that survive behavior-preserving refactoring.
+Assert internal structure or interactions only when they carry an
+accepted contract or resource bound.
+
+Discriminator: Name the wrong behavior each scenario rejects. Distinguish
+a planned discriminator from an observed pre-fix failure; missing code
+or a build failure is not behavioral evidence.
 
 ## Choose The Branch
 
@@ -30,5 +48,7 @@ boundaries, and current proof surfaces.
   concrete false-pass or flake risk. Return one shared finding-envelope
   disposition per obligation.
 
-Complete only when every obligation has a falsifier that would fail before the
-repair, an independent oracle, deterministic controls, and a reopen condition.
+Complete only when every obligation has a disposition under
+[Test Plan V1](../../../docs/spec-first-workflow/interfaces/test-plan-v1.md), and
+each obligation needing proof has a falsifier for the named wrong behavior,
+an independent oracle, deterministic controls, and a reopen condition.

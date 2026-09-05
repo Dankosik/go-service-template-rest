@@ -22,6 +22,17 @@ Load only a method whose pressure changes observable meaning:
 - persistence or cache truth -> `go-data-architecture`;
 - trust, authorization, isolation, or sensitive data -> `go-security`.
 
+Outcome: Check whether all requirements could pass while the accepted
+user outcome still fails; resolve any such gap.
+
+Necessity: Trace each added requirement to accepted intent or a mandatory
+constraint. Treat research recommendations as evidence, not accepted
+requirements.
+
+Composition: Check interacting rules together through a representative
+user-visible scenario; resolve conflicts in terminology, precedence,
+and outcomes.
+
 Return a compact behavioral contract and reference unchanged code, contracts,
 tests, mockups, or evidence. Persist `spec.md` only through
 [Artifacts](../shared/artifacts.md). Apply [Specification

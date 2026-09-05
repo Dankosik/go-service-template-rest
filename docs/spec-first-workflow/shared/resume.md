@@ -18,6 +18,9 @@ status request does not reset the task or require replaying completed phases.
 5. Recheck candidate identity and proof reuse through the [Evidence
    Contract](evidence-contract.md) before Implementation continues.
 
+Resolve the ledger's Execution locators against native task state before
+resuming or redispatching; a stored locator alone does not prove work is active.
+Use Resume notes only after checking them against current workspace and evidence.
 Refresh large completed coordination from the canonical ledger, native task
 status, and Git identities. Do not replay transcripts or duplicate native task
 lifecycle state.
