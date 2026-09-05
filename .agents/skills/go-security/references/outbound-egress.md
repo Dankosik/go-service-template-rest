@@ -10,7 +10,9 @@ delivery, or a destination influenced by a caller, a tenant, or config.
 - `internal/infra/httpclient` builds one client per fixed provider authority.
   Scheme and host are enforced on every request, redirects are refused with
   `http.ErrUseLastResponse`, and caller-supplied correlation headers are
-  stripped. Provider adapters or official SDKs own response bounds.
+  stripped. Construction requires provider-wide header, decoded-body, and
+  request-concurrency ceilings; a smaller non-streaming operation may also own
+  its deadline and decoded-body limit.
 - Its address check runs in the dialer's `ControlContext`, after resolution.
   That placement is the guarantee — it is what survives DNS rebinding, and it is
   why `Proxy` is set to nil: a proxy resolves and dials on the client's behalf,
@@ -18,8 +20,9 @@ delivery, or a destination influenced by a caller, a tenant, or config.
 - `NewExternalHTTPS` is the default. `NewPrivateHTTPS` is only for an existing
   deployment-owned private route and requires that platform's private DNS
   suffix; there is deliberately no default suffix and no plaintext variant.
-- Operation deadlines and provider concurrency are owned beside the provider
-  call or SDK. They are not generic client configuration.
+- Provider adapters or official SDKs choose the limits and retry eligibility.
+  The shared client enforces the accepted non-streaming ceilings but does not
+  invent provider values, parse responses, or retry.
 - A per-request, caller-supplied destination is outside what this client
   provides, because pinning is what makes its guarantee meaningful. Arbitrary
   destinations are a new decision — a registered endpoint identifier the service

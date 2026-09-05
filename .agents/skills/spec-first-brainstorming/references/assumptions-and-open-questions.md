@@ -12,7 +12,7 @@ Label every uncertainty and decide everything technical:
 - `[user-owned]` marks only an item that survives [Decision Ownership](../../../../AGENTS.md#decision-ownership), with an owner and an unblock condition precise enough for the orchestrator to act on.
 - `[nice to know]` holds anything that cannot block readiness.
 
-Ask the questions that change framing or route the next spec lanes; everything else is a labeled assumption or a decision.
+Ask only surviving user-owned framing questions. Return technical gaps and lane-routing questions to the parent; everything else is a labeled assumption or a decision.
 
 ## Inspect
 Input:

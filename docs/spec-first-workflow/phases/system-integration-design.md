@@ -25,8 +25,17 @@ Load only methods exposed by the decision:
 
 Use [Read-Only Delegation](../shared/read-only-delegation.md) only for
 independent material domain questions. The root validates and synthesizes their
-results. A signature-sensitive shape fixes exact bytes, algorithm, and one
+results. A surviving technical disagreement uses [Parent-Owned
+Recovery](../shared/transition.md#parent-owned-recovery) before this decision
+closes. A signature-sensitive shape fixes exact bytes, algorithm, and one
 deterministic non-secret vector.
+
+Trade-off: For each material choice with viable alternatives, state the
+decisive constraint, the cost accepted, and what evidence or changed
+assumption would reverse the choice.
+
+Enforcement: For each critical invariant, name the mechanism and boundary
+that enforce it; account for every effectful path that could bypass it.
 
 Return the selected mechanism, driver and alternative dispositions, material
 flows, affected authorities and contracts, measurable proof boundaries, and
