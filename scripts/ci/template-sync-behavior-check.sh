@@ -215,7 +215,7 @@ git -C "${template}" add AGENTS.md make/template.mk scripts/ci/portable-check.sh
 git -C "${template}" commit -qm v2
 
 # Instruction adoption does not migrate builds or consume target-side tooling.
-for scenario in legacy ignored-tooling unselected-harness; do
+for scenario in legacy ignored-tooling codex core cursor grok opencode; do
 	instruction_target="${fixture}/instructions-${scenario}"
 	git clone -q "${target_legacy}" "${instruction_target}"
 	printf 'exit 91\n' >"${instruction_target}/scripts/harness-skills-sync.sh"
@@ -227,8 +227,8 @@ for scenario in legacy ignored-tooling unselected-harness; do
 		printf 'local ignored tooling\n' >"${instruction_target}/make/template.mk"
 		printf '/make/template.mk\n' >>"${instruction_target}/.git/info/exclude"
 		;;
-	unselected-harness)
-		printf '%s\n' 'state = "complete"' 'agent_harness = "codex"' >"${instruction_target}/template.lock"
+	codex | core | cursor | grok | opencode)
+		printf 'state = "complete"\nagent_harness = "%s"\n' "${scenario}" >"${instruction_target}/template.lock"
 		mkdir -p "${instruction_target}/.claude/worktrees"
 		printf 'local worktree content\n' >"${instruction_target}/.claude/worktrees/local"
 		printf '/.claude/worktrees/\n' >>"${instruction_target}/.git/info/exclude"
@@ -247,7 +247,7 @@ for scenario in legacy ignored-tooling unselected-harness; do
 	case "${scenario}" in
 	legacy) [[ ! -e "${instruction_target}/make/template.mk" ]] || fail "instruction adoption migrated the legacy build" ;;
 	ignored-tooling) grep -Fxq 'local ignored tooling' "${instruction_target}/make/template.mk" || fail "ignored tooling was changed" ;;
-	unselected-harness)
+	codex | core | cursor | grok | opencode)
 		grep -Fxq 'local worktree content' "${instruction_target}/.claude/worktrees/local" || fail "unselected harness data was removed"
 		cmp -s "${target_legacy}/.claude/settings.json" "${instruction_target}/.claude/settings.json" || fail "unselected settings changed"
 		;;

@@ -583,11 +583,14 @@ target="${explicit_repo:-$PWD}"
 	fi
 	collect_service_skill_exclusions "${repo}"
 	ignored_generated_pathspecs=()
-	for entry in "${generated_paths[@]-}" "${pruned_paths[@]-}" "${service_skill_exclusions[@]-}"; do
+	for entry in "${generated_paths[@]-}" "${pruned_paths[@]-}"; do
 		[[ -n "${entry}" ]] && ignored_generated_pathspecs+=("${entry}")
 	done
 	target_generated_ignored=""
-	if git -C "${repo}" rev-parse --git-dir >/dev/null 2>&1; then
+	if ((${#ignored_generated_pathspecs[@]} > 0)) && git -C "${repo}" rev-parse --git-dir >/dev/null 2>&1; then
+		for entry in "${service_skill_exclusions[@]-}"; do
+			[[ -n "${entry}" ]] && ignored_generated_pathspecs+=("${entry}")
+		done
 		target_generated_ignored=$(git -C "${repo}" ls-files --others --ignored --exclude-standard -- \
 			"${ignored_generated_pathspecs[@]}" 2>/dev/null || true)
 	fi
