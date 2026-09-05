@@ -1,6 +1,6 @@
 ---
 name: go-delivery-platform
-description: "Delivery: Use for CI/CD, release trust, drift, containers, migrations, rollout, or control review. Own delivery acceptance; Skip implementation."
+description: "Release gates. Use when CI/CD, artifact provenance, drift, containers, migrations, rollout, or control-plane evidence determines whether a candidate may ship."
 metadata:
   invocation: model
   kind: method
@@ -17,14 +17,19 @@ Treat each status, parity check, provenance rule, container, migration, or
 rollout control as a gate. A waiver has an owner and expiry; drift between
 declared and actual controls is a finding.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct required gates from accepted delivery policy, repository workflows, build and deploy surfaces, migrations, generated/docs controls, and rollout dependencies.
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From accepted delivery policy to terminal rollout or rollback, build
+`DeliveryGate{control, artifact, command, pass_condition, exception_owner,
+expiry, rollout, recovery, proof}` for every required status, parity check,
+provenance rule, container, migration, or runtime control.
 
 ## Choose The Branch
 
 - **Decision** — load one matching [decision reference](references/decision/index.md)
-  and cover every gate, forced consequence, proof, and exception owner.
+  and disposition every gate, forced consequence, proof, and exception owner.
 - **Review** — load one matching [review reference](references/review/index.md)
   and account for every gate; a waived required gate remains a finding.
 
-Hand resilience to `go-reliability`, trust to `go-security`, and a release schema
-migration to [PostgreSQL schema design](../../../docs/universal-disciplines/postgres-schema-design/SKILL.md).
+Complete only when every required gate has a current artifact, fail-closed pass
+condition, exception disposition, and recovery consequence. A green job that
+did not compare or exercise its intended surface is not a passing gate.

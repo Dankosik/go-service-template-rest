@@ -37,14 +37,13 @@ guarantee, or a deprecation and removal plan.
 - Listing a check id in `api/openapi/breaking-changes-approvals.txt` to make the
   gate green: the file silences that check for the whole diff, so it must carry
   the accepted breaking change and its migration, not the desire to merge.
-- Treating `make check` or `make ci-local` as compatibility proof: neither runs
-  the breaking check. It runs only from `pr-check`, which supplies `BASE_REF` and
-  extracts the base spec with `git show`.
+- Treating format, lint, or unit tests as compatibility proof: none runs the
+  breaking check. Pull-request CI supplies the exact base spec with `git show`.
 
 ## Prove
 
-`make pr-check BASE_REF=origin/main`, or `make openapi-breaking
-BASE_OPENAPI=<base spec>` directly. A pass proves no schema-detectable
+`make openapi-breaking BASE_OPENAPI=<base spec>` directly, or the pull-request
+CI breaking step. A pass proves no schema-detectable
 regression against that base. For every change in the hand-classified list
 above, the proof is a stated client assumption and a migration or version
 decision, because the gate cannot see it.

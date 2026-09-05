@@ -18,10 +18,12 @@ Use <artifact path>.          # only when discovery is ambiguous
 <new authority or stop delta> # only when absent from the artifact
 ```
 
-Use `$<skill>` in Codex and `/<skill>` in Claude Code, Qwen Code, or Grok
-Build. The syntax selects a carrier; it does not change the skill's semantic
-contract. In Grok Build the current primary session is the Orchestrator
-carrier; do not require a prepared CLI launch.
+Use `$<skill>` in Codex and `/<skill>` in Claude Code, Qwen Code, Grok Build, Cursor, or OpenCode.
+The syntax selects a carrier; it does not change the skill's semantic
+contract. In Grok Build a user prompt in the primary session is the launch;
+do not require a prepared CLI launch. OpenCode discovers `.agents/skills`
+through the `skill` tool; `/orchestrator` is the project command that binds the
+Orchestrator carrier.
 
 This is normally one to three lines. Omit any line already supplied by the
 native entrypoint, current repository, or named artifact.

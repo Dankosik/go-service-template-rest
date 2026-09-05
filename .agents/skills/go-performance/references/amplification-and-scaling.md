@@ -55,7 +55,7 @@ mechanism and the workload for later measurement. After implementation, prefer
 an assertion on the growing count at the contract maximum, plus the narrowest
 matching benchmark when a latency, throughput, allocation, or capacity claim is
 made. A fake store proves local shape only; real database round-trip and pool
-cost use `make bench-db` with a named `BENCH_DB_WORKLOAD_ID`.
+cost use an integration-tagged `go test -bench` run with a named fixture.
 
 Hand retry and degradation policy to `go-reliability`, concurrency correctness
 to `go-concurrency`, and query, index, or plan attribution to

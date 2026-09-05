@@ -3,6 +3,7 @@ description = "Read-only adjudicator for one surviving material reviewer conflic
 class = "read-only-specialist"
 claude_model = "opus"
 qwen_model = "inherit"
+cursor_model = "grok-4.6[effort=xhigh]"
 grok_model = "grok-4.6"
 grok_effort = "xhigh"
 output_schema = "lane-result-v1"

@@ -7,7 +7,7 @@ the affected layer decides what you read.
 
 Retry eligibility, backoff, jitter, `Retry-After`, and ambiguous outcomes have
 no reference here — [`external-api-integration`](../../../../docs/universal-disciplines/external-api-integration/SKILL.md)
-owns them, and `internal/infra/httpclient/retry.go` is the local implementation.
+owns them, and the provider adapter or official SDK is the local implementation.
 Degradation shape, rollout sequencing, and proof selection have none either:
 decide them against the affected code, with `go-delivery-platform` owning
 release mechanics and `go-test-strategy` owning proof level. Adding a reference

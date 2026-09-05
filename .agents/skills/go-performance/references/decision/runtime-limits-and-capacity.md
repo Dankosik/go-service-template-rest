@@ -45,7 +45,7 @@ admission concurrency, or how many requests may be in flight at once.
 
 ## Prove
 
-`make bench` and `make bench-compare` for the per-operation half. For the
+`go test -bench` and `benchstat` for the per-operation half. For the
 envelope half, name the startup log line (`runtime_memory_limit_applied`,
 `runtime_memory_limit_skipped`, `runtime_request_buffer_budget_exceeded`) and
 the runtime or pool metric that must move, with the threshold that decides

@@ -4,7 +4,7 @@
 
 | Pressure | Load | Required effect |
 | --- | --- | --- |
-| Error identity, wrapping, inspection, a logged-away failure, or cancellation errors callers branch on. | [error-contracts.md](error-contracts.md) | Decide which cause becomes caller-observable API, rather than reading a satisfied `wrapcheck` as a sound contract. |
+| An error is created, wrapped, joined, logged, classified, used as a cancellation cause, or recovered from panic. | [error-contracts.md](error-contracts.md) | Assign one handling owner and decide which identity or type remains caller-observable, rather than reading a satisfied mechanical check as a sound contract. |
 | Detached or background work, resources opened in a loop, completion probes, partial reads, or `defer` scope. | [lifetime-and-release.md](lifetime-and-release.md) | Separate release from completion and name the scope that owns each, rather than treating a present `Close` as proof. |
 | Mutable slices, maps, headers, or buffers crossing a boundary; clone depth; observable map order; copied values. | [aliasing-and-ownership.md](aliasing-and-ownership.md) | Trace who can still write through the backing store, rather than reading a clone call as isolation. |
 | Typed nil, zero-value usability, nil-versus-empty at an observer, or interface satisfaction through a stored value. | [nil-zero-and-method-sets.md](nil-zero-and-method-sets.md) | Check what the caller observes at the boundary, rather than what the code says it returns. |
