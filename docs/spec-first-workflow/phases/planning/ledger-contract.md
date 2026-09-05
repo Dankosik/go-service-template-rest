@@ -44,20 +44,32 @@ dependency unless the manifest change is itself independently acceptable.
 
 ## Ready Frontier
 
-Place a dependency at the first action that consumes it. Distinguish inputs for
-code preparation and local acceptance from admission for publication, deployment,
-or data effects. A reviewed schema or contract may unblock an isolated candidate
-while applied production state still gates rollout. Verify stable interfaces,
-focused proof, and mutable-owner/lock separation before selecting that split;
-merging into an auto-deploy branch is itself an effect boundary. Do not weaken
-existing packet dependencies during dispatch: Planning owns their correction.
+Place a dependency at the first action that consumes it: implementation, unit
+acceptance, or a named external effect. [Task Packet
+V1](../../interfaces/task-packet-v1.md) owns gate annotations and the default for
+unannotated dependencies. A reviewed contract may support local preparation
+while a working provider still gates integration acceptance or applied state
+gates rollout. Planning owns this distinction; dispatch cannot weaken an
+existing dependency. Merging into an auto-deploy branch is an effect boundary.
 
-A unit is ready when every declared dependency output or gate is accepted, no
-active unit overlaps its [Task Packet](../../interfaces/task-packet-v1.md)
-mutable owners or exclusive locks, no active unit may change an accepted
-interface or assumption it consumes, required authority, environment, and
-focused proof are available, and it can reach one acceptance verdict without
-another unfinished unit.
+A unit is ready to execute when dependencies for its next action are accepted,
+no active unit overlaps its mutable owners or exclusive locks, no active unit
+may change an accepted interface or assumption it consumes, and the authority,
+environment, and focused proof for that action are available. Ordinarily it
+must be able to reach acceptance without another unfinished unit.
+
+When the packet's Boundary explicitly permits bounded preparation, its Lead
+may build an isolated candidate and run local proof while a named later gate
+is pending. Behavior, design, interfaces, and the local oracle must already be
+closed; preparation cannot guess missing decisions. The pending gate needs an
+owner able to supply it without consuming this unit's unaccepted output.
+At the declared stop,
+preserve the candidate, join or stop its lanes, and return `Blocked` naming the
+pending gate through the existing acceptance result. It provides no accepted
+output and cannot be landed as an accepted unit. Reconcile ownership and release
+execution resources; do not redispatch the same preparation until the named
+gate changes. When it closes, resume the same unit, rerun invalidated evidence,
+and complete every unit-required check before `Accepted`.
 
 Dispatch the complete ready frontier before waiting, within current capacity.
 A unit may be ready and still wait: start it concurrently only when owners and
@@ -90,9 +102,10 @@ need children. Do not persist waves.
 
 When eligible work exceeds capacity, first reserve the lanes required to finish
 active units. Then prefer ready units whose accepted outputs unblock waiting
-work in the current ledger. Use known dependencies; do not add duration
-estimation or a scheduling phase. Dispatch other eligible work whenever
-capacity and locks permit.
+work in the current ledger. Preparation must not occupy capacity or locks needed
+to produce its missing dependency. Use known dependencies; do not add duration
+estimation or a scheduling phase. Dispatch other eligible work whenever capacity
+and locks permit.
 
 A discovered exclusive lock or overlapping mutable owner updates the live
 frontier immediately. Stop only units that now conflict. Do not cancel

@@ -31,5 +31,7 @@ readiness.
 
 Apply [Task Review / Readiness](task-review-readiness.md) through shared
 [Review](../shared/review.md). Ready when the next unit can reach acceptance from
-closed inputs without chat history, companion work, or a new decision. Reopen
-the smallest upstream owner of any missing choice or input.
+closed inputs without chat history, companion work, or a new decision, or a
+persisted packet permits bounded preparation under the [Ready
+Frontier](planning/ledger-contract.md#ready-frontier). Reopen the smallest
+upstream owner of an input missing for the next authorized action.
