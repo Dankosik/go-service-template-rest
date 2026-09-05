@@ -81,4 +81,5 @@ docker run --rm --network "${project}_default" \
 
 RUNTIME_IMAGE_NETWORK="${project}_default" \
 	RUNTIME_IMAGE_POSTGRES_DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
+	RUNTIME_IMAGE_EGRESS_ALLOWLIST=postgres \
 	bash ./scripts/ci/runtime-image-check.sh "${image}" "${expected_version}"
