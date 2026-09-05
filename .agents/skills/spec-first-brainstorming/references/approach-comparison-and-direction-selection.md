@@ -1,15 +1,12 @@
 # Approach Comparison And Direction Selection
 
-## Behavior Change Thesis
-When loaded for the symptom "multiple plausible behavior-level frames remain, but the task is beyond raw ideation," this file makes the model compare framing approaches and recommend or block one direction instead of carrying every option forward or drifting into architecture design.
-
-## When To Load
+## Load When
 Load this when the user has a mostly chosen direction but the frame could still split into `2-3` plausible problem interpretations, and the choice affects downstream specialist lanes.
 
 ## The Move
 Compare frames, not implementations: each option states a different behavior problem or success signal, and options that differ only by mechanism while solving the same problem are one frame. Keep trade-offs at the level of actor, behavior delta, constraint, and risk. Recommend the option the user's symptom actually supports; when no discriminator exists, mark readiness `fail` and name the missing one — indecision stated as "support both" hides the choice, so when both frames are real, split scope or fail readiness until a product owner chooses. When no direction is chosen at all, return to `idea-refine`.
 
-## Imitate
+## Inspect
 Input:
 ```text
 Users say exports are slow. Maybe make reports async or cache the generated files.

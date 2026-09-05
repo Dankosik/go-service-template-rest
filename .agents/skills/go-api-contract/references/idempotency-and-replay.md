@@ -1,21 +1,11 @@
 # Idempotency And Replay
 
-## When To Load
+## Load When
 
 Load this when a `POST` or `PATCH` this service exposes can be retried, or when
 a client timeout can hide whether a mutation happened.
 
-## Behavior Change Thesis
-
-Without this file, an idempotency clause is written as "store the key with the
-response and replay it," which decides none of the fields that actually govern
-behavior. The recurring defects are a key table with no caller binding, so one
-caller's stored outcome answers another's request; a burnt key on a request that
-never reached the durable boundary, so a legitimate retry is refused; and `428
-Precondition Required` for a missing key, which tells the client to add an
-`If-Match` validator it was never asked for.
-
-## Decision Rubric
+## Decide
 
 - Decide and publish five fields together — they are the clause: key scope
   (caller or tenant, plus operation and route), key syntax and entropy, TTL,
@@ -46,12 +36,8 @@ Precondition Required` for a missing key, which tells the client to add an
   2025-10-15 and is now expired and archived without becoming an RFC. Write the
   syntax and semantics as this API's published rule; a client cannot look them
   up.
-- Reusing the outbound key policy in `internal/infra/httpclient`: that key
-  exists so this service may retry a non-idempotent request to a provider. It is
-  the caller side of the boundary, owned by `external-api-integration`, and the
-  inbound clause is a separate contract with its own scope and TTL.
 
-## Validation Shape
+## Prove
 
 Four consumer-runnable replays: equivalent payload returns the same resource
 identity; changed payload returns the mismatch status; a second request while

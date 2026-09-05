@@ -1,20 +1,11 @@
 # Abuse And Cost Bounds
 
-## When To Load
+## Load When
 
 Load this when a caller can scale work, repeat an attempt, or drive cost —
 pagination, batching, fan-out, retries, or a paid provider call.
 
-## Behavior Change Thesis
-
-Without this file, "the service has rate limiting" is read off the middleware
-chain and the endpoint is treated as covered. It is not. `RateLimit` is a seam:
-`RouterConfig.RateLimit` is nil in the shipped default, so the middleware is
-left out of the chain entirely, and there is deliberately no default key
-function — the repository refuses to guess an identity, because behind an edge
-`RemoteAddr` is the edge and `X-Forwarded-For` is caller-controlled.
-
-## Decision Rubric
+## Decide
 
 - Name the scarce resource and the identity a budget is charged to before
   choosing a control. Charging is the decision; the limiter is mechanism.
@@ -46,11 +37,11 @@ function — the repository refuses to guess an identity, because behind an edge
 - Degrading open on a security dependency under load: shedding may drop a
   request, never its authorization or its tenant scope.
 
-## Validation Shape
+## Prove
 
 Assert the denial and the absence of the effect — no provider call, no enqueue,
 no mutation — because a `429` alone does not show the work was skipped.
 `middleware_ratelimit_test.go` and `middleware_inflight_test.go` hold the
-transport-level cases; run `make test-race` when fan-out or worker bounds
+transport-level cases; run `ALLOW_HEAVY=1 make test-race` when fan-out or worker bounds
 change. Detailed worker-pool lifetime and race questions belong to
 `go-concurrency`.

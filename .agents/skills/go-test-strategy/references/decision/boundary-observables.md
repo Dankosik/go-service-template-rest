@@ -1,12 +1,9 @@
 # Boundary Observables
 
-## Behavior Change Thesis
-When loaded for symptom "the proof target is a client-visible, durable, cached, failing, or cross-service boundary", this file makes the model name the observable that a mock or a success response cannot fake instead of likely mistake "assert the handler returned 200, or assert the repository mock was called, and call the boundary proved."
-
-## When To Load
+## Load When
 Load this when the obligation touches REST/OpenAPI, auth or tenant boundaries, idempotent writes, async acceptance, SQL transactions, migrations, cache behavior, timeouts, retries, shutdown, or outbox/inbox replay.
 
-## Decision Rubric
+## Decide
 - Vary the caller-controlled dimension: credential, tenant, object identifier, idempotency key, cursor, request size, unknown field, operation identifier. A boundary exercised only by the authorized actor is untested.
 - Prove idempotency by duplicate side-effect suppression. Equal responses are the cheap half; exactly one durable write is the claim.
 - Keep key-mismatch and in-flight-concurrency expectations separate unless the approved contract collapses them.
@@ -14,11 +11,11 @@ Load this when the obligation touches REST/OpenAPI, auth or tenant boundaries, i
 - Prove transactions on durable state: every row present or every row absent after a representative mid-step failure, plus the error class the caller must still recognize.
 - Prove cache behavior at the origin rather than in the response: origin call count, cache write/delete/bypass, tenant-scoped key, and the fallback signal when the cache is unreachable.
 - Separate retry classes — transient-then-success, exhausted, non-retryable, and poison for async flows — because each has a different terminal state.
-- Prove cancellation twice: the recognizable context-derived error, and the absence of a success side effect after cancellation.
+- Cancellation: Place cancellation relative to the effect boundary and assert the accepted error, durable state, and recovery outcome; do not assume cancellation reverses an already committed effect.
 - Prove shutdown with a lifecycle observable — drain marker, joined goroutine, flushed or abandoned work — not with elapsed time.
 - Prove migrations on compatibility and resumability: the old application against the new schema, a backfill that resumes, and a destructive step that stays blocked until verified.
 
-## Imitate
+## Inspect
 A cache read can return the correct value while the entry is stale, because the origin was consulted anyway. Assert the origin call count and the cache write; the returned value alone was never the evidence.
 
 ## Reject
@@ -27,9 +24,9 @@ A cache read can return the correct value while the entry is stale, because the 
 - "Test authorization" with only the authorized actor, no missing credential, and no wrong tenant.
 - "The migration applies cleanly" as the whole migration claim, with no old/new compatibility and no backfill resumption.
 
-## Agent Traps
+## Reopen
 - Durable proof here lives in `./test/...` behind `//go:build integration`. `pgtest.DSN(tb)` and `pgtest.Migrated(tb, …)` create a per-test database on one shared, digest-pinned container, so a real-database row costs little and a mock is rarely the honest choice.
 - A fake cache proves serialization and TTL only if the fake implements them; connection-failure and eviction behavior need the real client.
 
-## Validation Shape
+## Prove
 Name the observable, the controlled data or failure trigger, and the validation family that would execute it. [validation-commands.md](validation-commands.md) owns the command map.

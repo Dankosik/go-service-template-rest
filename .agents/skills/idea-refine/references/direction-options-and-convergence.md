@@ -1,15 +1,12 @@
 # Direction Options And Convergence
 
-## Behavior Change Thesis
-When loaded for symptom "several product directions remain plausible or the raw idea is a grab bag," this file makes the model choose one defensible direction with rejected-option rationale instead of preserving every option as a combined strategy.
-
-## When To Load
+## Load When
 Load this when brainstorming needs convergence, when the idea contains unrelated features, or when two or three directions could each plausibly be first.
 
 ## The Move
 Compare two or three genuinely different directions — minor variants are one option — held against the same target user, problem, success signal, MVP size, and risk profile. Recommend the direction that tests the riskiest value assumption with the least irreversible scope; the deliverable reduces ambiguity, so exactly one direction is first even when several would please. Explain why runner-ups are not first rather than why they are bad forever, and keep them alive only as follow-ons or switch triggers later spec work can use.
 
-## Imitate
+## Inspect
 Input: "We need better onboarding: checklists, videos, templates, and AI setup help."
 
 ```markdown

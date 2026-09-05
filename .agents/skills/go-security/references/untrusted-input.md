@@ -1,20 +1,11 @@
 # Untrusted Input And Interpreters
 
-## When To Load
+## Load When
 
 Load this when caller- or provider-influenced data reaches a decoder, a SQL
 statement, a template, a subprocess, or a filesystem path.
 
-## Behavior Change Thesis
-
-Without this file, "validated" means a Go struct that decoded without error and
-a `filepath.Clean` before a join. Both read stronger than they are:
-`encoding/json` accepts duplicate object members and keeps the last, matches
-field names case-insensitively, and ignores unknown members — so two decoders
-can disagree about the same bytes — and lexical path cleaning says nothing about
-what a symlink resolves to.
-
-## Decision Rubric
+## Decide
 
 - Where a duplicate member could change a security decision, decode with a
   strict decoder instead of `encoding/json`. `internal/infra/oidcjwt/decode.go`
@@ -48,10 +39,10 @@ what a symlink resolves to.
 - `text/template` for anything a browser renders: it applies no contextual
   escaping. `html/template` does, and `template.HTML` opts back out of it.
 
-## Validation Shape
+## Prove
 
 Table cases at the owning boundary for accepted, rejected, boundary-length, and
 duplicate inputs, asserting that rejection happens before the side effect rather
-than that a status was returned. `make go-security` runs `gosec` and
+than that a status was returned. `make gosec` and `make govulncheck` run
 `govulncheck`, which find pattern and dependency classes; neither shows an
 allowlist is complete.

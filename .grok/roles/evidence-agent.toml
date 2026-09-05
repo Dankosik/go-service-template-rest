@@ -1,0 +1,3 @@
+description = "Fast read-only evidence subagent for bounded discovery, drift checks, and mechanical repair proposals without gate authority."
+default_capability_mode = "read-only"
+reasoning_effort = "low"

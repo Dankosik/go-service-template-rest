@@ -1,21 +1,12 @@
 # Allocation And Pooling
 
-## When To Load
+## Load When
 
 Load this when a change reuses memory to reduce allocation: `sync.Pool`, a
 shared buffer, a reset-and-refill struct, a preallocated slice kept between
 calls, or a claim about GC pressure.
 
-## Behavior Change Thesis
-
-Fewer allocations per operation reads as proof that GC pressure fell, and a
-pool's benchmark reads as proof that reuse happens. Both are weaker than they
-look: `sync.Pool` is documented as a hint that may return nothing it was given,
-so a tight benchmark loop measures a hit rate a bursty request path will not
-see, and per-operation churn and retained heap are different measurements that
-can move in opposite directions.
-
-## Decision Rubric
+## Decide
 
 - `sync.Pool`'s contract is explicit: any item may be removed automatically at
   any time without notification, and `Get` may ignore the pool and treat it as
@@ -24,7 +15,7 @@ can move in opposite directions.
   defect, and a benchmark that never misses is not the production shape.
 - Churn and retention need different evidence: `-benchmem` and `alloc_space`
   show allocation churn; `inuse_space` shows what stays live.
-  `make bench-profile BENCH_PROFILE=memory` prints both views, and a smaller
+Use `go test -memprofile` and inspect both `alloc_space` and `inuse_space`; a smaller
   in-use heap is not evidence that churn fell.
 - Two hazards are worth a finding on their own. A pooled object returned while
   still holding request data leaks it into the next request — this is a
@@ -42,9 +33,9 @@ can move in opposite directions.
   sizing a slice at its known length usually removes the same allocations
   without reuse discipline to maintain.
 
-## Validation Shape
+## Prove
 
-Old-versus-new `-benchmem` through `make bench-baseline` / `make bench` /
-`make bench-compare`, plus a case that does not keep the pool hot when the claim
+Old-versus-new `go test -bench -benchmem` samples compared with `benchstat`,
+plus a case that does not keep the pool hot when the claim
 is about reuse. For a live GC or heap claim, use the runtime metrics
 `otelruntime` already exports rather than extrapolating from a benchmark.
