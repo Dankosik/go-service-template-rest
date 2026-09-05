@@ -1,15 +1,36 @@
 ---
 name: go-chi
-description: "Chi transport: Use for router composition, middleware, OpenAPI wiring, fallbacks, CORS, labels, or routing review. Own chi decisions; Skip client API semantics, system topology, or general Go defects."
+description: "Chi route composition. Use when a change adds, mounts, moves, or reviews routes, middleware, fallbacks, CORS, or bounded route identity."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Chi
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct the affected route nodes from the composition root, generated and manual routes, middleware, fallbacks, and bounded labels; place them on one route tree, then reason about scope and order.
+A chi server is one **route tree**. Middleware order and scope are observable
+semantics.
 
-## Choose The Branch
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For every changed route, mount, middleware, fallback, or route label, build:
 
-- **Decision** — select when transport policy is absent or changing. Load the [decision selector](references/decision/index.md) only for a pressure that can change the result. Complete when shared Decision dispositions cover every affected route node, forced consequence, and focused proof.
-- **Review** — select when changed chi code must conform to accepted transport policy. Load the [review selector](references/review/index.md) for the changed runtime judgment. Complete when the shared finding envelope accounts for every affected node; name any outside boundary or proof blocker with the smallest safe correction and proof. Missing policy returns to the named transport Decision owner.
+`RouteNode{node, owner, parent_scope, before_after_order, handler_boundary, fallback, label_source, proof}`
 
-Hand resource or status semantics to `go-api-contract` and system topology to `go-system-architecture`.
+Emit each affected `RouteNode` inside the returned Decision or Review result.
+When rejecting a proposed node, disposition it and emit the accepted replacement
+record. A prose conclusion that does not fill every field is incomplete.
+
+Start at `internal/infra/http/router.go`. Follow generated and manual
+composition until each affected request reaches an operation handler or the
+router fallback. `internal/infra/http/middleware_access_log.go` owns route
+identity. No affected node or alternate serving path may remain implicit.
+
+Reject a second router that bypasses the existing hardened or generated path.
+The `proof` field names a route-tree walk for topology and an explicit order
+oracle: cite the current chain-order proof when order is unchanged, or use a
+before/after recorder when order changes. A status-only test proves neither.
+
+Complete when every changed node appears in the returned records with one owner
+and position, no parallel serving path remains, and the proof fails for the
+wrong topology, order, fallback, or label source. Load the [reference
+selector](references/index.md) only for the changed node pressure.

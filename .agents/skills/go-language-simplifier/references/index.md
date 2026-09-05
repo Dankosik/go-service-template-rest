@@ -1,15 +1,10 @@
 # Reference Selector
 
-Use broad false-simplification triage only when no narrower selector owns the pressure.
+Load one. Neither is needed when the reader's difficulty is nesting, naming, or
+comment density and the change is plainly behavior-preserving — `SKILL.md`
+owns that judgment, and mandatory lint owns the mechanical half.
 
-| Pressure | Load |
-| --- | --- |
-| Broad cleanup, DRY, deduplication, or readability claim spans several local axes. | [false-simplification-patterns.md](false-simplification-patterns.md) |
-| Helpers, wrappers, interfaces, callbacks, option bags, or helper buckets changed. | [helper-extraction-economics.md](helper-extraction-economics.md) |
-| Stable same-package policy is repeated, drifting, or moved away from its local owner. | [source-of-truth-extraction.md](source-of-truth-extraction.md) |
-| Branches, sentinels, named returns, defer, cleanup, rollback, audit, or phase order changed. | [control-flow-and-temporal-coupling.md](control-flow-and-temporal-coupling.md) |
-| Predicates, negatives, flags, modes, same-typed args, or option decoding obscure a decision. | [predicate-condition-and-mode-clarity.md](predicate-condition-and-mode-clarity.md) |
-| Error handling was deduplicated, normalized, mapped, logged, joined, or reordered. | [error-path-simplification.md](error-path-simplification.md) |
-| Tables, helpers, assertions, fixtures, or terse failures obscure test proof intent. | [test-readability-and-proof-shape.md](test-readability-and-proof-shape.md) |
-| Names or vocabulary obscure role, phase, ownership, or policy with merge risk. | [naming-and-intent-exposure.md](naming-and-intent-exposure.md) |
-| Cleanup touches alias isolation, nil/empty, receivers, zero values, lifetime, cleanup, or stdlib contracts. | [go-semantic-stop-signs.md](go-semantic-stop-signs.md) |
+| Pressure | Load | Required effect |
+| --- | --- | --- |
+| A helper, wrapper, interface, callback, or flag parameter was extracted, inlined, or generalized. | [indirection-economics.md](indirection-economics.md) | Price the interface against what it hides, and keep the single-use helper that is the only record of a constraint instead of inlining it on caller count. |
+| Branches, error paths, response paths, or cleanup were merged, or the goal is deduplication. | [behavior-preserving-boundary.md](behavior-preserving-boundary.md) | Name the observable distinction the merge collapses before calling it simpler, including the ones this repository's lint gate does not catch. |

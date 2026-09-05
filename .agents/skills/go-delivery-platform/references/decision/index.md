@@ -2,13 +2,10 @@
 
 | Symptom | Load | Decision it sharpens |
 | --- | --- | --- |
-| CI tiers, required jobs, skipped/cancelled checks, local parity, nightly, or preflight evidence | [ci-gate-matrix-and-blocking-policy.md](ci-gate-matrix-and-blocking-policy.md) | Choose exact jobs, commands, and fail-closed status semantics. |
-| Protected branches, rulesets, reviews, CODEOWNERS, bypass, conversations, or merge queue | [branch-protection-and-pr-governance.md](branch-protection-and-pr-governance.md) | Choose enforceable governance and drift guards. |
-| OpenAPI/sqlc generation, compatibility drift, and base-reference behavior | [codegen-contract-and-generated-drift.md](codegen-contract-and-generated-drift.md) | Choose generator-backed drift and compatibility gates. |
-| Schema/data movement, rollback class, mixed versions, backfill, or migrator ownership | [migration-release-safety.md](migration-release-safety.md) | Choose rehearsal, compatibility, sequencing, and rollback controls. |
-| Dockerfile/runtime contents, non-root/minimal image, Trivy, or Kubernetes security context when in scope | [container-runtime-hardening.md](container-runtime-hardening.md) | Choose the digest-pinned runtime and scan baseline. |
-| Railway health, draining, restart, placement, region/network, capacity, or config drift | [railway-release-runtime-policy.md](railway-release-runtime-policy.md) | Choose repository-reviewable managed-runtime evidence. |
-| SBOM, provenance, signing, OIDC, GHCR, or verifier-facing release trust | [supply-chain-provenance-and-sbom.md](supply-chain-provenance-and-sbom.md) | Choose digest-bound artifacts, permissions, and verification proof. |
-| Temporary bypass, suppression, override, accepted risk, or rollback exception | [exception-governance.md](exception-governance.md) | Require owner, expiry, compensation, auditability, and reopen conditions. |
+| Required status checks, branch protection or ruleset contexts, merge queue, change-scope skips, or a green check that never compared anything | [required-checks-and-change-scope.md](required-checks-and-change-scope.md) | Require the one aggregate context instead of a job list that change scope can strand. |
+| A release carrying a schema migration: sequencing, rollback class, backfill, mixed-version safety, or migrator ownership | [migration-rollout-window.md](migration-rollout-window.md) | Size the window in which the previous version runs against the new schema. |
+| GHCR publish, `workflow_run` triggers, signing, attestation, SBOM binding, workflow permissions, or a SLSA claim | [release-publication-trust.md](release-publication-trust.md) | Keep each trust and freshness clause load-bearing and bind proof to the digest. |
+
+Containers, generated-artifact drift, and Railway runtime knobs have no reference here: `build/docker/Dockerfile`, the `openapi-*` and `sqlc-check` Makefile targets, and `railway.toml` are short, current, and self-describing. Read them.
 
 Prefer live repository and managed-platform configuration as source-of-truth evidence; references sharpen a triggered decision but do not replace current facts.

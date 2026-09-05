@@ -1,51 +1,60 @@
 # Flaky Reproduction Controls For Go
 
-## Behavior Change Thesis
-When loaded for intermittent Go test failures, this file makes the model isolate repetition, order, race, CPU, and environment variables instead of mixing knobs or claiming a flake is fixed from one lucky pass.
+## Load When
 
-## When To Load
-Load when a Go test fails only under repetition, CI, `-race`, `-shuffle`, a specific CPU count, slower machines, environment differences, or wider package scope.
+Load when a Go test fails only under repetition, on CI, under `-race`,
+`-shuffle`, a specific `-cpu`, or in wider package scope.
 
-## Decision Rubric
-- Change one diagnostic variable at a time until the failure class is named.
-- Use narrow single-test repetition for local lifecycle, timing, and shared-state suspicion.
-- Use wider `-run` or package scope only when order dependence or leaked package state is the hypothesis.
-- Treat `-shuffle` as meaningful only when multiple tests or subtests remain in scope; replay the failing seed before editing.
-- Keep `-race`, `-cpu`, env, and shuffle experiments separate unless a later hypothesis requires a combined stress shape.
-- Record frequency as data, for example `7/100`, not as "sometimes".
+A test that is flaky because it sleeps on wall-clock time is a test-design
+problem, not a reproduction problem: `go-test-implementation` selects time
+controls supported by the target module and suitable for its proving layer.
+Resolve that deterministic control before widening any timeout here.
 
-## Imitate
+## Decide
 
-```bash
-go test ./internal/orders -run '^TestCheckout$' -count=100 -v
-go test ./internal/orders -run '^TestCheckout$' -race -count=50 -v
-go test ./internal/orders -run '^TestCheckout$' -cpu=1,4 -count=50 -v
-go test ./internal/orders -run '^(TestCheckout|TestCacheRefresh)$' -shuffle=on -count=50 -v
-go test ./internal/orders -run '^(TestCheckout|TestCacheRefresh)$' -shuffle=1700000000000000000 -count=1 -v
-```
+- **Read the recorded failure before reproducing it.** CI and `gotestsum`
+  preserve per-test output and ordering, which usually names the failure class
+  before a single command is rerun.
 
-Copy the separation: each command tests a different failure class, and the failing shuffle seed gets replayed as its own reproducer.
+- **Move one variable per command**, and name the class before combining: `-count`
+  for repetition, `-race` for shared state, `-cpu` for scheduler sensitivity,
+  `-shuffle` for order dependence. A combined stress shape is a later step for a
+  hypothesis that needs it, not the opening move.
+
+- **`-shuffle` only means something when several tests remain in scope.** Under a
+  narrow `-run`, it shuffles nothing worth shuffling. When it fails, the seed it
+  prints is the reproducer — replay `-shuffle=<seed> -count=1` before editing
+  anything, because the next `-shuffle=on` run will not be the same order.
+
+- **Repeated test commands take `-vet=off`** here: mandatory lint owns `govet` for
+  the current tree, so leaving default vet on re-lints the package on every one of
+  100 iterations. The repository's own flake gate is
+  a bounded `go test -vet=off -count=5 -shuffle=on <scope>` run; the
+  race gate is `ALLOW_HEAVY=1 make test-race`.
+
+- **Integration-tagged flakes have pinned commands.** `make test-messaging-race`
+  and `make test-outbox-race` run `-p=1 -count=1 -race -tags=integration` over a
+  fixed `-run` set. If the flaky test is in that set, reproduce with that target's
+  shape — `-p=1` is load-bearing, because those packages share a database and a
+  broker.
+
+- **Record frequency as data** — `7/100`, with the command that produced it.
+  "Sometimes" cannot be compared against the same number after the fix, which is
+  the only evidence that a probabilistic failure got rarer rather than luckier.
 
 ## Reject
 
-```bash
-go test ./internal/orders -run '^TestCheckout$' -shuffle=on -race -cpu=1,4 -count=100 -v
-```
+Reject a single green local run as evidence against a CI-only flake, and reject
+the same run count after the fix as evidence it is gone: a 1-in-20 failure passes
+19 consecutive runs routinely. Match the repetition to the observed rate, or state
+the residual risk in those terms.
 
-This mixes order, race, and scheduler variables while `-run` may be too narrow for shuffle to prove package-order leakage.
+Reject skipping or deleting the test before deciding whether the flake is
+test-only or a real production race that the test merely exposes intermittently.
 
-```text
-Fixed: CI passed once after increasing the sleep.
-```
+## Prove
 
-This does not name the failure class, preserve the reproducer, or prove the old race/timing/order condition is gone.
-
-## Agent Traps
-- Treating a single local pass as evidence against a CI flake.
-- Forgetting to capture or replay the `-shuffle` seed.
-- Running a package-wide command first and losing the smallest failing scope.
-- Reporting only the final failure summary instead of the first distinct failing stack or assertion.
-- Disabling the test before proving whether the behavior is test-only or production-relevant.
-
-## Validation Shape
-Capture the exact command, working directory, package/test selector, relevant env, `-count`, `-shuffle` seed, `-race`, `-cpu`, timeout, first failure signal, and failure frequency. After the fix, rerun the same defect-shaped command, then add only the broader package or CI-shaped smoke that increases confidence for the named failure class.
+Capture the exact command, package and test selector, `-count`, `-race`, `-cpu`,
+`-shuffle` seed, tags, relevant env, the first distinct failing stack or
+assertion rather than the run summary, and the failure frequency. After the fix,
+rerun that same command shape and report the new frequency against the old one.

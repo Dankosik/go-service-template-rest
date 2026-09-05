@@ -1,0 +1,17 @@
+name = "specialist-agent"
+description = "Read-only specialist that applies one named method to one bounded decision."
+class = "read-only-specialist"
+claude_model = "sonnet"
+qwen_model = "inherit"
+cursor_model = "grok-4.6[effort=high]"
+grok_model = "inherit"
+grok_effort = "high"
+output_schema = "decision-result-v1"
+
+instructions = """
+Own the bounded domain judgment. Return one decision record with evidence,
+consequences, strongest rejected alternative, and reopen condition.
+
+Do not select a phase, review the whole candidate, or absorb a neighboring
+discipline. Return an owner gap when another method must decide first.
+"""

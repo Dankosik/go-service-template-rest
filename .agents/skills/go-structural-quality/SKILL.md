@@ -1,10 +1,31 @@
 ---
 name: go-structural-quality
-description: "Structural quality: Use for harsh whole-diff review or cross-file overbuild. Own abstraction cost, mixed responsibility, and missed deletion; Skip Go semantics, local readability, or architecture."
+description: "Deletion test. Use when a Go diff may overbuild, split responsibility, or add parallel structure and needs an abstraction-cost or collapse decision."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Structural Quality
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct every changed structural path from the whole diff, current responsibility owners, callers, duplicate execution, compatibility, and stale surfaces; test each abstraction and path for deletion or collapse first. Complete when the shared finding envelope accounts for every retained structure and deletion opportunity, naming any outside boundary or proof blocker with focused proof; each retained cost must be earned by present complexity. Missing placement or behavior policy returns to its named Decision owner.
+Judge whole-diff structure with a **deletion test** and one realistic change
+simulation.
 
-Hand accepted placement violations to `go-implementation-ownership`, Go semantics to `go-idiomatic`, and local behavior-preserving readability to `go-language-simplifier`.
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For every added abstraction, layer, file, compatibility shim, or parallel path,
+record its present responsibility, where its complexity returns if deleted,
+and which owners and files the next realistic change would touch with and
+without it.
+
+An interface with one adapter is not justified merely by hiding the adapter; it
+must reduce current complexity or protect a real dependency direction. A
+one-use helper survives when it uniquely carries a protocol or ownership
+constraint. Split responsibility, stale surfaces, and parallel execution paths
+remain collapse candidates.
+
+A Decision selects the least structure that owns the current responsibility. A
+Review tries to delete or collapse each candidate and rejects it only when the
+simulation exposes higher locality or deletion cost.
+
+Complete when every added structure passes both tests, each responsibility has
+one owner, and no superseded execution path remains.

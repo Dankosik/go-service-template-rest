@@ -2,11 +2,8 @@
 
 | Symptom | Load |
 | --- | --- |
-| Required CI tiers, status semantics, local parity, merge/release blocking, or cancelled/skipped evidence changes. | [ci-gate-matrix-and-blocking-policy.md](../decision/ci-gate-matrix-and-blocking-policy.md) |
-| Branch protection, required reviews/checks, CODEOWNERS, bypass actors, rulesets, or merge queue changes. | [branch-protection-and-pr-governance.md](../decision/branch-protection-and-pr-governance.md) |
-| OpenAPI/sqlc generation, compatibility checks, or tracked output changes. | [codegen-contract-and-generated-drift.md](../decision/codegen-contract-and-generated-drift.md) |
-| Migration rehearsal, rollback class, mixed-version windows, backfill, sequencing, or migrator ownership changes. | [migration-release-safety.md](../decision/migration-release-safety.md) |
-| Dockerfile/image contents, runtime user, secrets, digest pinning, scan gates, or runtime hardening changes. | [container-runtime-hardening.md](../decision/container-runtime-hardening.md) |
-| Railway placement, health, overlap/draining, restart, capacity, promotion, rollback, or config drift changes. | [railway-release-runtime-policy.md](../decision/railway-release-runtime-policy.md) |
-| A required gate, scan, migration, protection, or rollout control is waived or downgraded. | [exception-governance.md](../decision/exception-governance.md) |
-| Publish permissions, immutable digests, SBOM, provenance, signing, attestations, or verification change. | [supply-chain-provenance-and-sbom.md](../decision/supply-chain-provenance-and-sbom.md) |
+| Required contexts, branch protection or rulesets, merge queue, job conditions, or change-scope routing changes. | [required-checks-and-change-scope.md](../decision/required-checks-and-change-scope.md) |
+| Migration files, `preDeployCommand`, overlap/draining windows, backfill, or rollback-class changes. | [migration-rollout-window.md](../decision/migration-rollout-window.md) |
+| Publish conditions, `workflow_run` guards, workflow permissions, signing, attestation, or SBOM changes. | [release-publication-trust.md](../decision/release-publication-trust.md) |
+
+A changed Dockerfile, generated artifact, or `railway.toml` knob is reviewed against the file itself and the gate that enforces it; no reference stands between them.

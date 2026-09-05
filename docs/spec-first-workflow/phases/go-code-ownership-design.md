@@ -1,39 +1,30 @@
 # Go Code / Ownership Design
 
-Give each changed responsibility one clear, evidence-backed owner, then place the selected system mechanism in Go packages and files while preserving accepted behavior and system decisions. Make every affected execution path reviewer-traceable.
+Use when package or file ownership is not mechanically forced. Own the exact
+responsibility map and inverse file map without writing implementation.
 
-## Read When
+Apply `go-implementation-ownership` to the ready behavior/design and current
+code, callers, composition roots, generated sources, tests, and replacement
+paths. Return [Ownership Map V1](../interfaces/ownership-map-v1.md) without
+function-body or statement-level design.
 
-- Planning cannot name the owning package/file, dependency direction, generated/manual boundary, cleanup owner, or test owner.
-- A substantial change could enlarge a mixed-responsibility file or introduce an interface/helper/dependency.
-- Technical review found ownership or placement ambiguity.
+Change cost: For a new abstraction or responsibility split, apply
+`go-structural-quality` to the proposed ownership map.
 
-## Inputs
-
-- Ready spec and system/integration design when present.
-- `docs/repo-architecture.md` and current package/file responsibilities.
-
-## Method
-
-Start from every selected system decision that enters Go. Decompose its Go manifestations — component responsibility, boundary adapter, transformation, failure path, composition point, authority change, and proof carrier — into the complete changed-responsibility set. Add each required responsibility exactly once and give it one owner; one system decision may produce several responsibilities. Reconcile that set against current files and symbols, callers, siblings, composition roots, generated sources, tests, and replaced or compatibility paths. Build the per-responsibility ownership record below from that evidence. Validate every recorded decision against the actual Go import graph, `internal` visibility, generated/manual boundary, and acyclicity.
-
-## Outputs
-
-A compact ownership section in `design/overview.md` or `design/go-code-ownership.md`, grouped by affected responsibility:
-
-- owner/placement: implementation owner; current file/symbol evidence; why that owner stays or changes; when a real placement fork exists, each viable alternative owner/location and why it is rejected; exact package/file placement; and what stays, moves, is added, or is removed. Only when exact file selection depends on implementation-local facts, give the owning surface, deterministic placement rule, and inspection bounds instead;
-- dependency/composition: dependency direction, composition boundary, and the owner and minimum required shape of each introduced or changed cross-package type, error, mapping, constructor, or exported symbol that planning would otherwise choose;
-- authority: generated source of truth and its hand-written change or regeneration point;
-- concrete types by default; when a present consumer must substitute implementations or direct coupling would violate dependency direction, use the smallest interface in the consumer package and name its composition-root wiring;
-- cleanup: keep/split rationale plus the disposition of each replaced or compatibility path and every now-obsolete caller, wiring/registration, test, config, generated input/artifact, and doc; if retained, name the present need, owner, and removal condition;
-- test and proof: test owner and proof entrypoint.
-
-Keep owner-specific behavior with its current owner and symbols unexported. Add the smallest new surface or seam only when a present responsibility cannot remain there without violating required dependency direction or the generated/manual boundary. Prefer explicit control flow, the Go standard library, and established repository patterns. Expected future reuse, line count, test convenience, generic helper naming, and one-product factories do not meet that admission rule.
+Refinement: When implementation evidence improves placement, update the
+affected ownership-map entries and recheck only invalidated decisions
+and proof; preserve unaffected boundaries.
 
 ## Review
 
-Apply focused root self-review with system design before planning. Use independent [Technical Design Review](technical-design-review.md) only when the shared review trigger applies.
+Use root self-review for unambiguous placement. Load [Go Ownership
+Review](../rubrics/go-ownership-review.md) only when its conditional trigger is
+present. A broader shared [Review](../shared/review.md) routes through Technical
+Design Review and consumes any current panel receipts.
 
-## Stop Rule
-
-This phase completes Technical Design when the fixed System / Integration Design still satisfies its Stop Rule; accepted behavior is preserved; every required Go manifestation of each selected system decision appears exactly once in the complete changed-responsibility set and has one evidence-backed owner; and every changed responsibility has an evidence-backed package/file placement or deterministic implementation-local rule, dependency/composition disposition, generated/manual authority and hand-written change or regeneration point, cleanup disposition, and test/proof owner and entrypoint. Every system mechanism, boundary, authority, failure policy, and Go responsibility owner needed downstream is fixed. The resulting import graph is validated as acyclic; planning has no material placement, dependency/composition, generated/manual, cleanup, test/proof ownership or entrypoint, or exported-surface decision left to make; and any triggered technical-design review has returned `PASS` or dispositioned `CONCERNS`. Reopen system design only when placement cannot preserve the selected mechanism, runtime behavior, or source of truth; reopen specification only when placement cannot preserve scope or contract.
+Done when every responsibility has one owner, every changed file one present
+reason, the import graph is acyclic, and Planning can preserve placement without
+choosing ownership, dependency/composition, generated authority, lifecycle,
+cleanup, proof location, or exported surface. Reopen System Design when
+placement cannot preserve mechanism/truth; reopen Specification when it cannot
+preserve observable behavior.
