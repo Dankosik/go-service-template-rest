@@ -2,9 +2,10 @@
 
 Canonical proof semantics for correctness, readiness, and completion claims.
 
-Evidence qualifies only when it is current, matches the claim's scope, and
-would fail if the claimed behavior or required production wiring were absent or
-wrong. Prefer one exercise of the observable path. Split proof qualifies only
+Evidence of existing or completed behavior qualifies only when it is current,
+matches the claim's scope, and would fail if the claimed behavior or required
+production wiring were absent or wrong. Prefer one exercise of the observable
+path. Split proof qualifies only
 when its owner and wiring checks together establish that path. Status, file or
 symbol presence, unrelated checks, and implementation summaries do not qualify
 alone.
@@ -14,6 +15,23 @@ requester policy, observed runtime settings, diagnostic limits, and agent
 assumptions. Prior artifact acceptance does not establish that attribution.
 Correct a misattributed constraint through its decision owner before designing
 or buying proof around it; preserve actual safety and authority requirements.
+
+## Design Proof
+
+Interpret domain proof requirements against the claim and active phase.
+Specification closes observable behavior and its nearest feasible falsifier;
+Technical Design supports the selected mechanism, invariant enforcement, and
+proof feasibility; Test Design closes an executable scenario, deterministic
+controls, independent oracle, and proving boundary. Planned proof of new
+behavior does not require completed product tests before Implementation.
+
+Claims about existing behavior, including deliberately unchanged behavior,
+still require current evidence. Proposed commands and design rationale do not
+establish runtime behavior or completed acceptance. Required feasibility probes
+and evidence needed to choose a mechanism remain mandatory before the affected
+design is ready; an unavailable required input stays a gap with its owner.
+
+## Execution Evidence
 
 Attach commit or tree identity only across a checkout or integration
 boundary; the current bounded diff is enough for local work. Reuse a receipt

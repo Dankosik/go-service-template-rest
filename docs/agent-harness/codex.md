@@ -153,7 +153,8 @@ Send only the changed dependency, question, status, or identity: use a direct
 message for an active agent and a follow-up to resume an idle one. Send sibling
 dependencies to the affected sibling and inform the parent when they change a
 shared assumption or acceptance state. Apply shared Context And Lifetime before
-reusing an identity; send only the delta for same-brief corrections.
+reusing an identity; send only the delta for permitted corrections or evidence
+follow-ups.
 For a sequential Lead reassignment admitted by the Planning Ledger Contract,
 use a follow-up with the new packet and current candidate/input locators.
 Re-evaluate model and effort for the new unit under Models; reuse the native

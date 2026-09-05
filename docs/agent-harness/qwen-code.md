@@ -46,13 +46,13 @@ consequence requires it. There is no per-agent reasoning-effort field; lanes
 inherit session effort. Preserve a user-selected model.
 
 Apply [Context And Lifetime](../agent-harness.md#context-and-lifetime) for
-freshness and ledger-controlled Lead reuse. A new small task starts a fresh
+freshness and permitted reuse. A new lane starts a fresh
 named agent without `subagent_type: "fork"` or continuation. Pass the
 [delegation interface](../agent-harness.md#delegation-interface) through native
 fields where available and supply facts absent from the named canonical
 inputs. Retain the returned `task_id`; `list_agents` identifies retained
-background agents, and `send_message` with that `task_id` continues related
-work or a same-brief review correction. A completed background agent may
+background agents, and `send_message` with that `task_id` continues work admitted
+by Context And Lifetime or Review. A completed background agent may
 resume from its resident runtime or retained transcript. Foreground nested
 results return inline; if their runtime has no retained continuation, return
 that exact gap to the parent rather than inventing a resume field.

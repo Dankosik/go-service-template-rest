@@ -82,9 +82,9 @@ identity or rejected required spawn is a carrier failure, not a
 completed lane.
 
 Apply shared [Context And Lifetime](../agent-harness.md#context-and-lifetime).
-New execution/evidence tasks and initial independent review omit `resume_from`.
-For same-brief repair or a permitted review recheck, resume only a completed
-source from the same parent and agent type. This continues its transcript,
+New execution/evidence lanes and initial independent review omit `resume_from`.
+For continuation admitted by Context And Lifetime or Review, resume only a
+completed source from the same parent and agent type. This continues its transcript,
 model, and cwd; it may return a new child ID, which replaces the prior locator.
 After a parent replacement, start a fresh bounded child if that lineage is no
 longer resumable. Native background spawning may overlap fixed-candidate review

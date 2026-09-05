@@ -26,4 +26,7 @@ Load this when approved behavior must become proof obligations: which level prov
 - Branch coverage of an implementation is not proof of the invariant the branch was written for.
 
 ## Prove
-Each obligation reads: risk → selected level → rejected level and its gap → observable → reopen condition. A missing part means the obligation is not yet implementation-ready.
+Each obligation reads: risk → selected level → observable → reopen condition.
+For a nontrivial level choice, also name the rejected level and its evidence
+gap. Missing a required part prevents readiness; an obvious level choice needs
+no invented alternative.

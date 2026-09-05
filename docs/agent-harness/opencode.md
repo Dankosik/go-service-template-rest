@@ -78,9 +78,9 @@ interfaces, and assumptions. Consume and integrate results serially under
 the Lead.
 
 Apply shared [Context And Lifetime](../agent-harness.md#context-and-lifetime).
-New execution/evidence tasks and initial independent review omit `task_id`.
-Use a current returned `task_id` only for same-brief repair, shared Review's
-permitted delta recheck, or an admitted Lead reassignment. A missing identity
+New execution/evidence lanes and initial independent review omit `task_id`.
+Use a current returned `task_id` only for continuation admitted by Context And
+Lifetime or Review. A missing identity
 is a carrier failure, not a completed lane.
 Spawned children do not receive `question`. The Orchestrator primary may use
 `question` for an `AGENTS.md` user-owned decision. Do not wait on a child

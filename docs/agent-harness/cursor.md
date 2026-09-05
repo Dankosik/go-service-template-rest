@@ -58,10 +58,10 @@ mutable owners and exclusive locks. Consume and integrate results serially
 under the Lead.
 
 Apply shared [Context And Lifetime](../agent-harness.md#context-and-lifetime).
-New execution/evidence tasks and initial independent review omit `resume`;
+New execution/evidence lanes and initial independent review omit `resume`;
 do not fork the parent's conversation. Resume a returned agent ID only for
-same-brief repair, shared Review's permitted delta recheck, or an admitted Lead
-reassignment. A missing identity is a carrier failure, not a completed lane.
+continuation admitted by Context And Lifetime or Review. A missing identity
+is a carrier failure, not a completed lane.
 Shared Nested Execution applies within Cursor's two-level limit; additional
 worker subsets return to the Lead. Use native background Task when review and
 non-mutating checks should overlap; acceptance still waits for required results.
