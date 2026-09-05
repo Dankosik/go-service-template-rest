@@ -1,16 +1,10 @@
 # Indirection Economics
 
-Behavior Change Thesis: this file makes the model price a helper by what its
-interface costs against what it hides, so it stops recommending the inline of a
-single-use helper that is the only place a non-obvious constraint is written
-down — the mistake `SKILL.md`'s own "deletion beats abstraction" invites and no
-configured linter catches.
-
-## When To Load
+## Load When
 Load this when a diff extracts, inlines, generalizes, or flag-parameterizes a
 helper, wrapper, interface, callback, or option shape.
 
-## Decision Rubric
+## Decide
 - Price the interface, not the line count. A helper earns its place when what a
   caller must learn to use it — name, parameters, results, and the contract it
   implies — is smaller than what it removes from the call site. Shallow
@@ -39,7 +33,7 @@ past 30 lines; `revive` reports unused parameters.
 which behavior was selected and invalid combinations stay callable. Split on the
 stable outcomes instead, or keep the branches local.
 
-## Validation Shape
+## Prove
 Call-site clarity needs a targeted build and reviewer inspection of the corrected
 callers. When the change moves branch selection into or out of a helper, the
 proof is one case per behavior class, not the happy path.

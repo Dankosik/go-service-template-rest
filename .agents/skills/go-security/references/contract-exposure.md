@@ -1,20 +1,11 @@
 # Contract Exposure
 
-## When To Load
+## Load When
 
 Load this when an operation is added, its `security:` changes, or a surface
 becomes reachable by a caller class it was not serving before.
 
-## Behavior Change Thesis
-
-Without this file, a new operation is treated as public until someone asks for
-authentication, and `security: []` reads as "no security decision yet". This
-contract inverts that default: `api/openapi/service.yaml` declares
-`security: [{bearerAuth: []}]` at the top level, so every operation is protected
-unless it opts out — and `security: []` *is* the opt-out. An unreviewed one
-ships an unauthenticated endpoint that the diff shows as two characters.
-
-## Decision Rubric
+## Decide
 
 - The global requirement is the default. The decision to record for
   `security: []` is why this operation is reachable without a credential, not
@@ -32,7 +23,7 @@ ships an unauthenticated endpoint that the diff shows as two characters.
   This file owns whether the operation is protected at all.
 - The authentication surface is a removable template profile. The
   `# profile:authn-oidc-jwt:start` and `:end` markers are stripped by
-  `scripts/init-module.sh` and gated by `scripts/ci/template-init-check.sh`, so
+  `scripts/init-module.sh` and gated by `scripts/ci/init-module-contract-check.sh`, so
   an edit inside them has to leave both the kept and the stripped tree valid.
 - Browser reachability is a decision, not a default. This service answers JSON
   behind an edge: `SecurityHeaders` sets `nosniff` and nothing else, and the
@@ -53,7 +44,7 @@ ships an unauthenticated endpoint that the diff shows as two characters.
 - Treating a path prefix as the boundary: `/admin` and `/internal` are strings.
   Reachability is what the contract declares and the router serves.
 
-## Validation Shape
+## Prove
 
 `make openapi-check` runs the contract tests, including the security-decision
 sweep above. The runtime side is `authn_router_test.go`
