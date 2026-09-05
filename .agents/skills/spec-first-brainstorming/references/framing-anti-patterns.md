@@ -1,15 +1,12 @@
 # Framing Anti-Patterns
 
-## Behavior Change Thesis
-When loaded for the symptom "the draft starts smuggling downstream design, task breakdown, or stakeholder theater into brainstorming," this file makes the model remove or reframe the drift while preserving the behavior concern the drift hints at.
-
-## When To Load
+## Load When
 Load this when the brainstorming output starts smuggling architecture/API/data/security/reliability decisions, task breakdowns, implementation design, or vague stakeholder theater into the frame. When a narrower positive reference matches, load that instead — this file is smell triage.
 
 ## The Move
-Preserve the real behavior concern while stripping the unapproved mechanism the user proposed. Remove task ledgers, schema and API choices, rollout plans, and telemetry names from brainstorming output; replace stakeholder theater with a named actor, behavior, and success signal. A "non-goal" that is actually a planning-critical unknown routes as an open question instead. When the frame cannot be rescued without product or repository evidence, mark readiness `fail`.
+Preserve the real behavior concern while stripping the unapproved mechanism the user proposed. Remove task ledgers, schema and API choices, rollout plans, and telemetry names from brainstorming output; replace stakeholder theater with a named actor, behavior, and success signal. A "non-goal" that is actually a planning-critical unknown routes to its decision owner instead; it becomes a user question only when it survives [Decision Ownership](../../../../AGENTS.md#decision-ownership). When the frame cannot be rescued without product or repository evidence, mark readiness `fail` and return the missing evidence to the parent.
 
-## Imitate
+## Inspect
 Input:
 ```text
 We need Redis-backed dedupe middleware for webhook delivery.

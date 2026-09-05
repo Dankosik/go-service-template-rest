@@ -1,9 +1,6 @@
 # Acceptance And Rejection Semantics
 
-## Behavior Change Thesis
-When loaded for symptom "the diff changed whether input is accepted, rejected, ignored, or already applied", this file makes the model preserve the exact accepted meaning instead of likely mistake "comment on error style or validation placement while a hard rejection silently becomes a successful no-op."
-
-## Decision Rubric
+## Decide
 - Success must mean the operation was accepted, or was already accepted by an explicit contract. A finding exists when the diff reports success for a forbidden command, rejects an approved one, converts a rejection into a silent no-op, or changes a deterministic domain error so callers read a different business result.
 - Commands and events are different: a command may be rejected; an event is a fact whose local policy is ignore, quarantine, compensate, or investigate. Rejecting an event as though it were a command discards a fact that already happened.
 - Vocabulary that separates outcomes is part of the contract. `cancelled` and `expired`, `owner` and `creator`, `authorized` and `captured`, `available` and `reserved` are distinctions a rename can collapse; a finding needs the local rule that reads them differently, not a preference. Readability-only naming goes to `go-language-simplifier`, exported-API naming to `go-idiomatic`.
@@ -22,5 +19,5 @@ Failure: no acceptance rule named and no business consequence, so nothing distin
 ```
 Failure: a naming preference unless a local rule treats reserved credit as unavailable. With that rule cited, the same line becomes a double-spend finding.
 
-## Validation Shape
+## Prove
 The finding is complete when it classifies the result as accepted, rejected, ignored, or already applied both before and after the diff, and names the caller or audit consequence of the difference.

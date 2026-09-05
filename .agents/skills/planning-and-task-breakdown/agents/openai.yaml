@@ -1,0 +1,5 @@
+interface:
+  display_name: "Planning and Task Breakdown"
+  short_description: "Package closed decisions as a task ledger"
+policy:
+  allow_implicit_invocation: false
