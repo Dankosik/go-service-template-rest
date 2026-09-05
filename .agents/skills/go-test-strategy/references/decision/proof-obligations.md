@@ -1,12 +1,9 @@
 # Proof Obligations
 
-## Behavior Change Thesis
-When loaded for symptom "an obligation needs a proof level, scenario rows, or a traceable observable", this file makes the model pick the smallest boundary that can observe the failure instead of likely mistake "escalate to integration or e2e because the requirement feels important, and write rows whose only expectation is that an error occurs."
-
-## When To Load
+## Load When
 Load this when approved behavior must become proof obligations: which level proves a claim, which scenario rows discriminate, and what each row observes.
 
-## Decision Rubric
+## Decide
 - Escalate a level only because the lower level cannot observe the boundary. Importance and blast radius raise the proof bar, not the level.
 - Unit proves deterministic local logic; contract proves client-visible boundary behavior; integration proves a real source-of-truth boundary; e2e smoke proves composed wiring after smaller tests already own the correctness claims.
 - When the level choice is nontrivial, name the rejected level and the evidence gap it would leave. An asserted level and a chosen one read alike until the rejection is named.
@@ -16,7 +13,7 @@ Load this when approved behavior must become proof obligations: which level prov
 - `-race`, repetition, and coverage are instrumentation over a scenario, never a scenario.
 - Choose fuzz only for input-heavy logic with a cheap invariant and a seed corpus. Otherwise a named example is the stronger oracle.
 
-## Imitate
+## Inspect
 `RollbackOnPartialFailure` selects integration because the claim is about durable state; rows are all-steps-succeed, mid-step failure, and cancellation before commit; the observable is that the rows are all present or all absent. The rejected level is unit-with-a-mock-repository, and the gap is decisive: it passes with no transaction at all.
 
 ## Reject
@@ -24,9 +21,12 @@ Load this when approved behavior must become proof obligations: which level prov
 - "Happy path, invalid input, edge case" with no named data shape. Nobody can turn the row into a test without re-deciding what was meant.
 - E2E smoke offered in place of API, data, reliability, or security proof. Smoke proves wiring and cannot localize a contract break.
 
-## Agent Traps
+## Reopen
 - A row that cannot name an observable is underspecified behavior, not a future test idea. Route it back through the contract's escalation path rather than inventing the missing policy here.
 - Branch coverage of an implementation is not proof of the invariant the branch was written for.
 
-## Validation Shape
-Each obligation reads: risk → selected level → rejected level and its gap → observable → reopen condition. A missing part means the obligation is not yet implementation-ready.
+## Prove
+Each obligation reads: risk → selected level → observable → reopen condition.
+For a nontrivial level choice, also name the rejected level and its evidence
+gap. Missing a required part prevents readiness; an obvious level choice needs
+no invented alternative.

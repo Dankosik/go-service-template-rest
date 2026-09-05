@@ -1,15 +1,12 @@
 # MVP Scope And Not Doing
 
-## Behavior Change Thesis
-When loaded for symptom "the idea is growing into a large bundle or the Not Doing list is missing/toothless," this file makes the model choose a learning-shaped MVP boundary and concrete exclusions instead of calling a platform-sized bundle an MVP.
-
-## When To Load
+## Load When
 Load this when scope is expanding, the MVP boundary is vague, the user asks for "complete" coverage, or `Not Doing` would otherwise say only "advanced features."
 
 ## The Move
 Define MVP by the learning it must produce — the smallest slice that proves the core bet against the current baseline — while keeping the safety, trust, and quality behavior the idea is supposed to validate. Defer every feature that assumes the answer. Write `Not Doing` as concrete excluded functionality, audiences, integrations, and guarantees; an abstract exclusion constrains nothing, and "complete experience" quietly re-admits dashboards, notifications, imports, exports, and admin controls.
 
-## Imitate
+## Inspect
 Input: "Build undo for environment deletion with snapshots, restore API, audit timeline, and admin reporting."
 
 ```markdown

@@ -1,35 +1,42 @@
 ---
 name: orchestrator
-description: "Ledger: Use when ready; Own routing/reopens; Skip work."
+description: "Ledger routing: Use only as LEDGER_ORCHESTRATOR for a ready persisted Implementation ledger. Own routing; Skip unit work."
+metadata:
+  invocation: role
+  kind: carrier
+disable-model-invocation: true
 ---
 
 # Ledger Orchestrator
 
-Use in the Codex App only when the user launches a ready Implementation ledger
-in its saved Git project. Bind `LEDGER_ORCHESTRATOR`, start its routing Goal, and
-load the [Role Tree](../../../docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree),
-[Artifact Model](../../../docs/spec-first-workflow/shared/artifact-model.md),
-[Resume And Handoff](../../../docs/spec-first-workflow/shared/resume-and-handoff.md),
-and [native protocol](../../../docs/agent-harness.md#codex-app-native-orchestration-protocol).
+Apply the [Planning Ledger
+Contract](../../../docs/spec-first-workflow/phases/planning/ledger-contract.md)
+and the current adapter selected by [Agent
+Harness](../../../docs/agent-harness.md). Treat `tasks.md` as a dependency
+graph, not an ordered list.
 
-The one user invocation authorizes every reversible native routing decision
-through ledger exhaustion. For each fresh task, choose its model and effort from
-the fixed brief and installed controls. Create it once with a no-op role/scope
-bootstrap and no overrides, wait for exactly `READY_FOR_DISPATCH`, then send one
-technical handoff with the selected pair. If an override is unavailable,
-continue on the effective configured value and record the capability gap; never
-ask the user. Dispatch several Leads only for a ledger-proven wave.
+Only this carrier writes canonical ledger state during orchestrated execution.
+At each cycle, apply the contract's ready-frontier and capacity rules; dispatch
+every ready unit to an `acceptance-unit-lead` before waiting, using only the
+contract's permitted Lead reuse.
 
-Before reopening a Worktree unit, Handoff the same Lead and fixed candidate to
-Local and let it persist the canonical blocker there. Then dispatch one fresh
-Local `UPSTREAM_REOPEN_LEAD` per affected macro phase on an agent-selected pair,
-wait through review and repair, and route only invalidated phases or prerequisite
-units. Resume the original Local Goal when supported; after proven non-resume,
-dispatch one replacement Local Lead for the same unit and candidate.
+Process each Lead's immutable [Acceptance Result
+V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md) through
+the contract's acceptance transition. Land only `Accepted` candidates serially,
+record the Lead-owned verdict without re-adjudication, and immediately refill
+before the next landing. Route `Blocked` to recovery without landing.
 
-After every child terminal event, apply [Terminal task
-cleanup](../../../docs/agent-harness.md#terminal-task-cleanup) before routing
-again.
+Route the smallest upstream repair back to the same unit. Do not cancel
+unrelated running units when one unit reopens or discovers a lock. Apply
+[Parent-Owned Recovery](../../../docs/spec-first-workflow/shared/transition.md#parent-owned-recovery)
+to technical, proof, review, and phase gaps; repair ledger status through
+Planning when needed. Continue until the ledger is done and
+[Cleanup](../../../docs/spec-first-workflow/shared/cleanup.md) has closed
+execution-only state, or no ready unit, owner-held recovery, or authorized
+cleanup path remains.
 
-Remain routing-only. Artifacts own semantic state, Codex owns task lifecycle,
-and Git owns candidates.
+Use the adapter's full-ledger carrier only when its required native identities,
+messaging, and wait controls are callable. Otherwise return that exact carrier
+gap before dispatch; never silently contract the ledger into a different
+workflow. Do not implement unit work or keep a parallel artifact, task, or Git
+journal.

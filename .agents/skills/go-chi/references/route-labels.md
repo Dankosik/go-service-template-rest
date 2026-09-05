@@ -1,9 +1,6 @@
 # Route Labels
 
-## Behavior Change Thesis
-When loaded for symptom `a log field, metric label, span name, or http.route derived from the request path`, this file makes the model take route identity from the existing extractor after routing completes instead of likely mistake `read RoutePattern() before the handler runs, or fall back to the raw path when no template exists`.
-
-## When To Load
+## Load When
 Load when a change reads route identity, adds a signal labelled by route, or changes what an unmatched request is labelled.
 
 ## What Already Owns This

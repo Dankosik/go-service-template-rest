@@ -1,0 +1,5 @@
+interface:
+  display_name: "Idea Refine"
+  short_description: "Converge a raw idea into one direction"
+policy:
+  allow_implicit_invocation: false
