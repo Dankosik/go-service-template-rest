@@ -27,8 +27,20 @@ Structure](../../../docs/project-structure-and-module-organization.md), and
 Gates prove only what they inspect; use `.golangci.yml` and `scripts/ci/` to
 subtract mechanical coverage rather than treating green as ownership evidence.
 
+Cohesion: Group declarations that must be understood and changed together.
+Use package boundaries for dependency and API isolation, and files for
+navigable, cohesive behavior.
+
+Caller view: Exercise each new or changed package boundary from a real
+caller's perspective; make inputs, results, errors, and lifecycle
+obligations understandable without inspecting implementation details.
+
+Debug path: Walk a representative failure symptom through the proposed
+owners to the responsible rule, effect, and regression-test location.
+Reduce unrelated context needed to follow that path.
+
 For a **Decision**, apply Project Structure's placement rules and record forced
 consequences for every responsibility. For **Review**, account for every
 affected owner and competing path. Complete only when implementation can
-proceed without choosing among packages, files, sources, dependencies, or
-proof levels.
+proceed from a current, unambiguous map of packages, files, sources,
+dependencies, and proof levels.

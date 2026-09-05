@@ -8,6 +8,13 @@ code, callers, composition roots, generated sources, tests, and replacement
 paths. Return [Ownership Map V1](../interfaces/ownership-map-v1.md) without
 function-body or statement-level design.
 
+Change cost: For a new abstraction or responsibility split, apply
+`go-structural-quality` to the proposed ownership map.
+
+Refinement: When implementation evidence improves placement, update the
+affected ownership-map entries and recheck only invalidated decisions
+and proof; preserve unaffected boundaries.
+
 ## Review
 
 Use root self-review for unambiguous placement. Load [Go Ownership

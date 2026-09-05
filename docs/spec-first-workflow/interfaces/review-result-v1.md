@@ -11,9 +11,10 @@ reopen_owner: <owner or none>
 ```
 
 Each surviving finding names its anchor, outcome impact, classification,
-smallest repair/reopen owner, and evidence boundary. A blocker includes the
-attempted falsifier and its result; an unavailable falsifier is a concern with
-that gap.
+smallest repair/reopen owner, and evidence boundary. Record the attempted
+falsifier and result, or why it is unavailable. The phase adapter determines
+whether the gap blocks the result; missing mandatory proof is not downgraded
+to a concern.
 
 Implementation finding classification is closed:
 

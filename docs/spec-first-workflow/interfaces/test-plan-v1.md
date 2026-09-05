@@ -8,5 +8,10 @@ claim | wrong_observable | controlled_trigger | independent_oracle | proof_bound
 
 Each row has one disposition: sufficient existing proof, existing proof to
 strengthen, planned scenario, non-test falsifier, or authorized residual risk.
+Planned proof requires an implementable scenario and exact command or procedure,
+not test code or a passing run. Existing-proof claims require current evidence.
+Authorized residual risks record acceptance authority and a reopen condition;
+unavailable proof fields name the gap instead of inventing evidence.
+
 Merge rows only when claim, trigger, oracle, proof boundary, and reopen path are
 the same.

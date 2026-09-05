@@ -6,16 +6,16 @@ Every persisted task packet contains:
 # T<ID> — <outcome>
 
 Outcome:
-<one falsifiable independently acceptable postcondition>
+<one falsifiable independently acceptable current-to-target change>
 
 Consumes:
-- <accepted source, dependency output, or gate>
+- <repository-relative path#section, stable ID, or dependency output/gate> — <decision or output used here>
 
 Provides:
 - <stable output consumed later or final result>
 
 Boundary:
-<primary responsibility and material exclusions>
+<primary responsibility, accepted replacement/cleanup, and material exclusions>
 
 Mutable owners:
 - <semantic repository owner or bounded writable surface>
@@ -26,13 +26,20 @@ Exclusive locks:
 
 Accept when:
 - Claim: <what must be true>
-- Focused check: <smallest unit-level proof>
-- Integrated check: <proof required after landing; omit when none>
-- Observable: <expected result>
+- Focused check: <working directory + exact command, or precise procedure>
+- Integrated check: <assembled-unit candidate proof required before Accepted; omit when none>
+- Observable: <result that establishes the claim>
 
 Reopen if:
 <smallest upstream invalidation condition>
 ```
+
+Use narrow source anchors for large inputs; name the repository for a source
+outside the current checkout. Resolve variable paths deterministically and
+record an unavailable required environment or input as a dependency gate.
+
+Acceptance: Outcome, Provides, and Accept when describe successful work.
+Record inability to complete as Blocked, not as an alternative success.
 
 Mutable owners are semantic (package, contract, bootstrap), not a guessed file
 list. Exclusive locks cannot be mutated concurrently even when files differ.

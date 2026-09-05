@@ -16,16 +16,14 @@ Harness](../../../docs/agent-harness.md). Treat `tasks.md` as a dependency
 graph, not an ordered list.
 
 Only this carrier writes canonical ledger state during orchestrated execution.
-At each cycle, compute the ready frontier from packet mutable owners, exclusive
-locks, and accepted dependencies, then dispatch every ready unit to one fresh
-`acceptance-unit-lead` before waiting, within current capacity counted across
-live Leads and their in-flight children.
+At each cycle, apply the contract's ready-frontier and capacity rules; dispatch
+every ready unit to one fresh `acceptance-unit-lead` before waiting.
 
-Each Lead returns one immutable [Acceptance Result
-V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md). Land
-the candidate serially, record the Lead-owned verdict without re-adjudicating
-it, then immediately refill the frontier before landing the next waiting
-result.
+Process each Lead's immutable [Acceptance Result
+V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md) through
+the contract's acceptance transition. Land only `Accepted` candidates serially,
+record the Lead-owned verdict without re-adjudication, and immediately refill
+before the next landing. Route `Blocked` to recovery without landing.
 
 Route the smallest upstream repair back to the same unit. Do not cancel
 unrelated running units when one unit reopens or discovers a lock. Apply

@@ -9,8 +9,8 @@ Use the installed Agent and Goal controls as native authority.
   repository `tasks.md` remains the acceptance ledger.
 - Dispatch every mutually independent ready unit before waiting, within current
   capacity. One teammate owns each ready Acceptance Unit through proof, fresh
-  review, and its acceptance verdict. The team lead lands each candidate
-  serially from the
+  review, and its acceptance verdict. The team lead lands only `Accepted`
+  candidates serially from the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
   and records that verdict without re-adjudicating or implementing the unit.
 - Bind that teammate to the canonical `acceptance-unit-lead` carrier in its
