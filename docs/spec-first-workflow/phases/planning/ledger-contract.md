@@ -44,6 +44,14 @@ dependency unless the manifest change is itself independently acceptable.
 
 ## Ready Frontier
 
+Place a dependency at the first action that consumes it. Distinguish inputs for
+code preparation and local acceptance from admission for publication, deployment,
+or data effects. A reviewed schema or contract may unblock an isolated candidate
+while applied production state still gates rollout. Verify stable interfaces,
+focused proof, and mutable-owner/lock separation before selecting that split;
+merging into an auto-deploy branch is itself an effect boundary. Do not weaken
+existing packet dependencies during dispatch: Planning owns their correction.
+
 A unit is ready when every declared dependency output or gate is accepted, no
 active unit overlaps its [Task Packet](../../interfaces/task-packet-v1.md)
 mutable owners or exclusive locks, no active unit may change an accepted
@@ -66,6 +74,12 @@ Capacity is a ceiling, not a fan-out target. It counts live Leads, their
 mutable workers, and in-flight review or validation lanes. Leave spare slots
 for unlock, review, and landing. Do not fill the ceiling with Leads that still
 need children. Do not persist waves.
+
+When eligible work exceeds capacity, first reserve the lanes required to finish
+active units. Then prefer ready units whose accepted outputs unblock waiting
+work in the current ledger. Use known dependencies; do not add duration
+estimation or a scheduling phase. Dispatch other eligible work whenever
+capacity and locks permit.
 
 A discovered exclusive lock or overlapping mutable owner updates the live
 frontier immediately. Stop only units that now conflict. Do not cancel

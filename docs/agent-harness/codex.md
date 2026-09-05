@@ -1,7 +1,7 @@
 # Codex Harness Adapter
 
-Use the installed Codex schemas as native authority; callable fields outrank
-public prose.
+Use the installed Codex schemas and tool instructions as native authority;
+field availability alone does not authorize its use.
 
 ## Native Map
 
@@ -11,12 +11,22 @@ public prose.
   Use fresh collaboration subagents for phase actors. At ready Planning, bind
   the current root as Ledger Orchestrator or dispatch a fixed-unit Lead as
   Implementation requires; preserve returned identities across that transition.
-- Delegate internal work through subagents when their native controls preserve
-  the selected topology. Creating a separate app task requires an explicit user
-  request for that task; an implementation or phase-repair request alone does
-  not authorize it. Check both native authorization and capability before
-  selecting a carrier. If no authorized carrier preserves the required
-  topology, report that exact gap before dispatch.
+- Prefer collaboration subagents for bounded internal work, including work
+  across repositories, when inherited permissions and native controls preserve
+  the required topology. A repository change alone does not justify a separate
+  app task.
+- Subagents start in the parent's working context. Before working in another
+  checkout, apply [Repository
+  Boundaries](../spec-first-workflow/shared/repository-boundaries.md) and use the
+  target checkout for commands and code navigation. A path in the brief or a
+  command's working directory does not reload that project's native
+  configuration, roles, or tools.
+- Use a separate app task when required project configuration, isolation, or an
+  independent durable lifecycle cannot be provided by the current subagent
+  carrier. Creation still requires an explicit user request for that task; an
+  implementation or phase-repair request alone does not authorize it. If no
+  authorized carrier preserves the required topology, report that exact gap
+  before dispatch.
 - A Local Acceptance-Unit Lead applies Implementation's execution topology
   and uses shared `worker-agent` lanes for delegated mutable work.
 - A Worktree task is the isolation control when [Agent
@@ -67,15 +77,16 @@ reasoning. Do not select `ultra` automatically for a critical role; use it only
 when the installed harness semantics and accepted delegation topology justify
 it. After a difficult unit closes, choose effort afresh for the next unit.
 
-Project and subagent defaults use Astra so omitted model fields cannot assign
-a decision-owning role to an execution model. Override those defaults through
+Project and subagent defaults use Astra; inheritance and explicit overrides
+still require effective-model verification. Override those defaults through
 native model and effort fields only for bounded execution or evidence work:
-Luna at `low` for closed mechanical work, Terra at `medium` for ordinary
-implementation and at `high` or `xhigh` for harder implementation, and Sol at
-`high` for difficult code within an accepted contract. These models may reason
-about implementation details and propose alternatives; Astra retains decision
-and acceptance authority. Use `evidence-agent` for advisory research, not a
-lower-model `specialist-agent` or `reviewer-agent` verdict.
+`gpt-5.6-luna` at `low` for closed mechanical work, `gpt-5.6-terra` at `medium`
+for ordinary implementation and at `high` or `xhigh` for harder implementation
+within an accepted contract. These models may reason about implementation
+details and propose alternatives; Astra retains decision and acceptance
+authority. Use `evidence-agent` for advisory research, not a lower-model
+`specialist-agent` or `reviewer-agent` verdict. Do not select `gpt-5.6-sol`
+for any role, execution, evidence work, escalation, or fallback.
 
 Before delegating, Astra closes the expected result, accepted decisions,
 writable boundary, focused proof, and conditions that return work to its owner
@@ -84,19 +95,42 @@ contract conflict, or inadequate proof returns evidence and a proposal to
 Astra; it does not change semantics, weaken checks, add a fallback, or accept
 the result. Astra resolves the gap through the smallest existing owner and
 resumes the work. Routine local coding choices remain with the executor.
+Astra reviews delegated code before acceptance. For code defects or failed
+proof, Astra resolves the cause and returns a bounded correction to Terra or
+Luna, then checks the repaired candidate and required proof. A missed invariant
+raises Astra's reasoning effort under Models; once the correction is closed,
+Terra or Luna may still implement it.
 Astra may implement a coherent unit directly when delegation would cost more.
 
 This Codex policy specializes Agent Harness's capability selection: raise
-effort within Astra for decision-owning roles; model escalation applies only
-to execution and evidence work. Resolve supported values from the callable
-schema and verify the effective model before assigning decision authority.
+effort within Astra for decision-owning roles; execution and evidence work may
+escalate from Luna to Terra, with unresolved judgment returning to Astra.
+Resolve supported values from the callable schema and verify the effective
+model before assigning decision authority.
 If Astra is unavailable or its selection is rejected, retain the native
 failure and stop the dependent decision or acceptance; never silently fall
-back to Sol or Terra. Preserve an explicit user-selected model, but assigning
+back to an execution model. Preserve an explicit user-selected model, but assigning
 a non-Astra model decision authority requires an explicit exception to this
 policy. A model name in prompt prose alone is not a native selection.
 
 ## Dispatch And Coordination
+
+Choose model and effort for each brief under Models and pass the full brief
+with the selected settings on the initial call when native authority permits:
+
+- `collaboration.spawn_agent` accepts `model` and `reasoning_effort` with
+  `fork_turns: "none"` or a bounded turn count. Full-history forks (`"all"`, also
+  the default) inherit the parent's model and effort and reject overrides.
+  Independent review uses `"none"`.
+- App `create_thread` accepts `model` and `thinking`, but its tool instructions
+  permit an explicit model only when the user requested that specific model.
+  Otherwise omit `model` and choose a supported `thinking`; dispatch only when
+  the resolved default is known to satisfy the role. If required model selection
+  is unavailable, use Native Map's carrier recovery; report a capability gap
+  rather than turn technical model selection into a user decision.
+
+Do not add a default-model bootstrap turn or use a follow-up to bypass initial
+selection restrictions. Recheck this mapping when the installed tools change.
 
 Pass the [delegation interface](../agent-harness.md#delegation-interface)
 through installed structured fields where available. Retain every returned
@@ -116,11 +150,13 @@ dependencies to the affected sibling and inform the parent when they change a
 shared assumption or acceptance state. Keep same-task corrections with the same
 agent while its context remains useful; do not resend the full brief.
 
-When authorized initial task creation cannot carry the selected model or effort, bootstrap
-with role and scope only, require exact `READY_FOR_DISPATCH`, then send one
-technical follow-up using the supported structured fields. Do not repeat an
-ambiguously delivered dispatch. Use a fresh agent when a clean context or
-changed strategy is more reliable.
+For a required model or effort escalation, an existing app task supports native
+overrides through `send_message_to_thread`. Subagent `send_message` and
+`followup_task` do not: start a fresh agent with the selected settings and the
+remaining brief, accepted state, candidate, and prior evidence. Before replacing
+mutable work, stop the old lane and reconcile its edits so writable ownership
+does not overlap. Do not repeat an ambiguously delivered dispatch. Use a fresh
+agent when a clean context or changed strategy is more reliable.
 
 For isolated work, validate the actual worktree and base before accepting its
 bytes. For an `Accepted` isolated candidate, the Worktree Lead returns an

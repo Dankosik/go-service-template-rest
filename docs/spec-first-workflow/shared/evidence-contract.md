@@ -9,6 +9,12 @@ when its owner and wiring checks together establish that path. Status, file or
 symbol presence, unrelated checks, and implementation summaries do not qualify
 alone.
 
+Before adopting a hard constraint, trace its source, scope, and units. Distinguish
+requester policy, observed runtime settings, diagnostic limits, and agent
+assumptions. Prior artifact acceptance does not establish that attribution.
+Correct a misattributed constraint through its decision owner before designing
+or buying proof around it; preserve actual safety and authority requirements.
+
 Attach commit or tree identity only across a checkout or integration
 boundary; the current bounded diff is enough for local work. Reuse a receipt
 only while `candidate`, `scope`, `command`, and `environment` are unchanged and

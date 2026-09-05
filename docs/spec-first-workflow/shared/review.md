@@ -21,6 +21,11 @@ evidence boundary. The reviewer keeps that boundary read-only, attempts to
 falsify it, and returns [Review Result V1](../interfaces/review-result-v1.md).
 Review never owns repair, integration, acceptance, or movement.
 
+Check newly adopted hard constraints against the [Evidence
+Contract](evidence-contract.md), including their original source and scope.
+For mechanical identity refreshes, use [Transition](transition.md)'s unchanged
+semantic-scope rule instead of restarting an unaffected review.
+
 Use a bounded delta recheck by the same reviewer when repair addresses only
 that reviewer's anchored findings, leaves Outcome, Boundary, accepted inputs,
 interfaces, and risk surface unchanged, and introduces no unrelated behavior or
