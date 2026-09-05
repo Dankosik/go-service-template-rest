@@ -5,13 +5,14 @@ Load for GHCR publish policy, `workflow_run` triggers, signing and attestation, 
 
 ## Decide
 - Publishing is opt-in behind the `ENABLE_GHCR_PUBLISH` repository variable. A workflow that looks correct still publishes nothing until that variable is `true`; absence of images is not evidence of a broken pipeline.
-- `publish-main` triggers on `workflow_run` of `ci`, and each clause of its condition does distinct work: upstream conclusion `success`, upstream event `push`, `head_repository.full_name == github.repository` rejects fork-originated runs, `head_branch == default_branch` scopes it, and `head_sha == github.sha` requires the built commit to still be the default-branch tip. Per GitHub, `github.sha` for `workflow_run` is the last commit on the default branch — so widening this job to other branches while keeping that clause silently publishes nothing.
+- The `publish` job accepts `workflow_run` of `ci` only when upstream conclusion is `success`, upstream event is `push`, the run came from this repository, the branch is the default branch, and `head_sha == github.sha`. It then waits for the exact-SHA main CodeQL run. Tag events wait for their own full exact-SHA CI and CodeQL runs, so release integration is never path-skipped.
 - Checkout pins `ref: github.event.workflow_run.head_sha`. A privileged `workflow_run` job that checks out anything else consumes code the upstream run never gated.
-- Workflow-scope permission is `contents: read`; `packages`, `id-token`, and `attestations` writes are already scoped to the two publish jobs. This is the finished state, not a migration to perform.
-- Both publish jobs share `concurrency: migration-publication-${{ github.repository }}` with `cancel-in-progress: false`, so a publish never races a migration-bearing publish. `scripts/ci/migration-publication-check.sh` fails when either job loses that group or promotes a public alias before the history marker.
+- Workflow-scope permission is `contents: read`; `packages`, `id-token`, and `attestations` writes are scoped to the publish job.
+- The single publish job uses `concurrency: migration-publication-${{ github.repository }}` with `cancel-in-progress: false`, so migration-bearing publications never race. Both modes push only a run-scoped candidate before trust verification. The SBOM artifact and verified-digest summary complete before the history marker and public aliases, and tag promotion is the final required step.
 - Signing and attestation bind to the resolved digest, not a tag: `cosign sign` on `<repo>@<digest>`, then `actions/attest` twice — build provenance and the CycloneDX SBOM — against the same `subject-digest`. The workflow then re-verifies with `cosign verify` and `gh attestation verify` before it finishes.
 - Provenance generated inline by this repository's own workflow is SLSA v1.0 Build **L2**. L3 requires a reusable workflow that isolates build logic from the caller. Claim L2.
-- `publish-release` requires `release-preflight`; a tag publish without it has no preflight evidence.
+- A tag publish watches the tag-scoped push runs for CI and CodeQL to successful completion before checkout or publication.
+- Main promotes the immutable-source `sha-<12>` alias plus `main` only after verification; release promotes the version plus `latest`. A partial multi-tag registry failure records the digest, already-promoted tags, and failed tag before returning failure.
 
 ## Inspect
 - "Resolve the pushed tag to a digest, sign and attest that digest, and let the workflow's own `gh attestation verify` be the passing evidence." Copy the digest-as-subject habit.
@@ -25,4 +26,4 @@ Load for GHCR publish policy, `workflow_run` triggers, signing and attestation, 
 - Rebuilding an image after the scan or attestation step publishes an artifact whose digest nothing verified.
 
 ## Prove
-Use the CD run URL, the publish job conclusion, the resolved digest, the cosign and `gh attestation verify` step output, the SBOM artifact name, and the `release-preflight` conclusion for tag releases.
+Use the CD run URL, the exact-SHA CI and CodeQL run IDs, the publish job conclusion, the resolved digest, the cosign and `gh attestation verify` step output, and the SBOM artifact name.

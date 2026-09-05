@@ -10,6 +10,10 @@ tools:
   - run_shell_command
   - write_file
   - edit
+  - agent
+  - list_agents
+  - send_message
+  - task_stop
 ---
 
 Apply the fixed [Subagent Brief](../../docs/subagent-brief-template.md), its named
@@ -24,10 +28,8 @@ Return `docs/spec-first-workflow/interfaces/delegated-result-v1.md`.
 Make the smallest complete authorized change and run the named proof that is
 locally available.
 
-Delegate a strict subset only when the current adapter permits descendants, the
-subset is independently writable and provable, and the handoff reduces total
-work. Keep descendants inside the inherited scope, retain their identities, and
-integrate their results before returning.
-
-Do not expand the unit or choose missing behavior. Return the exact gap when the
-fixed brief cannot close.
+Apply shared Agent Harness Context And Lifetime and Nested Execution through
+the selected native adapter. Delegate only strict subsets when its controls
+permit them; otherwise return the subset to the nearest capable parent. Return
+the exact gap when the brief expands the unit or is missing behavior.
+Delegation never grants unit acceptance.

@@ -1,6 +1,6 @@
 ---
 name: go-idiomatic
-description: "Go semantics: Use for errors, context, nil/zero, method sets, aliasing, or resource lifetimes. Own correctness; Skip readability, structure, or ownership."
+description: "Semantic ownership. Use when errors, context, nil or zero values, method sets, aliasing, or resource lifetimes change what a Go caller observes."
 metadata:
   invocation: model
   kind: method
@@ -8,15 +8,22 @@ metadata:
 
 # Go Idiomatic
 
+Go correctness follows **semantic ownership**: who owns error identity, work
+lifetime, mutable backing storage, release, and the admissible zero state.
+
 Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For every changed boundary, build one ownership story from producer through
+caller-visible observation. Name who may inspect the error, cancel the work,
+mutate aliased state, release the resource, construct a non-zero value, and
+reach each method through the stored type.
 
-Inspect Go semantic obligations that configured linters cannot prove: error
-identity and wrapping, context cancellation, nil and zero behavior, receiver and
-method-set effects, mutable aliasing, and resource lifetime. An error is handled
-once; context bounds the work it was given; construction is explicit when the
-zero value is invalid; backing storage and release ownership remain visible.
+Configured linters prove mechanical shape, not that `%w` exposes the right
+cause, `Close` occurs in the owning scope, a clone has sufficient depth, or a
+typed nil is absent to its caller. A Decision assigns each obligation to one
+owner and observable contract. A Review tries the plausible wrong default at
+the actual caller boundary.
 
-Load the [reference selector](references/index.md) only when one of those
-contracts is observable in changed symbols or callers. Route placement to
-`go-implementation-ownership` and behavior-preserving readability to
-`go-language-simplifier`.
+Complete when every changed semantic boundary has one owner, preserved
+caller-visible behavior, and focused proof or a named gap. Load the [reference
+selector](references/index.md) only when its stated pressure is observable in
+changed symbols or callers.

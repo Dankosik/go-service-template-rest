@@ -1,6 +1,6 @@
 ---
 name: go-api-contract
-description: "API contract: Use for client-visible REST, errors, pagination, idempotency, async behavior, or compatibility. Own semantics/proof; Skip transport, security, and code."
+description: "Observable contract. Use when a REST change can alter what a deployed client distinguishes across success, error, replay, async recovery, or compatibility."
 metadata:
   invocation: model
   kind: method
@@ -8,17 +8,28 @@ metadata:
 
 # Go API Contract
 
-An API is a promise: success bodies, errors, pagination, idempotency, and
-accepted async recovery are equally observable clauses. Additive evolution
-stays in place; narrowing an accepted observable needs a version or negotiated
-migration.
+A public API is an **observable contract**: every distinction a deployed client
+can detect is a clause.
 
-Apply the [shared specialist contract](../../contracts/specialist-contract.md). Inspect
-representations, validation, errors, compatibility, idempotency, and recovery
-against `api/openapi/service.yaml`, its router, `internal/problem`, and affected
-consumers.
+`request acceptance -> success -> failure -> replay or async recovery -> compatibility -> proof`
 
-Load the [reference selector](references/index.md) only for errors,
-compatibility, retryable mutation idempotency, or async acceptance. Route
-transport composition, topology, data, trust, durable execution, and provider
-behavior to their matching owners.
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For each affected operation, build one `ObservableCell{surface, old, accepted,
+client_consequence, owner, proof}` matrix from
+`api/openapi/service.yaml`, the serving router, `internal/problem`, and affected
+consumers. Each changed cell names the old behavior, accepted behavior, client
+consequence, canonical owner, and proof.
+
+Status, body shape or absence, error code and details, default and nullability,
+pagination order and cursor, resource identity, retry outcome, and unknown
+mutation outcome are observables. A green schema diff proves syntax, not
+compatibility.
+
+A Decision fills every missing cell and its migration behavior. A Review tries
+to falsify every accepted cell through a client-visible example. Complete only
+when every changed observable has one stable clause and consumer-runnable proof
+or a named evidence gap.
+
+The scope starts at the changed published operation and closes only after every
+terminal, replay, and unknown-outcome state that a client can distinguish.
+Load the [reference selector](references/index.md) only for its stated pressure.

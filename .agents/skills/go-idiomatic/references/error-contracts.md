@@ -1,28 +1,68 @@
 # Error Contracts
 
 ## Load When
-Load when a Go review touches returned errors, sentinels, `%w` or `%v`, `errors.Is`/`As`/`AsType`/`Join`, a failure that is logged rather than returned, or cancellation errors a caller branches on.
+
+Load when code creates, wraps, joins, logs, classifies, or recovers from an
+error; defines a custom type; or attaches a cancellation cause.
 
 ## Decide
-- `wrapcheck` requires context on an error crossing a package edge; it does not judge which cause that publishes. `%w` makes the cause's identity part of this package's contract — choose it when callers must inspect that cause, and a package-owned sentinel or `%v` when the cause is diagnostic only.
-- A sentinel the caller may not import cannot be part of your contract. Where an import boundary forbids the dependency, as depguard does for the database driver outside its adapter, the adapter translates the cause into a package-owned sentinel and wraps the rest for diagnostics.
-- `errorlint` and `nilnil` already gate sentinel `==` comparison and `(nil, nil)`. The shape that survives them is log-and-swallow: `nilerr` flags a bare `return nil` in an error branch, and a log call before that return defeats it. Return the error; the caller owns where it is logged.
-- Keep `context.Canceled` and `context.DeadlineExceeded` inspectable through wrapping wherever drain, retry, or status decisions read them — `internal/background` reports a canceled task as an ordinary stop only because that identity survived.
-- Go 1.26 adds `errors.AsType`, the generic form of `errors.As` returning `(E, bool)`; prefer it when the target is an error type and the returned value reads better than an out-parameter.
+
+- Give an error one handling owner. Handle it where the layer completes a
+  recovery, fallback, retry, translation, or terminal outcome; otherwise add
+  safe operation context and return it. Logging and returning the same error is
+  not handling: the terminal boundary owns the actionable record.
+- Keep operation names static and free of runtime data. Use `failure.Op` when an
+  unclassified boundary must retain the name in its safe class chain.
+- `%w` publishes the cause's identity as package API. Use it only when callers
+  may inspect that cause. Translate an implementation-detail dependency failure
+  into a package-owned sentinel or type. `%v` is opaque only when the dependency
+  text is safe there; do not use `errors.New(err.Error())` merely to hide identity.
+- Use `errors.Is` for identity or declared equivalence and
+  `errors.AsType[E]` for a type and its fields. Both traverse wrapped and joined
+  error trees. Never classify by `Error()` text or compare a possibly wrapped
+  sentinel with `==`.
+- Use a custom error type only for caller-visible fields or behavior.
+  Add `Unwrap` only when the cause is intentionally public.
+- Use `errors.Join` for independently meaningful failures, not an ordinary
+  causal chain. A match on one branch says nothing about its siblings.
+- Preserve `context.Canceled` and `context.DeadlineExceeded` for owners that
+  branch on them, but joining `cleanupErr` is not cancellation-only. Use
+  `context.WithCancelCause` only when an observer reads the cause.
+- Panic is not error propagation. Recover only at an isolation boundary that
+  owns continuation, safe output, stack capture, and terminal reporting.
+- Feature code returns feature errors. `failure.Mapper` performs
+  transport-neutral classification; mapper order is first-match policy. HTTP
+  and gRPC boundaries own their projections, and an unpublished code fails
+  closed.
 
 ## Inspect
-`fmt.Errorf("load user: %w", pgx.ErrNoRows)` from an exported adapter method — the finding is not wrap-versus-not, it is that the driver's sentinel just became this package's API.
+
+`fmt.Errorf("load user: %w", pgx.ErrNoRows)` from an exported adapter publishes
+the driver's sentinel as package API; wrapping is not merely a style choice.
 
 ## Reject
-- "Use `%w` because it is more idiomatic" — wrapping is an API decision, and the linter that demanded it does not know which cause is safe to expose.
-- "Make this a custom error type" — a contextual opaque error is the safer contract when no caller branches on it.
+
+- "Use `%w` because it is more idiomatic": wrapping is an API decision.
+- "Log it here and return it": that duplicates the boundary record and may
+  expose a different representation of the same cause.
+- "Make this a custom error type": an opaque contextual error is smaller when
+  no caller needs fields or behavior.
+- "Retry because `net.Error.Temporary()` is true": temporary is deprecated and
+  says nothing about repeatability, effect ambiguity, or the retry budget.
 
 ## Reopen
-- Name the caller policy a finding protects: what the caller must distinguish, retry, translate, or redact.
-- Report a logged-and-swallowed failure by the success the caller wrongly observes, not by the missing log line.
-- Leave transport status mapping, retry budgets, and domain meaning to their own lanes.
+
+- Name the caller policy: distinguish, translate, redact, release, retry, or
+  terminate.
+- Route HTTP output to `go-api-contract`, gRPC status to `go-grpc`, disclosure to
+  `go-observability`, retry to `go-reliability`, and cleanup to
+  [lifetime-and-release.md](lifetime-and-release.md).
 
 ## Prove
-- Assert the exported contract with `errors.Is` or `errors.AsType` against the sentinel callers may name, never against the message string.
-- Add a negative test proving an intentionally opaque cause stays uninspectable.
-- Inject a failure on the swallowed path and assert no success-side effect occurs.
+
+- Assert the exported contract with `errors.Is` or `errors.AsType`, never a
+  message string; add a negative assertion when a cause must stay opaque.
+- For a join, prove every independently meaningful branch remains observable
+  and that a single match cannot hide a sibling failure.
+- Drive recovery through the isolation boundary and assert safe output and the
+  terminal record.
