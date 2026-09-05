@@ -1,26 +1,6 @@
 # Reference Selector
 
-Each row names a pressure where this repository's implemented controls or a
-current standard overrides the obvious answer. State the expected behavior
-change before loading, and load one reference by default.
-
-Password storage, account recovery, cookie sessions, CSRF tokens, uploads, and
-archive extraction have no reference here: this service authenticates bearer
-tokens issued elsewhere and serves no browser documents, uploaded files, or
-archives. A service that adds one decides it against
-[`auth-access-control`](../../../../docs/universal-disciplines/auth-access-control/SKILL.md)
-and current OWASP guidance; adding a reference back requires a decision it would
-change.
-
-Two neighbours own security questions that arrive through this skill. Deny-path
-falsifiers, permission-model shape, tenant partitioning, and revocation windows
-belong to `auth-access-control`. Inbound message authenticity — a webhook or
-queue payload whose producer must be proved before a side effect, and the replay
-window that follows — belongs to
-[`reliable-messaging`](../../../../docs/universal-disciplines/reliable-messaging/SKILL.md)
-and
-[`durable-background-jobs`](../../../../docs/universal-disciplines/durable-background-jobs/SKILL.md),
-with the identity carried as durable principal context rather than a live token.
+State the expected decision effect and load one matching reference by default.
 
 | Pressure | Load | Required effect |
 | --- | --- | --- |

@@ -1,0 +1,3 @@
+description = "Fresh read-only reviewer for one fixed candidate and named review method."
+default_capability_mode = "read-only"
+reasoning_effort = "high"

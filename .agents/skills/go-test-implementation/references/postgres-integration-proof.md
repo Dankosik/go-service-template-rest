@@ -1,18 +1,10 @@
 # Postgres Integration Proof
 
-## Behavior Change Thesis
-When loaded for repository, migration, transaction, or cache proof, this file
-makes the model run the cases the engine decides against a real PostgreSQL — the
-common defect is a fake querier standing in for the database on behavior the
-database owns, where `SKIP LOCKED` exclusion, constraint violation, and query
-ordering are whatever the fake was written to return, so the test agrees with
-itself and rejects nothing.
-
-## When To Load
+## Load When
 Symptom: the obligation involves SQL, migrations, transactions, row locks,
 concurrent claims, tenant isolation, or a cache whose backend behavior matters.
 
-## Decision Rubric
+## Decide
 - Split by owner. The engine decides lock exclusion, `ORDER BY`, unique and
   foreign-key violations, serialization failures, rollback visibility, and
   redelivery after a claim expires; none survive a fake. Go code decides error
@@ -36,10 +28,9 @@ concurrent claims, tenant isolation, or a cache whose backend behavior matters.
   the key string the current implementation builds.
 - A TTL with no injectable clock is an escalation. Sleeping through a real
   expiry buys a slow test and a flaky one.
-- Tag the file `//go:build integration`. `make test-integration` runs
-  `./test/...` plus `./internal/infra/natsjs` and `./cmd/worker/internal/bootstrap`
-  with `-p=1 -count=1`, so a package outside that set is not covered by the gate
-  a claim of integration proof implies.
+- Tag the file `//go:build integration`. Verify that the selected gate's current
+  package and test selectors include the scenario; the tag alone does not
+  establish gate coverage.
 
 ## Reject
 - A container started to reach behavior a fake query result already decides: it
@@ -48,10 +39,10 @@ concurrent claims, tenant isolation, or a cache whose backend behavior matters.
 - Integration proof reported as skipped-because-Docker without saying so; the run
   produced no evidence for the claim it was cited under.
 
-## Validation Shape
+## Prove
 - Repository unit test: focused package command with `-count=1 -vet=off`.
-- Integration test: `make test-integration`, or the tagged package directly while
-  iterating.
+- Integration proof: follow [PostgreSQL Validation](../../../../docs/validation/postgres.md)
+  for the focused tagged selector and the final claim-matched gate.
 - Migration-sensitive change: pair the integration command with the repository's
   migration validation, since `pgtest.Migrated` runs migrations per database and
   a broken migration fails every case at setup.
