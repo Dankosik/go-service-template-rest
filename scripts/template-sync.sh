@@ -12,13 +12,15 @@ set -euo pipefail
 usage() {
 	cat <<'EOF'
 usage:
-  template-sync.sh --check  [--from <template-dir>] [--repo <target-dir>]
-  template-sync.sh --apply  [--from <template-dir>] [--repo <target-dir>]
+  template-sync.sh --check  [--instructions-only] [--from <template-dir>] [--repo <target-dir>]
+  template-sync.sh --apply  [--instructions-only] [--from <template-dir>] [--repo <target-dir>]
 
   --check     report drift for every manifest path
   --apply     mirror the manifest into the target working tree
   --from      template checkout that owns the manifest (default: this script's repo)
   --repo      target repository (default: the current working directory)
+  --instructions-only  sync instructions and selected agent configuration;
+                       leave tooling and unselected harness data unchanged
 
 Uncommitted work outside the manifest and its generated `.claude/skills`,
 `.qwen/skills`, and `.codex/config.toml` views is never staged or touched. Changes inside those
@@ -39,7 +41,7 @@ reject() {
 }
 
 check_failed() {
-	printf 'template-sync: target drifted from template %s\n' "${template_revision}" >&2
+	printf 'template-sync: target drifted from template %s%s\n' "${template_revision}" "${scope_suffix}" >&2
 	exit 1
 }
 
@@ -49,6 +51,9 @@ default_template=$(CDPATH='' cd -- "${script_dir}/.." && pwd)
 mode=""
 template="${default_template}"
 explicit_repo=""
+instructions_only=false
+scope_suffix=""
+sync_surface="portable files"
 
 while (($# > 0)); do
 	case "$1" in
@@ -66,6 +71,12 @@ while (($# > 0)); do
 		[[ $# -ge 2 ]] || fail "--repo needs a directory"
 		explicit_repo="$2"
 		shift 2
+		;;
+	--instructions-only)
+		instructions_only=true
+		scope_suffix=" (instructions only)"
+		sync_surface="agent instructions"
+		shift
 		;;
 	-h | --help)
 		usage
@@ -170,6 +181,13 @@ path_enabled_for_harness() {
 	esac
 }
 
+instruction_path() {
+	case "$1" in
+	AGENTS.md | CLAUDE.md | Grok.md | QWEN.md | docs/* | .agents/* | .claude/* | .codex/* | .cursor/* | .grok/* | .opencode/* | .qwen/* | opencode.json) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 configure_target_harness() {
 	local repo="$1" entry state
 	agent_harness="all"
@@ -186,6 +204,7 @@ configure_target_harness() {
 
 	paths=()
 	for entry in "${all_paths[@]}"; do
+		if [[ "${instructions_only}" == true ]] && ! instruction_path "${entry}"; then continue; fi
 		path_enabled_for_harness "${entry}" "${agent_harness}" && paths+=("${entry}")
 	done
 	generated_paths=()
@@ -204,6 +223,10 @@ configure_target_harness() {
 		pruned_paths+=(.cursor/agents)
 	elif [[ "${agent_harness}" != "cursor" && "${agent_harness}" != "all" ]]; then
 		pruned_paths+=(.cursor)
+	fi
+	if [[ "${instructions_only}" == true ]]; then
+		pruned_paths=()
+		retired_paths=()
 	fi
 	return 0
 }
@@ -363,7 +386,7 @@ apply_entry() {
 collect_present() {
 	local repo="$1" entry
 	present=()
-	for entry in "${paths[@]}" "${generated_paths[@]-}" "${retired_paths[@]}" "${pruned_paths[@]-}"; do
+	for entry in "${paths[@]}" "${generated_paths[@]-}" "${retired_paths[@]-}" "${pruned_paths[@]-}"; do
 		[[ -n "${entry}" ]] || continue
 		if [[ -e "${repo}/${entry%/}" || -L "${repo}/${entry%/}" ]]; then present+=("${entry%/}"); fi
 	done
@@ -524,8 +547,10 @@ target="${explicit_repo:-$PWD}"
 	fi
 
 	target_ignored=""
+	target_pathspecs=()
+	for entry in "${paths[@]}"; do target_pathspecs+=("${entry%/}"); done
 	if git -C "${repo}" rev-parse --git-dir >/dev/null 2>&1; then
-		target_ignored=$(git -C "${repo}" ls-files --others --ignored --exclude-standard -- "${template_pathspecs[@]}" 2>/dev/null || true)
+		target_ignored=$(git -C "${repo}" ls-files --others --ignored --exclude-standard -- "${target_pathspecs[@]}" 2>/dev/null || true)
 	fi
 	if [[ -n "${target_ignored}" ]]; then
 		if [[ "${mode}" == "check" ]]; then
@@ -589,7 +614,7 @@ target="${explicit_repo:-$PWD}"
 	drift=0
 	report=""
 	legacy_makefile=false
-	if [[ -f "${repo}/Makefile" && ! -e "${repo}/make/template.mk" && ! -e "${repo}/make/service.mk" ]] &&
+	if [[ "${instructions_only}" == false && -f "${repo}/Makefile" && ! -e "${repo}/make/template.mk" && ! -e "${repo}/make/service.mk" ]] &&
 		! cmp -s "${source_root}/Makefile" "${repo}/Makefile"; then
 		legacy_makefile=true
 		drift=1
@@ -601,7 +626,8 @@ target="${explicit_repo:-$PWD}"
 			report+="${entry_report}"$'\n'
 		fi
 	done
-	for entry in "${retired_paths[@]}"; do
+	for entry in "${retired_paths[@]-}"; do
+		[[ -n "${entry}" ]] || continue
 		if [[ -e "${repo}/${entry}" || -L "${repo}/${entry}" ]]; then
 			drift=1
 			report+="  - ${entry} (retired)"$'\n'
@@ -637,11 +663,11 @@ target="${explicit_repo:-$PWD}"
 	fi
 
 	if ((drift == 0)); then
-		printf '   in sync with template %s\n' "${template_revision}"
+		printf '   in sync with template %s%s\n' "${template_revision}" "${scope_suffix}"
 		if [[ "${mode}" == "check" ]]; then
-			echo "template-owned portable files are current"
+			printf 'template-owned %s are current\n' "${sync_surface}"
 		else
-			printf 'template-sync: target already synced to template %s\n' "${template_revision}"
+			printf 'template-sync: target already synced to template %s%s\n' "${template_revision}" "${scope_suffix}"
 		fi
 		exit 0
 	fi
@@ -705,12 +731,15 @@ target="${explicit_repo:-$PWD}"
 	fi
 
 	for entry in "${paths[@]}"; do apply_entry "${repo}" "${entry}"; done
-	for entry in "${retired_paths[@]}"; do rm -f -- "${repo}/${entry}"; done
+	for entry in "${retired_paths[@]-}"; do
+		[[ -n "${entry}" ]] || continue
+		rm -f -- "${repo}/${entry}"
+	done
 	for entry in "${pruned_paths[@]-}"; do
 		[[ -n "${entry}" ]] && rm -rf -- "${repo:?}/${entry:?}"
 	done
 
-	if [[ -f "${repo}/scripts/template-sync.sh" ]]; then
+	if [[ "${instructions_only}" == false && -f "${repo}/scripts/template-sync.sh" ]]; then
 		chmod +x \
 			"${repo}/scripts/template-sync.sh" \
 			"${repo}/scripts/agent-roles-sync.sh" \
@@ -718,16 +747,16 @@ target="${explicit_repo:-$PWD}"
 			"${repo}/scripts/codex-agents-sync.sh"
 	fi
 	if [[ "${agent_harness}" == "claude" || "${agent_harness}" == "all" ]] &&
-		! bash "${repo}/scripts/harness-skills-sync.sh" claude --apply --repo "${repo}"; then
+		! bash "${harness_skills_helper}" claude --apply --repo "${repo}"; then
 		reject "Claude skill link rebuild failed; the mirror is in the working tree and was not committed"
 	fi
 	if [[ "${agent_harness}" == "qwen" || "${agent_harness}" == "all" ]] &&
-		! bash "${repo}/scripts/harness-skills-sync.sh" qwen --apply --repo "${repo}"; then
+		! bash "${harness_skills_helper}" qwen --apply --repo "${repo}"; then
 		reject "Qwen skill link rebuild failed; the mirror is in the working tree and was not committed"
 	fi
 	if [[ "${agent_harness}" == "codex" || "${agent_harness}" == "all" ]] &&
-		! bash "${repo}/scripts/codex-agents-sync.sh" --apply --repo "${repo}"; then
+		! bash "${codex_agents_helper}" --apply --repo "${repo}"; then
 		reject "Codex agent registry rebuild failed; the mirror is in the working tree and was not committed"
 	fi
-	printf '   synced into the working tree at template %s\n' "${template_revision}"
-printf 'template-sync: target synced to template %s\n' "${template_revision}"
+	printf '   synced into the working tree at template %s%s\n' "${template_revision}" "${scope_suffix}"
+printf 'template-sync: target synced to template %s%s\n' "${template_revision}" "${scope_suffix}"
