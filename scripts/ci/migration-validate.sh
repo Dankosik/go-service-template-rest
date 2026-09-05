@@ -41,7 +41,14 @@ port=${address##*:}
 dsn="postgres://app:app@localhost:${port}/app?sslmode=disable"
 
 case "${migration_engine}" in
-	goose) "${go_command}" tool -modfile=tools/go.mod goose -dir "${migration_dir}" validate ;;
+	goose)
+		"${go_command}" tool -modfile=tools/go.mod goose -dir "${migration_dir}" validate
+		rehearsal_pattern='^TestPostgres(MigrateRepositorySourceRehearsal|HTTPIdempotencySchemaReplacementIsFailClosed)$'
+		rehearsal_tests=(
+			TestPostgresMigrateRepositorySourceRehearsal
+			TestPostgresHTTPIdempotencySchemaReplacementIsFailClosed
+		)
+		;;
 	golang-migrate)
 		"${go_command}" run -mod=readonly -tags=postgres github.com/golang-migrate/migrate/v4/cmd/migrate \
 			-path "${migration_dir}" -database "${dsn}" up
@@ -49,14 +56,18 @@ case "${migration_engine}" in
 			-path "${migration_dir}" -database "${dsn}" down 1
 		"${go_command}" run -mod=readonly -tags=postgres github.com/golang-migrate/migrate/v4/cmd/migrate \
 			-path "${migration_dir}" -database "${dsn}" up 1
+		rehearsal_pattern='^TestPostgresMigrateUpAppliesAndReplaysMigrations$'
+		rehearsal_tests=(TestPostgresMigrateUpAppliesAndReplaysMigrations)
 		;;
 esac
 
 rehearsal=$(mktemp)
 trap 'rm -f "${rehearsal}"; cleanup' EXIT INT TERM
 PGTEST_POSTGRES_DSN="${dsn}" REQUIRE_DOCKER=1 "${go_command}" test -vet=off -count=1 -tags=integration ./test \
-	-run '^TestPostgresMigrateUpAppliesAndReplaysMigrations$' -json | tee "${rehearsal}"
-grep -Eq '"Action":"pass".*"Test":"TestPostgresMigrateUpAppliesAndReplaysMigrations"' "${rehearsal}"
+	-run "${rehearsal_pattern}" -json | tee "${rehearsal}"
+for rehearsal_test in "${rehearsal_tests[@]}"; do
+	grep -Eq '"Action":"pass".*"Test":"'"${rehearsal_test}"'"' "${rehearsal}"
+done
 
 image=${requested_image:-${service_name}:migration}
 if [[ -z ${requested_image} ]]; then
