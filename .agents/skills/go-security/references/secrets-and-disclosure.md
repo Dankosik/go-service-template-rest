@@ -34,9 +34,9 @@ repository.
   runs gitleaks against the change with `.gitleaks.toml` and
   `.gitleaks.baseline.json`, so a plausible value either fails the gate or
   teaches the next reader to reuse it. Obviously fake placeholders do neither.
-- Treating a scanner as proof of a privacy or access rule: `make gosec`
-  runs `govulncheck` and `gosec`, which cover dependency and pattern classes and
-  say nothing about who may read a field.
+- Treating scanners as proof of a privacy or access rule: `make govulncheck`
+  and `make gosec` cover dependency and pattern classes independently and say
+  nothing about who may read a field.
 
 ## Prove
 

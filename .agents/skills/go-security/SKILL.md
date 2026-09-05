@@ -1,6 +1,6 @@
 ---
 name: go-security
-description: "Security: Use for identity, authorization, tenancy, tokens, secrets, injection, SSRF, or trust boundaries. Own policy; Skip placement."
+description: "Attacker paths. Use when identity, authorization, tenancy, tokens, secrets, injection, SSRF, abuse, or another trust boundary changes what an attacker can reach."
 metadata:
   invocation: model
   kind: method
@@ -13,8 +13,10 @@ authority, asset, enforcement point, attacker action, and observable denial.
 
 `boundary -> principal -> enforcement -> action -> failure -> negative proof`
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
-every reachable path across route exposure, verified identity, objects reached,
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From every caller-controlled entrypoint to an asset or observable denial, build
+`AttackerPath{boundary, principal, asset, enforcement, action, failure,
+denial_proof}` across route exposure, verified identity, objects reached,
 outbound destinations, secrets, and caller-controlled work. Missing identity,
 ambiguous tenant, or absent policy denies. Every accepted control needs focused
 negative proof because an allow test also passes against a bypass.
@@ -27,8 +29,6 @@ input, outbound destination, work amplification, or a secret sink.
 
 For a **Decision**, disposition every reachable path with fail-closed behavior
 and negative proof. For **Review**, follow each path into the shared finding
-envelope; no findings still requires the focused deny proof.
-
-Hand contract semantics to `go-api-contract`, data authority to
-`go-data-architecture`, placement to `go-implementation-ownership`, and
-credential, permission, or revocation mechanism to [access control](../../../docs/universal-disciplines/auth-access-control/SKILL.md).
+envelope; no findings still requires the focused deny proof. Load [access
+control](../../../docs/universal-disciplines/auth-access-control/SKILL.md) when
+the credential, permission, or revocation mechanism itself is open.

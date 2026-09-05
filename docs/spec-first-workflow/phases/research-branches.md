@@ -29,15 +29,27 @@ a substitute, prerequisite, complement, or defense-in-depth mechanism; compare
 only same-level substitutes. Research may eliminate a candidate contradicted by
 authority or a hard constraint, but System Design selects the mechanism.
 
+Prior art: Seek established system design patterns, original technical
+papers, first-hand engineering writeups, and postmortems relevant to
+the problem and its constraints.
+
+Follow leads: Expand searches through discovered terminology and
+references; investigate promising approaches and their failure modes.
+
 Scan only relevant rungs: repository reuse, Go stdlib, native platform,
 approved infrastructure, managed service, mature OSS, and custom code. For a
 surviving external option record only evidence that can change approval:
 ownership/support, availability/quota/SLA, compatibility, security and data
 custody, pricing unit at accepted workload, lifecycle, migration, portability,
 and exit/failback. For external code also cover maintenance, license,
-vulnerabilities, API stability, and transitive cost. Stop when searches by
-problem, force, failure mode, and known alias no longer expose a materially
-different viable substitute.
+vulnerabilities, API stability, and transitive cost.
+
+Transfer: Explain what each material precedent teaches, which assumptions
+match our context, and where the analogy breaks.
+
+Saturation: Stop when further searches add no material alternatives,
+trade-offs, failure modes, or applicability constraints; disclose
+remaining evidence gaps.
 
 ## Empirical Claim Or Probe
 

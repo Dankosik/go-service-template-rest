@@ -1,0 +1,5 @@
+interface:
+  display_name: "Thermo-Nuclear Code Quality Review"
+  short_description: "Harsh evidence-backed maintainability review"
+policy:
+  allow_implicit_invocation: false

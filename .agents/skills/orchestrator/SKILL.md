@@ -16,25 +16,24 @@ Harness](../../../docs/agent-harness.md). Treat `tasks.md` as a dependency
 graph, not an ordered list.
 
 Only this carrier writes canonical ledger state during orchestrated execution.
-At each cycle, compute the ready frontier from packet mutable owners, exclusive
-locks, and accepted dependencies, then dispatch every ready unit to one fresh
-`acceptance-unit-lead` before waiting, within current capacity counted across
-live Leads and their in-flight children.
+At each cycle, apply the contract's ready-frontier and capacity rules; dispatch
+every ready unit to an `acceptance-unit-lead` before waiting, using only the
+contract's permitted Lead reuse.
 
-Each Lead returns one immutable [Acceptance Result
-V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md). Land
-the candidate serially, record the Lead-owned verdict without re-adjudicating
-it, then immediately refill the frontier before landing the next waiting
-result.
+Process each Lead's immutable [Acceptance Result
+V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md) through
+the contract's acceptance transition. Land only `Accepted` candidates serially,
+record the Lead-owned verdict without re-adjudication, and immediately refill
+before the next landing. Route `Blocked` to recovery without landing.
 
 Route the smallest upstream repair back to the same unit. Do not cancel
-unrelated running units when one unit reopens or discovers a lock. An agent-owned
-technical, proof, review, or phase reopen is owner-held recovery: open the named
-fresh task, wait for its canonical transition, repair ledger status through
-Planning when needed, and resume without asking the user to confirm routing,
-delegation, or reopen. Ask only when an `AGENTS.md` user-owned decision or
-authority boundary remains unresolved. Continue until the ledger is done or no
-ready unit or owner-held recovery remains.
+unrelated running units when one unit reopens or discovers a lock. Apply
+[Parent-Owned Recovery](../../../docs/spec-first-workflow/shared/transition.md#parent-owned-recovery)
+to technical, proof, review, and phase gaps; repair ledger status through
+Planning when needed. Continue until the ledger is done and
+[Cleanup](../../../docs/spec-first-workflow/shared/cleanup.md) has closed
+execution-only state, or no ready unit, owner-held recovery, or authorized
+cleanup path remains.
 
 Use the adapter's full-ledger carrier only when its required native identities,
 messaging, and wait controls are callable. Otherwise return that exact carrier

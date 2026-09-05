@@ -10,9 +10,12 @@ become named Go tests, or the layer that should carry the proof is unsettled.
   goroutine that exited. The observable picks the layer, never the reverse.
 - Two questions disqualify an oracle. Could this assertion have been written from
   the approved behavior alone, without reading the implementation? If not it is
-  derived, and it restates the code instead of judging it. Can you name a wrong
-  implementation that still passes? If yes it is loose — `err != nil`,
-  `code >= 400`, and a non-empty slice all accept outcomes the contract rejects.
+  derived, and it restates the code instead of judging it. Could a plausible
+  regression in this scenario's named obligation pass the oracle? If yes,
+  strengthen the discriminator or report the narrower evidence without closing
+  the unmet obligation. Broad assertions such as
+  `err != nil`, `code >= 400`, or a non-empty slice are insufficient when the
+  contract requires a more specific outcome.
 - Prove duplicate-request semantics through the identity returned and the number
   of effects performed, not the reservation key, fingerprint, or row the current
   code happens to use.
@@ -40,7 +43,7 @@ become named Go tests, or the layer that should carry the proof is unsettled.
 
 ## Prove
 - Run the named test with `-count=1 -vet=off`, matching the repository's own test
-  commands and leaving vet to `make lint`.
+  commands and leaving vet to `make lint-package` or `make lint-all`.
 - Add the package command when helpers, fixtures, or shared setup changed.
 - A plain `go test` run over a fuzz target executes the seed corpus only, so it
   proves the seeds and not exploration; a focused `go test -fuzz` is the bounded run

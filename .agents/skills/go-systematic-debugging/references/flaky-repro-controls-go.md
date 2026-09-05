@@ -6,10 +6,9 @@ Load when a Go test fails only under repetition, on CI, under `-race`,
 `-shuffle`, a specific `-cpu`, or in wider package scope.
 
 A test that is flaky because it sleeps on wall-clock time is a test-design
-problem, not a reproduction problem: `go-test-implementation` owns
-`testing/synctest`, which this repository already uses for time-driven behavior
-(`internal/health/cached_test.go`, `internal/background`, the bootstrap
-lifecycle tests). Reach for a fake clock there before widening any timeout here.
+problem, not a reproduction problem: `go-test-implementation` selects time
+controls supported by the target module and suitable for its proving layer.
+Resolve that deterministic control before widening any timeout here.
 
 ## Decide
 
@@ -31,7 +30,7 @@ lifecycle tests). Reach for a fake clock there before widening any timeout here.
   the current tree, so leaving default vet on re-lints the package on every one of
   100 iterations. The repository's own flake gate is
   a bounded `go test -vet=off -count=5 -shuffle=on <scope>` run; the
-  race gate is `make test-race`.
+  race gate is `ALLOW_HEAVY=1 make test-race`.
 
 - **Integration-tagged flakes have pinned commands.** `make test-messaging-race`
   and `make test-outbox-race` run `-p=1 -count=1 -race -tags=integration` over a

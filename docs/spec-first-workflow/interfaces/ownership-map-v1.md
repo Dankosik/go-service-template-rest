@@ -2,6 +2,12 @@
 
 Return two reconciled sections.
 
+Describe each responsibility, its constraints, and evidence once in
+Responsibilities. Files references those entries by unambiguous name or anchor
+and supplies the file-specific facts. A reference may fill a repeated field only
+when it resolves that field completely; retain every required field and check
+both responsibility-to-file and file-to-responsibility coverage.
+
 ## Responsibilities
 
 One row per changed responsibility:

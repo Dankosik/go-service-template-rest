@@ -11,9 +11,10 @@ reopen_owner: <owner or none>
 ```
 
 Each surviving finding names its anchor, outcome impact, classification,
-smallest repair/reopen owner, and evidence boundary. A blocker includes the
-attempted falsifier and its result; an unavailable falsifier is a concern with
-that gap.
+smallest repair/reopen owner, and evidence boundary. Record the attempted
+falsifier and result, or why it is unavailable. The phase adapter determines
+whether the gap blocks the result; missing mandatory proof is not downgraded
+to a concern.
 
 Implementation finding classification is closed:
 
@@ -21,7 +22,7 @@ Implementation finding classification is closed:
 | --- | --- | --- |
 | `TASK_DEFECT` | The candidate falsifies the current task packet. | `FAIL`; repair the same task. |
 | `UPSTREAM_GAP` | An accepted input or dependency output is missing or invalid. | `NEEDS_PARENT`; reopen the smallest upstream owner. |
-| `INTEGRATION_DEFECT` | A seam or assembly between accepted outputs fails. | `FAIL` the integration task; Planning creates the smallest repair task and preserves unaffected acceptance. |
+| `INTEGRATION_DEFECT` | A seam or assembly between accepted outputs fails. | `FAIL`; route repair under [Integrated Candidate](../phases/implementation-review.md#integrated-candidate) to the smallest affected existing unit, preserving unaffected acceptance. Reopen Planning only when its accepted boundary cannot cover the repair. |
 | `FOLLOW_UP` | An improvement is outside the current packet and does not falsify it. | It cannot block `PASS`; route separately through Planning if accepted. |
 
 Non-implementation adapters use `PASS | CONCERNS | FAIL`. Implementation uses

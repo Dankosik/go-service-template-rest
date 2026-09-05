@@ -10,9 +10,10 @@ Callable Task fields outrank public prose.
 - `/orchestrator` binds the current session as Ledger Orchestrator. Cursor
   reads `.agents/skills` directly.
 - Dispatch every mutually independent ready unit before waiting, within
-  current capacity. Spawn one fresh `acceptance-unit-lead` per ready unit
-  through Task. That Lead owns proof, review, and the acceptance verdict;
-  this session lands each candidate serially from the
+  current capacity. Assign an `acceptance-unit-lead` through Task, reusing a
+  completed related Lead only under the shared ledger contract. That Lead owns
+  proof, any required review, and the acceptance verdict;
+  this session lands only `Accepted` candidates serially from the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
   and records that verdict without re-adjudicating it.
 - Bind that teammate to `acceptance-unit-lead`. Do not substitute
@@ -56,20 +57,25 @@ capacity. Concurrent mutable units and lanes require disjoint packet
 mutable owners and exclusive locks. Consume and integrate results serially
 under the Lead.
 
-Continue the same agent while its context helps; use a fresh agent for
-independent review, an invalidated base, a stall, or a changed strategy. A
-missing identity is a carrier failure, not a completed lane.
+Apply shared [Context And Lifetime](../agent-harness.md#context-and-lifetime).
+New execution/evidence lanes and initial independent review omit `resume`;
+do not fork the parent's conversation. Resume a returned agent ID only for
+continuation admitted by Context And Lifetime or Review. A missing identity
+is a carrier failure, not a completed lane.
+Shared Nested Execution applies within Cursor's two-level limit; additional
+worker subsets return to the Lead. Use native background Task when review and
+non-mutating checks should overlap; acceptance still waits for required results.
 
 ## Review And Recovery
 
-An independent implementation review uses a fresh `reviewer-agent` with
+Start a required independent implementation review with a fresh `reviewer-agent` and
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
-as its Method. When Review requires integrated-candidate review, this
+as its Method; shared Review owns continuation. When Review requires integrated-candidate review, this
 session binds one fresh `reviewer-agent` to that boundary and still does not
 accept units. Raise its Task `model` field only for a justified
 highest-consequence boundary. Keep the fixed candidate unchanged.
 
 If implementation invalidates an upstream decision, the Lead repairs the
-smallest owner when it can, or this session opens a fresh
-`acceptance-unit-lead` for that phase, waits for its canonical transition,
-and resumes the same unit. Add no scheduler, journal, or recovery database.
+smallest owner when it can, or this session dispatches a fresh actor governed
+by the reopened phase, consumes its Transition Result, and resumes the same
+implementation unit. Add no scheduler, journal, or recovery database.

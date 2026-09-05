@@ -37,8 +37,11 @@ Runtime config value precedence (last wins):
 4. `APP__...` environment variables
 
 An empty `APP__...` value is still an explicit final override. Empty values for required keys are not treated as absent; they flow through parsing or validation and fail fast when the key cannot be empty.
-Unknown keys from files, overlays, or `APP__...` variables always fail
-validation; there is no permissive mode.
+Unknown keys from files, overlays, or `APP__...` variables fail validation in
+the full service snapshot; malformed `APP__...` names fail too. The jobs worker
+is the deliberate exception: it projects only the sections that binary
+consumes, so keys from foreign optional profiles are ignored, while unknown
+keys inside retained sections still fail.
 
 ## Network Admission Ownership
 
@@ -63,54 +66,50 @@ Do not migrate feature config into `NETWORK_*`. Outbound network admission belon
 
 ## OpenTelemetry Environment Policy
 
-This service configures OpenTelemetry from `observability.otel.*` only. It
-deliberately does not read the standard `OTEL_*` environment variables, so
-resource identity and exporter target cannot be retargeted by ambient process
-environment:
+Typed configuration owns service identity and takes precedence, while the
+official OpenTelemetry environment remains a supported platform fallback:
 
-- `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_SERVICE_NAME` are ignored; the typed
-  config snapshot is the only resource source.
-- When `observability.otel.exporter.otlp_endpoint` is set, ambient
-  `OTEL_EXPORTER_OTLP_*` variables split in two. Variables the explicit
-  exporter options already override — `..._ENDPOINT`, `..._TRACES_ENDPOINT`,
-  `..._INSECURE`, `..._TRACES_INSECURE` — plus ones that carry no destination
-  or credential, such as `..._PROTOCOL`, `..._TIMEOUT`, and `..._COMPRESSION`,
-  are **ignored** and logged as `telemetry_ambient_env_ignored`. Tracing keeps
-  working. Credential and trust material — `..._HEADERS`,
-  `..._TRACES_HEADERS`, `..._CERTIFICATE`, `..._TRACES_CERTIFICATE`,
-  `..._CLIENT_CERTIFICATE`, `..._CLIENT_KEY`, and their `TRACES_` forms — is
-  **rejected**, because this service sets no client certificate or CA pool and
-  sets headers only from config, so an injected value would otherwise travel to
-  the collector unverified. The rejection degrades telemetry and is logged; it
-  does not stop the service.
-- When `observability.otel.exporter.otlp_endpoint` is empty, tracing is
-  disabled (valid trace IDs are still produced for propagation and log
-  correlation, but no span is exported). If ambient `OTEL_EXPORTER_OTLP_*`
-  variables are present in that case, startup logs
-  `telemetry_ambient_env_ignored` naming the ignored variables.
+- `service.name`, `service.version`, `vcs.revision`, `service.instance.id`, and
+  `deployment.environment.name` come from the typed snapshot. Additional
+  `OTEL_RESOURCE_ATTRIBUTES` survive underneath them; ambient values cannot
+  override those five fields.
+- A typed signal endpoint wins. Otherwise the signal-specific standard endpoint
+  variable is used, then `OTEL_EXPORTER_OTLP_ENDPOINT` as the shared collector
+  root. Configured collector headers pin the destination and therefore disable
+  ambient endpoint fallback.
+- When a typed endpoint selects the destination, ambient credential and trust
+  material (`..._HEADERS`, `..._CERTIFICATE`, `..._CLIENT_CERTIFICATE`, and
+  `..._CLIENT_KEY`, including signal-specific forms) is rejected. The same rule
+  applies when the shared typed root supplies the metrics endpoint.
+- Standard non-secret SDK tuning such as timeout and compression remains owned
+  by the official exporter. Explicit endpoint options still override ambient
+  endpoint and transport-security selection.
+- When the platform supplies the endpoint, it also owns the matching standard
+  credentials, trust material, and tuning for that collector.
 
-The override direction is not an assumption: `otlptracehttp` applies ambient
-environment first and explicit options second, and this service always passes
-`WithEndpointURL`, which owns the endpoint, the URL path, and the TLS scheme.
+Startup logs `telemetry_ambient_env_present` for additional ambient exporter
+variables after excluding the honored endpoint source and credential/trust
+settings already rejected by setup. The record reports names only, never values,
+and makes no false claim that SDK-owned tuning was ignored.
 
-This matters on platforms that inject the standard variables automatically
-(OpenTelemetry Operator auto-instrumentation, Grafana Alloy, vendor add-ons).
-Injection alone does **not** enable export here. Map the injected endpoint onto
-`APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT` explicitly, and treat
-`telemetry_ambient_env_ignored` as the alarm that this mapping is missing.
-Telemetry setup failures never block startup: they log
-`startup_dependency_degraded` with `reason` and the underlying `err`.
+Telemetry setup failures never block the service binary: they log a bounded
+reason and a sanitized setup error. Background binaries may choose a stricter
+policy when their own operator contract requires working metrics.
 
-Trace-export state is queryable rather than log-only. The startup summary
-carries `tracing.exporter` as `active`, `disabled`, or `degraded`, and the
+Trace-export initialization is queryable rather than log-only. The startup
+summary carries `tracing.exporter` as `initialized`, `disabled`, or
+`degraded`, and the
 Prometheus diagnostics listener exposes
-`service_startup_trace_exporter_active`. Alert on that gauge: a service that
-exports no traces still answers every request and reports healthy.
+`service_startup_trace_exporter_active`. This is a startup-configuration signal,
+not continuous delivery health. Runtime SDK/export failures are emitted as the
+bounded structured event `otel_sdk_error`; collector-side telemetry remains the
+authority for end-to-end delivery.
 
 `observability.metrics.addr` owns the Prometheus diagnostics listener. It
-defaults to `127.0.0.1:9090`; an empty value disables HTTP exposition. Binding
-failure blocks startup. Do not use a non-loopback value without deployment
-network policy that keeps the listener private.
+defaults to `:9090`, which binds every interface so a scraper in another pod
+can reach it; an empty value disables HTTP exposition. Binding failure blocks
+startup. Deployment network policy must keep this listener private, especially
+when `observability.pprof.enabled` is true.
 
 ## Secret Rules
 
@@ -125,19 +124,17 @@ network policy that keeps the listener private.
   missing base ref fails rather than silently changing scope.
 - Secret-like YAML keys may exist only as empty placeholders for schema/default visibility.
 - Non-empty secret-like YAML values are rejected at load time (`dsn`, `password`, `token`, `secret`, `authorization`, `otlp_headers`).
-- In non-local environments, file-based config is hardened:
-  - absolute path only
-  - must be under allowed roots (`/etc/config`, `/etc/service/config`, `/run/secrets` by default)
-  - symlinks are rejected
-  - group/world-writable files are rejected
-  - max config file size is 1 MiB
-
-Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`. In non-local environments, every non-empty root entry must be an absolute path. An empty value keeps the default roots, while a delimiter-only value produces no allowed roots and rejects explicit config files.
+- Explicit config paths come from process arguments, at the same trust level as
+  the selected binary and entrypoint. Relative paths and symlinks are accepted;
+  Kubernetes projected ConfigMap and Secret volumes depend on symlinks for
+  atomic updates. The loader does not impose an allowed-root or file-permission
+  policy. It does bound every file read to 1 MiB and rejects non-empty
+  secret-like values before merging them.
 
 ## Runtime Budget Policy
 
 - `http.readiness_timeout` bounds `/health/ready` and startup admission readiness checks. It must not exceed `http.write_timeout`, because readiness handlers still run under the server write deadline. Readiness probes run sequentially, so this timeout must also cover the aggregate budget of every enabled readiness probe. The PostgreSQL probe has one template-owned `3s` budget. Startup admission also requires `150ms` headroom because bootstrap checks the readiness context again after the internal readiness check returns.
-- `http.request_timeout` is the per-request handler budget and defaults to `8s`. It is the only bound on how long one request may hold a goroutine and its pooled resources: `http.read_timeout` and `http.write_timeout` are connection deadlines that never cancel the request context, so without this a handler waiting on a slow dependency outlives the client that asked. It must not exceed `http.write_timeout`, because a budget that expires after the write deadline can no longer send the `504` reporting it. Lowering `http.write_timeout` below `8s` therefore requires lowering this too. It bounds handlers, not the process: a handler that ignores its context cannot be interrupted from the transport layer.
+- `http.request_timeout` is the per-request handler budget and defaults to `8s`. It is the only bound on how long one request may hold a goroutine and its pooled resources: `http.read_timeout` and `http.write_timeout` are connection deadlines that never cancel the request context, so without this a handler waiting on a slow dependency outlives the client that asked. It must leave at least `1s` before `http.write_timeout`, reserving time to send the terminal `504`; lowering the write timeout therefore requires lowering the request timeout too. It bounds handlers, not the process: a handler that ignores its context cannot be interrupted from the transport layer.
 - PostgreSQL connection and startup-ping timeouts are template-owned `3s` defaults inside the adapter; the startup stage still caps the whole probe at `5s`.
 - The migrator owns a `5m` orchestration deadline. Cancellation stops subsequent
   migration work; one in-flight statement can still take up to its separate
@@ -148,12 +145,15 @@ Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`. In non-local en
   rehearsal evidence for the actual schema and largest production table proves
   them insufficient.
 - `http.shutdown_timeout` is tunable within validation bounds. `http.readiness_propagation_delay` is counted inside it; the remaining drain budget must still cover `http.write_timeout`.
-- The default process-grace expectation is `30s` HTTP shutdown plus the bootstrap telemetry flush window (`5s`) after HTTP drain. Platform termination grace should cover readiness propagation, HTTP drain, and telemetry flush instead of only the HTTP server timeout.
+- The default process-grace expectation is the configured `25s` HTTP shutdown
+  plus the `17s` post-drain tail: diagnostics close (`2s`), background join
+  (`5s`), dependency close (`5s`), and telemetry flush (`5s`). Readiness
+  propagation is already inside the HTTP shutdown budget.
 
   **This is a deployment precondition on every platform, not only Railway.** The
-  default worst-case sequence is 35 seconds, so a grace period shorter than that
-  SIGKILLs the service mid-drain and drops in-flight requests. Default grace
-  periods of 10–30 seconds are too short. Configure it explicitly:
+  default worst-case sequence is 42 seconds, leaving 3 seconds inside the
+  shipped `45s` grace period. A shorter grace period can SIGKILL the service
+  before cleanup and telemetry flush finish. Configure it explicitly:
 
   | Platform | Setting |
   | --- | --- |
@@ -177,8 +177,8 @@ The baseline Postgres DSN contract is intentionally strict. The DSN must come fr
 
 When a feature needs a new runtime config key:
 
-1. Add the typed field and `koanf` tag, its default when the key has a baseline value, and its validation — all three in the section's own `internal/config/<section>_config.go`. One key is one file: the reason a value was chosen sits beside the rule that enforces it, and a section a build profile removes leaves with its file. `types.go` and `defaults.go` hold the `Config` shape, the merge over it, and only the sections a dedicated file would not pay for (`app`, `health`, `log`, `runtime`); `http` and `observability` are always present too and still have their own files, because size rather than removability is what earns one. `validate.go` owns the order the sections run in and the helpers more than one section shares. A rule spanning two sections goes to whichever section depends on the other and takes that other section as a parameter — `validatePostgres` against the request budget, `validateOutbox` against Postgres — so no rule outlives the section it is about.
-2. Add the key to both `sentinelConfigSourceValues` and `expectedSentinelSnapshotValues` in `internal/config/snapshot_contract_test.go`. `TestBuildSnapshotMapsEveryKnownConfigLeafKey` walks the shape by reflection and fails on a leaf that either map is missing, so a key skipped here fails the suite rather than silently going unproven.
+1. Add the typed field and `koanf` tag, its default when the key has a baseline value, and its validation — all three in the section's own `internal/config/<section>_config.go`. One key is one file: the reason a value was chosen sits beside the rule that enforces it, and a section a build profile removes leaves with its file. `types.go` and `defaults.go` hold the `Config` shape, the merge over it, and only the sections a dedicated file would not pay for (`app`, `health`, `log`, `runtime`); `http` and `observability` are always present too and still have their own files, because size rather than removability is what earns one. `validate.go` owns the order the sections run in and the helpers more than one section shares. A rule spanning two sections goes to whichever section depends on the other and takes that other section as a parameter — `validateJobs` against Postgres, for example — so no rule outlives the section it is about.
+2. Add the key and its source/expected pair to `snapshotContractValues` in `internal/config/snapshot_contract_test.go`. `TestSnapshotContract` walks the shape by reflection and fails on a leaf the table is missing, so a skipped key fails the suite rather than silently going unproven.
 3. Update `env/config/local.yaml` or `env/.env.example` only where the key belongs for non-secret examples or env-driven secrets.
 4. Update docs that explain the feature's config behavior, especially secret-source or runtime-budget rules.
 5. Add or update `internal/config` tests so the tagged field is decoded into the immutable `Config` snapshot and validation rejects invalid values.

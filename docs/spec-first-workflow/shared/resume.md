@@ -2,6 +2,10 @@
 
 Use after compaction, interruption, or an actor/session change.
 
+For mid-task steering, reopen the earliest affected decision, invalidate only
+its dependent work and proof, and continue unaffected work. A side question or
+status request does not reset the task or require replaying completed phases.
+
 1. Inspect the current workspace and Git status. Read `tasks.md` first when
    implementation or validation is active; for a split ledger, read the index
    and only the files of the current ready frontier.
@@ -14,6 +18,9 @@ Use after compaction, interruption, or an actor/session change.
 5. Recheck candidate identity and proof reuse through the [Evidence
    Contract](evidence-contract.md) before Implementation continues.
 
+Resolve the ledger's Execution locators against native task state before
+resuming or redispatching; a stored locator alone does not prove work is active.
+Use Resume notes only after checking them against current workspace and evidence.
 Refresh large completed coordination from the canonical ledger, native task
 status, and Git identities. Do not replay transcripts or duplicate native task
 lifecycle state.

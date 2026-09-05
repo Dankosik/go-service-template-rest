@@ -9,7 +9,13 @@ wording, pruning, examples, prohibitions, and behavior-proof claims.
 Use a model-invoked skill when the agent or another skill must discover it.
 Front-load a likely domain word in the description and keep neighboring skills
 distinguishable. Encode the machine contract as a `Use` trigger, owned outcome,
-and decisive `Skip` exclusion in at most two sentences.
+and, only when evidence requires it, one decisive exclusion in at most two
+sentences.
+
+Treat the description as a routing discriminator, not a body summary: name the
+observable pressure and the decision it owns. Prefer positive discriminants.
+Add a negative exclusion only when a concrete observed collision demonstrates
+material over-trigger without it.
 
 Use a user-invoked skill when human judgment should select it and autonomous
 discovery has no value. Material with no independent trigger or steps is a
@@ -36,11 +42,8 @@ false`; they remain available through the harness's explicit skill syntax or
 bound carrier. The generated Claude/Qwen views and skill sync checks enforce
 these projections. Grok, Cursor, and OpenCode read the canonical `.agents/skills`
 set directly and need no generated skill symlink. OpenCode ignores
-`disable-model-invocation`; `opencode.json` denies `user/workflow` skill names
-on the built-in `build` and `plan` agents. The `orchestrator` carrier stays
-loadable on `build` so a user request to orchestrate a ledger can dispatch
-without a slash command. Keep other `role/carrier` entries behind Task
-`subagent_type` rather than implicit `skill` loading.
+`disable-model-invocation`; keep those entries behind `/orchestrator` or the
+bound agent file rather than relying on implicit `skill` loading.
 
 Codex starts with names, descriptions, and paths and may shorten a crowded
 catalog. Put the leading word and decisive trigger first. The repository gate
@@ -59,25 +62,30 @@ Co-locate a concept's rule, consequences, review signals, and proof. Keep
 `SKILL.md` below 500 lines. Before splitting a skill, disclose a reference and
 verify that a real trigger boundary remains.
 
-## Method Skills: Behavioral Compression
+## Method Skills
 
 A `model/method` skill exists to change one technical judgment the base model
-otherwise makes inconsistently. Before editing, state the ablation: what
-observable decision becomes worse when the body is absent?
+otherwise makes inconsistently.
 
-A promoted method skill binds four elements to the same domain judgment:
+State the domain judgment, the non-obvious criteria that change it, a plausible
+wrong default when useful, and a checkable completion condition. Use familiar
+domain terms without requiring the same word or document shape in every skill.
 
-1. **Operator** — one pretrained technical term repeated in the description and
-   opening.
-2. **Story** — one concrete path, lifecycle, matrix, table, graph, or ownership
-   map the agent must build.
-3. **Falsifier** — one plausible wrong default paired with the correct
-   replacement behavior.
-4. **Done** — one local, checkable, exhaustive completion criterion.
+Require a fixed sequence or typed domain records only when ordering, comparison
+of multiple paths, or a decision/review handoff needs them. Name that trigger
+in the method. For a single local path, a grounded decision and matching proof
+can suffice; do not add a record solely to satisfy a common skill format.
+When exhaustive path coverage matters, name its traversal start and terminal
+closure, and give each affected path a disposition with proof or an exact gap.
 
-Prove promotion with trigger, non-trigger, neighbor-collision, decision, and
-completion evals. Compare current and ablated baselines with the candidate
-before claiming changed model behavior.
+For delegated Decision or Review results, use the
+[shared specialist contract](../.agents/contracts/specialist-contract.md).
+Local completion neither completes the enclosing task nor turns a technical
+gap into a user decision. Preserve required workflow result interfaces.
+
+The canonical [specialist neighbor map](../.agents/contracts/specialist-neighbors.json)
+owns catalog collisions. Keep neighboring triggers distinct and route concrete
+wrong defaults through the matching method or reference.
 
 ## Structural Budget
 
