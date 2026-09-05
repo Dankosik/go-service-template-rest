@@ -52,8 +52,29 @@ fingerprint_candidate() {
 	} <"${tmp}/file-hashes" | shasum -a 256 | awk '{print $1}'
 }
 
-self_test() {
-	local output
+self_test() (
+	local output fixture scratch script
+	fixture=$(mktemp -d)
+	trap 'rm -rf -- "${fixture}"' EXIT
+	mkdir -p "${fixture}/scripts/ci" "${fixture}/make" "${fixture}/tools" \
+		"${fixture}/internal/failure" "${fixture}/internal/problem"
+	cp "${ROOT_DIR}/scripts/ci/"{verify,changed-surfaces,validation-lock,affected-go-packages,git-changed-paths}.sh "${fixture}/scripts/ci/"
+	cp "${ROOT_DIR}/make/template.mk" "${fixture}/make/template.mk"
+	cp "${ROOT_DIR}/tools/go.mod" "${fixture}/tools/go.mod"
+	cd "${fixture}"
+	printf 'module example.invalid/verify\n\n' >go.mod
+	awk '/^go / { print; exit }' "${ROOT_DIR}/go.mod" >>go.mod
+	printf 'package failure\n' >internal/failure/failure.go
+	printf 'package failure\n' >internal/failure/failure_test.go
+	printf 'package problem\n\nimport _ "example.invalid/verify/internal/failure"\n' >internal/problem/problem.go
+	printf 'include make/template.mk\n' >Makefile
+	printf '# Verification fixture\n' >README.md
+	: >scripts/integration-init.sh
+	printf 'echo fixture docs check passed\n' >scripts/ci/docs-contract-check.sh
+	git init -q
+	git add -A
+	git -c user.name=verify-test -c user.email=verify-test@example.invalid -c commit.gpgsign=false commit -qm fixture
+	script=${fixture}/scripts/ci/verify.sh
 	(
 		tmp=$(mktemp -d)
 		trap 'rm -rf -- "${tmp}"' EXIT
@@ -95,46 +116,51 @@ self_test() {
 	grep -q 'ALLOW_FULL=1' "${TMPDIR:-/tmp}/verify-full-guard.$$"
 	rm -f "${TMPDIR:-/tmp}/verify-full-guard.$$"
 
-	output=$(bash "$0" --plan --files README.md)
+	output=$(bash "${script}" --plan --files README.md)
 	grep -q 'documentation=true' <<<"${output}"
 	grep -q 'make docs-contract-check' <<<"${output}"
 	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
 
-	local scratch
-	scratch=$(mktemp -d)
-	output=$(TMPDIR="${scratch}" VERIFY_FORCE=1 bash "$0" --files README.md)
+	scratch=${fixture}/tmp
+	mkdir "${scratch}"
+	output=$(TMPDIR="${scratch}" VERIFY_FORCE=1 bash "${script}" --files README.md)
+	grep -q 'fixture docs check passed' <<<"${output}"
+	grep -q '^result: pass$' <<<"${output}"
+	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
+	if grep -q 'reusing exact passing receipt' <<<"${output}"; then return 1; fi
+	printf 'exit 42\n' >scripts/ci/docs-contract-check.sh
+	if output=$(TMPDIR="${scratch}" VERIFY_FORCE=1 bash "${script}" --files README.md 2>&1); then
+		echo "verify self-test accepted a failing gate" >&2
+		return 1
+	fi
+	grep -q '^result: fail$' <<<"${output}"
 	# Both the unlocked planner and its locked child own temporary files.
 	[[ -z $(find "${scratch}" -mindepth 1 -print -quit) ]] || {
 		echo "verification leaked temporary files" >&2
-		rm -rf -- "${scratch}"
 		return 1
 	}
-	rmdir "${scratch}"
-	grep -q 'docs contract check passed' <<<"${output}"
-	grep -q 'documentation: no repository-wide documentation validator' <<<"${output}"
-	if grep -q 'reusing exact passing receipt' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files tools/go.mod)
+	output=$(bash "${script}" --plan --files tools/go.mod)
 	grep -q 'make tools-dependencies-check' <<<"${output}"
 	if grep -q 'test-integration' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files build/docker/Dockerfile)
+	output=$(bash "${script}" --plan --files build/docker/Dockerfile)
 	grep -q 'make dockerfile-check' <<<"${output}"
 	grep -q 'make runtime-image-build' <<<"${output}"
 	grep -q 'make runtime-image-check' <<<"${output}"
 	grep -q 'make container-security' <<<"${output}"
 	if grep -q 'test-integration-db' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files scripts/integration-init.sh)
+	output=$(bash "${script}" --plan --files scripts/integration-init.sh)
 	grep -q 'INTEGRATION_INIT_ROWS=row_e1_http' <<<"${output}"
 	if grep -q 'template-init-check' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files test/performance/http/single-flow.js)
+	output=$(bash "${script}" --plan --files test/performance/http/single-flow.js)
 	grep -q 'performance_harness=true' <<<"${output}"
 	grep -q 'make performance-harness-check' <<<"${output}"
 	if grep -q 'benchmark-http' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files internal/failure/failure.go internal/problem/problem.go)
+	output=$(bash "${script}" --plan --files internal/failure/failure.go internal/problem/problem.go)
 	test "$(grep -c "make fmt-files-check" <<<"${output}")" -eq 1
 	test "$(grep -c "make lint-changed" <<<"${output}")" -eq 1
 	grep -q 'make test-package PKG=' <<<"${output}"
@@ -142,12 +168,12 @@ self_test() {
 	grep -q './internal/problem' <<<"${output}"
 	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files internal/failure/failure_test.go)
+	output=$(bash "${script}" --plan --files internal/failure/failure_test.go)
 	grep -q "make test-package PKG='./internal/failure'" <<<"${output}"
 	if grep -q './internal/problem' <<<"${output}"; then return 1; fi
 	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files internal/failure/removed.go)
+	output=$(bash "${script}" --plan --files internal/failure/removed.go)
 	grep -q "make lint-changed PKGS='./internal/failure'" <<<"${output}"
 	grep -q 'make test-package PKG=' <<<"${output}"
 	if grep -q 'removed.go' <<<"${output}" && grep -q 'fmt-files-check' <<<"${output}"; then
@@ -155,39 +181,39 @@ self_test() {
 	fi
 	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files Makefile)
+	output=$(bash "${script}" --plan --files Makefile)
 	grep -q 'make verify-check' <<<"${output}"
 	grep -q 'make changed-surfaces-check' <<<"${output}"
 	if grep -q 'proof-receipt' <<<"${output}"; then return 1; fi
 	if grep -q 'make test-all' <<<"${output}"; then return 1; fi
 	if grep -q 'test-integration' <<<"${output}"; then return 1; fi
 
-	output=$(bash "$0" --plan --files make/template.mk)
+	output=$(bash "${script}" --plan --files make/template.mk)
 	grep -q 'make verify-check' <<<"${output}"
 	grep -q 'make changed-surfaces-check' <<<"${output}"
 
-	output=$(bash "$0" --plan --files go.mod)
+	output=$(bash "${script}" --plan --files go.mod)
 	grep -q 'make test-all' <<<"${output}"
 	grep -q 'make root-mod-check' <<<"${output}"
 
-	if CI='' ALLOW_HEAVY='' bash "$0" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-heavy.$$"; then
+	if CI='' ALLOW_HEAVY='' bash "${script}" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-heavy.$$"; then
 		echo "verify self-test accepted a heavy route without ALLOW_HEAVY=1" >&2
 		return 1
 	fi
 	grep -q 'set ALLOW_HEAVY=1' "${TMPDIR:-/tmp}/verify-heavy.$$"
 	rm -f "${TMPDIR:-/tmp}/verify-heavy.$$"
 
-	if ALLOW_HEAVY=1 VERIFY_DOCKER_COMMAND=missing-docker-for-verify-test bash "$0" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-docker.$$"; then
+	if ALLOW_HEAVY=1 VERIFY_DOCKER_COMMAND=missing-docker-for-verify-test bash "${script}" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-docker.$$"; then
 		echo "verify self-test accepted an integration route without Docker" >&2
 		return 1
 	fi
 	grep -q 'Docker is required' "${TMPDIR:-/tmp}/verify-docker.$$"
 	rm -f "${TMPDIR:-/tmp}/verify-docker.$$"
 
-	output=$(bash "$0" --plan --files api/openapi/service.yaml)
+	output=$(bash "${script}" --plan --files api/openapi/service.yaml)
 	grep -q 'make openapi-runtime-contract-check' <<<"${output}"
 	if grep -q 'requires_network=true' <<<"${output}"; then return 1; fi
-}
+)
 
 if [[ ${mode} == self-test ]]; then
 	self_test

@@ -66,33 +66,48 @@ emit() {
 	printf 'fallback_reason=%s\n' "${fallback_reason}"
 }
 
-self_test() {
-	local output
+self_test() (
+	local output fixture script
+	fixture=$(mktemp -d)
+	trap 'rm -rf -- "${fixture}"' EXIT
+	mkdir -p "${fixture}/scripts/ci" "${fixture}/internal/failure" \
+		"${fixture}/internal/problem" "${fixture}/internal/testconsumer" "${fixture}/internal/openapi"
+	cp "${ROOT_DIR}/scripts/ci/affected-go-packages.sh" "${fixture}/scripts/ci/"
+	printf 'module example.invalid/affected\n\n' >"${fixture}/go.mod"
+	awk '/^go / { print; exit }' "${ROOT_DIR}/go.mod" >>"${fixture}/go.mod"
+	printf 'package failure\n' >"${fixture}/internal/failure/failure.go"
+	printf 'package failure\n' >"${fixture}/internal/failure/failure_test.go"
+	printf 'package problem\n\nimport _ "example.invalid/affected/internal/failure"\n' >"${fixture}/internal/problem/problem.go"
+	printf 'package testconsumer\n' >"${fixture}/internal/testconsumer/consumer.go"
+	printf 'package testconsumer\n\nimport _ "example.invalid/affected/internal/failure"\n' >"${fixture}/internal/testconsumer/consumer_test.go"
+	printf 'package openapi\n' >"${fixture}/internal/openapi/openapi.gen.go"
+	script=${fixture}/scripts/ci/affected-go-packages.sh
 
-	output=$(printf '%s\n' README.md | bash "$0")
+	output=$(printf '%s\n' README.md | bash "${script}")
 	grep -qx 'format_files=' <<<"${output}"
 	grep -qx 'changed_packages=' <<<"${output}"
 	grep -qx 'affected_test_packages=' <<<"${output}"
 	grep -qx 'fallback=false' <<<"${output}"
 
-	output=$(printf '%s\n' go.mod | bash "$0")
+	output=$(printf '%s\n' go.mod | bash "${script}")
 	grep -qx 'fallback=true' <<<"${output}"
 	grep -qx 'fallback_reason=root_module' <<<"${output}"
 	grep -qx 'affected_test_packages=./...' <<<"${output}"
 
-	output=$(printf '%s\n' internal/failure/failure_test.go | bash "$0")
+	output=$(printf '%s\n' internal/failure/failure_test.go | bash "${script}")
 	grep -qx 'fallback=false' <<<"${output}"
 	grep -q 'changed_packages=./internal/failure' <<<"${output}"
 	grep -qx 'affected_test_packages=./internal/failure' <<<"${output}"
-	if grep -q './internal/problem' <<<"${output}"; then
+	if grep -qE './internal/(problem|testconsumer)' <<<"${output}"; then
 		echo "test-only change expanded to reverse importers" >&2
 		return 1
 	fi
 
-	output=$(printf '%s\n' internal/failure/failure.go | bash "$0")
+	output=$(printf '%s\n' internal/failure/failure.go | bash "${script}")
 	grep -qx 'fallback=false' <<<"${output}"
 	grep -q './internal/failure' <<<"${output}"
 	grep -q './internal/problem' <<<"${output}"
+	grep -q './internal/testconsumer' <<<"${output}"
 	if grep -qx 'affected_test_packages=./...' <<<"${output}"; then
 		echo "leaf production change fell back to the full module" >&2
 		return 1
@@ -102,23 +117,29 @@ self_test() {
 		return 1
 	fi
 
-	output=$(printf '%s\n' internal/openapi/openapi.gen.go | bash "$0")
+	output=$(printf '%s\n' internal/openapi/openapi.gen.go | bash "${script}")
 	grep -qx 'format_files=' <<<"${output}"
 	grep -qx 'lint_packages=' <<<"${output}"
 	grep -q 'changed_packages=./internal/openapi' <<<"${output}"
 
 	# Both sides of a production move must remain seeds.
-	output=$(printf '%s\n' internal/failure/failure.go internal/problem/problem.go | bash "$0")
+	output=$(printf '%s\n' internal/failure/failure.go internal/problem/problem.go | bash "${script}")
 	grep -q './internal/failure' <<<"${output}"
 	grep -q './internal/problem' <<<"${output}"
 
-	output=$(printf '%s\n' internal/packagetest/packagetest.go | bash "$0")
+	output=$(printf '%s\n' internal/packagetest/packagetest.go | bash "${script}")
 	grep -qx 'affected_test_packages=' <<<"${output}"
 
-	output=$(printf '%s\n' test/inbound_webhook_process_integration_test.go | bash "$0")
+	output=$(printf '%s\n' test/inbound_webhook_process_integration_test.go | bash "${script}")
 	grep -qx 'lint_packages=' <<<"${output}"
 	grep -qx 'affected_test_packages=' <<<"${output}"
-}
+
+	printf 'package mismatch\n' >"${fixture}/internal/problem/mismatch.go"
+	output=$(printf '%s\n' internal/failure/failure.go | bash "${script}")
+	grep -qx 'fallback=true' <<<"${output}"
+	grep -qx 'fallback_reason=go_list_error' <<<"${output}"
+	grep -qx 'affected_test_packages=./...' <<<"${output}"
+)
 
 if [[ ${1:-} == --self-test ]]; then
 	self_test
@@ -273,7 +294,7 @@ dirs=${tmp}/dirs
 list_err=${tmp}/list.err
 : >"${graph}"
 : >"${dirs}"
-if ! go list -e -test -f '{{if not .ForTest}}{{.ImportPath}}	{{.Dir}}	{{if .Error}}ERR{{end}}	{{join .Imports " "}}	{{join .TestImports " "}}	{{join .XTestImports " "}}{{end}}' ./... >"${tmp}/list" 2>"${list_err}"; then
+if ! go list -e -test -f '{{if not .ForTest}}{{.ImportPath}}	{{.Dir}}	{{if .Error}}ERR{{else}}OK{{end}}	{{join .Imports " "}}	{{join .TestImports " "}}	{{join .XTestImports " "}}{{end}}' ./... >"${tmp}/list" 2>"${list_err}"; then
 	fallback=true
 	fallback_reason=go_list_error
 	affected_test_packages=./...
