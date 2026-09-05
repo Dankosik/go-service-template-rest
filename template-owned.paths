@@ -1,6 +1,6 @@
 # Template-owned portable surface.
 #
-# Every applicable path listed here is mirrored verbatim from this template into
+# Except for the two managed settings leaves below, each applicable path is mirrored verbatim from this template into
 # a derived repository by `make template-sync`, including deletions inside
 # listed directories. Harness-specific entries are filtered by the complete
 # `agent_harness` choice in the target's `template.lock`. A service may retain
@@ -8,7 +8,7 @@
 # only with a `.service-owned` marker; the sync preserves that skill regardless
 # of Git status and keeps its Claude/Qwen discovery links out of the sync commit. It
 # still mirrors and deletes every unmarked template-owned skill. A path may
-# appear here only while it carries no
+# appear here only while its managed content carries no
 # repository-specific content: no service name, no module path, no deployment
 # target, no owner, and no initialization-profile marker. `make
 # template-owned-purity-check` enforces the manifest's structural safety and
@@ -64,6 +64,7 @@ docs/universal-disciplines/
 .agents/contracts/
 .agents/skills/
 .claude/agents/
+# Only env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH is template-owned; other JSON is consumer-owned.
 .claude/settings.json
 .codex/agents/
 .cursor/agents/
@@ -77,11 +78,13 @@ docs/universal-disciplines/
 .opencode/plugins/
 .opencode/rules/
 .qwen/agents/
+# Only model.maxSubagentDepth is template-owned; other JSON is consumer-owned.
 .qwen/settings.json
 opencode.json
 
 template-owned.paths
 scripts/template-sync.sh
+scripts/template-settings-sync.py
 scripts/agent-roles-sync.sh
 scripts/dev/benchmark.sh
 scripts/harness-skills-sync.sh
