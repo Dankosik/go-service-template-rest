@@ -38,6 +38,9 @@ if [[ -n ${RUNTIME_IMAGE_POSTGRES_DSN:-} ]]; then
 		-e "APP__POSTGRES__DSN=${RUNTIME_IMAGE_POSTGRES_DSN}"
 	)
 fi
+if [[ -n ${RUNTIME_IMAGE_EGRESS_ALLOWLIST:-} ]]; then
+	docker_args+=(-e "NETWORK_EGRESS_ALLOWLIST=${RUNTIME_IMAGE_EGRESS_ALLOWLIST}")
+fi
 
 docker run -d --name "${container}" \
 	-p 127.0.0.1::8080 \
