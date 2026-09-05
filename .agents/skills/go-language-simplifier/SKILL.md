@@ -1,10 +1,30 @@
 ---
 name: go-language-simplifier
-description: "Go readability: Use when correct local Go is obscured by control flow, predicates, naming, or helpers. Own behavior-preserving simplification; Skip Go semantics, package ownership, or whole-diff overbuild."
+description: "Indirection economics. Use when opaque Go control flow, predicates, names, helpers, or deduplication obscure intent and behavior must remain unchanged."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Language Simplifier
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct affected intent paths from the changed control flow, predicates, names, temporal coupling, and helper call sites under accepted behavior; make intent direct by flattening or deleting indirection without changing semantics. Complete when the shared finding envelope accounts for every path, naming any outside boundary or proof blocker with the smallest behavior-preserving correction and focused proof. Missing behavior policy returns to the named domain Decision owner.
+Simplification is **indirection economics** inside a behavior-preserving
+boundary: the reader must learn less without losing an observable distinction.
 
-Load the [review selector](references/index.md) for one concrete pressure by default. Hand semantic defects to `go-idiomatic`, ownership to `go-implementation-ownership`, and explicit cross-file overbuild to `go-structural-quality`.
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For each proposed simplification, compare the caller-facing cost of names,
+parameters, results, control flow, and hidden contracts before and after. Name
+every behavior class the rewrite must preserve: error identity, status, nil or
+empty, mutation authority, cleanup order, and durable side-effect order where
+applicable.
+
+Duplicate-looking branches may carry different contracts; merging them is a
+behavior change, not cleanup. A one-use helper may remain when its name or
+comment is the only carrier of a current constraint. Prefer deletion over
+indirection, names over narration, and ordinary control flow over hidden
+temporal coupling.
+
+Complete when intent is cheaper to recover, every observable class still has
+focused proof, and every remaining helper carries a named current constraint.
+Load the [reference selector](references/index.md) only for a helper boundary or
+merged branch.

@@ -1,0 +1,18 @@
+name = "adjudicator-agent"
+description = "Read-only adjudicator for one surviving material reviewer conflict."
+class = "read-only-specialist"
+claude_model = "opus"
+qwen_model = "inherit"
+cursor_model = "grok-4.6[effort=xhigh]"
+grok_model = "grok-4.6"
+grok_effort = "xhigh"
+output_schema = "lane-result-v1"
+
+instructions = """
+Use only for one surviving evidence-backed reviewer conflict. Compare the
+competing claims, assumptions, evidence, and falsifiers; return the narrowest
+defensible resolution or blocker.
+
+Do not act as a first-pass reviewer, create policy, or expand scope. Root
+synthesis remains authoritative.
+"""

@@ -1,8 +1,48 @@
 ---
 name: go-systematic-debugging
-description: "Root cause: Use for Go bugs, flaky tests, build failures, hangs, deadlocks, timeouts, or regressions. Own the first broken invariant and authorized proof/fix; Skip features, policy design, or broad review."
+description: "First broken invariant. Use when a bug, flaky test, build failure, hang, deadlock, timeout, or regression has an unknown cause and needs diagnosis or authorized root-cause repair."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Systematic Debugging
 
-Use [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md) for authorized repair. For a locally accessible symptom, establish and run one agent-runnable command that can fail on the exact reported behavior before ranking causal hypotheses; make it deterministic or record its failure rate and minimize it until every retained input, caller, configuration, and step is load-bearing. Volatile live incident evidence is the alternate entry point: capture it before local reproduction work can destroy or stale it. Work causally: classify `diagnosis_only` or `fix_authorized`, reconstruct the affected invariant and hypothesis set from the symptom, volatile evidence, callers, state transitions, and sibling paths, then reproduce with controls and trace to the first broken invariant. Before ranking hypotheses, classify the symptom's boundary: name every service, client, job, and managed dependency on the failing path, and mark which side of each hop the current evidence comes from. A hop with evidence from only one side is an open hypothesis, not a cleared one. Match the observed symptom to [the reference selector](references/index.md) and load one reference only when it can change the next discriminating experiment or repair owner. Test the highest-information hypothesis one at a time and disposition it as rejected, supported, or blocked; continue until one causal chain is supported by reproduction or current incident evidence and survives the smallest available falsification, or a named blocker prevents the next experiment. In `fix_authorized`, the repair gate opens only after that diagnosis observable exists; repair only the earliest owner and replay the signal. Route accepted feature work to `go-coder`; hand timeout, retry, degradation, or overload policy to `go-reliability`. Return evidence, hypothesis dispositions, the supported root cause or explicit unproven state, results, and the next experiment or blocker. Missing causal proof keeps diagnosis open and cannot justify repair. A chain terminating at a hop you did not inspect from both sides is unproven, not supported; call that hop a blocker only when its source and telemetry are genuinely unreachable.
+Debugging ends at the **first broken invariant**, not at the first plausible
+explanation. Classify the request as `diagnosis_only` or `fix_authorized`.
+
+## Signal Gate
+
+For a local symptom, establish one agent-runnable command that has already been
+run and catches the user's exact symptom. Make it deterministic and fast, or
+record and raise its reproduction rate. For a live incident, capture volatile
+evidence before restart, signal, rollout, or time can destroy it, and state which
+side of every boundary the evidence covers.
+
+No hypothesis work starts until this signal exists or the exact evidence
+blocker is named.
+
+## Causal Loop
+
+Minimize the reproducer until every remaining input, dependency, step, and
+timing condition is load-bearing. Build ranked falsifiable hypotheses; each
+states the observation that would distinguish it. Change one variable or add
+one targeted probe at a time, recording each hypothesis as rejected, supported,
+or blocked.
+
+Walk backward through affected boundaries until the earliest invariant whose
+inputs were valid but whose output was wrong. A downstream victim is not the
+root cause. Use [Integration Boundaries](../../../docs/architecture/integration.md)
+when the far-side contract or runtime locator changes the experiment, and load
+one matching [debugging reference](references/index.md) only when its stated
+pressure does.
+
+In `fix_authorized`, repair the earliest shared owner, turn the minimized
+reproducer into deterministic regression proof at the correct seam, and replay
+the original unminimized signal. In `diagnosis_only`, make no repository edit.
+
+Complete when one causal chain survives the signal and its smallest available
+falsifier, or when the exact next experiment and missing capability are named.
+Remove temporary instrumentation before completion. Use [production
+diagnosis](../../../docs/universal-disciplines/production-diagnosis/SKILL.md)
+for a running multi-service symptom.
