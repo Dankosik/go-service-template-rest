@@ -1,53 +1,21 @@
 # Inter-Service Protocol Selection
 
-Use this decision only after the interaction has been classified as a synchronous
-service boundary. A queue, event, or durable workflow is a different architecture
-decision, not a REST-versus-gRPC choice.
+## Load When
+Load when a new call crosses a service boundary synchronously, a consumer class changes, or an existing contract is proposed for migration between REST and gRPC. A queue, event, or durable workflow is a different decision.
 
-## Default
+## Decide
+- Classify consumers from current consumers, repositories, and the deployment path — never from a service name or a private network. A contract is strictly internal only when every caller and callee is an organization-controlled workload, no browser or third party shares it, and every affected consumer can own a generated client.
+- Default a new strictly-internal synchronous contract to native gRPC when the profile is present in the checkout. `internal/infra/grpc` owns server policy and lifecycle, `internal/infra/grpcclient` owns bounded shared connections, `api/proto/` is the contract source of truth, and `BASE_REF=<ref> make proto-breaking` is the compatibility gate.
+- The gRPC profile is optional and stripped at initialization. If `internal/infra/grpcclient` is absent, choosing gRPC adopts the whole profile — protobuf tooling, generation drift checks, CI profile jobs — not just a listener. Price that against one more resource on a REST contract that already has `make openapi-breaking`.
+- Railway publishes what `railway.toml` declares, and it declares the REST listener and `/health/ready` only. A native gRPC contract runs over Railway private networking with the neighbor's internal DNS and explicit port; a public gRPC endpoint needs end-to-end HTTP/2 trailers revalidated on the current platform, or TCP Proxy with application TLS and hostname verification. [docs/grpc.md](../../../../docs/grpc.md) owns that boundary; enabling the runtime proves no reachability.
+- Keep public, browser, mobile, third-party, and webhook contracts on REST with `api/openapi/service.yaml` as the source of truth. Existing REST does not become a migration task because gRPC is the internal default.
+- Record whether the neighbor may receive W3C Trace Context. The shared gRPC client always emits it and emits neither baggage nor the request ID; a target that must receive less or more requires a separate accepted client policy before wiring.
+- Record the neighbor in [Integration Boundaries](../../../../docs/architecture/integration.md): its contract source, runtime evidence, and the field joining it to this service's `X-Request-ID`.
+- After selection, `go-grpc` owns RPC schema, status, interceptor, and streaming contracts; `go-api-contract` owns REST representation and OpenAPI authority. Business behavior stays outside both transports.
 
-Apply this order:
+## Reject
+- Exposing both transports for one behavior without two current consumer classes. Two transports are two representations of the same state drifting under separate breaking-change gates.
+- Treating a shared generated client as the boundary contract. The contract is the proto or the OpenAPI document; a client is derived from it and cannot carry a guarantee the contract does not state.
 
-1. Honor an explicit accepted protocol or compatibility requirement.
-2. For a new strictly internal service-to-service contract, choose native gRPC
-   when the user expressed no protocol priority and no current constraint below
-   defeats it.
-3. For a public, browser, mobile, third-party, webhook, or human-oriented HTTP
-   contract, choose REST with an
-   [OpenAPI HTTP API description](https://spec.openapis.org/oas/latest.html)
-   unless stronger current evidence requires another protocol.
-
-A contract is strictly internal only when every known caller and callee is an
-organization-controlled service workload, no external or browser-facing consumer
-shares the contract, the deployment path preserves native gRPC semantics, and
-generated client ownership described by
-[gRPC core concepts](https://grpc.io/docs/what-is-grpc/core-concepts/) can close
-for every affected service. Derive that classification from current consumers,
-repositories, and deployment evidence; do not infer it from a service name or
-private network alone.
-
-## Constraints That Defeat The Internal Default
-
-Keep or choose REST/OpenAPI when an accepted compatibility requirement depends
-on it; the platform cannot preserve the
-[gRPC over HTTP/2 protocol](https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md),
-including trailers and status semantics; HTTP caching, intermediary
-compatibility, or direct human tooling is material; or an affected consumer
-cannot own generated gRPC clients. Existing REST/OpenAPI does not become a
-migration task merely because gRPC is the default for new internal contracts.
-
-Do not add both transports for hypothetical reuse. Dual exposure requires
-evidence of distinct current consumer classes, one canonical behavior owner, and
-proof that transport-specific representations and failures cannot drift.
-
-## Decision Closure
-
-A complete decision records the consumer classification and evidence, selected
-protocol, dominant reason the live alternative lost, affected contract authority,
-required proof, and reopen condition. Reopen when the consumer class,
-compatibility obligation, or deployment path changes.
-
-After selection, load `go-grpc` for the RPC schema, status, interceptor, health,
-streaming, and lifecycle contract, or `go-api-contract` for REST representation,
-HTTP semantics, and OpenAPI authority. Keep business behavior owned outside both
-transports.
+## Prove
+Name the consumer classification and its evidence, the selected protocol, the live alternative that lost and the reason that rejects it, the correlation policy chosen per neighbor, and the condition that reopens the choice — a change of consumer class, compatibility obligation, or deployment path. gRPC selection proves itself with `make proto-check` and `BASE_REF=<ref> make proto-breaking`; REST with `make openapi-check`.

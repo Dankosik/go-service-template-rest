@@ -1,15 +1,35 @@
 ---
 name: go-delivery-platform
-description: "Delivery platform: Use for CI/CD gates, release trust, drift, containers, migrations, rollout, or control review. Own delivery acceptance; Skip API, data, security, reliability, or pipeline implementation."
+description: "Release gates. Use when CI/CD, artifact provenance, drift, containers, migrations, rollout, or control-plane evidence determines whether a candidate may ship."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Delivery Platform
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct required gates from accepted delivery policy, repository workflows, build and deploy surfaces, migrations, generated/docs controls, and rollout dependencies. Treat each status, parity check, provenance rule, container, rollout, or exception as a gate with an artifact, command, observable prerequisite, pass condition, exception owner, and recovery consequence.
+Delivery trust is a chain of **gates** with named artifacts, pass conditions,
+exceptions, and recovery consequences.
+
+`accepted policy -> gate inventory -> artifact and command -> pass condition -> exception owner -> rollout and recovery -> proof`
+
+Treat each status, parity check, provenance rule, container, migration, or
+rollout control as a gate. A waiver has an owner and expiry; drift between
+declared and actual controls is a finding.
+
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From accepted delivery policy to terminal rollout or rollback, build
+`DeliveryGate{control, artifact, command, pass_condition, exception_owner,
+expiry, rollout, recovery, proof}` for every required status, parity check,
+provenance rule, container, migration, or runtime control.
 
 ## Choose The Branch
 
-- **Decision** — select when delivery policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when shared Decision dispositions cover every gate, forced consequence, proof, and exception owner.
-- **Review** — select when changed delivery artifacts must conform to accepted policy. Load the [review selector](references/review/index.md) for the changed control. Account for every gate through the shared finding envelope, naming any outside boundary or proof blocker; a waived required gate remains a finding with focused proof. Missing policy returns to the named Delivery Decision owner.
+- **Decision** — load one matching [decision reference](references/decision/index.md)
+  and disposition every gate, forced consequence, proof, and exception owner.
+- **Review** — load one matching [review reference](references/review/index.md)
+  and account for every gate; a waived required gate remains a finding.
 
-Hand resilience policy to `go-reliability` and trust controls to `go-security`.
+Complete only when every required gate has a current artifact, fail-closed pass
+condition, exception disposition, and recovery consequence. A green job that
+did not compare or exercise its intended surface is not a passing gate.
