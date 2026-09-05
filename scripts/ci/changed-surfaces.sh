@@ -114,7 +114,7 @@ classify() {
 			.github/dependabot.yml) mark dependency_automation ;;
 		esac
 		case "${file}" in
-			AGENTS.md|CLAUDE.md|Grok.md|QWEN.md|.agents/*|.claude/*|.codex/*|.cursor/*|.grok/*|.opencode/*|.qwen/*|docs/agent-harness/*|docs/spec-first-workflow/*|docs/prompt-*|docs/skill-authoring.md|docs/validation/*|scripts/agent-roles-sync.sh|scripts/harness-skills-sync.sh|scripts/codex-agents-sync.sh|scripts/template-sync.sh|scripts/ci/template-owned-purity-check.sh|scripts/ci/template-sync-behavior-check.sh)
+			AGENTS.md|CLAUDE.md|Grok.md|QWEN.md|.agents/*|.claude/*|.codex/*|.cursor/*|.grok/*|.opencode/*|.qwen/*|docs/agent-harness/*|docs/spec-first-workflow/*|docs/prompt-*|docs/skill-authoring.md|docs/validation/*|scripts/agent-roles-sync.sh|scripts/harness-skills-sync.sh|scripts/codex-agents-sync.sh|scripts/template-sync.sh|scripts/template-settings-sync.py|scripts/ci/template-owned-purity-check.sh|scripts/ci/template-sync-behavior-check.sh)
 				mark agent_instructions
 				;;
 		esac
@@ -267,6 +267,9 @@ assert_case() {
 }
 
 self_test() {
+	assert_case scripts/template-settings-sync.py \
+		"agent_instructions" \
+		"go_source shell module_initializer runtime_image"
 	assert_case specs/example/candidate-manifest.json \
 		"documentation" \
 		"go_source shell validation_system"
