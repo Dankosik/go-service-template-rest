@@ -29,8 +29,8 @@ causal attempt failed, or review exposed a previously unknown invariant. If
 those signals disagree, raise. After a causal focused-proof or review miss,
 raise capability for the remaining repair of that unit; do not keep the cheaper
 configuration that missed the invariant. Child work uses the cheapest
-configuration likely to close its fixed brief. Preserve an exact user-selected
-model.
+configuration permitted by the adapter for its authority and fixed brief.
+Preserve an exact user-selected model.
 
 Choose roles by capability: `evidence-agent`, `specialist-agent`,
 `worker-agent`, `reviewer-agent`, or `adjudicator-agent`. Put domain expertise or
