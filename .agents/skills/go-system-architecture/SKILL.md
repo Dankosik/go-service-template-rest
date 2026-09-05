@@ -1,10 +1,30 @@
 ---
 name: go-system-architecture
-description: "System architecture: Use for service boundaries, topology/protocol, truth, consistency, failure, or migration. Own runtime interactions; Skip Go placement, local data, domain policy, or implementation."
+description: "Runtime boundary design. Use when a change adds or changes a component crossing, protocol, source of truth, consistency expectation, failure model, or migration topology."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go System Architecture
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one decision branch: reconstruct every material boundary crossing from accepted behavior, current components and contracts, sources of truth, material flows, consumers, and rollout topology. At each crossing name authority, protocol, interaction, consistency, failure, migration, and forced consequence, then choose the smallest coherent runtime boundaries. Complete when shared Decision dispositions cover every crossing and leave no ownership, sequence, proof, or rollout condition for implementation to invent.
+Architecture is decided by **forces**: every component, boundary, and protocol is earned by a named requirement, constraint, or failure mode, and the simplest topology whose contracts survive the stated load and failures wins.
 
-Load the [decision selector](references/index.md) for one concrete architecture pressure by default. Hand package/file placement to `go-implementation-ownership`, data mechanics to `go-data-architecture`, and business policy to `go-domain-invariant`.
+`requirements -> forces -> boundary crossings -> interaction contracts -> consistency and failure -> migration -> proof`
+
+Boundary crossings are where systems break, so each one names its authority, protocol, consistency expectation, failure behavior, and migration story — whatever stays unnamed gets invented under incident pressure by whoever is on call.
+
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From every new or changed runtime crossing through its migration and terminal
+failure disposition, build `Crossing{from, to, authority, protocol,
+interaction, consistency, failure, migration, forced_consequence, proof}` from
+accepted behavior, current components, contracts, sources of truth, consumers,
+and rollout topology. Choose the smallest coherent runtime boundaries.
+
+[Distributed system design](../../../docs/universal-disciplines/distributed-system-design/SKILL.md)
+owns the general force, estimate, and failure-model method.
+
+Load the [decision selector](references/index.md) for the affected current-state
+leaf or a new service call, protocol, migration, or consumer-class change.
+Complete when every crossing is dispositioned and implementation has no
+boundary, authority, sequence, proof, or rollout condition left to invent.

@@ -1,19 +1,12 @@
 # MVP Scope And Not Doing
 
-## Behavior Change Thesis
-When loaded for symptom "the idea is growing into a large bundle or the Not Doing list is missing/toothless," this file makes the model choose a learning-shaped MVP boundary and concrete exclusions instead of the likely mistake of calling a platform-sized bundle an MVP.
-
-## When To Load
+## Load When
 Load this when scope is expanding, the MVP boundary is vague, the user asks for "complete" coverage, or `Not Doing` would otherwise say only "advanced features."
 
-## Decision Rubric
-- Define MVP by the learning it must produce, not by the smallest amount of code.
-- Keep safety, trust, and basic quality intact; MVP is not permission to ship sloppy work.
-- Compare against the current baseline, not an ideal future product.
-- Write `Not Doing` as concrete excluded functionality, audiences, use cases, integrations, or guarantees.
-- Preserve the smallest slice that proves the core bet; defer features that assume the answer.
+## The Move
+Define MVP by the learning it must produce — the smallest slice that proves the core bet against the current baseline — while keeping the safety, trust, and quality behavior the idea is supposed to validate. Defer every feature that assumes the answer. Write `Not Doing` as concrete excluded functionality, audiences, integrations, and guarantees; an abstract exclusion constrains nothing, and "complete experience" quietly re-admits dashboards, notifications, imports, exports, and admin controls.
 
-## Imitate
+## Inspect
 Input: "Build undo for environment deletion with snapshots, restore API, audit timeline, and admin reporting."
 
 ```markdown
@@ -30,21 +23,6 @@ Not Doing
 
 Copy the move: it validates whether prevention reduces wrong deletions before committing to a broad recovery platform.
 
-Input: "Let's create full team analytics for onboarding."
-
-```markdown
-MVP Scope
-Support one onboarding path from blank workspace to first useful project for a single target segment. Track whether the user reaches that first outcome without needing help content.
-
-Not Doing
-- No manager analytics dashboard.
-- No cross-team benchmarking.
-- No video course.
-- No personalized AI coach.
-```
-
-Copy the move: it narrows the first pass to the behavior change, not the surrounding reporting system.
-
 ## Reject
 ```markdown
 MVP Scope
@@ -54,17 +32,4 @@ Not Doing
 - Advanced features.
 ```
 
-Reject this because the MVP is still platform-sized and the `Not Doing` list does not constrain anything.
-
-```markdown
-MVP Scope
-A quick prototype without auth, logging, or error handling.
-```
-
-Reject this when trust or safety is part of the value; cutting basic quality can invalidate the learning.
-
-## Agent Traps
-- Do not define MVP as "version 1 of every feature."
-- Do not cut the very safety/trust behavior the idea is supposed to validate.
-- Do not make `Not Doing` abstract. Name excluded integrations, actors, guarantees, and recovery paths.
-- Do not let "complete experience" smuggle in dashboards, notifications, imports, exports, analytics, and admin controls by default.
+The MVP is still platform-sized and the `Not Doing` list does not constrain anything.

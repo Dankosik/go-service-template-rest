@@ -1,8 +1,18 @@
 ---
 name: agent-prompt-composer
-description: "Reconstruction: Use when rough, mixed-language, or noisy input needs a repository-grounded English Intake brief. Own fidelity; Skip routing-ready input or translation/editing."
+description: "Prompt packaging: Use whenever asked to write a repo-grounded prompt or rough input needs packaging. Own the shortest locator/delta prompt; Skip translation."
+metadata:
+  invocation: user
+  kind: workflow
+disable-model-invocation: true
 ---
 
 # Agent Prompt Composer
 
-Apply [Intake](../../../docs/spec-first-workflow/phases/intake.md) as the output contract. Preserve only source material that can change its accepted outcome or business meaning, scope or non-goals, authority, observable success, routing facts, assumption boundary, or stop condition. Preserve an identifier, path, or command only when downstream action depends on it; discard wrapper noise and link inherited repository rules instead of copying them. Load [examples](references/example-transformations.md) only when output calibration is genuinely unclear. Return the Intake brief or its single blocking question.
+Apply [Prompt Composition](../../../docs/prompt-composition.md). Use
+[Intake](../../../docs/spec-first-workflow/phases/intake.md) only when outcome,
+scope, authority, target, or stop meaning is unresolved. A routing-ready native
+entrypoint or artifact takes the fast path: return its invocation/locator plus
+only a missing user-owned delta. Load [examples](references/example-transformations.md)
+only when calibration is unclear. Return the prompt or Intake's single blocking
+question.

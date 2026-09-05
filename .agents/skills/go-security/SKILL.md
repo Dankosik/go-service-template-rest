@@ -1,15 +1,34 @@
 ---
 name: go-security
-description: "Security: Use for trust boundaries, identity, authorization, tenant isolation, tokens, secrets, injection, SSRF, or review. Own policy; Skip non-security API, data, reliability, or placement."
+description: "Attacker paths. Use when identity, authorization, tenancy, tokens, secrets, injection, SSRF, abuse, or another trust boundary changes what an attacker can reach."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Security
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct every reachable attacker path from affected trust-boundary surfaces in routes, handlers, identities, objects, stores, outbound calls, secrets, and abuse controls. Follow each path through identity, authority, asset, enforcement point, attacker action, and observable failure; silence is never evidence that a path is closed.
+Security work walks **attacker paths** from trust boundary through principal,
+authority, asset, enforcement point, attacker action, and observable denial.
 
-## Choose The Branch
+`boundary -> principal -> enforcement -> action -> failure -> negative proof`
 
-- **Decision** — select when security policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing threat. Complete when shared Decision dispositions cover every reachable path with fail-closed behavior and focused negative proof.
-- **Review** — select when changed code must conform to accepted security policy. Load the [review selector](references/review/index.md) for the concrete attacker path. Follow every reachable path into the shared finding envelope, naming any outside boundary or proof blocker; no finding requires focused negative proof. Missing policy returns to the named Security Decision owner.
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From every caller-controlled entrypoint to an asset or observable denial, build
+`AttackerPath{boundary, principal, asset, enforcement, action, failure,
+denial_proof}` across route exposure, verified identity, objects reached,
+outbound destinations, secrets, and caller-controlled work. Missing identity,
+ambiguous tenant, or absent policy denies. Every accepted control needs focused
+negative proof because an allow test also passes against a bypass.
 
-Hand non-security contract semantics to `go-api-contract`, data authority to `go-data-architecture`, and placement to `go-implementation-ownership`.
+Decide against existing owners: `internal/infra/oidcjwt` verifies tokens,
+`api/openapi/service.yaml` declares default auth, `internal/infra/httpclient`
+pins destinations, and `internal/config` separates secret inputs. Load the
+[reference selector](references/index.md) for identity, exposure, interpreter
+input, outbound destination, work amplification, or a secret sink.
+
+For a **Decision**, disposition every reachable path with fail-closed behavior
+and negative proof. For **Review**, follow each path into the shared finding
+envelope; no findings still requires the focused deny proof. Load [access
+control](../../../docs/universal-disciplines/auth-access-control/SKILL.md) when
+the credential, permission, or revocation mechanism itself is open.

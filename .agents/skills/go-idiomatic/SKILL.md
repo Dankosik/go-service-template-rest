@@ -1,10 +1,29 @@
 ---
 name: go-idiomatic
-description: "Go idiom: Use when changed Go risks errors, context, nil/zero, receivers, method sets, aliasing, resources, or API contracts. Own semantics; Skip readability, whole-diff structure, or package ownership."
+description: "Semantic ownership. Use when errors, context, nil or zero values, method sets, aliasing, or resource lifetimes change what a Go caller observes."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Idiomatic
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct semantic obligations from changed symbols, callers, exported APIs, context/resource lifetimes, nil/zero states, errors, receiver/method sets, and mutable-value aliasing, then inspect Go semantics rather than style. Complete when the shared finding envelope accounts for every obligation; name any outside boundary or proof blocker with its forced consequence and focused proof. Unset behavior returns to the named domain Decision owner.
+Go correctness follows **semantic ownership**: who owns error identity, work
+lifetime, mutable backing storage, release, and the admissible zero state.
 
-Load the [review selector](references/index.md) for one violated contract by default. Hand placement to `go-implementation-ownership` and behavior-preserving readability to `go-language-simplifier`.
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For every changed boundary, build one ownership story from producer through
+caller-visible observation. Name who may inspect the error, cancel the work,
+mutate aliased state, release the resource, construct a non-zero value, and
+reach each method through the stored type.
+
+Configured linters prove mechanical shape, not that `%w` exposes the right
+cause, `Close` occurs in the owning scope, a clone has sufficient depth, or a
+typed nil is absent to its caller. A Decision assigns each obligation to one
+owner and observable contract. A Review tries the plausible wrong default at
+the actual caller boundary.
+
+Complete when every changed semantic boundary has one owner, preserved
+caller-visible behavior, and focused proof or a named gap. Load the [reference
+selector](references/index.md) only when its stated pressure is observable in
+changed symbols or callers.

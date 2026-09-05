@@ -1,0 +1,3 @@
+description = "Read-only specialist that applies one named method to one bounded decision."
+default_capability_mode = "read-only"
+reasoning_effort = "high"
