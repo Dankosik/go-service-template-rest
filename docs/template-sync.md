@@ -4,6 +4,13 @@ This template is the single source of truth for its portable instruction and
 tooling surface. A repository derived from it adopts those changes by running a
 script, not by hand-merging files and not by asking an agent to copy them.
 
+Selected Claude and Qwen profiles also mirror the template-owned project
+`settings.json` depth defaults and their native Lead carriers. OpenCode carries
+its depth in `opencode.json`; Codex generates its runtime from
+`.agents/codex-project.toml`. Keep credentials and personal machine overrides
+outside these portable files. Native configuration keys are not interchangeable
+between harnesses.
+
 ## Read When
 
 - Changing any portable instruction or tooling file and deciding whether derived repositories must receive that change.

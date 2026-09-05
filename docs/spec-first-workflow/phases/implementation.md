@@ -16,16 +16,20 @@ canonical ledger transitions require one routing owner. Durable recovery or
 isolated handoff can require this carrier even for one unit.
 
 The Orchestrator never implements unit work. The Lead does not schedule sibling
-acceptance units. Do not bind one Lead when sibling units still need scheduling.
+acceptance units. Do not replace the Orchestrator with a Lead while sibling
+units still need scheduling. The Orchestrator may reassign a finished Lead
+under the [Planning Ledger Contract](planning/ledger-contract.md#ready-frontier).
 
 ## Execution
 
 The Acceptance-Unit Lead owns the fixed unit through integration, claim-matched
 proof, required independent review, and one accepted or blocked result. Load
 the current task packet and consumed outputs; repair only within that boundary.
-A new postcondition, responsibility, behavior, or proof oracle reopens Planning
-instead of expanding the task. A discovered mutable owner or exclusive lock
-updates the live frontier without reopening Outcome.
+Reopen the smallest upstream owner only when evidence invalidates accepted
+behavior, architecture, the task boundary, or its proof criterion. Additional
+callers, error handling, cleanup, and internal placement needed to satisfy the
+same accepted result remain implementation work. A discovered mutable owner or
+exclusive lock updates the live frontier without reopening Outcome.
 
 Fixture, transport-control, and test-runner defects remain repairs of this unit
 while accepted behavior, oracle, and proof boundary hold. Reopen Test Design
@@ -40,35 +44,52 @@ capability, or keeps the remaining context reliably bounded. A serial handoff
 that duplicates the Lead's context needs one of those reasons. Use the existing
 brief; no separate delegation assessment is required.
 
-Fan out execution lanes when two or more strict subsets have disjoint writable
+Delegate parallel execution lanes when their expected independent progress
+outweighs dispatch and integration cost. Eligible subsets have disjoint writable
 responsibility, no shared exclusive lock, stable accepted interfaces,
 independently checkable focused proof, and a result the Lead can integrate
-without delegating a missing decision. Dispatch every independent lane before
-waiting. Integrate returned lane results serially under the Lead. When the Lead
-cannot reliably hold the whole edit surface, fan out lanes and keep one review.
+without delegating a missing decision. Dispatch selected independent lanes
+before waiting. Integrate returned lane results serially under the Lead. When
+the Lead cannot reliably hold the whole edit surface, fan out lanes while
+keeping acceptance and any required review at the unit boundary.
 
 An identified lane that produces no material result at a stall signal is a
 carrier failure. Replace it or finish that subset directly. Do not wait
 indefinitely.
 
+Executors diagnose and repair code and focused-check failures within the
+accepted contract, ownership, and proof boundary without returning each attempt
+to the Lead. Return a contract conflict, inadequate oracle, unresolved material
+risk, or stalled diagnosis with evidence and a proposal. The Lead resolves the
+gap and retains acceptance responsibility; routine repair needs no new phase.
+
 Execution lanes are not acceptance units. Workers do not accept, transition, or
-review the parent unit. Lanes do not spawn; a brief that still needs partition
-returns to the Lead. For a lane's technical or proof gap, the Lead applies
+review the parent unit. Apply shared [Nested
+Execution](../../agent-harness.md#nested-execution) through the selected adapter;
+when native limits prevent descendants, return the subset to the nearest
+capable parent. For a lane's technical or proof gap, the Lead applies
 [Parent-Owned Recovery](../shared/transition.md#parent-owned-recovery) and
 resumes the same unit after the required input closes.
 
 ## Candidate Freeze And Proof
 
-After focused proof passes, freeze one candidate identity. Dispatch independent
-review and remaining read-only or non-mutating validation concurrently. Do not
-mutate the candidate while those lanes are active. Acceptance waits for every
-mandatory result; the lanes do not wait for one another.
+When the code is ready, fix the candidate and apply
+[Review](../shared/review.md)'s Implementation trigger. Required review may run
+alongside focused and other non-mutating checks on that candidate. Wait for a
+cheap compile or smoke check first when it would avoid reviewing unusable code;
+do not require all focused proof to finish before useful review starts.
+Name in-flight checks and their owners in the existing brief and deliver their
+results to the reviewer without duplicate execution. Respect validation locks
+and resource limits; review overlap does not authorize concurrent heavy checks.
+Do not mutate the candidate while its lanes are active. If repair needs an edit,
+stop or join lanes using that candidate first, then rerun only invalidated proof and review.
+Acceptance waits for all mandatory results on the repaired candidate.
 
-Workers run only the focused proof named by their brief. The Lead does not
-rerun an equivalent package aggregate on an unchanged integrated candidate.
-Surface-aware aggregate proof runs once as `make verify` on the integrated
-delivery tree unless the unit's own acceptance claim still needs a leaf that
-`make verify` marked not applicable.
+Executors run the task's focused proof. The Lead assesses its sufficiency,
+reuses current evidence, and runs any required unit Integrated check before
+acceptance. The Orchestrator records that verdict without repeating the checks
+or review. [Evidence Contract](../shared/evidence-contract.md) assigns the final
+delivery aggregate; unit acceptance alone does not trigger it.
 
 The same Lead owns every candidate-caused repair. [Review](../shared/review.md)
 selects bounded delta recheck versus a fresh reviewer. During orchestrated
@@ -87,6 +108,7 @@ Contract](planning/ledger-contract.md) only when a persisted ledger exists, and
 [remote preflight](../shared/deployment-proof-preflight.md) only before a
 matching external action.
 
-Done when current evidence and review establish the unit's postcondition on the
-real path. Otherwise return the exact unverified claim and owner. Reopen through
+Done when current evidence, Lead self-review, and any required independent
+review establish the unit's postcondition on the real path. Otherwise return
+the exact unverified claim and owner. Reopen through
 [Transition](../shared/transition.md) only when an accepted input is invalid.

@@ -15,6 +15,13 @@ sources, fixed candidate identity when crossing a boundary, current proof, and
 irreproducible external evidence. Reuse valid receipts and run only a missing or
 adversarial falsifier.
 
+When named checks are still running on the fixed candidate, inspect the code
+and supported traces without duplicating those checks. Pending execution alone
+is not a defect or unavailable proof. Receive the results before a final PASS;
+report discovered defects promptly. Failed or unavailable required proof keeps
+its existing failure or NEEDS_PARENT path. If repair changes the candidate,
+apply shared Review's delta and freshness rules.
+
 A delegated execution lane, generated output, partial package change, or
 intermediate handoff is reviewed here only when it is itself a distinct
 acceptance unit.
@@ -47,7 +54,7 @@ and their invalidated proof. Do not reopen unaffected reasoning.
 
 ## Integrated candidate
 
-Use after two or more accepted units share one integrated candidate. Falsify
+Use when shared Review selects an integrated candidate. Falsify
 only whole-spec coverage, cross-unit compatibility, assembly of the candidate,
 and the ledger's global Completion. Do not reopen accepted unit-local findings
 unless the integrated candidate invalidated them. Each surviving finding names

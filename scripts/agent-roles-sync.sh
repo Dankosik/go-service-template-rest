@@ -196,8 +196,8 @@ for source_file in "${sources}"/*.toml; do
 		fallback_file="${classes}/mutable-worker-fallback.md"
 		sandbox_mode="workspace-write"
 		cursor_readonly="false"
-		claude_tools="Read, Grep, Glob, Bash, Edit, Write"
-		qwen_tools=$'  - read_file\n  - grep_search\n  - glob\n  - list_directory\n  - run_shell_command\n  - write_file\n  - edit'
+		claude_tools="Read, Grep, Glob, Bash, Edit, Write, Agent, SendMessage, TaskOutput, TaskStop"
+		qwen_tools=$'  - read_file\n  - grep_search\n  - glob\n  - list_directory\n  - run_shell_command\n  - write_file\n  - edit\n  - agent\n  - list_agents\n  - send_message\n  - task_stop'
 		grok_permission_mode="bypassPermissions"
 		grok_capability="all"
 		;;
@@ -312,7 +312,12 @@ for source_file in "${sources}"/*.toml; do
 		if [[ "${class}" == read-only-specialist ]]; then
 			printf '%s\n' '  edit: deny'
 		fi
-		printf '%s\n' '  task: deny' '  question: deny' '---' ''
+		if [[ "${class}" == mutable-worker ]]; then
+			printf '%s\n' '  task:' '    "*": deny' '    worker-agent: allow' '    evidence-agent: allow'
+		else
+			printf '%s\n' '  task: deny'
+		fi
+		printf '%s\n' '  question: deny' '---' ''
 		printf '%s\n\n%s\n' "${common}" "${fallback}"
 		[[ -z "${schema_line}" ]] || printf '\n%s\n' "${schema_line}"
 		printf '\n%s\n' "${body}"
@@ -342,6 +347,9 @@ check_extra() {
 	for file in "${target}"/*."${extension}"; do
 		role=${file##*/}
 		role=${role%."${extension}"}
+		if [[ "${harness}" == claude || "${harness}" == qwen ]] && [[ "${role}" == acceptance-unit-lead ]]; then
+			continue
+		fi
 		if [[ "${harness}" == grok ]] && is_grok_session_agent "${role}.${extension}"; then
 			continue
 		fi
@@ -366,6 +374,9 @@ sync_generated() {
 	for file in "${target}"/*."${extension}"; do
 		role=${file##*/}
 		role=${role%."${extension}"}
+		if [[ "${harness}" == claude || "${harness}" == qwen ]] && [[ "${role}" == acceptance-unit-lead ]]; then
+			continue
+		fi
 		if [[ "${harness}" == grok ]] && is_grok_session_agent "${role}.${extension}"; then
 			continue
 		fi

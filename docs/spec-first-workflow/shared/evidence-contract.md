@@ -31,9 +31,14 @@ Reuse existing proof when it would fail on the changed observable. Add a test or
 fixture only for otherwise-unproved changed behavior; unrelated historical
 coverage remains outside the unit.
 
-The bounded-change actor owns iterative focused checks. The acceptance owner
-assigns every deterministic gate, validates any reused receipt, and runs
-`make verify` once on the integrated candidate. Rerun `make prove` only when
+The bounded-change actor owns iterative focused checks. The unit Lead validates
+reused evidence and completes the packet's required proof, including any unit
+Integrated check, before acceptance. Do not defer a unit-required check to final
+delivery. The Orchestrator records acceptance without repeating that work.
+The integrated delivery owner runs `make verify` once on the final delivery
+candidate, not after each unit or ledger transition; final delivery and global
+Completion remain pending until their required proof passes. For a single-unit
+delivery, these owners may be the same actor. Rerun `make prove` only when
 package-sized iteration is still needed and the candidate will change before
 `make verify`. A reviewer runs only a missing or adversarial falsifier for its
 independent question. Run `ALLOW_FULL=1 make check` only when the integrated claim spans its

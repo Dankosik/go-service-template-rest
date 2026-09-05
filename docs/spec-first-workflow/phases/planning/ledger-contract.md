@@ -65,6 +65,19 @@ locks are free and isolation cost is smaller than the unit's work; otherwise
 start it serially on the current checkout when that checkout is free.
 Overlapping owners or locks stay serial.
 
+The Orchestrator may assign the next ready related unit to the same Lead after
+its previous unit is accepted and landed, its lanes have stopped, and no repair
+or handoff remains. Reuse useful context when it saves startup work; use a new
+Lead when the subject, context load, or required native configuration makes
+that more reliable. Do not hold independent ready work waiting for a preferred
+Lead. The reassigned Lead loads the new packet and current checkout/base and
+consumed outputs; previous task assumptions and verdicts do not transfer. Each
+unit keeps its own proof, review disposition, and acceptance result. Only the
+Orchestrator chooses the next unit and updates its Execution locator; a reused
+Lead owns one active unit and cannot serve as its independent reviewer.
+If an earlier unit later reopens, serialize its repair or transfer its Lead
+ownership before dispatch; reuse never creates two active scopes for one Lead.
+
 After every result, integration, blocker, or accepted transition, re-read
 canonical ledger state, release completed locks, recompute the frontier, and
 immediately dispatch newly ready units. Continue waiting only when no additional
@@ -131,9 +144,12 @@ Use `blocked` only when no ready unit or owner-held recovery remains because a
 required user/external input or authority is unavailable. A conflicting
 `status: blocked` reopens Planning; it is not a user confirmation question.
 After the final accepted unit, verify the global Completion condition before
-`done`. When the integrated candidate contains two or more accepted units,
-apply required [Review](../../shared/review.md) for that candidate before
-`done`. Then load [Cleanup](../../shared/cleanup.md) and report terminal
+`done`. Apply [Review](../../shared/review.md)'s integrated-candidate trigger to
+remaining cross-unit risks; record its verdict or not-required disposition in
+the existing Completion result. Unit count does not add a review gate. The
+delivery owner runs the final aggregate through [Evidence
+Contract](../../shared/evidence-contract.md), not after every ledger transition.
+Then load [Cleanup](../../shared/cleanup.md) and report terminal
 completion only after execution-only state is removed or Cleanup returns its
 exact blocker.
 

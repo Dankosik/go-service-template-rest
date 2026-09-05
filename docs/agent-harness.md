@@ -47,6 +47,57 @@ Choose roles by capability: `evidence-agent`, `specialist-agent`,
 a phase review lens in the brief's `Method`; use model/effort fields for a
 critical quality tier instead of creating another semantic role.
 
+## Context And Lifetime
+
+Lifetime follows responsibility, not model size:
+
+| Owner | Lifetime |
+| --- | --- |
+| Orchestrator | The ledger; recover from canonical state when context is no longer reliable. |
+| Architect or phase owner | Its macro phase; a different phase or independent design uses a fresh actor. |
+| Lead | Its unit, with related-unit reuse only under the Planning Ledger Contract. |
+| Execution or evidence lane | One bounded brief and corrections of that same result, including on smaller models. |
+
+Start every execution or evidence lane, including nested descendants, with a
+fresh history using the selected adapter's native controls. Supply the accepted
+result, necessary decisions,
+source locators, writable boundary, and focused proof through the existing
+Subagent Brief. Clean history excludes the parent's conversation; it does not
+remove applicable instructions, tools, permissions, or current repository files.
+Reviewer freshness remains governed by shared Review.
+
+Keep corrections with the same worker while its result, responsibility, and
+proof boundary hold and its context remains useful. A different outcome,
+writable responsibility, or independent question requires a new agent, even
+when the old one is idle. Lead reuse does not extend to its execution lanes.
+Once the parent consumes a completed result, end that worker's assignment;
+resume it only for a correction within the same brief.
+
+For stalled diagnosis or unreliable context, preserve the current edits and
+material findings, reconcile and stop the old subtree, and give a fresh agent
+the remaining brief and useful evidence. Change the failed approach through
+the responsible parent; do not copy the unsuccessful conversation wholesale.
+Follow-ups continue existing history and do not reset context. Do not rotate
+agents by elapsed time or message count, or add a separate lifecycle manager.
+
+## Nested Execution
+
+The Orchestrator owns the ledger; a Lead owns each unit's acceptance. A worker
+may delegate a strict subset of its accepted brief only when the selected
+adapter permits descendants and Implementation's benefit, ownership, lock,
+and proof conditions hold. Missing decisions still return to their owner.
+At a native depth or tool limit, the nearest capable parent dispatches the
+subset or completes it within its own authority; do not invent a new acceptance
+unit or an unsupported carrier. Use only as much nesting as the work needs.
+
+Each delegating parent owns its subtree: retain child identities, give them
+disjoint writable scopes, consume and integrate their results, and join or stop
+all descendants before returning, freezing, or releasing that scope. A parent
+cannot edit a delegated writable scope concurrently. Count the whole active
+tree against capacity and leave room for review and completion. Reconcile and
+stop the entire affected subtree before replacing a parent or reassigning its
+scope; parent interruption alone does not prove descendant termination.
+
 ## Select One Adapter
 
 | Current harness | Adapter |

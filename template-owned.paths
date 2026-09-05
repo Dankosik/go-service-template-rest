@@ -64,6 +64,7 @@ docs/universal-disciplines/
 .agents/contracts/
 .agents/skills/
 .claude/agents/
+.claude/settings.json
 .codex/agents/
 .cursor/agents/
 .cursor/rules/
@@ -76,6 +77,7 @@ docs/universal-disciplines/
 .opencode/plugins/
 .opencode/rules/
 .qwen/agents/
+.qwen/settings.json
 opencode.json
 
 template-owned.paths

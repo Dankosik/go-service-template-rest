@@ -27,8 +27,12 @@ done
 cp -p "${root}/scripts/lib/manifest.sh" "${root}/scripts/lib/sync-cli.sh" "${template}/scripts/lib/"
 cp -p "${root}/.agents/codex-project.toml" "${template}/.agents/codex-project.toml"
 cp -p "${root}/.agents/roles/worker-agent.toml" "${template}/.agents/roles/worker-agent.toml"
+cp -p "${root}/.agents/roles/reviewer-agent.toml" "${template}/.agents/roles/reviewer-agent.toml"
 cp -p "${root}/.agents/role-classes/mutable-worker.md" \
 	"${root}/.agents/role-classes/mutable-worker-fallback.md" \
+	"${template}/.agents/role-classes/"
+cp -p "${root}/.agents/role-classes/read-only-specialist.md" \
+	"${root}/.agents/role-classes/read-only-specialist-fallback.md" \
 	"${template}/.agents/role-classes/"
 cp -p "${root}/.opencode/.gitignore" "${template}/.opencode/.gitignore"
 printf '# fixture template v1\n' >"${template}/AGENTS.md"
@@ -56,6 +60,7 @@ make/template.mk
 .agents/roles/
 .agents/skills/
 .claude/agents/
+.claude/settings.json
 .codex/agents/
 .cursor/agents/
 .grok/agents/
@@ -63,6 +68,7 @@ make/template.mk
 .opencode/.gitignore
 .opencode/agents/
 .qwen/agents/
+.qwen/settings.json
 template-owned.paths
 scripts/template-sync.sh
 scripts/agent-roles-sync.sh
@@ -83,6 +89,28 @@ for file in \
 	printf '# Fixture repository owner\n' >"${template}/${file}"
 done
 bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
+for harness in claude qwen; do
+	cp -p "${root}/.${harness}/settings.json" "${template}/.${harness}/settings.json"
+	cp -p "${root}/.${harness}/agents/acceptance-unit-lead.md" "${template}/.${harness}/agents/acceptance-unit-lead.md"
+done
+# Regeneration must preserve the handwritten native Lead carriers.
+bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
+grep -Eq '^tools:.* Agent(,|$)' "${template}/.claude/agents/worker-agent.md" || fail "Claude worker cannot delegate"
+if grep -Eq '^tools:.* Agent(,|$)' "${template}/.claude/agents/reviewer-agent.md"; then
+	fail "Claude reviewer gained mutable delegation"
+fi
+grep -Fxq '  - agent' "${template}/.qwen/agents/worker-agent.md" || fail "Qwen worker cannot delegate"
+if grep -Fxq '  - agent' "${template}/.qwen/agents/reviewer-agent.md"; then
+	fail "Qwen reviewer gained mutable delegation"
+fi
+grep -Fxq '    "*": deny' "${template}/.opencode/agents/worker-agent.md" || fail "OpenCode worker lost its delegation default deny"
+grep -Fxq '    worker-agent: allow' "${template}/.opencode/agents/worker-agent.md" || fail "OpenCode worker cannot delegate"
+grep -Fxq '    evidence-agent: allow' "${template}/.opencode/agents/worker-agent.md" || fail "OpenCode worker cannot request evidence"
+grep -Fxq '  task: deny' "${template}/.opencode/agents/reviewer-agent.md" || fail "OpenCode reviewer gained mutable delegation"
+for harness in claude qwen; do
+	cmp -s "${root}/.${harness}/agents/acceptance-unit-lead.md" "${template}/.${harness}/agents/acceptance-unit-lead.md" ||
+		fail "${harness} Lead carrier was not preserved"
+done
 bash "${template}/scripts/harness-skills-sync.sh" claude --apply --repo "${template}" >/dev/null
 bash "${template}/scripts/harness-skills-sync.sh" qwen --apply --repo "${template}" >/dev/null
 bash "${template}/scripts/codex-agents-sync.sh" --apply --repo "${template}" >/dev/null
@@ -154,7 +182,19 @@ sed -i.bak 's/standard v1/standard v2/' "${template}/make/template.mk"
 rm -f "${template}/make/template.mk.bak"
 sed -i.bak 's/portable v1/portable v2/' "${template}/scripts/ci/portable-check.sh"
 rm -f "${template}/scripts/ci/portable-check.sh.bak"
-git -C "${template}" add AGENTS.md make/template.mk scripts/ci/portable-check.sh
+# Make native settings and Lead carriers stale in every already-cloned consumer.
+printf '%s\n' '{"env":{"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH":"4"}}' >"${template}/.claude/settings.json"
+printf '%s\n' '{"model":{"maxSubagentDepth":6}}' >"${template}/.qwen/settings.json"
+for harness in claude qwen; do
+	printf '\nFixture Lead v2.\n' >>"${template}/.${harness}/agents/acceptance-unit-lead.md"
+	if cmp -s "${template}/.${harness}/settings.json" "${target_dirty}/.${harness}/settings.json" ||
+		cmp -s "${template}/.${harness}/agents/acceptance-unit-lead.md" "${target_dirty}/.${harness}/agents/acceptance-unit-lead.md"; then
+		fail "${harness} propagation fixture did not start with stale consumer content"
+	fi
+done
+git -C "${template}" add AGENTS.md make/template.mk scripts/ci/portable-check.sh \
+	.claude/settings.json .qwen/settings.json \
+	.claude/agents/acceptance-unit-lead.md .qwen/agents/acceptance-unit-lead.md
 git -C "${template}" commit -qm v2
 
 report=$(expect_failure "apply with a legacy Makefile" \
@@ -241,6 +281,12 @@ if ! report=$(bash "${template}/scripts/template-sync.sh" --check --from "${temp
 	fail "repeat check failed: ${report}"
 fi
 grep -Fq 'fixture template v2' "${target_dirty}/AGENTS.md" || fail "valid apply omitted committed content"
+for harness in claude qwen; do
+	cmp -s "${template}/.${harness}/settings.json" "${target_dirty}/.${harness}/settings.json" ||
+		fail "${harness} portable settings were not propagated"
+	cmp -s "${template}/.${harness}/agents/acceptance-unit-lead.md" "${target_dirty}/.${harness}/agents/acceptance-unit-lead.md" ||
+		fail "${harness} Lead carrier was not propagated"
+done
 test "$(make -s -C "${target_dirty}" --no-print-directory standard-check)" = 'standard v2' ||
 	fail "standard Make target was not updated"
 test "$(make -s -C "${target_dirty}" --no-print-directory local-check)" = 'local service' ||
