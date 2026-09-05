@@ -1,69 +1,48 @@
 # Generated Source Of Truth And Drift
 
-## Behavior Change Thesis
-When loaded for generated-code or drift pressure, this file makes the model change the owning source and run the matching generator/check instead of hand-editing generated output or leaving source and artifacts half-updated.
+## Load When
 
-## When To Load
-Load this when work touches generated files, generation configs, OpenAPI, sqlc, or drift-check failures.
+Load this when the change touches an OpenAPI operation or schema, a SQL query or
+migration, a `.proto` service, a generator config, or a drift-check failure.
 
-## Decision Rubric
-- Identify the source of truth before editing: OpenAPI spec/config, SQL migrations or queries, Go interfaces with `//go:generate`, enum source, or generator config.
-- Edit generated files only as the output of the generator, not as the primary source.
-- Keep source and generated artifacts in the same diff when the repository tracks generated output.
-- Remove stale generated files when the source no longer owns them.
-- Run the narrow generator/check for the touched surface before broader tests.
-- If generated drift appears outside the approved task, stop and report it instead of mixing unrelated regeneration into the implementation.
+## Decide
 
-## Imitate
-For OpenAPI server bindings, change the contract or generator config, then regenerate and check.
+Reconstruct `canonical source -> generator configuration/directive -> command
+-> generated output` from the target's contracts, configuration, generation
+directives, and Makefile. Its [Repository
+Architecture](../../../../docs/repo-architecture.md) owns generated/manual
+boundaries. Change the canonical source, regenerate, and remove superseded
+output.
 
-```text
-Source: api/openapi/service.yaml or internal/openapi/oapi-codegen.yaml
-Generated: internal/openapi/openapi.gen.go
-Proof: make openapi-check
-```
-
-For sqlc, change query/schema sources, then regenerate and check the generated package.
-
-```text
-Source: migrations/*.up.sql or internal/infra/postgres/queries/*.sql
-Generated: internal/infra/postgres/sqlcgen/*
-Proof: make sqlc-check
-```
+- Inspect the selected command before execution: a drift check may regenerate
+  in place and leave changed output even when it fails. Such a command is not a
+  read-only review probe. Review any resulting hunks against the source delta
+  before retaining them; an unsuccessful check is not consistency proof.
+- Generator flags and output paths belong to the configuration or directive the
+  target actually invokes. A portable path example cannot establish that owner.
+- A successful no-source or disabled-capability branch proves no generated
+  consistency. Check both source presence and orphaned output when a profile or
+  contract is removed. An available Make target does not establish an active
+  capability.
+- Resolve decoding and validation behavior from the target's contract,
+  generator options, and validator wiring before changing handwritten handlers.
+- Keep regeneration scoped to the source you changed. Generated churn with no
+  source change is a separate finding to report, not diff to absorb.
 
 ## Reject
-Reject direct generated edits as the primary fix.
 
-```go
-// internal/openapi/openapi.gen.go
-func (c *Client) NewMethod(...) { // hand-written patch
-	// ...
-}
-```
+Lint cannot establish source-to-output consistency, whether or not the target's
+lint configuration includes generated files. A compiling generated file can
+still be stale.
 
-Reject source-only changes that leave tracked generated output stale.
+## Prove
 
-```text
-Changed: internal/infra/postgres/queries/ping_history.sql
-Missing: internal/infra/postgres/sqlcgen/ping_history.sql.go regeneration
-```
-
-Reject broad regeneration that hides unrelated drift.
-
-```text
-Task: update one generated OpenAPI binding
-Action: run all generators and commit unrelated sqlc changes
-```
-
-## Agent Traps
-- Treating "DO NOT EDIT" as a comment that only applies to humans.
-- Fixing a compile error in generated code instead of finding the schema, query, directive, or generator config that produced it.
-- Running `go test ./...` and forgetting the drift check that proves generated artifacts are in sync.
-- Keeping a stale generated file after removing or renaming the source query or enum.
-- Regenerating everything and accepting unrelated generated churn without a source explanation.
-- Editing runtime adapter code when the real contract change belongs in OpenAPI or sqlc source.
-
-## Validation Shape
-- OpenAPI contract or generated API changes: `make openapi-check`.
-- SQL query, schema, or sqlc output changes: `make sqlc-check`.
-- After generation, inspect `git diff` and keep only generated changes that trace back to an approved source change.
+- Select generated-contract proof through [Validation
+  Routing](../../../../docs/validation-routing.md) and the [Evidence
+  Contract](../../../../docs/spec-first-workflow/shared/evidence-contract.md).
+  A separate check is for iteration or required proof absent from the selected
+  aggregate, not a mandatory prelude to it.
+- Inspect `git diff` over the generated path and keep only hunks that trace back
+  to the source change you made.
+- When a generated symbol disappears, prove in the same diff that its
+  hand-written callers were migrated or removed.

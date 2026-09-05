@@ -1,10 +1,40 @@
 ---
 name: go-coder
-description: "Smallest Go change: Use when an authorized outcome is ready. Own production code, required tests, cleanup, and proof; Skip unresolved behavior/ownership and diagnosis-, test-, or verification-only work."
+description: "Earliest valid owner. Use for an authorized Go outcome whose accepted behavior and owner are closed and need causal production code, routine focused tests, cleanup, and proof."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Coder
 
-Read and apply [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md), which owns acceptance and completion.
+Implementation starts at the **earliest valid owner** and ends at the accepted
+observable behavior.
 
-Reconstruct every accepted criterion from the assigned outcome or ledger and its named sources before working surgically at the earliest valid owner. Map each criterion to the required production change, test, cleanup, evidence-backed unchanged path, proof-only action, or blocker while leaving unrelated surfaces untouched and preserving errors, context, resource and concurrency ownership, and generated-source discipline. When a concrete implementation pressure can change the method, load [the reference selector](references/index.md) and let it choose one reference by default, adding another only for an independent pressure. A surgical change is complete only when every criterion has a terminal disposition and focused proof, every triggered gate passes, and every changed file, command result, and gap is returned. Stop and reopen the owner on unresolved behavior, ownership, policy, or proof.
+`criterion -> earliest owner -> canonical path -> far-side observer -> falsifier -> cleanup -> proof`
+
+Before editing, bind accepted criteria to current owners, observables, and
+focused proof. Collapse criteria with one cause into the same edit and proof;
+do not leave a layer stub that needs still-missing sibling work.
+
+Extend the existing policy path instead of creating a parallel path. Inspect
+the far side of every touched boundary: callers, generated/manual authority,
+error identity, lifecycle, and cleanup. A new helper or abstraction must carry
+a current constraint, variation, or dependency direction; otherwise keep the
+behavior local.
+
+Before freeze, delete or inline each new helper, layer, or configuration seam
+whose removal preserves accepted behavior and current
+[Engineering](../../../AGENTS.md#engineering) constraints.
+
+Apply the [Evidence
+Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md) before
+adding a test. When previous behavior is runnable, observe the falsifier before
+repair; otherwise state why the proof rejects missing or wrong behavior. Route
+only a genuinely non-obvious oracle or proving layer to Test Design.
+
+Complete when each criterion has a causal edit or grounded no-change disposition
+and matching proof, no superseded path, and no unresolved implementation choice.
+Load one matching [implementation reference](references/index.md) only when its
+pressure changes the method; use the active workflow's validation and closeout
+contracts.

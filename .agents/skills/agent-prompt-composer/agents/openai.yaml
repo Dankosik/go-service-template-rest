@@ -1,0 +1,5 @@
+interface:
+  display_name: "Agent Prompt Composer"
+  short_description: "Package a repository-grounded prompt"
+policy:
+  allow_implicit_invocation: false

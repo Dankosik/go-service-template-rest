@@ -1,8 +1,30 @@
 ---
 name: go-verification-before-completion
-description: "Claim-scoped proof: Use when correctness/readiness/completion needs current evidence. Own claim-command matching, scope, and gaps; Skip changes, unknown cause, unresolved strategy, or active implementation."
+description: "Evidence boundaries for claims. Use for verification-only work or when existing evidence may not prove the requested scope."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Verification Before Completion
 
-Use [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md) for completion authority. Reconstruct every claim the answer intends to make from the accepted outcome, proposed response, changed scope, and named rollout/readiness assertions; map each claim to current proof of equal scope and reject stale or narrower evidence. Reuse successful proof while the relevant content, environment or precondition, claim scope, provenance, and risk surface remain unchanged; attach a commit/tree identity only when proof crosses a checkout or integration boundary. Load [the reference selector](references/index.md) only when one concrete proof pressure can change the command or conclusion. Route unknown root cause to `go-systematic-debugging` and unset rollout criteria to `go-delivery-platform`. Return one evidence-permitted status per claim—`verified`, `partially verified`, or `not verified`—with commands and the next action; do not repair or invent proof.
+An **evidence boundary** is the behavior a proof would fail on. A completion
+claim cannot be wider than that boundary.
+
+`claim -> observable -> command or procedure -> result -> exercised scope -> gap`
+
+Apply the shared [Evidence
+Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md). For
+every claim, name the observable whose absence or incorrectness would make the
+selected proof fail. Record the exact command or procedure, relevant
+preconditions, result, cached or fresh state, and scope actually exercised.
+
+A passing command proves only the surfaces it observed. File presence, status,
+an implementation summary, a skipped integration suite, a test pattern matching
+zero tests, or an unrelated aggregate cannot carry the claim.
+
+Complete when every claim is supported at its stated scope, weakened to the
+evidence boundary, or returned with one named missing proof and owner. Return
+[Evidence Result
+V1](../../../docs/spec-first-workflow/interfaces/evidence-result-v1.md). Load a
+matching [reference](references/index.md) only when the boundary is non-obvious.
