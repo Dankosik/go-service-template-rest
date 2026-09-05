@@ -7,6 +7,7 @@ cd "${ROOT_DIR}"
 mode="${MIGRATION_HISTORY_MODE:-worktree}"
 head_ref="${HEAD_REF:-HEAD}"
 base_ref="${BASE_REF:-}"
+migration_dir="${MIGRATION_DIR:-migrations}"
 
 if [[ "${mode}" == "self-test" ]]; then
 	fixture="$(mktemp -d -t migration-history.XXXXXX)"
@@ -14,28 +15,37 @@ if [[ "${mode}" == "self-test" ]]; then
 	git -C "${fixture}" init -q
 	git -C "${fixture}" config user.name migration-history
 	git -C "${fixture}" config user.email migration-history@example.invalid
-	mkdir -p "${fixture}/migrations"
-	printf '%s\n' '-- +goose Up' 'SELECT 1;' '-- +goose Down' 'SELECT 1;' >"${fixture}/migrations/000001_create.sql"
-	printf '%s\n' '-- +goose Up' 'SELECT 3;' '-- +goose Down' 'SELECT 3;' >"${fixture}/migrations/000003_extend.sql"
+	mkdir -p "${fixture}/env/migrations"
+	printf '%s\n' '-- +goose Up' 'SELECT 1;' '-- +goose Down' 'SELECT 1;' >"${fixture}/env/migrations/000001_create.sql"
+	printf '%s\n' '-- +goose Up' 'SELECT 3;' '-- +goose Down' 'SELECT 3;' >"${fixture}/env/migrations/000003_extend.sql"
 	git -C "${fixture}" add .
 	git -C "${fixture}" commit -qm baseline
-	printf '%s\n' '-- rewritten' >>"${fixture}/migrations/000001_create.sql"
-	if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+	printf '%s\n' '-- rewritten' >>"${fixture}/env/migrations/000001_create.sql"
+	if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_DIR=env/migrations MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
 		echo "migration history self-test: rewrite passed" >&2
 		exit 1
 	fi
-	git -C "${fixture}" restore migrations/000001_create.sql
-	printf '%s\n' '-- +goose Up' 'SELECT 4;' '-- +goose Down' 'SELECT 4;' >"${fixture}/migrations/000004_add.sql"
-	git -C "${fixture}" add migrations/000004_add.sql
-	MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null
-	printf '%s\n' '-- +goose Up' 'SELECT 2;' '-- +goose Down' 'SELECT 2;' >"${fixture}/migrations/000002_late.sql"
-	git -C "${fixture}" add migrations/000002_late.sql
-	if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+	git -C "${fixture}" restore env/migrations/000001_create.sql
+	printf '%s\n' '-- +goose Up' 'SELECT 4;' '-- +goose Down' 'SELECT 4;' >"${fixture}/env/migrations/000004_add.sql"
+	git -C "${fixture}" add env/migrations/000004_add.sql
+	MIGRATION_REPO_ROOT="${fixture}" MIGRATION_DIR=env/migrations MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null
+	printf '%s\n' '-- +goose Up' 'SELECT 2;' '-- +goose Down' 'SELECT 2;' >"${fixture}/env/migrations/000002_late.sql"
+	git -C "${fixture}" add env/migrations/000002_late.sql
+	if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_DIR=env/migrations MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
 		echo "migration history self-test: out-of-order addition passed" >&2
+		exit 1
+	fi
+	if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_DIR=missing MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+		echo "migration history self-test: missing configured directory passed" >&2
 		exit 1
 	fi
 	echo "migration history self-test passed"
 	exit 0
+fi
+
+if [[ ! -d "${migration_dir}" ]]; then
+	echo "configured migration directory does not exist: ${migration_dir}" >&2
+	exit 2
 fi
 
 case "${mode}" in
@@ -94,7 +104,7 @@ if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	exit 0
 fi
 
-diff_status="$(git diff --name-status --find-renames --find-copies "${diff_args[@]}" -- migrations/)"
+diff_status="$(git diff --name-status --find-renames --find-copies "${diff_args[@]}" -- "${migration_dir}/")"
 changes="$(printf '%s\n' "${diff_status}" | awk '$1 !~ /^A$/ { print }')"
 if [[ -n "${changes}" ]]; then
 	echo "migration history: applied migration files are append-only (${scope})" >&2
@@ -103,7 +113,7 @@ if [[ -n "${changes}" ]]; then
 fi
 
 prior_max="$(
-	git ls-tree -r --name-only "${base_ref}" -- migrations/ |
+	git ls-tree -r --name-only "${base_ref}" -- "${migration_dir}/" |
 		LC_ALL=C awk -F/ '
 			$NF ~ /^[0-9]+_.+\.sql$/ {
 				name = $NF
@@ -115,7 +125,7 @@ prior_max="$(
 )"
 added_paths="$(printf '%s\n' "${diff_status}" | awk '$1 == "A" { print $2 }')"
 if [[ "${mode}" != "exact-base" ]]; then
-	untracked="$(git ls-files --others --exclude-standard -- migrations/)"
+	untracked="$(git ls-files --others --exclude-standard -- "${migration_dir}/")"
 	if [[ -n "${untracked}" ]]; then
 		added_paths="${added_paths}${added_paths:+$'\n'}${untracked}"
 	fi
