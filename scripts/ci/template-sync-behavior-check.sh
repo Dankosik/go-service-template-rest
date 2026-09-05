@@ -214,6 +214,57 @@ git -C "${template}" add AGENTS.md make/template.mk scripts/ci/portable-check.sh
 	.claude/agents/acceptance-unit-lead.md .qwen/agents/acceptance-unit-lead.md
 git -C "${template}" commit -qm v2
 
+# Instruction adoption does not migrate builds or consume target-side tooling.
+for scenario in legacy ignored-tooling codex core cursor grok opencode; do
+	instruction_target="${fixture}/instructions-${scenario}"
+	git clone -q "${target_legacy}" "${instruction_target}"
+	printf 'exit 91\n' >"${instruction_target}/scripts/harness-skills-sync.sh"
+	chmod -x "${instruction_target}/scripts/template-sync.sh"
+	printf 'older full-sync receipt\n' >"${instruction_target}/.template-sync"
+	case "${scenario}" in
+	ignored-tooling)
+		mkdir -p "${instruction_target}/make"
+		printf 'local ignored tooling\n' >"${instruction_target}/make/template.mk"
+		printf '/make/template.mk\n' >>"${instruction_target}/.git/info/exclude"
+		;;
+	codex | core | cursor | grok | opencode)
+		printf 'state = "complete"\nagent_harness = "%s"\n' "${scenario}" >"${instruction_target}/template.lock"
+		mkdir -p "${instruction_target}/.claude/worktrees"
+		printf 'local worktree content\n' >"${instruction_target}/.claude/worktrees/local"
+		printf '/.claude/worktrees/\n' >>"${instruction_target}/.git/info/exclude"
+		;;
+	esac
+	tooling_before=$(git -C "${instruction_target}" diff --binary HEAD -- Makefile make scripts template-owned.paths)
+	if ! report=$(bash "${template}/scripts/template-sync.sh" --apply --instructions-only \
+		--from "${template}" --repo "${instruction_target}" 2>&1); then
+		fail "${scenario} instruction adoption failed: ${report}"
+	fi
+	cmp -s "${template}/AGENTS.md" "${instruction_target}/AGENTS.md" || fail "instruction bytes did not propagate"
+	[[ "${tooling_before}" == "$(git -C "${instruction_target}" diff --binary HEAD -- Makefile make scripts template-owned.paths)" ]] ||
+		fail "instruction adoption changed tooling or its local work"
+	[[ ! -x "${instruction_target}/scripts/template-sync.sh" ]] || fail "instruction adoption changed tooling mode"
+	grep -Fxq 'older full-sync receipt' "${instruction_target}/.template-sync" || fail "instruction adoption removed a full-sync receipt"
+	case "${scenario}" in
+	legacy) [[ ! -e "${instruction_target}/make/template.mk" ]] || fail "instruction adoption migrated the legacy build" ;;
+	ignored-tooling) grep -Fxq 'local ignored tooling' "${instruction_target}/make/template.mk" || fail "ignored tooling was changed" ;;
+	codex | core | cursor | grok | opencode)
+		grep -Fxq 'local worktree content' "${instruction_target}/.claude/worktrees/local" || fail "unselected harness data was removed"
+		cmp -s "${target_legacy}/.claude/settings.json" "${instruction_target}/.claude/settings.json" || fail "unselected settings changed"
+		;;
+	esac
+	if ! report=$(bash "${template}/scripts/template-sync.sh" --check --instructions-only \
+		--from "${template}" --repo "${instruction_target}" 2>&1); then
+		fail "instruction parity did not converge: ${report}"
+	fi
+	grep -Fq 'template-owned agent instructions are current' <<<"${report}" || fail "instruction check claimed full parity"
+	printf '\nlocal instruction work\n' >>"${instruction_target}/AGENTS.md"
+	cp "${instruction_target}/AGENTS.md" "${fixture}/instruction-before.md"
+	report=$(expect_failure "dirty selected instructions" bash "${template}/scripts/template-sync.sh" \
+		--apply --instructions-only --from "${template}" --repo "${instruction_target}")
+	grep -Fq 'the sync would overwrite them' <<<"${report}" || fail "dirty instruction refusal used the wrong reason"
+	cmp -s "${fixture}/instruction-before.md" "${instruction_target}/AGENTS.md" || fail "dirty instructions were overwritten"
+done
+
 # Invalid committed source depths must refuse before touching an older consumer.
 for invalid_depth in qwen-zero qwen-over-limit claude-zero; do
 	settings_source="${fixture}/${invalid_depth}"

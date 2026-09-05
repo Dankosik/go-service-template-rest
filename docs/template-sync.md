@@ -109,6 +109,15 @@ recipe for a standard target is drift, not an override mechanism.
 
 ## Uncommitted Work
 
+For instruction adoption without a tooling migration, add `--instructions-only`
+to either command. It selects manifest-owned bootstrap files, documentation,
+skills, roles, and the chosen harness configuration and generated views. It
+preserves Makefiles, scripts, tool dependencies, the manifest, retired full-sync
+receipts, and unselected harness data. A legacy Makefile or dirty tooling does
+not block that mode; dirty selected instructions and the other safety checks
+still do. Generated views use the committed source helpers. Its successful
+check proves instruction parity only, not full portable-tooling parity.
+
 The sync never commits. Its result remains a normal reviewable working-tree
 change in one target.
 
