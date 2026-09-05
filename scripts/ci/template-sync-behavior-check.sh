@@ -106,6 +106,22 @@ expect_failure() {
 	printf '%s' "${output}"
 }
 
+purity="${fixture}/purity-routing"
+mkdir -p "${purity}/scripts/ci"
+cp "${root}/make/template.mk" "${purity}/Makefile"
+printf '%s\n' 'module example.invalid/purity-routing' 'go 1.27.0' >"${purity}/go.mod"
+printf '%s\n' 'echo "fixture purity validator invoked"' 'exit 42' >"${purity}/scripts/ci/template-owned-purity-check.sh"
+report=$(expect_failure "source purity failure" \
+	make -s -C "${purity}" --no-print-directory template-owned-purity-check)
+grep -Fq 'fixture purity validator invoked' <<<"${report}" || fail "source purity validator was not invoked"
+printf '%s\n' 'state = "complete"' 'agent_harness = "core"' >"${purity}/template.lock"
+if ! report=$(make -s -C "${purity}" --no-print-directory template-owned-purity-check 2>&1); then
+	fail "initialized consumer ran a stale source-only purity validator: ${report}"
+fi
+grep -Fq 'not applicable: template manifest purity is source-only' <<<"${report}" ||
+	fail "consumer purity skip was not explicit"
+[[ -f "${purity}/scripts/ci/template-owned-purity-check.sh" ]] || fail "consumer purity validator was removed"
+
 assert_v1() {
 	! grep -Fq 'fixture template v2' "$1/AGENTS.md" || fail "$2 changed before a safe apply"
 }

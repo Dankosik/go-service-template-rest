@@ -201,10 +201,10 @@ docs-contract-check:
 	$(DOCS_CONTRACT_CHECK_SCRIPT)
 
 template-owned-purity-check:
-	@if [ -f ./scripts/ci/template-owned-purity-check.sh ]; then \
-		$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT); \
-	else \
+	@if grep -Fqx 'state = "complete"' template.lock 2>/dev/null || [ ! -f ./scripts/ci/template-owned-purity-check.sh ]; then \
 		echo "not applicable: template manifest purity is source-only; run make template-sync-check TEMPLATE=<path> for upstream drift"; \
+	else \
+		$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT); \
 	fi
 
 # TEMPLATE points at a checkout of the template that owns the instructions.
