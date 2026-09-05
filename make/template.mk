@@ -8,6 +8,8 @@ OUTBOX_RELAY_BINARY := bin/$(SERVICE_NAME)-outbox-relay
 JOBS_WORKER_CMD := ./cmd/jobs-worker
 JOBS_WORKER_BINARY := bin/$(SERVICE_NAME)-jobs-worker
 GO ?= go
+MIGRATION_DIR ?= migrations
+MIGRATION_ENGINE ?= goose
 PGO_PROFILE ?= off
 PGO_MANIFEST ?= $(PGO_PROFILE).meta
 PGO_BINARY ?= bin/$(SERVICE_NAME)-pgo
@@ -592,12 +594,14 @@ sqlc-check:
 	fi
 
 migration-history-check:
-	@if [ ! -d migrations ]; then echo "not applicable: no migrations"; else \
-		BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)" MIGRATION_HISTORY_MODE="$(if $(MIGRATION_HISTORY_MODE),$(MIGRATION_HISTORY_MODE),worktree)" $(MIGRATION_HISTORY_CHECK_SCRIPT); \
-	fi
+	@BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)" MIGRATION_DIR="$(MIGRATION_DIR)" MIGRATION_HISTORY_MODE="$(if $(MIGRATION_HISTORY_MODE),$(MIGRATION_HISTORY_MODE),worktree)" $(MIGRATION_HISTORY_CHECK_SCRIPT)
 
 migration-check: migration-history-check
-	@if [ ! -d migrations ]; then echo "not applicable: no migrations"; else $(GO_TOOL) goose -dir migrations validate; fi
+	@if [ "$(MIGRATION_ENGINE)" = "goose" ]; then \
+		$(GO_TOOL) goose -dir "$(MIGRATION_DIR)" validate; \
+	elif [ "$(MIGRATION_ENGINE)" != "golang-migrate" ]; then \
+		echo "unsupported migration engine: $(MIGRATION_ENGINE)" >&2; exit 2; \
+	fi
 
 openapi-generate:
 	go generate $(OPENAPI_PACKAGES)
@@ -672,12 +676,14 @@ proto-check: proto-format-check proto-lint proto-drift-check
 check-proto: proto-check
 
 migration-validate:
-	@if [ ! -d migrations ]; then \
-		echo "not applicable: no migrations"; \
+	@if [ "$(MIGRATION_ENGINE)" != "goose" ] && [ "$(MIGRATION_ENGINE)" != "golang-migrate" ]; then \
+		echo "unsupported migration engine: $(MIGRATION_ENGINE)" >&2; exit 2; \
+	elif [ ! -d "$(MIGRATION_DIR)" ]; then \
+		echo "configured migration directory does not exist: $(MIGRATION_DIR)" >&2; exit 2; \
 	elif [ "$(ALLOW_HEAVY)" != "1" ] && [ "$(CI)" != "true" ]; then \
 		printf 'refusing %s: set ALLOW_HEAVY=1 (CI sets CI=true)\n' "$@"; exit 2; \
 	else \
-		$(VALIDATION_LOCK) env GO="$(GO)" $(MIGRATION_VALIDATE_SCRIPT) "$(RUNTIME_IMAGE)" "$(RUNTIME_EXPECTED_VERSION)" "$(SERVICE_NAME)"; \
+		$(VALIDATION_LOCK) env GO="$(GO)" MIGRATION_DIR="$(MIGRATION_DIR)" MIGRATION_ENGINE="$(MIGRATION_ENGINE)" $(MIGRATION_VALIDATE_SCRIPT) "$(RUNTIME_IMAGE)" "$(RUNTIME_EXPECTED_VERSION)" "$(SERVICE_NAME)"; \
 	fi
 
 container-security:
