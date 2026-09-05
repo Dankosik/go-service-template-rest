@@ -55,7 +55,7 @@ classify() {
 		matched=false
 
 		case "${file}" in
-			internal/openapi/*.gen.go|examples/reference-service/internal/openapi/*.gen.go|internal/infra/*/internal/openapi/*.gen.go|internal/infra/postgres/sqlcgen/*.go|internal/gen/proto/*|examples/grpc-reference-service/internal/gen/proto/*)
+			internal/openapi/*.gen.go|internal/api/*.gen.go|examples/reference-service/internal/openapi/*.gen.go|internal/infra/*/*.gen.go|internal/infra/postgres/sqlcgen/*.go|internal/gen/proto/*|examples/grpc-reference-service/internal/gen/proto/*)
 				mark go_source go_generated
 				;;
 				scripts/*.go) mark go_handwritten ;;
@@ -312,6 +312,12 @@ self_test() {
 	assert_case env/migrations/000001_init.up.sql \
 		"migrations db_integration" \
 		"go_source shell runtime_image image_security"
+	assert_case internal/api/openapi.gen.go \
+		"go_source go_generated" \
+		"go_handwritten shell runtime_image image_security"
+	assert_case internal/infra/billing/client.gen.go \
+		"go_source go_generated" \
+		"go_handwritten shell runtime_image image_security"
 	assert_case internal/infra/natsjs/client.go \
 		"go_source messaging_integration integration_race" \
 		"db_integration migrations runtime_image image_security"
