@@ -6,6 +6,14 @@ selected adapter owns how the current harness provides it.
 
 ## Delegation Interface
 
+Across checkout or actor changes, retain the selected workflow revision and
+instruction locators in the existing handoff, and verify the effective model
+and effort through native state. Compare only the relevant local owners before
+using a stale checkout's policy. Resolve material drift with the continuation
+owner before dependent work; do not silently mix policies, bulk-sync an active
+checkout, or treat a pinned revision as overriding current user/native authority.
+Unchanged owners need no repeated inventory or bootstrap turn.
+
 Give a delegated agent only the semantic fields in the [Subagent Brief
 Template](subagent-brief-template.md). Isolate concurrent mutation only when it
 is cheaper than waiting for the current checkout. Concurrent mutation may share
@@ -20,17 +28,19 @@ against capacity. Leave spare slots for unlock and landing. A silent identified
 lane is not progress; replace or absorb it.
 
 Carry model, reasoning effort, isolation, native identity, and task lifecycle in
-tool fields rather than prompt prose. Read Exclusive locks and Accept-when to
-choose Lead capability. Use the adapter's balanced configuration only when
-locks are `none`, the focused check is a named mechanical command, and Boundary
-has no protected-risk reason. Raise to the strongest configuration when the
-lock is not `none`, the oracle is weak, the unit is cross-cutting, an earlier
-causal attempt failed, or review exposed a previously unknown invariant. If
-those signals disagree, raise. After a causal focused-proof or review miss,
-raise capability for the remaining repair of that unit; do not keep the cheaper
-configuration that missed the invariant. Child work uses the cheapest
-configuration permitted by the adapter for its authority and fixed brief.
-Preserve an exact user-selected model.
+tool fields rather than prompt prose. Exclusive locks determine scheduling and
+isolation, not reasoning capability. Select capability from the remaining
+semantic judgment, protected risks, oracle strength, and interacting invariants
+under the selected adapter. Use its balanced configuration only when the focused
+check is a named mechanical command and Boundary has no protected-risk reason.
+Raise capability for weak proof or interacting invariants, or after a causal
+attempt or review exposes a missed invariant. If capability signals disagree,
+raise under the adapter.
+Expected failing tests and mechanically diagnosed setup or syntax errors do
+not by themselves trigger escalation; unexplained or repeated causal failures do.
+Retain the raised capability for the remaining repair of that unit. Child work
+uses the cheapest configuration permitted by the adapter for its authority and
+fixed brief. Preserve an exact user-selected model.
 
 Choose roles by capability: `evidence-agent`, `specialist-agent`,
 `worker-agent`, `reviewer-agent`, or `adjudicator-agent`. Put domain expertise or

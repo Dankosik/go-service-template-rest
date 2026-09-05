@@ -27,9 +27,18 @@ A new postcondition, responsibility, behavior, or proof oracle reopens Planning
 instead of expanding the task. A discovered mutable owner or exclusive lock
 updates the live frontier without reopening Outcome.
 
-Choose the smallest reliable execution topology. Implement directly when the
-unit has one coherent mutable owner, delegation would duplicate context, or
-handoff and integration would cost as much as doing the subset directly.
+Fixture, transport-control, and test-runner defects remain repairs of this unit
+while accepted behavior, oracle, and proof boundary hold. Reopen Test Design
+only when its method is invalid, and the mechanism owner when product design is
+invalid; do not turn an implementation defect into a new phase chain. For novel
+controls, consume Test Design's [feasibility witness](test-design.md#feasibility)
+and exercise the first runnable path before building the rest of the harness.
+
+The Lead implements a coherent unit directly by default. Delegate a subset
+only when it enables independent concurrent progress, supplies a missing
+capability, or keeps the remaining context reliably bounded. A serial handoff
+that duplicates the Lead's context needs one of those reasons. Use the existing
+brief; no separate delegation assessment is required.
 
 Fan out execution lanes when two or more strict subsets have disjoint writable
 responsibility, no shared exclusive lock, stable accepted interfaces,
