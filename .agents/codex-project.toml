@@ -1,3 +1,6 @@
+model = "gpt-6-astra"
+model_reasoning_effort = "high"
+
 developer_instructions = """
 During an event-driven wait on sub-agents, use a multi-minute wait. The active
 wait is not a silent gap requiring commentary. This is an explicit exception
@@ -9,5 +12,5 @@ a healthy agent for status.
 
 [agents]
 max_concurrent_threads_per_session = 20
-default_subagent_model = "gpt-5.6-terra"
-default_subagent_reasoning_effort = "medium"
+default_subagent_model = "gpt-6-astra"
+default_subagent_reasoning_effort = "high"

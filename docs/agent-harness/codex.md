@@ -36,20 +36,65 @@ public prose.
 
 ## Models
 
-Use Sol with `high` reasoning effort for the Acceptance-Unit Lead, and `xhigh`
-when remaining uncertainty or protected-risk surface requires it. Resolve
-supported reasoning-effort values from the callable schema for the selected
-model. Evaluate Astra for difficult architecture, cross-domain synthesis, or
-critical review against the current role model using the same inputs and
-supported effort. Promote it to a role default only from comparable evidence;
-an available newer model alone does not replace every role. Use Luna at low
-effort for closed mechanical work, Terra at
-medium effort for ordinary delegated work or review, and Sol for complex,
-cross-cutting, protected-domain, or high-consequence reasoning. Preserve a
-user-named model and effort when supported. If a structured field is unsupported
-or rejected, retain the native evidence and report the mismatch. Use the
-effective configured value only when the request allows that fallback; do not
-encode a model name only in prompt text.
+Use `gpt-6-astra` for every decision-owning role: the root coordinator,
+Ledger Orchestrator, phase owner, Acceptance-Unit Lead, domain specialist,
+independent reviewer, and adjudicator. Model capability does not merge
+role responsibilities: the Orchestrator routes, the Lead accepts its unit,
+and the fresh reviewer challenges a fixed candidate. Acceptance still requires
+all mandatory proof and resolution of material review findings.
+
+The installed Codex catalog supports `low`, `medium`, `high`, `xhigh`, `max`,
+and `ultra` for Astra, with a native default of `medium`; this project chooses
+`high`. The [Astra API model page](https://developers.openai.com/api/docs/models/gpt-6-astra)
+lists the first five. Codex `ultra` adds automatic task delegation to maximum
+reasoning; it is not an additional API reasoning level. Recheck the callable
+schema when the harness changes.
+
+Select Astra effort from the remaining judgment, not the role title alone:
+
+| Effort | Use when |
+| --- | --- |
+| `low` | Mechanical retrieval or status readback with no new judgment; prefer a bounded helper when delegation is worthwhile. |
+| `medium` | Coordination only applies closed ledger decisions or routes known results; no new decision, acceptance, or review verdict is needed. |
+| `high` | Default for phase decisions, implementation ownership, acceptance, domain judgment, and independent review. |
+| `xhigh` | Interacting cross-domain invariants, ambiguous recovery, weak proof, a material reviewer conflict, or a failed causal attempt requires deeper reasoning. |
+| `max` | A concrete unresolved reasoning gap remains after `xhigh`, and additional depth justifies the time and usage within the accepted budget. |
+| `ultra` | Maximum reasoning with automatic delegation, only when the installed harness preserves the accepted topology, role authority, and capacity. |
+
+Raise effort before the affected decision or remaining repair. Missing facts,
+authority, or a broken harness require recovery through their owner, not more
+reasoning. Do not select `ultra` automatically for a critical role; use it only
+when the installed harness semantics and accepted delegation topology justify
+it. After a difficult unit closes, choose effort afresh for the next unit.
+
+Project and subagent defaults use Astra so omitted model fields cannot assign
+a decision-owning role to an execution model. Override those defaults through
+native model and effort fields only for bounded execution or evidence work:
+Luna at `low` for closed mechanical work, Terra at `medium` for ordinary
+implementation and at `high` or `xhigh` for harder implementation, and Sol at
+`high` for difficult code within an accepted contract. These models may reason
+about implementation details and propose alternatives; Astra retains decision
+and acceptance authority. Use `evidence-agent` for advisory research, not a
+lower-model `specialist-agent` or `reviewer-agent` verdict.
+
+Before delegating, Astra closes the expected result, accepted decisions,
+writable boundary, focused proof, and conditions that return work to its owner
+in the existing Subagent Brief. An executor that discovers a missing decision,
+contract conflict, or inadequate proof returns evidence and a proposal to
+Astra; it does not change semantics, weaken checks, add a fallback, or accept
+the result. Astra resolves the gap through the smallest existing owner and
+resumes the work. Routine local coding choices remain with the executor.
+Astra may implement a coherent unit directly when delegation would cost more.
+
+This Codex policy specializes Agent Harness's capability selection: raise
+effort within Astra for decision-owning roles; model escalation applies only
+to execution and evidence work. Resolve supported values from the callable
+schema and verify the effective model before assigning decision authority.
+If Astra is unavailable or its selection is rejected, retain the native
+failure and stop the dependent decision or acceptance; never silently fall
+back to Sol or Terra. Preserve an explicit user-selected model, but assigning
+a non-Astra model decision authority requires an explicit exception to this
+policy. A model name in prompt prose alone is not a native selection.
 
 ## Dispatch And Coordination
 
