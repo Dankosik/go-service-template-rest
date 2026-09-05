@@ -1,20 +1,50 @@
 # Template Sync
 
-This template is the single source of truth for the workflow instruction set. A repository derived from it adopts instruction changes by running a script, not by hand-merging documents and not by asking an agent to copy files.
+This template is the single source of truth for its portable instruction and
+tooling surface. A repository derived from it adopts those changes by running a
+script, not by hand-merging files and not by asking an agent to copy them.
+
+Selected Claude and Qwen profiles update the template-owned project
+`settings.json` depth leaves and mirror their native Lead carriers. OpenCode carries
+its depth in `opencode.json`; Codex generates its runtime from
+`.agents/codex-project.toml`. Keep credentials and personal machine overrides
+outside these portable files. Native configuration keys are not interchangeable
+between harnesses.
 
 ## Read When
 
-- Changing any instruction file and deciding whether derived repositories must receive that change.
+- Changing any portable instruction or tooling file and deciding whether derived repositories must receive that change.
 - Recording something that is true of one service rather than of every service built from this template.
-- Adopting the current instruction set in a derived repository, or explaining why one drifted.
+- Adopting the current portable surface in a derived repository, or explaining why one drifted.
 
 ## The Ownership Split
 
-`template-owned.paths` is the manifest. Every applicable path it lists is mirrored verbatim into a derived repository, including deletions inside listed directories. A complete target `template.lock` filters harness-specific entries through its durable `agent_harness` choice; repositories without a lock retain the legacy `all` behavior. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates and validates the checked-in Codex, Claude, Qwen, Grok, Cursor, and OpenCode carriers before propagation. `.grok/agents` also keeps the handwritten `orchestrator` and `acceptance-unit-lead` primary-session agents. `.cursor/agents` keeps the handwritten `acceptance-unit-lead` Task agent. `.opencode/agents` keeps the handwritten `orchestrator` and `acceptance-unit-lead` agents. `.agents/codex-project.toml` owns portable Codex runtime defaults. Selected target-local generated views are rebuilt after mirroring: `.claude/skills` and `.qwen/skills` expose the same canonical skill set, while `.codex/config.toml` is generated exactly from the portable runtime and role registry. Cursor, Grok, and OpenCode read `.agents/skills` directly. Machine-specific Codex settings belong only in user or system config.
+`template-owned.paths` is the manifest. Applicable paths are mirrored verbatim, including deletions inside listed directories, except for the managed settings leaves described below. A complete target `template.lock` filters harness-specific entries through its durable `agent_harness` choice; repositories without a lock retain the legacy `all` behavior. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates and validates the checked-in Codex, Claude, Qwen, Grok, Cursor, and OpenCode carriers before propagation. `.grok/agents` also keeps the handwritten `orchestrator` and `acceptance-unit-lead` primary-session agents. `.cursor/agents` keeps the handwritten `acceptance-unit-lead` Task agent. `.opencode/agents` keeps the handwritten `orchestrator` and `acceptance-unit-lead` agents. `.agents/codex-project.toml` owns portable Codex runtime defaults. Selected target-local generated views are rebuilt after mirroring: `.claude/skills` and `.qwen/skills` expose the same canonical skill set, while `.codex/config.toml` is generated exactly from the portable runtime and role registry. Cursor, Grok, and OpenCode read `.agents/skills` directly. Machine-specific Codex settings belong only in user or system config.
 
-A path may appear in the manifest only while it carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve. That restriction is what makes mirroring safe — there is nothing in an owned file for a derived repository to lose.
+In `.claude/settings.json`, only `env.CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`
+is template-owned; in `.qwen/settings.json`, only `model.maxSubagentDepth`
+is template-owned. All other JSON belongs to the consumer, including hooks,
+permissions, other environment variables, and model choices. Check compares
+only those leaves; apply replaces or adds them while retaining unrelated JSON
+bytes. Missing files or parent objects are created. Python 3 and the committed
+`scripts/template-settings-sync.py` helper are required before writes. Malformed
+JSON, duplicate keys, non-JSON numeric constants, or a non-object document or
+managed parent refuse the sync without logging settings values. Existing
+dirty-file, symlink, type, and ignored-content protections still apply to the
+settings files.
 
-The one target-local exception is a service capability skill under
+`Makefile` is the portable entry point and includes `make/template.mk`, which
+owns standard commands. A service may add uniquely named commands in
+repository-owned `make/service.mk`. Portable scripts are listed individually so
+the manifest never owns or deletes sibling service scripts. `tools/go.mod` and
+`tools/go.sum` pin the common development tools with a repository-neutral module
+identity. Lint, secret-scan, and OpenAPI policy configuration stays
+repository-owned because its accepted exceptions and current code surface are
+service-specific; the portable wrappers and pinned binaries consume it.
+
+A path may appear in the manifest only while its managed content carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. Apart from the two explicit settings leaves, ownership covers the entire file. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve.
+
+Another target-local exception is a service capability skill under
 `.agents/skills/<name>/` with a `.service-owned` marker. The sync
 preserves that directory, requires a real `SKILL.md`, refuses an ownership
 collision with a template skill of the same name, excludes it from the sync
@@ -34,6 +64,10 @@ These documents stay repository-owned and the sync never touches them:
 | `docs/railway-deployment-profile.md` | This service's deployment target |
 | `test/README.md` | This service's integration-test topology and commands |
 | `docs/first-production-feature.md` | Template-only onboarding; not shipped to services |
+| `make/service.mk` | Service-only commands and their variables |
+| `.golangci.yml`, `.gitleaks.toml`, and `.redocly.yaml` | Service code policy, reviewed exceptions, and API lint policy |
+| `.gitleaks.baseline.json` | Reviewed findings for this repository's history |
+| `.github/workflows/*.yml` and `railway.toml` | Repository-specific required-check, publication, and deployment activation |
 
 Record a service-specific decision in one of those, or in a task-local artifact.
 Never in an owned path. `make template-owned-purity-check` validates safe
@@ -42,7 +76,7 @@ exclusions, absence of profile markers, and propagation of the sync mechanism.
 Broader content portability remains a review responsibility; the actual sync
 independently refuses an owned path that names the target module.
 
-## Adopting Instruction Changes
+## Adopting Portable Changes
 
 Run the script from the template checkout, never a potentially stale target
 copy. From the derived repository:
@@ -69,11 +103,20 @@ of the manifest. The result stays in the target working tree for ordinary
 review and commit. A service-owned skill and links for selected Claude/Qwen
 views retain their existing Git status.
 
-Portable validation invokes the synced helper scripts directly. A derived
-repository's `Makefile` is repository-owned, so template Make targets are
-convenience aliases for the template checkout, not propagated interfaces.
+Portable validation invokes the synced helper scripts through the shared Make
+implementation. Service commands remain in `make/service.mk`; defining a second
+recipe for a standard target is drift, not an override mechanism.
 
 ## Uncommitted Work
+
+For instruction adoption without a tooling migration, add `--instructions-only`
+to either command. It selects manifest-owned bootstrap files, documentation,
+skills, roles, and the chosen harness configuration and generated views. It
+preserves Makefiles, scripts, tool dependencies, the manifest, retired full-sync
+receipts, and unselected harness data. A legacy Makefile or dirty tooling does
+not block that mode; dirty selected instructions and the other safety checks
+still do. Generated views use the committed source helpers. Its successful
+check proves instruction parity only, not full portable-tooling parity.
 
 The sync never commits. Its result remains a normal reviewable working-tree
 change in one target.
@@ -116,11 +159,13 @@ changes.
 | `.claude`, `.qwen`, or `.codex` has an unsafe path shape, or the Codex managed markers are malformed | A generated view could fail after manifest writes |
 | Ignored content exists inside the template manifest or a target owned, generated, or pruned path | It could leak into a target or be silently deleted |
 | The committed canonical inputs and generated projections disagree | Apply would fail or create drift after target writes |
+| Managed harness settings contain malformed JSON or unsafe object shapes, or Python 3 is unavailable | The depth update cannot preserve the consumer's other settings safely |
 | A required repository-owned instruction is missing | Mirrored instructions would point at an absent local authority |
 | A marked service-owned skill is malformed or collides with a template skill | The sync cannot preserve one unambiguous local owner |
 | A manifest path is gitignored in the target | The mirror writes it, git refuses to track it, and drift never clears |
 | Target has a directory where the template has a file, or the reverse | The copy cannot land |
 | An owned path names the target's own module | The manifest is wrong, not the target |
+| A pre-portability root `Makefile` has not been split | Sync cannot distinguish service targets from obsolete standard recipes; move only service targets to `make/service.mk` first |
 
 One environment assumption is not checked. A target with `core.autocrlf`
 enabled rewrites line endings on checkout, which reads as permanent drift; keep

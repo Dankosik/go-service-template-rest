@@ -11,6 +11,7 @@ Task-local artifacts live under `specs/<task>/`:
 
 | Trigger | Artifact | Owns |
 | --- | --- | --- |
+| New structured work completes requester interview | [`intent.md`](../interfaces/intent.md) | Requester meaning synthesized after interview |
 | Behavior delta must survive | `spec.md` | Outcome, behavior delta, constraints, proof expectations |
 | Implementation would choose mechanism or placement | `design/` | Selected system and ownership decisions |
 | Proof needs a scenario matrix | `test-plan.md` | Proof obligations, observables, levels, gaps |

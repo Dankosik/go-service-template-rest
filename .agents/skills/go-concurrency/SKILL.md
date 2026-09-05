@@ -14,6 +14,10 @@ Judge every change by its **happens-before** story: a claim that two events cann
 
 Every goroutine has an owner, a signal it observes to stop, a guaranteed unblock for each blocking site, and a join point; a goroutine missing any of these outlives its purpose and leaks work, memory, or writes into freed assumptions. Worker pools and fan-outs carry explicit bounds, and timers and tickers have named stop owners.
 
+Load [goroutine leak profiles](references/goroutine-leak-profiles.md) for
+goroutine-count growth, shutdown stalls, production liveness incidents, or
+changes to channel, lock, wait-group, and process-exit ownership.
+
 Load the [shared specialist contract](../../contracts/specialist-contract.md).
 From every changed spawn site to its join or explicit process-lifetime
 disposition, build `GoroutineStory{owner, stop, blocking_sites, unblock, join,

@@ -13,13 +13,18 @@ query shape, and any cache's authority, freshness, invalidation, and fallback.
 
 `caller intent -> transaction -> query -> cache contract -> fallback -> observability -> proof`
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
-From every changed caller intent through its terminal result, build
+Trace the changed caller intent through its terminal result, including tenant
+identity, commit outcome, and resource lifetime. What must be atomically true
+together defines the transaction. A cache needs measured value, tenant-scoped
+keys, a freshness bound, an invalidation owner, and bounded origin fallback.
+
+When comparing multiple affected access paths or handing off a Decision or
+Review, record
 `AccessPath{caller, transaction, query, tenant, cache_authority, freshness,
-invalidation, fallback, commit_outcome, resource_lifetime, proof}`. What must
-be atomically true together defines the transaction. A cache needs measured
-value, tenant-scoped keys, a freshness bound, an invalidation owner, and
-bounded origin fallback.
+invalidation, fallback, commit_outcome, resource_lifetime, proof}` for each path.
+A single local path needs a grounded disposition and matching proof. For a
+delegated Decision or Review, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 
 For a **Decision**, load [transaction and commit outcome](references/decision/transaction-boundary-and-commit-outcome.md)
 when deciding atomicity, safe retry, or an unknown commit. Reject a cache without
