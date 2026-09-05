@@ -1,22 +1,14 @@
 # Deterministic Time And Concurrency
 
-## Behavior Change Thesis
-When loaded for timers, backoff, deadlines, or goroutine handoff, this file makes
-the model run the code inside a `synctest` bubble on a fake clock — the common
-defect is a real-time test built from `time.Sleep` and a polling loop, which pays
-wall-clock for every schedule it proves and still flakes on a loaded machine,
-because a sleep is a guess about scheduling rather than an observation of it.
-
-## When To Load
+## Load When
 Symptom: the behavior under test is a schedule, a timeout, a backoff, a
 cancellation, a shutdown ordering, or a handoff between goroutines.
 
-## Decision Rubric
-- `synctest.Test(t, func(t *testing.T) { ... })` is the entry point in
-  `testing/synctest` on this toolchain (Go 1.26.5; GA since 1.25). The Go 1.24
-  spelling — `synctest.Run` behind `GOEXPERIMENT=synctest` — no longer applies,
-  and the current form is already used in
-  `internal/infra/postgresoutbox/relay_test.go` and eleven other files.
+## Decide
+- Resolve the target module's supported test APIs through [Go Modern
+  Version](../../go-modern-version/SKILL.md). Use that version's
+  `testing/synctest` interface when available and suitable; inspect local tests
+  for reusable fixtures instead of assuming another checkout's examples exist.
 - Inside a bubble `time.Sleep` is how the fake clock advances, not something to
   avoid. Time moves only when every goroutine in the bubble is durably blocked,
   so a sleep asks the clock to jump to the next scheduled wakeup. The identical
@@ -35,9 +27,9 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
   the offender is the bubble frame missing the `(durable)` marker —
   `[chan receive, synctest bubble 1]` beside healthy neighbours reading
   `[chan receive (durable), synctest bubble 1]`.
-- Goroutine exit needs no separate assertion inside a bubble: `Test` waits for
-  every bubble goroutine. Package-wide that job belongs to
-  `goleak.VerifyTestMain(m)` in `TestMain`, already run in seven packages here.
+- `synctest.Test` waits for every bubble goroutine, providing evidence of their
+  exit. For goroutines outside the bubble, inspect the target package's existing
+  lifecycle assertions and leak checks before adding proof.
 - When the code genuinely leaves the bubble — a container, a subprocess, a real
   socket — drop synctest for an explicit ready signal and a buffered result
   channel, keeping a real timeout only as a failure diagnostic.
@@ -50,6 +42,6 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
 - A clean `-race` run read as proof of liveness, ordering, or cancellation. It
   reports conflicting access on the paths that executed, and nothing else.
 
-## Validation Shape
+## Prove
 - Focused test with `-count=1 -vet=off`.
-- `make test-race` when the changed path shares state across goroutines.
+- `ALLOW_HEAVY=1 make test-race` when the changed path shares state across goroutines.

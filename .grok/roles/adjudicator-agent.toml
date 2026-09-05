@@ -1,0 +1,4 @@
+description = "Read-only adjudicator for one surviving material reviewer conflict."
+default_capability_mode = "read-only"
+model = "grok-4.6"
+reasoning_effort = "xhigh"

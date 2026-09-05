@@ -1,30 +1,20 @@
 # Flaky Reproduction Controls For Go
 
-## Behavior Change Thesis
-
-When loaded for an intermittent Go test failure, this file makes the model move
-one control variable at a time and keep the failing seed as a replayable
-reproducer — instead of stacking `-race -shuffle -cpu -count` into a single
-command that reproduces *something* without naming which knob did it, and
-instead of reading one green local run as evidence against a CI-only flake.
-
-## When To Load
+## Load When
 
 Load when a Go test fails only under repetition, on CI, under `-race`,
 `-shuffle`, a specific `-cpu`, or in wider package scope.
 
 A test that is flaky because it sleeps on wall-clock time is a test-design
-problem, not a reproduction problem: `go-test-implementation` owns
-`testing/synctest`, which this repository already uses for time-driven behavior
-(`internal/health/cached_test.go`, `internal/background`, the bootstrap
-lifecycle tests). Reach for a fake clock there before widening any timeout here.
+problem, not a reproduction problem: `go-test-implementation` selects time
+controls supported by the target module and suitable for its proving layer.
+Resolve that deterministic control before widening any timeout here.
 
-## Decision Rubric
+## Decide
 
-- **Read the recorded failure before reproducing it.** `make test-report` writes
-  `.artifacts/test/junit.xml` and `.artifacts/test/test2json.json`. The JSON
-  stream carries per-test output and ordering that the CI summary drops, which is
-  usually what names the failure class before a single command is run.
+- **Read the recorded failure before reproducing it.** CI and `gotestsum`
+  preserve per-test output and ordering, which usually names the failure class
+  before a single command is rerun.
 
 - **Move one variable per command**, and name the class before combining: `-count`
   for repetition, `-race` for shared state, `-cpu` for scheduler sensitivity,
@@ -39,8 +29,8 @@ lifecycle tests). Reach for a fake clock there before widening any timeout here.
 - **Repeated test commands take `-vet=off`** here: mandatory lint owns `govet` for
   the current tree, so leaving default vet on re-lints the package on every one of
   100 iterations. The repository's own flake gate is
-  `make test-flake-smoke` (`go test -vet=off -count=5 -shuffle=on ./...`); the
-  race gate is `make test-race`.
+  a bounded `go test -vet=off -count=5 -shuffle=on <scope>` run; the
+  race gate is `ALLOW_HEAVY=1 make test-race`.
 
 - **Integration-tagged flakes have pinned commands.** `make test-messaging-race`
   and `make test-outbox-race` run `-p=1 -count=1 -race -tags=integration` over a
@@ -62,7 +52,7 @@ the residual risk in those terms.
 Reject skipping or deleting the test before deciding whether the flake is
 test-only or a real production race that the test merely exposes intermittently.
 
-## Validation Shape
+## Prove
 
 Capture the exact command, package and test selector, `-count`, `-race`, `-cpu`,
 `-shuffle` seed, tags, relevant env, the first distinct failing stack or

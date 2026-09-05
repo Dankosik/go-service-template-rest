@@ -1,9 +1,6 @@
 # Idempotency, Replay, And Async Domain Rules
 
-## Behavior Change Thesis
-When loaded for symptom "the rules touch retries, duplicates, replay, or out-of-order arrival", this file makes the model define domain sameness and the effect boundary first instead of likely mistake "reach for an idempotency key or consumer dedupe without ever saying what counts as the same operation."
-
-## Decision Rubric
+## Decide
 - Define sameness before mechanism: which fields carry business intent, and which are incidental metadata. Caller key, business key, event ID, aggregate version, and tenant scope are candidates; a transport key or a payload hash is one only if the domain says so.
 - Same identity plus **different** intent is a conflict, not a replay. That case is the one an idempotency key alone answers wrongly, because the key matches and the meaning does not.
 - Name the effect boundary: which effects may be observed before acceptance commits, and which must not exist until it does. An effect that is externally visible or irreversible belongs after the last guard.
@@ -23,5 +20,5 @@ Replay the events through the handlers.
 ```
 Failure: replay is not a rerun until each side effect is classified recomputable, sandbox-only, forbidden, or policy-controlled.
 
-## Validation Shape
+## Prove
 Proof should cover same identity with same intent, same identity with different intent, a concurrent or in-progress duplicate, an unknown commit, an out-of-order arrival, and whichever reconciliation path the rules chose.

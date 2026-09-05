@@ -1,16 +1,13 @@
 # Trace Context And Correlation
 
-## Behavior Change Thesis
-When loaded for propagation, correlation identifiers, or "pass this value to the downstream service", this file makes the model choose an explicit egress policy for the target instead of the likely mistake: designing an allowlisted-baggage solution, which in this repository propagates nothing — baggage is never injected and is stripped on the way out, so the design silently no-ops and the value never arrives.
-
-## When To Load
+## Load When
 Load this when a change crosses a service boundary with correlation attached: a new outbound client, a value that must reach a downstream, async lineage, or log-to-trace correlation.
 
-## Decision Rubric
+## Decide
 
-**Baggage does not travel here.** `SetupTracing` registers `propagation.TraceContext{}` alone — no composite, no `propagation.Baggage`. Both outbound clients go further: `internal/infra/httpclient/propagation.go` and `internal/infra/grpcclient/propagation.go` strip `traceparent`, `tracestate`, `baggage`, and the request-ID header from every attempt before injecting. A value that must reach a downstream travels as an explicit field of the request, or the policy is extended deliberately by its owner.
+**Shared clients do not synthesize baggage.** `SetupTracing` and the gRPC client register `propagation.TraceContext{}` alone — no composite, no `propagation.Baggage`. The fixed HTTP client strips `traceparent`, `tracestate`, `baggage`, and the request-ID header and injects nothing. A value that must reach a downstream travels as an explicit request field; caller-supplied gRPC metadata remains the concrete adapter's responsibility.
 
-**Egress is a per-target policy and fail-closed.** `PropagationPolicy` has three values and the zero value is `PropagationNone`. `PropagationTraceContext` emits W3C trace context; `PropagationTrustedService` adds the request ID and is the choice that asserts the target is trusted with it. A new client picks one explicitly — the default emits no remote correlation at all, so an unset policy is a silent loss of end-to-end tracing rather than a leak.
+**gRPC egress always emits W3C Trace Context.** The shared client has no per-target propagation policy and emits neither baggage nor the request ID. A target that may not receive trace context, or that must receive another correlation value, requires a separate accepted policy before composition. Fixed HTTP provider calls emit no remote correlation.
 
 **Correlation on logs is already automatic.** `internal/observability/logctx` publishes `request_id`, `trace_id`, and `span_id` on every record from the context it was logged with. Adding them by hand duplicates them; logging without a context drops them, which is what the repository's sloglint `context: scope` setting catches. The pivot from an alert to a trace to a log runs on these keys and needs nothing added.
 
@@ -20,10 +17,10 @@ Load this when a change crosses a service boundary with correlation attached: a 
 
 ## Reject
 - Baggage as a transport for tenant, user, or plan values, because nothing registers a baggage propagator and the sanitizer removes the header regardless.
-- A new outbound client that leaves `Propagation` at its zero value while expecting distributed traces, because the zero value is `PropagationNone` and the trace ends at this service.
+- A fixed HTTP provider call that expects distributed traces without a separate accepted telemetry policy, because the shared client deliberately emits no remote correlation.
 - Re-adding `trace_id` or `request_id` to a log call, because `logctx` already published them and the second copy is what drifts.
 
-## Validation Shape
-- Name the `PropagationPolicy` chosen for each new target and what it asserts about that target's trust.
+## Prove
+- Confirm that each new gRPC target may receive W3C Trace Context; reopen client policy when it may not or needs another correlation value.
 - For async work, state whether lineage is parent-child or linked, and why.
 - Confirm one alert-to-trace-to-log pivot works from the keys `logctx` already publishes.

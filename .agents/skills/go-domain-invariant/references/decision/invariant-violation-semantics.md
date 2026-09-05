@@ -1,9 +1,6 @@
 # Invariant Violation Semantics
 
-## Behavior Change Thesis
-When loaded for symptom "a rule says what must be true but not what happens when it is false", this file makes the model pick one deterministic outcome from a closed set instead of likely mistake "handle the error and continue, or return a scoped-empty success that hides the violation."
-
-## Decision Rubric
+## Decide
 - Exactly one primary outcome per violation: `reject`, `deny`, `defer_async`, `compensate`, `forward_recover`, `manual_intervention`, or `accepted_risk`.
 - `reject` when the command is not accepted and the caller can correct it. `deny` for identity, tenant, ownership, and authorization failures — fail closed rather than returning a filtered or empty result, because an empty list is indistinguishable from a legitimate empty scope at every layer above.
 - `defer_async` only when the accepted state is honestly pending. `compensate` and `forward_recover` only after naming the durable state and side effects that already happened. `accepted_risk` only with its consequence and its reopen trigger.
@@ -22,5 +19,5 @@ Log a warning and continue.
 ```
 Failure: the operation now succeeds with the invariant false. No caller can distinguish that from a clean accept.
 
-## Validation Shape
+## Prove
 Proof asserts the chosen outcome directly: the forbidden transition rejects, the tenant mismatch denies, the ambiguous commit lands in pending or reconciliation, the duplicate returns the equivalent outcome, and a failed compensation reaches the stated terminal or manual state.

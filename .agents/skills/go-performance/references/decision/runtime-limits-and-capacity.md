@@ -1,21 +1,12 @@
 # Runtime Limits And Capacity
 
-## When To Load
+## Load When
 
 Load this when the decision is about the process's own envelope: container
 memory, GC behavior, `GOMAXPROCS`, `GOMEMLIMIT`, `GOGC`, connection pool size,
 admission concurrency, or how many requests may be in flight at once.
 
-## Behavior Change Thesis
-
-The canonical Go answer to "this container is OOM-killed" or "raise capacity" is
-to set `GOMEMLIMIT`, lower `GOGC`, add `automaxprocs`, and size the pool to match
-the concurrency limit. In this repository each of those is already done, made
-harmful by doing it, or inverts an ordering chosen on purpose — and the number
-that actually decides whether the process survives its own concurrency is one no
-layer computes at runtime except a startup warning.
-
-## Decision Rubric
+## Decide
 
 - `GOMAXPROCS` is deliberately unset (`cmd/service/internal/bootstrap/runtime_limits.go`).
   Since Go 1.25 the runtime defaults it from the cgroup CPU bandwidth limit and
@@ -52,9 +43,9 @@ layer computes at runtime except a startup warning.
   exports pool acquire and wait metrics; a claim about either has instruments
   without adding any.
 
-## Validation Shape
+## Prove
 
-`make bench` and `make bench-compare` for the per-operation half. For the
+`go test -bench` and `benchstat` for the per-operation half. For the
 envelope half, name the startup log line (`runtime_memory_limit_applied`,
 `runtime_memory_limit_skipped`, `runtime_request_buffer_budget_exceeded`) and
 the runtime or pool metric that must move, with the threshold that decides

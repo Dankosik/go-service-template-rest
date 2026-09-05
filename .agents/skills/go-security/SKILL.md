@@ -1,23 +1,34 @@
 ---
 name: go-security
-description: "Security: Use for trust boundaries, identity, authorization, tenant isolation, tokens, secrets, injection, or SSRF. Own policy; Skip non-security API, data, reliability, or placement."
+description: "Attacker paths. Use when identity, authorization, tenancy, tokens, secrets, injection, SSRF, abuse, or another trust boundary changes what an attacker can reach."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Security
 
-Security work walks **attacker paths**: every reachable route from an attacker's position through identity, authority, asset, enforcement point, and attacker action to an observable failure — and silence is never evidence that a path is closed.
+Security work walks **attacker paths** from trust boundary through principal,
+authority, asset, enforcement point, attacker action, and observable denial.
 
-`trust boundary -> principal -> enforcement point -> attacker action -> observable failure -> negative proof`
+`boundary -> principal -> enforcement -> action -> failure -> negative proof`
 
-The system fails closed: missing identity, ambiguous tenant, or absent policy denies rather than guesses. A control proves nothing until a negative test exercises its deny path, because allow-path tests pass equally well against a bypassed control — so every control this work accepts or changes carries one.
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From every caller-controlled entrypoint to an asset or observable denial, build
+`AttackerPath{boundary, principal, asset, enforcement, action, failure,
+denial_proof}` across route exposure, verified identity, objects reached,
+outbound destinations, secrets, and caller-controlled work. Missing identity,
+ambiguous tenant, or absent policy denies. Every accepted control needs focused
+negative proof because an allow test also passes against a bypass.
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct every reachable attacker path across the affected surfaces: the declared exposure of each route, the verified principal, the objects reached with it, outbound destinations, secrets, and the bounds on caller-driven work.
+Decide against existing owners: `internal/infra/oidcjwt` verifies tokens,
+`api/openapi/service.yaml` declares default auth, `internal/infra/httpclient`
+pins destinations, and `internal/config` separates secret inputs. Load the
+[reference selector](references/index.md) for identity, exposure, interpreter
+input, outbound destination, work amplification, or a secret sink.
 
-Decide against what this service already enforces rather than a generic threat list. `internal/infra/oidcjwt` verifies bearer tokens, `api/openapi/service.yaml` requires one by default, `internal/infra/httpclient` pins outbound destinations, and `internal/config` separates secret from non-secret configuration. Load the [reference selector](references/index.md) when the change touches caller identity or token verification, operation exposure, caller-influenced input reaching an interpreter, outbound destinations, a caller's ability to scale work or cost, or a secret's path to any sink.
-
-## Choose The Branch
-
-- **Decision** — select when security policy is absent or changing. Complete when every reachable path reaches a shared Decision disposition with fail-closed behavior and focused negative proof.
-- **Review** — select when changed code must conform to accepted security policy. Follow every reachable path into the shared finding envelope; reporting no findings requires focused negative proof.
-
-Hand non-security contract semantics to `go-api-contract`, data authority to `go-data-architecture`, and placement to `go-implementation-ownership`. Load [`auth-access-control`](../../../docs/universal-disciplines/auth-access-control/SKILL.md) when the decision turns on credential lifecycle, session or token mechanism, permission-model shape, or how fast a revocation must take effect: it forces the mechanism to be derived from the required revocation window and permissions to be enumerable data, instead of role checks behind a long-lived token whose claims are treated as current.
+For a **Decision**, disposition every reachable path with fail-closed behavior
+and negative proof. For **Review**, follow each path into the shared finding
+envelope; no findings still requires the focused deny proof. Load [access
+control](../../../docs/universal-disciplines/auth-access-control/SKILL.md) when
+the credential, permission, or revocation mechanism itself is open.

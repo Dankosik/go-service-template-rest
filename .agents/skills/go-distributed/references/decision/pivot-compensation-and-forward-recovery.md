@@ -1,13 +1,6 @@
 # Pivot, Compensation, And Forward Recovery
 
-## Behavior Change Thesis
-
-When loaded for rollback, cancellation, timeout, or irreversible-step symptoms,
-this file makes the model name the pivot and bound every compensation by the
-lifetime of the thing it undoes, instead of promising generic rollback or
-scheduling a compensation whose retry budget outlives the hold it releases.
-
-## When To Load
+## Load When
 
 Load when a flow must undo work another owner already performed: pivot
 identification, compensating actions, cancellation policy, or a step whose
@@ -18,7 +11,7 @@ delivery, acknowledgement, and replay belong to
 [`reliable-messaging`](../../../../../docs/universal-disciplines/reliable-messaging/SKILL.md).
 This file owns only the undo decision.
 
-## Decision Rubric
+## Decide
 
 - Name the pivot: the step after which the flow can no longer roll back and
   every later failure resolves forward. Steps before it may compensate; steps
@@ -42,7 +35,7 @@ This file owns only the undo decision.
   [`resilience-and-load`](../../../../../docs/universal-disciplines/distributed-system-design/references/resilience-and-load.md)
   owns resolving that ambiguity before creating new intent.
 
-## Imitate
+## Inspect
 
 - A release refuses once the hold's own expiry has passed and escalates, rather
   than crediting back units the expiry already returned.
@@ -52,7 +45,7 @@ This file owns only the undo decision.
   chargeback — because post-capture there is no rollback, only a later
   transaction with its own failure mode.
 
-## Validation Shape
+## Prove
 
 - The reply is lost after the remote effect committed: read owner state by
   operation identity, and compensate only from an observed applied state.
