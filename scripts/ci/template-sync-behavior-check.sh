@@ -21,14 +21,18 @@ mkdir -p \
 	"${template}/.agents/roles" \
 	"${template}/.agents/skills/fixture-skill" \
 	"${template}/.opencode"
-for file in template-sync.sh agent-roles-sync.sh harness-skills-sync.sh codex-agents-sync.sh; do
+for file in template-sync.sh template-settings-sync.py agent-roles-sync.sh harness-skills-sync.sh codex-agents-sync.sh; do
 	cp -p "${root}/scripts/${file}" "${template}/scripts/${file}"
 done
 cp -p "${root}/scripts/lib/manifest.sh" "${root}/scripts/lib/sync-cli.sh" "${template}/scripts/lib/"
 cp -p "${root}/.agents/codex-project.toml" "${template}/.agents/codex-project.toml"
 cp -p "${root}/.agents/roles/worker-agent.toml" "${template}/.agents/roles/worker-agent.toml"
+cp -p "${root}/.agents/roles/reviewer-agent.toml" "${template}/.agents/roles/reviewer-agent.toml"
 cp -p "${root}/.agents/role-classes/mutable-worker.md" \
 	"${root}/.agents/role-classes/mutable-worker-fallback.md" \
+	"${template}/.agents/role-classes/"
+cp -p "${root}/.agents/role-classes/read-only-specialist.md" \
+	"${root}/.agents/role-classes/read-only-specialist-fallback.md" \
 	"${template}/.agents/role-classes/"
 cp -p "${root}/.opencode/.gitignore" "${template}/.opencode/.gitignore"
 printf '# fixture template v1\n' >"${template}/AGENTS.md"
@@ -56,6 +60,7 @@ make/template.mk
 .agents/roles/
 .agents/skills/
 .claude/agents/
+.claude/settings.json
 .codex/agents/
 .cursor/agents/
 .grok/agents/
@@ -63,8 +68,10 @@ make/template.mk
 .opencode/.gitignore
 .opencode/agents/
 .qwen/agents/
+.qwen/settings.json
 template-owned.paths
 scripts/template-sync.sh
+scripts/template-settings-sync.py
 scripts/agent-roles-sync.sh
 scripts/harness-skills-sync.sh
 scripts/codex-agents-sync.sh
@@ -83,6 +90,28 @@ for file in \
 	printf '# Fixture repository owner\n' >"${template}/${file}"
 done
 bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
+for harness in claude qwen; do
+	cp -p "${root}/.${harness}/settings.json" "${template}/.${harness}/settings.json"
+	cp -p "${root}/.${harness}/agents/acceptance-unit-lead.md" "${template}/.${harness}/agents/acceptance-unit-lead.md"
+done
+# Regeneration must preserve the handwritten native Lead carriers.
+bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
+grep -Eq '^tools:.* Agent(,|$)' "${template}/.claude/agents/worker-agent.md" || fail "Claude worker cannot delegate"
+if grep -Eq '^tools:.* Agent(,|$)' "${template}/.claude/agents/reviewer-agent.md"; then
+	fail "Claude reviewer gained mutable delegation"
+fi
+grep -Fxq '  - agent' "${template}/.qwen/agents/worker-agent.md" || fail "Qwen worker cannot delegate"
+if grep -Fxq '  - agent' "${template}/.qwen/agents/reviewer-agent.md"; then
+	fail "Qwen reviewer gained mutable delegation"
+fi
+grep -Fxq '    "*": deny' "${template}/.opencode/agents/worker-agent.md" || fail "OpenCode worker lost its delegation default deny"
+grep -Fxq '    worker-agent: allow' "${template}/.opencode/agents/worker-agent.md" || fail "OpenCode worker cannot delegate"
+grep -Fxq '    evidence-agent: allow' "${template}/.opencode/agents/worker-agent.md" || fail "OpenCode worker cannot request evidence"
+grep -Fxq '  task: deny' "${template}/.opencode/agents/reviewer-agent.md" || fail "OpenCode reviewer gained mutable delegation"
+for harness in claude qwen; do
+	cmp -s "${root}/.${harness}/agents/acceptance-unit-lead.md" "${template}/.${harness}/agents/acceptance-unit-lead.md" ||
+		fail "${harness} Lead carrier was not preserved"
+done
 bash "${template}/scripts/harness-skills-sync.sh" claude --apply --repo "${template}" >/dev/null
 bash "${template}/scripts/harness-skills-sync.sh" qwen --apply --repo "${template}" >/dev/null
 bash "${template}/scripts/codex-agents-sync.sh" --apply --repo "${template}" >/dev/null
@@ -136,6 +165,22 @@ for target in "${target_direct}" "${target_generated}" "${target_pruned}" "${tar
 	clone_target "${target}"
 done
 
+# Settings outside the two owned leaves are committed consumer data, not drift.
+cat >"${target_dirty}/.claude/settings.json" <<'EOF'
+{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo local"}]}]},"env":{"LOCAL_ENV":"keep","CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH":"3"},"permissions":{"deny":["Read(.env)"]},"precise":1.234567890123456789,"model":"consumer-model"}
+EOF
+cat >"${target_dirty}/.qwen/settings.json" <<'EOF'
+{"env":{"LOCAL_ENV":"keep"},"hooks":{"AfterTool":[]},"permissions":{"allow":["Read"]},"model":{"name":"consumer-model","maxSubagentDepth":5,"generationConfig":{"temperature":0.1234567890123456789}}}
+EOF
+for harness in claude qwen; do
+	cp "${target_dirty}/.${harness}/settings.json" "${fixture}/${harness}-before.json"
+done
+git -C "${target_dirty}" add .claude/settings.json .qwen/settings.json
+git -C "${target_dirty}" commit -qm consumer-settings
+if ! report=$(bash "${template}/scripts/template-sync.sh" --check --from "${template}" --repo "${target_dirty}" 2>&1); then
+	fail "consumer-owned settings were treated as drift: ${report}"
+fi
+
 git -C "${target_legacy}" rm -q make/template.mk
 printf 'legacy-local:\n\t@printf '\''legacy local\\n'\''\n' >"${target_legacy}/Makefile"
 git -C "${target_legacy}" add Makefile
@@ -154,8 +199,87 @@ sed -i.bak 's/standard v1/standard v2/' "${template}/make/template.mk"
 rm -f "${template}/make/template.mk.bak"
 sed -i.bak 's/portable v1/portable v2/' "${template}/scripts/ci/portable-check.sh"
 rm -f "${template}/scripts/ci/portable-check.sh.bak"
-git -C "${template}" add AGENTS.md make/template.mk scripts/ci/portable-check.sh
+# Make native settings and Lead carriers stale in every already-cloned consumer.
+printf '%s\n' '{"env":{"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH":"4"}}' >"${template}/.claude/settings.json"
+printf '%s\n' '{"model":{"maxSubagentDepth":6}}' >"${template}/.qwen/settings.json"
+for harness in claude qwen; do
+	printf '\nFixture Lead v2.\n' >>"${template}/.${harness}/agents/acceptance-unit-lead.md"
+	if cmp -s "${template}/.${harness}/settings.json" "${target_dirty}/.${harness}/settings.json" ||
+		cmp -s "${template}/.${harness}/agents/acceptance-unit-lead.md" "${target_dirty}/.${harness}/agents/acceptance-unit-lead.md"; then
+		fail "${harness} propagation fixture did not start with stale consumer content"
+	fi
+done
+git -C "${template}" add AGENTS.md make/template.mk scripts/ci/portable-check.sh \
+	.claude/settings.json .qwen/settings.json \
+	.claude/agents/acceptance-unit-lead.md .qwen/agents/acceptance-unit-lead.md
 git -C "${template}" commit -qm v2
+
+# Invalid committed source depths must refuse before touching an older consumer.
+for invalid_depth in qwen-zero qwen-over-limit claude-zero; do
+	settings_source="${fixture}/${invalid_depth}"
+	clone_target "${settings_source}"
+	case "${invalid_depth}" in
+	qwen-zero) printf '%s\n' '{"model":{"maxSubagentDepth":0}}' >"${settings_source}/.qwen/settings.json" ;;
+	qwen-over-limit) printf '%s\n' '{"model":{"maxSubagentDepth":101}}' >"${settings_source}/.qwen/settings.json" ;;
+	claude-zero) printf '%s\n' '{"env":{"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH":"0"}}' >"${settings_source}/.claude/settings.json" ;;
+	esac
+	git -C "${settings_source}" add .claude/settings.json .qwen/settings.json
+	git -C "${settings_source}" commit -qm invalid-source-depth
+	report=$(expect_failure "apply with ${invalid_depth} source depth" \
+		bash "${settings_source}/scripts/template-sync.sh" --apply --from "${settings_source}" --repo "${target_invalid}")
+	grep -Fq 'template revision has invalid managed settings' <<<"${report}" || fail "source depth refusal used the wrong reason"
+	[[ -z "$(git -C "${target_invalid}" status --porcelain)" ]] || fail "invalid source depth changed consumer content"
+	assert_v1 "${target_invalid}" "invalid-source-depth target"
+done
+
+# Each refusal must precede every target write, even when other files have drift.
+for harness in claude qwen; do
+	for malformed in '{"private":"fixture-secret",' '[]' '{"env":null,"model":[]}' '{"private":1,"private":2}' '{"private":NaN}'; do
+		settings_target="${fixture}/settings-target"
+		clone_target "${settings_target}"
+		# Give the template a separate visible change so an early copy is detectable.
+		printf '# fixture template v1\n' >"${settings_target}/AGENTS.md"
+		printf '%s\n' "${malformed}" >"${settings_target}/.${harness}/settings.json"
+		git -C "${settings_target}" add AGENTS.md ".${harness}/settings.json"
+		git -C "${settings_target}" commit -qm malformed-settings
+		report=$(expect_failure "apply with malformed ${harness} settings" \
+			bash "${template}/scripts/template-sync.sh" --apply --from "${template}" --repo "${settings_target}")
+		grep -Fq 'invalid managed settings' <<<"${report}" || fail "settings refusal used the wrong reason"
+		if grep -Fq 'fixture-secret' <<<"${report}"; then fail "settings refusal exposed JSON content"; fi
+		[[ -z "$(git -C "${settings_target}" status --porcelain)" ]] || fail "malformed settings changed target content"
+		assert_v1 "${settings_target}" "malformed-settings target"
+		rm -rf -- "${settings_target}"
+	done
+done
+
+for missing in files parents; do
+	settings_target="${fixture}/settings-${missing}"
+	clone_target "${settings_target}"
+	if [[ "${missing}" == files ]]; then
+		git -C "${settings_target}" rm -q .claude/settings.json .qwen/settings.json
+	else
+		printf '%s\n' '{"permissions":{"deny":["Read(.env)"]}}' >"${settings_target}/.claude/settings.json"
+		printf '%s\n' '{"model":{"name":"consumer-model"}}' >"${settings_target}/.qwen/settings.json"
+		git -C "${settings_target}" add .claude/settings.json .qwen/settings.json
+	fi
+	git -C "${settings_target}" commit -qm missing-settings
+	if ! report=$(bash "${template}/scripts/template-sync.sh" --apply --from "${template}" --repo "${settings_target}" 2>&1); then
+		fail "missing settings ${missing} could not be created: ${report}"
+	fi
+	python3 - "${settings_target}" "${missing}" <<'PY'
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+claude = json.loads((root / ".claude/settings.json").read_text())
+qwen = json.loads((root / ".qwen/settings.json").read_text())
+assert claude["env"]["CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH"] == "4"
+assert qwen["model"]["maxSubagentDepth"] == 6
+if sys.argv[2] == "parents":
+    assert claude["permissions"] == {"deny": ["Read(.env)"]}
+    assert qwen["model"]["name"] == "consumer-model"
+PY
+done
 
 report=$(expect_failure "apply with a legacy Makefile" \
 	bash "${template}/scripts/template-sync.sh" --apply --from "${template}" --repo "${target_legacy}")
@@ -241,6 +365,23 @@ if ! report=$(bash "${template}/scripts/template-sync.sh" --check --from "${temp
 	fail "repeat check failed: ${report}"
 fi
 grep -Fq 'fixture template v2' "${target_dirty}/AGENTS.md" || fail "valid apply omitted committed content"
+for harness in claude qwen; do
+	cmp -s "${template}/.${harness}/agents/acceptance-unit-lead.md" "${target_dirty}/.${harness}/agents/acceptance-unit-lead.md" ||
+		fail "${harness} Lead carrier was not propagated"
+done
+python3 - "${fixture}" "${target_dirty}" <<'PY'
+from pathlib import Path
+import sys
+fixture, target = map(Path, sys.argv[1:])
+for harness, before, after in (
+    ("claude", '"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH":"3"', '"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH":"4"'),
+    ("qwen", '"maxSubagentDepth":5', '"maxSubagentDepth":6'),
+):
+    original = (fixture / (harness + "-before.json")).read_bytes()
+    expected = original.replace(before.encode(), after.encode())
+    assert expected != original, "fixture did not start with a stale owned depth"
+    assert (target / ("." + harness) / "settings.json").read_bytes() == expected, "consumer settings lost bytes or owned depth did not update"
+PY
 test "$(make -s -C "${target_dirty}" --no-print-directory standard-check)" = 'standard v2' ||
 	fail "standard Make target was not updated"
 test "$(make -s -C "${target_dirty}" --no-print-directory local-check)" = 'local service' ||

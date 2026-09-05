@@ -1,57 +1,67 @@
 # Qwen Code Harness Adapter
 
-Use installed Qwen task and agent controls as native authority.
+Use installed Qwen agent controls as native authority. The ordinary nested
+route is supported by Qwen Code 0.21.9; recheck native controls after runtime
+changes.
 
 ## Native Map
 
-- `todo_write`, or team `task_create` and `task_update`, tracks the root
-  execution tree; repository `tasks.md` remains the acceptance ledger.
-- `/orchestrator` binds the current session as Ledger Orchestrator when Agent
-  Team controls are callable. Dispatch every mutually independent ready unit
-  before waiting, within current capacity. Create one named Acceptance-Unit
-  Lead teammate per ready unit; the Lead owns proof, review, and the
-  acceptance verdict, while the team lead lands only `Accepted` candidates
-  serially from the
+- `/orchestrator` binds the current session as Ledger Orchestrator. Dispatch
+  mutually independent ready units through `agent` with
+  `subagent_type: "acceptance-unit-lead"`, within current capacity. The native
+  [Lead carrier](../../.qwen/agents/acceptance-unit-lead.md) loads the existing
+  role skill and owns its fixed unit through proof, required review, and its
+  acceptance verdict. The root lands only `Accepted` candidates serially from
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
-  and records that verdict without re-adjudicating it.
-- Bind that teammate to the canonical `acceptance-unit-lead` carrier in its
-  spawn brief; do not substitute generic worker semantics.
-- If Agent Team controls are unavailable, full-ledger invocation returns the
-  exact carrier gap before dispatch instead of silently becoming single-unit
-  work.
-- Agent Team enablement is user or machine configuration. Name that condition
-  when absent; do not mutate settings as part of ledger routing.
-- The Lead may implement directly or delegate implement, investigate, verify,
-  or review mode to a built-in or project agent.
-- Use `isolation: "worktree"` when [Agent Harness](../agent-harness.md)
-  selects isolation for a concurrent mutable Lead. Workers inside one Lead
-  may share the Lead checkout when writable responsibility and exclusive
-  locks are disjoint. Do not create worktrees for sequential work, cheap
-  disjoint units, or bounded read-only review.
-- Independent review uses one fresh `reviewer-agent`, names its Method, and
-  keeps the fixed candidate unchanged.
+  and records the verdict without re-adjudicating or implementing the unit.
+  `todo_write` tracks execution; repository `tasks.md` owns acceptance.
+- The installed schema names the tool `agent` (display name `Agent`), not
+  `task`. Ordinary named agents can nest. Apply
+  [Nested Execution](../agent-harness.md#nested-execution); project setting
+  `model.maxSubagentDepth: 5` selects the installed default of five levels.
+  Teammates, forks, and workflow-spawned agents cannot nest regardless of
+  that setting. Missing tools or exhausted depth return an exact parent gap.
+- The Lead may implement directly. Use `isolation: "worktree"` when
+  [Agent Harness](../agent-harness.md) selects isolation. Workers may share
+  the Lead checkout when writable responsibilities and locks are disjoint.
+- Top-level ordinary agents run in the background by default. Nested agents
+  run in the foreground and reject `run_in_background: true`; omit it or set
+  it to `false`. Caller-owned `working_dir` launches are also foreground-only.
+  Do not promise review/proof overlap from a blocked nested parent: let the
+  root broker an independent background reviewer from the Lead's fixed brief
+  when that overlap is useful, returning its result to the Lead.
+- Agent Teams remain an explicitly selected, already configured route. Since
+  teammates cannot nest, the root brokers descendants from teammate Lead
+  briefs and returns their results; acceptance stays with the Lead. Team
+  `task_create`/`task_update` mirror execution only. Full-ledger work does not
+  require enabling Teams or changing user or machine settings.
 
 ## Models And Dispatch
 
 Project agent frontmatter accepts `inherit`, `fast`, a model ID, or
 `authType:modelId`. Use `fast` for closed mechanical work when configured,
 `inherit` for ordinary work and a closed, strongly owned Lead unit, and the
-strongest configured model when remaining uncertainty, protected-risk surface,
-or high-consequence reasoning requires it. Qwen has
-no per-agent reasoning-effort field, so lanes inherit session effort. Preserve
-a user-selected model.
+strongest configured model when uncertainty, protected risk, or high
+consequence requires it. There is no per-agent reasoning-effort field; lanes
+inherit session effort. Preserve a user-selected model.
 
-Pass the [delegation interface](../agent-harness.md#delegation-interface) through
-native fields where available. Retain the returned agent identity before
-waiting or following up. Continue the same agent while its context is useful;
-use a fresh agent when independence, an invalidated base, a stall, or a changed
-strategy makes that more reliable. A missing identity is a carrier failure,
-not a completed lane.
+Apply [Context And Lifetime](../agent-harness.md#context-and-lifetime) for
+freshness and ledger-controlled Lead reuse. A new small task starts a fresh
+named agent without `subagent_type: "fork"` or continuation. Pass the
+[delegation interface](../agent-harness.md#delegation-interface) through native
+fields where available and supply facts absent from the named canonical
+inputs. Retain the returned `task_id`; `list_agents` identifies retained
+background agents, and `send_message` with that `task_id` continues related
+work or a same-brief review correction. A completed background agent may
+resume from its resident runtime or retained transcript. Foreground nested
+results return inline; if their runtime has no retained continuation, return
+that exact gap to the parent rather than inventing a resume field.
 
-Retain team, task, agent, and continuation identities. Use `send_message` for a
-same-unit correction and a fresh `reviewer-agent` for independent review. When
-Review requires integrated-candidate review, the team lead binds one fresh
-`reviewer-agent` to that boundary and still does not accept units. Team
-tasks mirror execution only; this session records the Lead-owned
-`Accepted`/`Blocked` verdict in the repository ledger without re-adjudicating
-it.
+[Review](../spec-first-workflow/shared/review.md) selects whether independent
+review is required. When required, bind a fresh `reviewer-agent` to
+[Implementation Review](../spec-first-workflow/phases/implementation-review.md)
+and the fixed candidate. Start review before independent focused proof only
+where the native async route permits it; keep the candidate unchanged and
+observe the proof budget. The root binds integrated-candidate review only
+when Review requires that boundary. Messages and execution status do not
+replace proof receipts or the Lead's acceptance result.

@@ -83,6 +83,7 @@ done
 }
 
 command -v rsync >/dev/null 2>&1 || fail "rsync is required"
+command -v python3 >/dev/null 2>&1 || fail "python3 is required for managed harness settings"
 
 template=$(CDPATH='' cd -- "${template}" 2>/dev/null && pwd) || fail "template directory not found"
 manifest="${template}/template-owned.paths"
@@ -247,6 +248,16 @@ agent_roles_helper="${source_root}/scripts/agent-roles-sync.sh"
 codex_agents_helper="${source_root}/scripts/codex-agents-sync.sh"
 [[ -f "${codex_agents_helper}" ]] ||
 	fail "template-owned Codex agent helper is missing: scripts/codex-agents-sync.sh"
+settings_helper="${source_root}/scripts/template-settings-sync.py"
+[[ -f "${settings_helper}" ]] || fail "template-owned settings helper is missing: scripts/template-settings-sync.py"
+for entry in "${paths[@]}"; do
+	case "${entry}" in
+	.claude/settings.json | .qwen/settings.json)
+		python3 "${settings_helper}" source "${source_root}" "${source_root}" "${entry}" ||
+			fail "template revision has invalid managed settings: ${entry}"
+		;;
+	esac
+done
 
 # Validate the committed replacement bytes before inspecting or changing a
 # target. Target preflight sees the old target and cannot prove this source.
@@ -266,6 +277,12 @@ fi
 # Compare one manifest entry. Prints a human-readable delta, returns 1 on drift.
 diff_entry() {
 	local repo="$1" entry="$2" source="${source_root}/$2" destination
+	case "${entry}" in
+	.claude/settings.json | .qwen/settings.json)
+		python3 "${settings_helper}" check "${source_root}" "${repo}" "${entry}"
+		return $?
+		;;
+	esac
 	destination="${repo}/${entry%/}"
 	if [[ "${entry}" == */ ]]; then
 		[[ -d "${source}" ]] || fail "manifest lists a missing template directory: ${entry}"
@@ -312,6 +329,12 @@ diff_entry() {
 # Copy one manifest entry, mirroring deletions inside directories.
 apply_entry() {
 	local repo="$1" entry="$2" source="${source_root}/$2"
+	case "${entry}" in
+	.claude/settings.json | .qwen/settings.json)
+		python3 "${settings_helper}" apply "${source_root}" "${repo}" "${entry}"
+		return
+		;;
+	esac
 	if [[ "${entry}" == */ ]]; then
 		local name
 		local -a excludes=()
@@ -552,6 +575,16 @@ target="${explicit_repo:-$PWD}"
 			reject "ignored generated or pruned content could be overwritten; first: $(printf '%s' "${target_generated_ignored}" | head -1)"
 		fi
 	fi
+
+	# Validate both settings documents before drift detection or any target write.
+	for entry in "${paths[@]}"; do
+		case "${entry}" in
+		.claude/settings.json | .qwen/settings.json)
+			python3 "${settings_helper}" preflight "${source_root}" "${repo}" "${entry}" ||
+				reject "invalid managed settings: ${entry}"
+			;;
+		esac
+	done
 
 	drift=0
 	report=""
