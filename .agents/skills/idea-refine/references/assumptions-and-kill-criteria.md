@@ -1,15 +1,12 @@
 # Assumptions And Kill Criteria
 
-## Behavior Change Thesis
-When loaded for symptom "the idea depends on enthusiasm, AI magic, uncertain demand, risky behavior, or untested policy assumptions," this file makes the model choose falsifiable bets and kill/pivot criteria instead of listing vague assumptions that cannot change the recommendation.
-
-## When To Load
+## Load When
 Load this when the recommendation would fail if a belief about user value, trust, feasibility, policy, operations, or business viability turns out false.
 
 ## The Move
 Write each assumption as a "we believe..." claim specific enough to be contradicted, and lead with the assumption that is both most important to success and most weakly evidenced. Attach kill, shrink, or pivot criteria to the assumptions that would change the recommendation, naming the observable result that triggers them — a qualitative criterion beats an invented threshold, and a user-supplied basis is what earns a number. Weigh behavioral evidence over stated preference, and label anecdote — including "stakeholders asked for it" — as weak evidence.
 
-## Imitate
+## Inspect
 Input: "Let's add AI-generated release notes for every deploy."
 
 ```markdown

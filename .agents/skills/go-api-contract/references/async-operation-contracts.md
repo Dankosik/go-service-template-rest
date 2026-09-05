@@ -1,23 +1,12 @@
 # Async Operation Contracts
 
-## When To Load
+## Load When
 
 Load this when `202 Accepted` is under consideration, when work outlives the
 request that started it, or when this service publishes events to consumers who
 will build on their delivery.
 
-## Behavior Change Thesis
-
-Without this file, `202` is answered as soon as the work is handed to a
-goroutine, a channel, or a queue client. `202` is a promise that the service
-will complete the work or report why it did not, so acceptance has to be durable
-before the response is written. In this repository the boundary is a
-`postgresoutbox` row committed in the same transaction as the state change and
-published by `cmd/outbox-relay` — anything earlier means a process restart
-between the response and the enqueue silently drops work the client was told was
-accepted.
-
-## Decision Rubric
+## Decide
 
 - Answer `202` only once the service owns completion or failure reporting.
   Name the commit that makes that true; if there is no such commit, the honest
@@ -52,7 +41,7 @@ accepted.
   control, which is `external-api-integration`. This file owns the event shape
   and the reconciliation promise only.
 
-## Validation Shape
+## Prove
 
 A consumer-runnable proof: kill the process between the accepted response and
 the work starting, then show the operation still reaches a terminal state.

@@ -1,9 +1,6 @@
 # Invalid State And Transition Review
 
-## Behavior Change Thesis
-When loaded for symptom "a construction, mutation, save, guard, or status update may admit a state the domain forbids", this file makes the model prove the reachable bad state instead of likely mistake "call the model anemic, or ask for a formal state machine, without showing a move the contract rejects."
-
-## Decision Rubric
+## Decide
 - A finding exists only when the diff can accept, persist, or expose state the local contract forbids — a guard bypassed, a transition the lifecycle rejects, an approved transition now blocked, or a terminal state weakened. A transition guard is an invariant guard; the granularity does not change the test.
 - Name the rule in repository terms before naming the pattern: the accepted rule, the path that reaches around it, the bad state that survives, and what a caller or an audit reader then believes.
 - Treat state names as business language when local specs, tests, fixtures, or callers give them product meaning. `retrying` and `published` are technical unless a product rule depends on them.
@@ -22,5 +19,5 @@ There are too many states here.
 ```
 Failure: state-count taste. Without a broken transition rule there is nothing to preserve.
 
-## Validation Shape
+## Prove
 The finding is complete when a reader can name the accepted rule, the reachable bad state, and one assertion that fails today and passes after the smallest fix.

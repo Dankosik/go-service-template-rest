@@ -1,69 +1,39 @@
+# template-owned-codex-runtime:start
+model = "gpt-6-astra"
+model_reasoning_effort = "high"
+features.multi_agent_v2 = true
+
+developer_instructions = """
+During an event-driven wait on sub-agents, use a multi-minute wait. The active
+wait is not a silent gap requiring commentary. This is an explicit exception
+to general 60-second commentary and blocking-wait guidance. Unless the user
+requests periodic updates, report only dispatch, a material state change,
+blocker, user decision, or completion; do not emit unchanged heartbeats or poll
+a healthy agent for status.
+"""
+
 [agents]
-max_depth = 1
-
-[shell_environment_policy]
-inherit = "core"
-
-[shell_environment_policy.set]
-ANTHROPIC_BASE_URL = "https://api.gonkagate.com"
+enabled = true
+max_concurrent_threads_per_session = 20
+default_subagent_model = "gpt-6-astra"
+default_subagent_reasoning_effort = "high"
+# template-owned-codex-runtime:end
 
 # template-owned-codex-agents:start
 # Registry compatibility: agents.<name>.config_file entries are required by Codex.
-[agents.api-agent]
-config_file = "agents/api-agent.toml"
-
-[agents.architecture-agent]
-config_file = "agents/architecture-agent.toml"
-
-[agents.challenger-agent]
-config_file = "agents/challenger-agent.toml"
-
-[agents.concurrency-agent]
-config_file = "agents/concurrency-agent.toml"
-
-[agents.critical-adjudicator-agent]
-config_file = "agents/critical-adjudicator-agent.toml"
-
-[agents.critical-reviewer-agent]
-config_file = "agents/critical-reviewer-agent.toml"
-
-[agents.data-agent]
-config_file = "agents/data-agent.toml"
-
-[agents.delivery-agent]
-config_file = "agents/delivery-agent.toml"
-
-[agents.design-integrator-agent]
-config_file = "agents/design-integrator-agent.toml"
-
-[agents.distributed-agent]
-config_file = "agents/distributed-agent.toml"
-
-[agents.domain-agent]
-config_file = "agents/domain-agent.toml"
+[agents.adjudicator-agent]
+config_file = "agents/adjudicator-agent.toml"
 
 [agents.evidence-agent]
 config_file = "agents/evidence-agent.toml"
 
-[agents.observability-agent]
-config_file = "agents/observability-agent.toml"
+[agents.reviewer-agent]
+config_file = "agents/reviewer-agent.toml"
 
-[agents.performance-agent]
-config_file = "agents/performance-agent.toml"
+[agents.specialist-agent]
+config_file = "agents/specialist-agent.toml"
 
-[agents.qa-agent]
-config_file = "agents/qa-agent.toml"
-
-[agents.quality-agent]
-config_file = "agents/quality-agent.toml"
-
-[agents.reliability-agent]
-config_file = "agents/reliability-agent.toml"
-
-[agents.security-agent]
-config_file = "agents/security-agent.toml"
-
-[agents.task-acceptance-agent]
-config_file = "agents/task-acceptance-agent.toml"
+[agents.worker-agent]
+config_file = "agents/worker-agent.toml"
 
 # template-owned-codex-agents:end

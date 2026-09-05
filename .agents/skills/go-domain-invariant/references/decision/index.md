@@ -1,6 +1,6 @@
 # Reference Selector
 
-Choose the reference by the domain decision pressure it sharpens. Accepted cross-task terms and authority live in `docs/repo-architecture.md#domain-vocabulary` and `#source-of-truth-ownership`; read those before defining a term here.
+Choose the reference by the domain decision pressure it sharpens. Accepted cross-task terms and authority live in `docs/repo-architecture.md#domain-vocabulary` and `#source-of-truth`; read those before defining a term here.
 
 | Symptom | Load | Decision it sharpens |
 | --- | --- | --- |

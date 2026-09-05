@@ -1,20 +1,40 @@
 ---
 name: go-coder
-description: "Smallest Go change: Use when an authorized outcome is ready. Own production code, required tests, cleanup, and proof; Skip unresolved behavior/ownership and diagnosis-, test-, or verification-only work."
+description: "Earliest valid owner. Use for an authorized Go outcome whose accepted behavior and owner are closed and need causal production code, routine focused tests, cleanup, and proof."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Coder
 
-One authorized outcome becomes one **surgical change**: the smallest diff at the earliest valid owner that makes every accepted criterion true, provable, and clean.
+Implementation starts at the **earliest valid owner** and ends at the accepted
+observable behavior.
 
-Measure smallest across repository-owned behavior rather than changed lines: when a new case is evidence of the same policy, extend or refactor its existing owner instead of cloning the path.
+`criterion -> earliest owner -> canonical path -> far-side observer -> falsifier -> cleanup -> proof`
 
-`accepted criteria -> earliest valid owner -> smallest change -> required tests -> cleanup -> proof -> return`
+Before editing, bind accepted criteria to current owners, observables, and
+focused proof. Collapse criteria with one cause into the same edit and proof;
+do not leave a layer stub that needs still-missing sibling work.
 
-Read and apply [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md), which owns acceptance and completion.
+Extend the existing policy path instead of creating a parallel path. Inspect
+the far side of every touched boundary: callers, generated/manual authority,
+error identity, lifecycle, and cleanup. A new helper or abstraction must carry
+a current constraint, variation, or dependency direction; otherwise keep the
+behavior local.
 
-Reconstruct every accepted criterion from the assigned outcome or ledger and its named sources before touching code. Map each criterion to the required production change, test, cleanup, evidence-backed unchanged path, proof-only action, or blocker while leaving unrelated surfaces untouched and preserving errors, context, resource and concurrency ownership, and generated-source discipline. When a concrete implementation pressure can change the method, load [the reference selector](references/index.md) and let it choose one reference by default, adding another only for an independent pressure.
+Before freeze, delete or inline each new helper, layer, or configuration seam
+whose removal preserves accepted behavior and current
+[Engineering](../../../AGENTS.md#engineering) constraints.
 
-Before returning, check the far side of every boundary the change touched: the caller that now receives a different shape, the concurrent path that reads what it writes, the version that must keep running beside it. A change that satisfies its criteria on the near side and breaks their mirror reads finished while the defect ships.
+Apply the [Evidence
+Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md) before
+adding a test. When previous behavior is runnable, observe the falsifier before
+repair; otherwise state why the proof rejects missing or wrong behavior. Route
+only a genuinely non-obvious oracle or proving layer to Test Design.
 
-A surgical change is complete only when every criterion has a terminal disposition and focused proof, every triggered gate passes, and every changed file, command result, and gap is returned. Stop and reopen the owner on unresolved behavior, ownership, policy, or proof — an invented decision is a defect even when the code works.
+Complete when each criterion has a causal edit or grounded no-change disposition
+and matching proof, no superseded path, and no unresolved implementation choice.
+Load one matching [implementation reference](references/index.md) only when its
+pressure changes the method; use the active workflow's validation and closeout
+contracts.
