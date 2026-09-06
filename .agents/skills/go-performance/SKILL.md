@@ -16,11 +16,16 @@ Performance decisions and optimizations use different evidence loops:
 
 A budget without a unit, percentile, and owner is a mood. Before implementation, reject mechanisms whose amplification or ceiling cannot satisfy the accepted envelope. After implementation, claim an improvement only from comparable measurements under that workload.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
-For every changed mechanism or claim, build `PerformancePath{workload, budget,
-unit, percentile_or_capacity, multiplier, mechanism, baseline, attribution,
-delta, owner, proof}` from accepted workloads, SLOs, execution paths,
-measurements, and rollout constraints.
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
+Ground every changed mechanism or claim in accepted workloads, SLOs, execution
+paths, measurements, and rollout constraints. For comparing mechanisms,
+interacting hot paths, or a decision/review handoff, record
+`PerformancePath{workload, budget, unit, percentile_or_capacity, multiplier,
+mechanism, baseline, attribution, delta, owner, proof}` per path. A single local
+claim can use the existing benchmark result and task artifact; record only the
+fields applicable to the selected evidence loop.
 
 [Benchmarking](../../../docs/benchmarking.md) owns proof level, workload
 identity, comparable evidence, and completion policy. Load one matching leaf

@@ -106,7 +106,8 @@ available evidence and a proposal; the executor cannot change accepted behavior,
 add an unaccepted fallback, or grant final acceptance. Missing test cases and
 commands are implementation work, not an upstream gap.
 
-Return Implemented and continue the ledger without checks or review. At final
+Return Implemented and continue the ledger under Implementation's execution
+boundary. At final
 validation after assembly, Astra assesses the combined code and evidence;
 shared Review selects any final independent reviewer. Terra or Luna can repair
 code and test failures then, with only invalidated checks rerun under the
@@ -150,13 +151,19 @@ mutable owners and exclusive locks. Consume and integrate results serially
 under the Lead. Integrate `Implemented` candidates serially into the local
 development tree from the
 [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md),
-then immediately unlock dependent implementation. Do not run task checks or
-reviews. Assign one general-purpose Lead the final delivery boundary after
+then immediately unlock dependent implementation without a task proof or
+review gate. Assign one general-purpose Lead the final delivery boundary after
 assembly; it owns consolidated proof and acceptance. The Orchestrator records
 that final result without repeating it.
 
-Send only the changed dependency, question, status, or identity: use a direct
-message for an active agent and a follow-up to resume an idle one. Send sibling
+Send only the changed dependency, question, status, or identity. Use
+`collaboration.send_message` to steer an active agent; it does not start a turn.
+For idle or completed work, use `collaboration.followup_task` within the permitted
+reuse boundary. Before waiting for the requested result, establish that dispatch
+started an active turn or already returned that result from native status or
+events. Message delivery and a retained agent id do not establish execution.
+If dispatch is uncertain, reconcile once before resuming or replacing the lane;
+do not wait on an idle lane or resend blindly. Send sibling
 dependencies to the affected sibling and inform the parent when they change a
 shared assumption or acceptance state. Apply shared Context And Lifetime before
 reusing an identity; send only the delta for permitted corrections or evidence
