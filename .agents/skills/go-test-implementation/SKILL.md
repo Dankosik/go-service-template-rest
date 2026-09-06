@@ -1,6 +1,6 @@
 ---
 name: go-test-implementation
-description: "Executable Go falsifiers. Use for a test-only change after the proof obligation, oracle, and proving layer are accepted, or when a non-routine fixture or harness must be built."
+description: "Executable Go falsifiers. Use for test-only changes or non-routine fixtures and harnesses, selecting cases and assertions from accepted behavior during implementation."
 metadata:
   invocation: model
   kind: method
@@ -8,21 +8,23 @@ metadata:
 
 # Go Test Implementation
 
-A test is an **executable falsifier**: it exists to reject the wrong behavior at the smallest deterministic layer, through an oracle independent of the code it judges.
+Write tests that reject wrong behavior through an observable independent of
+the implementation being tested. Routine tests alongside production code stay
+with `go-coder`; this method handles test-only work or non-routine controls.
 
-`accepted obligation -> proving layer -> deterministic controls -> independent oracle -> executable proof -> disposition`
+Choose cases, fixtures, assertions, and commands while writing the tests from
+accepted product behavior and existing repository patterns. No pre-approved
+scenario, oracle, matrix, or separate test plan is required. Use the smallest
+deterministic layer that observes the claim. A source-string assertion proves
+behavior only when the exact text is itself the accepted output contract.
 
-Routine focused tests required by a production unit remain with `go-coder`.
+Load the [reference selector](references/index.md) only for a concrete problem
+with the proving layer, fixture, control, or command. Keep the result in test
+code and its normal task packet; add no proof-design artifact.
 
-From every accepted proof obligation through its runnable command, build
-`ExecutableProof{wrong_behavior, proving_layer, controls, fixture, oracle,
-test, command, cleanup, result}`. Use the oracle as the anchor and choose the
-smallest deterministic layer that rejects the wrong behavior. Source-string
-presence substitutes for execution only when the exact text is itself the
-accepted output contract. Load [the reference selector](references/index.md)
-only when a concrete pressure changes the layer, controls, oracle, or command.
-
-Complete when every accepted proof obligation has executable proof or a named
-blocker, every proof carries an independent oracle, and the command actually
-executes the named test. Return obligation dispositions, changed tests and
-fixtures, commands, results, and gaps.
+Return Implemented when the required tests and fixtures are written, recording
+commands for final validation. Execute nothing during ledger implementation.
+The [Evidence Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md)
+owns final execution: the command must run the intended tests and establish
+their observables before a passing behavior claim. Missing test infrastructure
+is a final-validation input, not missing permission to write the tests.
