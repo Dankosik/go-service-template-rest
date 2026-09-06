@@ -17,7 +17,9 @@ Treat each status, parity check, provenance rule, container, migration, or
 rollout control as a gate. A waiver has an owner and expiry; drift between
 declared and actual controls is a finding.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 From accepted delivery policy to terminal rollout or rollback, build
 `DeliveryGate{control, artifact, command, pass_condition, exception_owner,
 expiry, rollout, recovery, proof}` for every required status, parity check,

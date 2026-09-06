@@ -73,11 +73,29 @@ INTEGRATION_INIT_ROWS=row_e1_http make integration-init-check
 make integration-init-check
 ```
 
+## Verification continuation
+
+`make verify` prints the persistent attempt record in the Git-common
+`codex/verify` directory. It retains the full plan, candidate, environment,
+step starts, results, and durations even when a later step fails. The last
+state for a step applies; pending or running without a terminal result is
+unverified. A passed step is only a scoped result, and an invalidated attempt
+requires checking source stability before reusing any result.
+
+After repair, the delivery owner reconciles that plan and runs its missing or
+invalidated canonical commands under the
+[Evidence Contract](spec-first-workflow/shared/evidence-contract.md#execution-evidence).
+The attempt file does not cause automatic skipping or provide a passing
+aggregate receipt. Use `VERIFY_FORCE=1 make verify` when a fresh complete
+aggregate is required despite an otherwise reusable exact passing receipt.
+
 ## Standalone Go diagnostics
 
 These commands serve debugging outside an implementation ledger or repairs
-inside its final validation. During ledger implementation, write all planned
-code and tests before executing checks; there is no per-task diagnostic loop.
+inside its final validation. During ledger implementation,
+[Implementation](spec-first-workflow/phases/implementation.md#feedback-during-coding)
+owns the narrower coding-feedback allowance; these diagnostic targets do not
+automatically qualify.
 For a package-sized diagnostic, use:
 
 ```bash
