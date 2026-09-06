@@ -1,17 +1,24 @@
 # Go Validation
 
-During ledger implementation, navigate source and references without running
-validation commands, including `gopls check`, tests, lint, and watch mode.
+During ledger implementation, use only the coding feedback allowed by
+[Implementation](../spec-first-workflow/phases/implementation.md#feedback-during-coding).
+For affected packages, `gopls check` or compile-only `go test -c` with the required
+tags can expose type errors in production and test code. Keep binary outputs
+outside source paths. `go test -run '^$'` is not compile-only: it can execute
+package initialization and TestMain. Neither diagnostic establishes behavior.
 `gopls references file.go:line:column` locates callers for semantic renames or
 signature changes; it does not test or accept the code.
 
-For standalone debugging outside a ledger, `make prove PKG=... FILES='...'`
+For standalone debugging or focused repair during final validation,
+`make prove PKG=... FILES='...'`
 is the lock-wrapped package check. Both fields are required; there is no
 `./...` default. `make test-watch` and `make lint-fast` are also diagnostic
 commands, not steps in ledger execution or substitutes for final evidence.
 
-The integrated delivery owner runs `make verify` once on the final delivery
-candidate, not once per ledger unit. Task handoffs are `Implemented`, without
+The integrated delivery owner starts `make verify` on the assembled delivery
+candidate, not once per ledger unit. Continue a failed plan through the
+[Evidence Contract](../spec-first-workflow/shared/evidence-contract.md#execution-evidence)
+instead of automatically rerunning the aggregate. Task handoffs are `Implemented`, without
 intermediate proof; all required packet checks are consolidated
 here before final acceptance. `make verify` formats changed handwritten files,
 lints changed packages, and tests the module-local reverse importer closure instead of defaulting to `test-all`. `test-all` remains the
