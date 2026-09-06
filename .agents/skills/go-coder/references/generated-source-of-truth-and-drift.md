@@ -41,7 +41,8 @@ still be stale.
   Routing](../../../../docs/validation-routing.md) and the [Evidence
   Contract](../../../../docs/spec-first-workflow/shared/evidence-contract.md).
   Run a separate check only for required final proof absent from the selected
-  aggregate. During implementation, generate sources without executing checks.
+  aggregate. During implementation, generate sources under the active workflow's
+  coding-feedback boundary; generation does not require a drift-check gate.
 - Inspect `git diff` over the generated path and keep only hunks that trace back
   to the source change you made.
 - When a generated symbol disappears, prove in the same diff that its

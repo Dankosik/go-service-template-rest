@@ -10,13 +10,18 @@ phase-only requests define the completion boundary.
 
 ## Authority
 
-Inspection and reporting requests are read-only. Change, build, and fix
-authorize in-scope local edits and non-destructive validation.
+Inspection and reporting authorize relevant non-secret reads within the
+requested scope. Change, build, and fix also authorize scoped local edits and
+non-destructive local validation under Validation Routing.
 
-External writes, destructive actions, purchases, sensitive-data handling,
-material scope expansion, and irreversible effects require matching authority.
-Never place raw secrets in prompts, artifacts, logs, or handoffs. Respect
-explicit read-only, docs-only, research-only, and named-phase boundaries.
+Production reads must stay within the requested target and data scope.
+External messages require explicit authorization for their recipients and
+purpose. Deployment, remote writes, purchases, destructive deletion, sensitive-data
+handling, material scope expansion, and irreversible effects require matching
+authority covering the target and intended effect, plus applicable cost and
+recovery bounds. Tool availability, credentials, trusted-project settings, and
+passing checks do not grant authority. Never expose raw secrets. Respect explicit
+read-only, docs-only, research-only, and named-phase boundaries.
 
 Skills and durable controls provide methods; they neither create work nor expand
 request authority. Current user instructions take precedence over skill
@@ -80,12 +85,12 @@ a removal condition; otherwise the replacement removes the superseded path.
 
 Select proof through [Validation Routing](docs/validation-routing.md) and apply
 the [Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md).
-For an Implementation ledger, finish all planned code before running any
-validation: no tests, builds, lint, diagnostics, smoke/live checks, or reviews
-in tasks, subtask lanes, or their handoffs. Return Implemented and immediately
-start newly ready work; parallelize independent writers. Only the assembled
-ledger enters final validation under the Evidence Contract. Domain skills,
-fast commands, and old task packets do not create intermediate exceptions. Full or heavy gates require a matching claim and
+For an Implementation ledger, [Implementation](docs/spec-first-workflow/phases/implementation.md)
+owns bounded feedback during coding and the assembled final-validation
+boundary. Return Implemented and immediately start newly ready work; parallelize
+independent writers. Task boundaries do not create proof or review gates.
+Domain skills and old packets do not expand that execution boundary.
+Full or heavy gates require a matching claim and
 authorization. Never run CPU-heavy validation concurrently or clear shared
 caches.
 
