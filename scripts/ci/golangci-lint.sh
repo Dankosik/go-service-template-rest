@@ -75,7 +75,7 @@ case ${1:-} in
 run | fmt)
 	command=$1
 	shift
-	config_dir=$(mktemp -d -t golangci-config)
+	config_dir=$(mktemp -d -t golangci-config.XXXXXX)
 	config=${config_dir}/.golangci.yml
 	trap 'rm -rf -- "${config_dir}"' EXIT INT TERM
 	render_config >"${config}"
