@@ -1,29 +1,20 @@
 # Go Validation
 
-Use existing gopls diagnostics and the narrowest package test while iterating.
-Run `gopls references file.go:line:column` before a semantic rename or exported
-signature change. `make lint-fast PKG=<package>` adds changed-code
-mechanical feedback without turning its `--new-from-rev` filter into a full
-lint claim. `make test-watch` reruns the package containing the saved Go file;
-press `a` only when an explicit full run is useful.
+During ledger implementation, navigate source and references without running
+validation commands, including `gopls check`, tests, lint, and watch mode.
+`gopls references file.go:line:column` locates callers for semantic renames or
+signature changes; it does not test or accept the code.
 
-Package-sized iteration is optional:
-
-```bash
-make prove PKG=./internal/<package> FILES='internal/<package>/a.go internal/<package>/a_test.go'
-```
-
-`PKG` and `FILES` are required. There is no `./...` default. `make prove` is
-the lock-wrapped `unit-check`. Go's build/test cache and golangci-lint's cache
-reuse unchanged inputs; do not layer a second package receipt on top of them.
-Skip `make prove` when the change is already ready for completion.
+For standalone debugging outside a ledger, `make prove PKG=... FILES='...'`
+is the lock-wrapped package check. Both fields are required; there is no
+`./...` default. `make test-watch` and `make lint-fast` are also diagnostic
+commands, not steps in ledger execution or substitutes for final evidence.
 
 The integrated delivery owner runs `make verify` once on the final delivery
-candidate, not once per ledger unit. Earlier unit acceptance requires its own
-focused and explicitly required Integrated checks; it does not claim completed
-delivery. `make verify` formats changed handwritten files, lints changed
-packages, and tests the module-local reverse
-importer closure instead of defaulting to `test-all`. `test-all` remains the
+candidate, not once per ledger unit. Task handoffs are `Implemented`, without
+intermediate proof; all required packet checks are consolidated
+here before final acceptance. `make verify` formats changed handwritten files,
+lints changed packages, and tests the module-local reverse importer closure instead of defaulting to `test-all`. `test-all` remains the
 fallback when `go.mod`/`go.sum` change, the package graph cannot be built, or
 the reverse closure is most of the module. Use `make plan` only to diagnose
 that selection; `make verify` already prints the plan it will run.

@@ -16,9 +16,11 @@ means placement is not decided.
 Load the [shared specialist contract](../../contracts/specialist-contract.md).
 For every changed responsibility, build `OwnerRecord{responsibility,
 canonical_source, package, file, dependency_direction, sequence_owner,
-proof_location, competing_paths, cleanup}` from accepted behavior through
-callers, wiring, generated and manual sources, tests, and cleanup. Ownerless,
-duplicated, or competing paths are findings.
+existing_proof_location_if_known, competing_paths, cleanup}` from accepted
+behavior through callers, wiring, generated and manual sources, and cleanup.
+Ownerless, duplicated, or competing production paths are findings. Implementation
+chooses new test cases, files, and proving layers while writing code; their
+absence does not block the ownership decision.
 
 The nearest record wins: read package `doc.go`, `README.md`, and seam comments
 before [Repository Architecture](../../../docs/repo-architecture.md), [Project
@@ -42,5 +44,6 @@ Reduce unrelated context needed to follow that path.
 For a **Decision**, apply Project Structure's placement rules and record forced
 consequences for every responsibility. For **Review**, account for every
 affected owner and competing path. Complete only when implementation can
-proceed from a current, unambiguous map of packages, files, sources,
-dependencies, and proof levels.
+proceed from a current, unambiguous map of production packages, files, sources,
+and dependency boundaries. This method establishes code ownership, not an
+approved test plan or proof level before Implementation.
