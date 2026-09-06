@@ -8,7 +8,7 @@ human-facing explanation.
 | Changed surface or claim | Load | Primary proof |
 | --- | --- | --- |
 | Agent instructions, roles, skills, mirrors, or template propagation | [Instructions](validation/instructions.md) | `make template-owned-purity-check` |
-| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | optional `make prove PKG=... FILES='...'` while iterating; `make verify` once on the integrated tree |
+| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | `make verify` once after all ledger code is implemented and assembled |
 | OpenAPI, protobuf, SQLC, or generated drift | [Generated Contracts](validation/generated.md) | matching `*-check` |
 | PostgreSQL transactions, migrations, or integration semantics | [PostgreSQL](validation/postgres.md) | `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` |
 | Runtime image, container behavior, or migration rehearsal | [Containers](validation/containers.md) | `make runtime-image-build` |
@@ -16,10 +16,11 @@ human-facing explanation.
 | Secrets, dependencies, Go or image vulnerability claims | [Security](validation/security.md) | matching security target |
 | Latency, throughput, allocation, contention, or capacity | [Benchmarking](benchmarking.md) | workload-matched benchmark |
 
-Start with the focused target that can falsify the change. The table names each
-leaf's aggregate command; run that aggregate only when the completion claim
-spans it. Missing Docker or an external provider narrows the claim; it does not
-become a passing skip.
+This router selects commands for final validation or a separate verification
+request. During ledger implementation, select planned proof without executing
+it; no leaf, fast target, or diagnostic is an exception. Run the smallest
+aggregate matching the final claim after all planned code is assembled. Missing
+Docker or an external provider narrows the claim; it is not a passing skip.
 
 `make plan` diagnoses the current worktree's selected surfaces, commands, and
 not-applicable gates; it is not a required completion gate. `make verify` prints
@@ -30,9 +31,10 @@ happen before execution; selected integration leaves force `REQUIRE_DOCKER=1`,
 and a changed candidate cannot produce a receipt. `ALLOW_FULL=1 make check`
 remains the explicit deterministic full-repository gate.
 
-`*-fast` targets are local iteration signals. They refuse CI and local tool
-version drift; run the matching canonical leaf for final proof.
+`*-fast` targets are available for standalone debugging; they are not part of
+ledger implementation. They refuse CI and local tool version drift. Final proof
+uses the matching canonical leaf.
 
-Validation and blockers stay within the fixed accepted unit and its required
-evidence. Unrelated or pre-existing defects are observations, not blockers,
+Final validation and blockers stay within the accepted delivery scope and its
+required evidence. Unrelated or pre-existing defects are observations, not blockers,
 unless the intended claim explicitly spans that broader surface.

@@ -1,6 +1,6 @@
 export const TaskSubagents = async () => {
   const catalog = [
-    "acceptance-unit-lead: own one implementation unit through proof and review",
+    "acceptance-unit-lead: implement an assigned task without checks or review, or own final validation after the whole ledger is implemented",
     "worker-agent: one bounded mutable implementation, investigation, or verification result",
     "specialist-agent: one named method on one bounded decision",
     "evidence-agent: bounded read-only evidence without gate authority",
