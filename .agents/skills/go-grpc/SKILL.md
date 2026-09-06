@@ -13,7 +13,9 @@ and metadata, and that mapping is policy.
 
 `proto -> registration/interceptors -> deadlines/limits -> status -> stream lifecycle -> health/shutdown -> proof`
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 For every changed RPC, build `RPCPath{method, proto, registration,
 interceptors, deadline, limits, status, details, metadata, stream_end,
 health_shutdown, proof}` from canonical `.proto` through the terminal client

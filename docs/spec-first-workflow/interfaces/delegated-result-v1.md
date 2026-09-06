@@ -5,7 +5,7 @@ Every mutable delegated worker returns:
 ```text
 result: <completed bounded outcome or no result>
 changed_paths: <repository-relative paths or none>
-proof: <omit for implementation; actual results for final validation or standalone verification>
+proof: <omit for initial implementation; actual scoped results and gaps for final-validation repair or standalone verification>
 candidate: <identity when isolated or none>
 gap: <remaining blocker or none>
 ```
