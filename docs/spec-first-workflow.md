@@ -22,9 +22,8 @@ ownership, reversibility, or proof.
 | --- | --- |
 | Definition | Intake, supporting or standalone Research, Specification, required review of the fixed macro result |
 | Technical Design | supporting Research, System / Integration Design, Go Code / Ownership Design, required Technical Design Review |
-| Test Design | Test Design and required review when the phase is triggered |
 | Planning | Planning and required Task Review / Readiness |
-| Implementation | Implementation and required acceptance review per fixed unit |
+| Implementation | Parallel implementation, then final validation and any required delivery review |
 
 Research is a standalone macro phase only when the accepted boundary is
 `research only`; otherwise it supports the active phase. Review, repair, and
@@ -36,6 +35,11 @@ routes results; it does not perform phase work or accept implementation units.
 [Transition](spec-first-workflow/shared/transition.md) owns continuation,
 including before an Implementation ledger exists. An explicit phase-only or
 research-only request stops at that reviewed boundary.
+
+Test cases, fixtures, assertions, and test commands are chosen by the executor
+while implementing each task. They require no preceding phase, approved test
+plan, or separate review. Implementation's final-validation boundary owns when
+the tests run.
 
 Traverse applicable macro phases in table order. Skip one only when Phase
 Selection evidence shows that its decision is already closed or untriggered;
@@ -52,7 +56,6 @@ Evaluate these triggers before loading a phase owner:
 | Structured work lacks a ready behavior delta | [Specification](spec-first-workflow/phases/specification.md) |
 | Implementation would otherwise choose a runtime boundary, truth, material flow, failure/recovery behavior, or rollout mechanism | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) |
 | Package/file ownership is not mechanically forced by current code and accepted design | [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md) |
-| Material proof obligations, oracles, or proof levels are non-obvious | [Test Design](spec-first-workflow/phases/test-design.md) |
 | Structured work lacks one ready fixed unit or the smallest dependency-ordered ledger | [Planning](spec-first-workflow/phases/planning.md) |
 | One accepted implementation unit is ready and authorized | [Implementation](spec-first-workflow/phases/implementation.md) |
 

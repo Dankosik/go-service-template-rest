@@ -19,10 +19,12 @@ those control planes.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Assign an `acceptance-unit-lead` through Task, reusing a
   completed related Lead only under the shared ledger contract. That Lead owns
-  proof, any required review, and the acceptance verdict.
-  This session lands only `Accepted` candidates and records verdicts through the
+  implementation and returns `Implemented` without task checks or review.
+  This session integrates those candidates into the local development tree
+  and immediately unlocks dependent implementation through the
   [Ledger Contract's acceptance transition](../spec-first-workflow/phases/planning/ledger-contract.md#acceptance-transition)
-  from the Lead's immutable Acceptance Result.
+  from the Lead's immutable Acceptance Result. Assign one final delivery
+  boundary for consolidated validation and acceptance after assembly.
 - Bind that teammate to `acceptance-unit-lead`. Task `subagent_type` is a free
   string. `.opencode/plugins/task-subagents.js` appends the project catalog to
   the Task blurb. Pass `acceptance-unit-lead` anyway if the blurb is stale. Do
@@ -88,7 +90,8 @@ question.
 
 ## Review And Recovery
 
-Start a required independent implementation review with a fresh `reviewer-agent` and
+Only at final delivery, start a required independent implementation review
+with a fresh `reviewer-agent` and
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
 as its Method; shared Review owns continuation. When Review requires integrated-candidate review, this
 session binds one fresh `reviewer-agent` to that boundary and still does not
