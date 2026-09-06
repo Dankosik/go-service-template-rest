@@ -11,7 +11,9 @@ metadata:
 Go correctness follows **semantic ownership**: who owns error identity, work
 lifetime, mutable backing storage, release, and the admissible zero state.
 
-Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 For every changed boundary, build one ownership story from producer through
 caller-visible observation. Name who may inspect the error, cancel the work,
 mutate aliased state, release the resource, construct a non-zero value, and
