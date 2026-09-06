@@ -46,10 +46,10 @@ set directly and need no generated skill symlink. OpenCode ignores
 bound agent file rather than relying on implicit `skill` loading.
 
 Codex starts with names, descriptions, and paths and may shorten a crowded
-catalog. Put the leading word and decisive trigger first. The repository gate
-keeps local metadata below its vendor-context ceiling; that is structural
-headroom, not invocation proof. Rules that must always apply belong in
-bootstrapped authority, not only a skill.
+catalog. Put the leading word and decisive trigger first. Assess the effective
+skill catalog in the target harness; repository-local metadata alone does not
+establish its total size or selection quality. Rules that must always apply
+belong in bootstrapped authority, not only a skill.
 
 ## Body And References
 
