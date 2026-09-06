@@ -9,7 +9,7 @@ metadata:
 # Go Test Strategy
 
 Choose a test that rejects plausible wrong behavior at the smallest layer that
-can observe it. This is an optional testing method within Implementation,
+can observe it. This is an optional method while implementing code or tests,
 not a separate phase, approval, or mandatory preliminary test plan.
 
 Ground the assertion in accepted product behavior, not the implementation's
@@ -33,6 +33,6 @@ delegated, use the [shared specialist contract](../../contracts/specialist-contr
 
 Done when the testing choice can be implemented in the current task. Repair
 fixtures and assertions locally; reopen a product owner only when expected
-behavior is actually undefined. Under the [Evidence
-Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md), write
-tests now and execute them only at final validation of the assembled ledger.
+behavior is actually undefined. The active workflow and [Evidence
+Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md) own
+validation timing and task completion.
