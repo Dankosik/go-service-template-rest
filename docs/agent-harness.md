@@ -69,7 +69,8 @@ Start every execution or evidence lane, including nested descendants, with a
 fresh history using the selected adapter's native controls. Supply accepted
 behavior, necessary decisions, source locators, writable scope, and the expected
 outcome through the existing Subagent Brief. Executors choose their tests while
-coding; final-validation briefs carry execution commands after assembly. Clean history excludes the parent's conversation; it does not
+coding; final-validation repair briefs carry the focused rerun and established
+execution authority with the repair. Clean history excludes the parent's conversation; it does not
 remove applicable instructions, tools, permissions, or current repository files.
 Reviewer freshness remains governed by shared Review.
 
