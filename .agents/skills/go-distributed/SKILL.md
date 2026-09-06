@@ -12,10 +12,15 @@ A cross-service flow is defined by its **recovery**.
 
 `flow contract -> durable steps -> partial failure -> ordering and duplicates -> compensation -> redrive -> reconciliation -> proof`
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
-From every accepted producer effect through terminal reconciliation, build
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
+Trace every accepted producer effect through terminal reconciliation. For
+interacting effects, exhaustive recovery-path coverage, or a decision/review
+handoff, record
 `DurableStep{identity, authority, commit, duplicate, reorder, unknown,
-compensate, redrive, reconcile, proof}`. Replay duplicate
+compensate, redrive, reconcile, proof}` per step. A single local path can keep
+its judgment and evidence in the code or existing task artifact. Replay duplicate
 delivery, reordering, partial completion, process loss, redrive, and mixed
 versions. Each step is idempotent under redelivery or has a named compensation;
 ordering exists only where a key serializes it; reconciliation distinguishes

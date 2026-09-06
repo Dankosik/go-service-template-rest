@@ -11,7 +11,9 @@ metadata:
 Simplification is **indirection economics** inside a behavior-preserving
 boundary: the reader must learn less without losing an observable distinction.
 
-Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 For each proposed simplification, compare the caller-facing cost of names,
 parameters, results, control flow, and hidden contracts before and after. Name
 every behavior class the rewrite must preserve: error identity, status, nil or
