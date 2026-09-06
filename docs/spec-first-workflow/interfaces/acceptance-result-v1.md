@@ -14,7 +14,8 @@ next_owner: <next implementation owner, or exact missing input and its owner>
 ```
 
 Return Implemented when in-scope code, tests, and cleanup are written and writers
-have joined. Do not run checks or review, attach a per-task proof receipt, or
+have joined. [Implementation](../phases/implementation.md#feedback-during-coding)
+owns permitted coding feedback; do not attach a per-task proof receipt or
 wait for final-validation resources. The result unlocks local dependent coding;
 it makes no behavior, acceptance, or release claim. Blocked retains partial
 work and names the missing implementation input. Neither verdict starts final

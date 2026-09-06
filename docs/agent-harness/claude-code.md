@@ -10,8 +10,8 @@ runtime changes.
   mutually independent ready units through `Agent` with
   `subagent_type: "acceptance-unit-lead"`, within current capacity. The native
   [Lead carrier](../../.claude/agents/acceptance-unit-lead.md) loads the existing
-  role skill and returns its fixed unit as `Implemented`, without task checks
-  or review. The root integrates these candidates serially into the local
+  role skill and returns its fixed unit as `Implemented`, without task proof
+  or review gates. The root integrates these candidates serially into the local
   development tree from
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
   and unlocks dependent implementation immediately. One final delivery
