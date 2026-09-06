@@ -12,7 +12,7 @@ Callable Task fields outrank public prose.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Assign an `acceptance-unit-lead` through Task, reusing a
   completed related Lead only under the shared ledger contract. That Lead owns
-  implementation and returns `Implemented` without task checks or review;
+  implementation and returns `Implemented` without task proof or review gates;
   this session integrates those candidates serially into the local development
   tree from the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
