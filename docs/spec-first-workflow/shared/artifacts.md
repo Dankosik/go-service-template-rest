@@ -14,11 +14,16 @@ Task-local artifacts live under `specs/<task>/`:
 | New structured work completes requester interview | [`intent.md`](../interfaces/intent.md) | Requester meaning synthesized after interview |
 | Behavior delta must survive | `spec.md` | Outcome, behavior delta, constraints, proof expectations |
 | Implementation would choose mechanism or placement | `design/` | Selected system and ownership decisions |
-| Proof needs a scenario matrix | `test-plan.md` | Proof obligations, observables, levels, gaps |
 | Several units/dependencies or durable execution state exist | `tasks.md`, `tasks/<ID>-<slug>.md` | Index order/status/results and each task's outcome/boundary/acceptance |
 | Evidence must be reused or refreshed | `research/*.md` | Findings, limits, conflicts, decision effect |
 | Deployment/migration/backfill has a real sequence | `rollout.md` | Operational gates, recovery, observables |
 | Cross-session coordination cannot be recovered from those artifacts | `workflow-plan.md` | Current phase, active artifacts, blockers, next action |
+
+Task artifacts preserve accepted behavior, design, and scope; current workflow
+owners govern execution timing. Superseded workflow reports and old per-task
+acceptance recipes are not an alternative instruction path. Remove completed
+process reports after their surviving decisions live in canonical owners;
+Git retains the evidence history.
 
 Reference stable OpenAPI, code, tests, generated sources, and external contracts
 instead of copying them. Split an artifact only when the split creates a real

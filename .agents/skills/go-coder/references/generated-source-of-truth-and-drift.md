@@ -40,8 +40,8 @@ still be stale.
 - Select generated-contract proof through [Validation
   Routing](../../../../docs/validation-routing.md) and the [Evidence
   Contract](../../../../docs/spec-first-workflow/shared/evidence-contract.md).
-  A separate check is for iteration or required proof absent from the selected
-  aggregate, not a mandatory prelude to it.
+  Run a separate check only for required final proof absent from the selected
+  aggregate. During implementation, generate sources without executing checks.
 - Inspect `git diff` over the generated path and keep only hunks that trace back
   to the source change you made.
 - When a generated symbol disappears, prove in the same diff that its
