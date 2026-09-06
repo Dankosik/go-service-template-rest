@@ -13,7 +13,9 @@ means placement is not decided.
 
 `responsibilities -> owner -> dependency direction -> generated/manual authority -> proof placement -> cleanup`
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 For every changed responsibility, build `OwnerRecord{responsibility,
 canonical_source, package, file, dependency_direction, sequence_owner,
 existing_proof_location_if_known, competing_paths, cleanup}` from accepted

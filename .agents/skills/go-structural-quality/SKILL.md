@@ -11,7 +11,9 @@ metadata:
 Judge whole-diff structure with a **deletion test** and one realistic change
 simulation.
 
-Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 For every added abstraction, layer, file, compatibility shim, or parallel path,
 record its present responsibility, where its complexity returns if deleted,
 and which owners and files the next realistic change would touch with and
