@@ -10,10 +10,12 @@ changes.
   mutually independent ready units through `agent` with
   `subagent_type: "acceptance-unit-lead"`, within current capacity. The native
   [Lead carrier](../../.qwen/agents/acceptance-unit-lead.md) loads the existing
-  role skill and owns its fixed unit through proof, required review, and its
-  acceptance verdict. The root lands only `Accepted` candidates serially from
+  role skill and returns its fixed unit as `Implemented`, without task checks
+  or review. The root integrates these candidates serially into the local
+  development tree from
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
-  and records the verdict without re-adjudicating or implementing the unit.
+  and unlocks dependent implementation immediately. One final delivery
+  assignment owns validation and acceptance after assembly.
   `todo_write` tracks execution; repository `tasks.md` owns acceptance.
 - The installed schema names the tool `agent` (display name `Agent`), not
   `task`. Ordinary named agents can nest. Apply
@@ -32,7 +34,7 @@ changes.
   when that overlap is useful, returning its result to the Lead.
 - Agent Teams remain an explicitly selected, already configured route. Since
   teammates cannot nest, the root brokers descendants from teammate Lead
-  briefs and returns their results; acceptance stays with the Lead. Team
+  briefs and returns their results; final acceptance stays with the assigned delivery Lead. Team
   `task_create`/`task_update` mirror execution only. Full-ledger work does not
   require enabling Teams or changing user or machine settings.
 
@@ -58,9 +60,10 @@ results return inline; if their runtime has no retained continuation, return
 that exact gap to the parent rather than inventing a resume field.
 
 [Review](../spec-first-workflow/shared/review.md) selects whether independent
-review is required. When required, bind a fresh `reviewer-agent` to
+review is required at final delivery, never between implementation tasks.
+When required, bind a fresh `reviewer-agent` to
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
-and the fixed candidate. Start review before independent focused proof only
+and the fixed candidate. Start review alongside final validation only
 where the native async route permits it; keep the candidate unchanged and
 observe the proof budget. The root binds integrated-candidate review only
 when Review requires that boundary. Messages and execution status do not
