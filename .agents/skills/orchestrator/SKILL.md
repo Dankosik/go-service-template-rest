@@ -22,9 +22,11 @@ contract's permitted Lead reuse.
 
 Process each Lead's immutable [Acceptance Result
 V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md) through
-the contract's acceptance transition. Land only `Accepted` candidates serially,
-record the Lead-owned verdict without re-adjudication, and immediately refill
-before the next landing. Route `Blocked` to recovery without landing.
+the contract's acceptance transition. Integrate `Implemented` candidates
+serially into the local development tree and immediately refill the frontier;
+do not wait for tests or reviews. Route `Blocked` to recovery. After assembly,
+assign one Lead the final delivery boundary, consume its final proof and
+acceptance result, and record it without repeating validation.
 
 Route the smallest upstream repair back to the same unit. Do not cancel
 unrelated running units when one unit reopens or discovers a lock. Apply
