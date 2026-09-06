@@ -57,7 +57,7 @@ bounded work locally within current role authority; do not create App chats.
 Use `gpt-6-astra` for every decision-owning role: the root coordinator,
 Ledger Orchestrator, phase owner, Acceptance-Unit Lead, domain specialist,
 independent reviewer, and adjudicator. Model capability does not merge
-role responsibilities: the Orchestrator routes, the Lead accepts its unit,
+role responsibilities: the Orchestrator routes, the delivery Lead accepts,
 and the fresh reviewer challenges a fixed candidate. Acceptance still requires
 all mandatory proof and resolution of material review findings.
 
@@ -96,20 +96,23 @@ authority. Use `evidence-agent` for advisory research, not a lower-model
 `specialist-agent` or `reviewer-agent` verdict. Do not select `gpt-5.6-sol`
 for any role, execution, evidence work, escalation, or fallback.
 
-Before delegating, Astra closes the expected result, accepted decisions,
-writable boundary, focused proof, and conditions that return work to its owner
-in the existing Subagent Brief. An executor that discovers a missing decision,
-contract conflict, or inadequate proof returns evidence and a proposal to
-Astra; it does not change accepted behavior, weaken checks, add an unaccepted
-fallback, or accept the result. Astra resolves the gap through the smallest existing owner and
-resumes the work. Routine local coding choices remain with the executor.
-Astra assesses delegated code and evidence before acceptance; shared Review
-selects any independent reviewer. Terra or Luna diagnoses and repairs ordinary
-code defects and focused-check failures directly under Implementation's repair
-boundary. Return unresolved judgment or stalled diagnosis to Astra with evidence
-and a proposal. A missed invariant raises Astra's reasoning effort under Models;
-the executor may continue repair after that decision closes.
-Astra may implement a coherent unit directly when delegation would cost more.
+Before delegating, Astra supplies accepted behavior, the expected outcome,
+writable scope, and genuine product/architecture reopen conditions in the
+existing Subagent Brief. Routine coding choices, test cases, fixtures,
+assertions, and test commands belong to the executor as it writes the task.
+No prior test plan, named check, or passing proof is needed to delegate.
+A contract conflict or missing product decision returns to Astra with the
+available evidence and a proposal; the executor cannot change accepted behavior,
+add an unaccepted fallback, or grant final acceptance. Missing test cases and
+commands are implementation work, not an upstream gap.
+
+Return Implemented and continue the ledger without checks or review. At final
+validation after assembly, Astra assesses the combined code and evidence;
+shared Review selects any final independent reviewer. Terra or Luna can repair
+code and test failures then, with only invalidated checks rerun under the
+delivery owner. Return unresolved judgment or stalled diagnosis to Astra.
+A missed invariant raises Astra's effort under Models; no extra per-task gate
+is created. Astra may implement directly when delegation would cost more.
 
 This Codex policy specializes Agent Harness's capability selection: raise
 effort within Astra for decision-owning roles; execution and evidence work may
@@ -144,10 +147,13 @@ returned no identity. Dispatch all independent
 ready lanes before waiting, within current capacity; capacity is a ceiling, not
 a fan-out target. Concurrent mutable units and lanes require disjoint packet
 mutable owners and exclusive locks. Consume and integrate results serially
-under the Lead. Land only `Accepted` candidates onto the shared checkout serially
-from the
-[Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
-and record the Lead-owned verdict without re-adjudicating it.
+under the Lead. Integrate `Implemented` candidates serially into the local
+development tree from the
+[Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md),
+then immediately unlock dependent implementation. Do not run task checks or
+reviews. Assign one general-purpose Lead the final delivery boundary after
+assembly; it owns consolidated proof and acceptance. The Orchestrator records
+that final result without repeating it.
 
 Send only the changed dependency, question, status, or identity: use a direct
 message for an active agent and a follow-up to resume an idle one. Send sibling
@@ -168,7 +174,7 @@ does not overlap. Do not repeat an ambiguously delivered dispatch. Use a fresh
 agent when a clean context or changed strategy is more reliable.
 
 For isolated work, validate the actual worktree and base before accepting its
-bytes. For an `Accepted` isolated candidate, the Worktree Lead returns an
+bytes. For an `Implemented` isolated candidate, the Worktree Lead returns an
 Acceptance Result with the fixed candidate and exact `HANDOFF_READY`.
 The Orchestrator, or a root-local Lead, lands that
 candidate serially and records the verdict without re-adjudicating it.
@@ -176,7 +182,8 @@ Handoff is routing evidence, not acceptance.
 
 ## Review And Recovery
 
-Start an independent implementation review with a fresh `reviewer-agent` and
+Only at final delivery, start a required independent implementation review
+with a fresh `reviewer-agent` and
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
 as its Method; shared Review owns same-reviewer rechecks. When Review requires
 integrated-candidate review, the

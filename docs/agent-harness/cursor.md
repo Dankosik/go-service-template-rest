@@ -12,10 +12,12 @@ Callable Task fields outrank public prose.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Assign an `acceptance-unit-lead` through Task, reusing a
   completed related Lead only under the shared ledger contract. That Lead owns
-  proof, any required review, and the acceptance verdict;
-  this session lands only `Accepted` candidates serially from the
+  implementation and returns `Implemented` without task checks or review;
+  this session integrates those candidates serially into the local development
+  tree from the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
-  and records that verdict without re-adjudicating it.
+  and immediately unlocks dependent implementation. Assign one final delivery
+  boundary for consolidated validation and acceptance after assembly.
 - Bind that teammate to `acceptance-unit-lead`. Do not substitute
   `generalPurpose`, `explore`, `shell`, or generic worker semantics.
 - Full-ledger work requires Task plus returned agent identities. If Task
@@ -68,7 +70,8 @@ non-mutating checks should overlap; acceptance still waits for required results.
 
 ## Review And Recovery
 
-Start a required independent implementation review with a fresh `reviewer-agent` and
+Only at final delivery, start a required independent implementation review
+with a fresh `reviewer-agent` and
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
 as its Method; shared Review owns continuation. When Review requires integrated-candidate review, this
 session binds one fresh `reviewer-agent` to that boundary and still does not
