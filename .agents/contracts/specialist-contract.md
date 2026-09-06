@@ -1,5 +1,10 @@
 # Shared Specialist Contract
 
+Use this result protocol for a delegated Decision or Review, or when the active
+artifact requires its interface. Applying a domain method locally does not
+create a specialist handoff; keep the judgment and evidence in the code or
+existing task artifact under the active workflow.
+
 Select the domain by the absent/changing decision or violated accepted contract.
 Use **Decision** for policy and **Review** for conformance. Load one domain
 reference by default and another only for an independent pressure.
@@ -7,8 +12,8 @@ reference by default and another only for an independent pressure.
 Interpret domain proof requirements through the [Evidence
 Contract](../../docs/spec-first-workflow/shared/evidence-contract.md#design-proof)
 for the claim and active phase. During ledger implementation, a domain method's
-proof requirements describe final evidence; they do not authorize executing
-checks, review, or a diagnostic loop before all planned code is assembled.
+proof requirements describe final evidence; they do not expand the execution
+boundary owned by [Implementation](../../docs/spec-first-workflow/phases/implementation.md).
 
 A Decision returns [Decision Result
 V1](../../docs/spec-first-workflow/interfaces/decision-result-v1.md). A Review
