@@ -6,7 +6,9 @@ reference by default and another only for an independent pressure.
 
 Interpret domain proof requirements through the [Evidence
 Contract](../../docs/spec-first-workflow/shared/evidence-contract.md#design-proof)
-for the claim and active phase.
+for the claim and active phase. During ledger implementation, a domain method's
+proof requirements describe final evidence; they do not authorize executing
+checks, review, or a diagnostic loop before all planned code is assembled.
 
 A Decision returns [Decision Result
 V1](../../docs/spec-first-workflow/interfaces/decision-result-v1.md). A Review
