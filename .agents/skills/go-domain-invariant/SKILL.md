@@ -16,7 +16,9 @@ State each invariant in accepted business terms with the input, sequence, or
 replay that falsifies it and the surface that rejects the attempt. The domain
 owns effect order, duplicate meaning, and out-of-order meaning.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 From every changed accepting path through its false case and replay, build
 `InvariantRecord{rule, owner, accepting_paths, transitions, false_case,
 rejection, effect_order, replay, mixed_version, proof}`. A rule is incomplete

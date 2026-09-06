@@ -52,8 +52,34 @@ fingerprint_candidate() {
 	} <"${tmp}/file-hashes" | shasum -a 256 | awk '{print $1}'
 }
 
+# One argument vector owns both execution and the retained continuation command.
+prepare_command() {
+	local kind=$1 argument=$2
+	case "${kind}" in
+		make)
+			case "${argument}" in
+			test-all | lint-all | check-go) step_command=(env ALLOW_FULL=1 make "${argument}") ;;
+			*) step_command=(make "${argument}") ;;
+			esac
+			;;
+		fmt) step_command=(make fmt-files-check "FILES=${argument}") ;;
+		lint) step_command=(make lint-changed "PKGS=${argument}") ;;
+		test) step_command=(make test-package "PKG=${argument}") ;;
+		shell) step_command=(make shellcheck "SHELL_FILES=${argument}") ;;
+		integration-init) step_command=(make integration-init-check "INTEGRATION_INIT_ROWS=${argument}") ;;
+		integration) step_command=(env REQUIRE_DOCKER=1 make "${argument}") ;;
+		image-build) step_command=(env "APP_VERSION=verify-${candidate:0:12}" "VCS_REF=${execution_head}" make runtime-image-build "RUNTIME_IMAGE=${argument}") ;;
+		image-check) step_command=(make runtime-image-check "RUNTIME_IMAGE=${argument}" "RUNTIME_EXPECTED_VERSION=verify-${candidate:0:12}") ;;
+		migration-validate) step_command=(make migration-validate "RUNTIME_IMAGE=${argument}" "RUNTIME_EXPECTED_VERSION=verify-${candidate:0:12}") ;;
+		image-security) step_command=(make container-security "CONTAINER_IMAGE=${argument}") ;;
+		*) echo "unknown verification command kind: ${kind}" >&2; return 2 ;;
+	esac
+	printf -v step_display '%q ' "${step_command[@]}"
+	step_display=${step_display% }
+}
+
 self_test() (
-	local output fixture scratch script
+	local output fixture scratch script attempt_path receipts_before
 	fixture=$(mktemp -d)
 	trap 'rm -rf -- "${fixture}"' EXIT
 	mkdir -p "${fixture}/scripts/ci" "${fixture}/make" "${fixture}/tools" \
@@ -213,6 +239,106 @@ self_test() (
 	output=$(bash "${script}" --plan --files api/openapi/service.yaml)
 	grep -q 'make openapi-runtime-contract-check' <<<"${output}"
 	if grep -q 'requires_network=true' <<<"${output}"; then return 1; fi
+
+	# A failure retains successful and unstarted steps without granting aggregate
+	# acceptance. The delivery owner can finish only the missing canonical leaves.
+	printf '# Agent fixture\n' >AGENTS.md
+	: >.gitleaks.toml
+	cat >Makefile <<'MAKE'
+check-instructions:
+	@printf 'instructions\n' >>invoked
+docs-contract-check:
+	@printf 'docs\n' >>invoked
+	@test -f allow-docs
+secret-scan:
+	@printf 'secrets\n' >>invoked
+MAKE
+	receipts_before=$(find .git/codex/verify -name '*.receipt' | wc -l)
+	if output=$(VERIFY_FORCE=1 bash "${script}" --files AGENTS.md README.md .gitleaks.toml 2>&1); then
+		echo "verify self-test accepted a partially failed plan" >&2
+		return 1
+	fi
+	attempt_path=$(sed -n 's/^verification attempt: //p' <<<"${output}")
+	[[ -f ${attempt_path} ]]
+	grep -q '^step_state: 1 passed ' "${attempt_path}"
+	grep -q '^step_state: 2 failed ' "${attempt_path}"
+	grep -q '^step_state: 3 pending$' "${attempt_path}"
+	if grep -q '^step_state: 3 running ' "${attempt_path}"; then return 1; fi
+	grep -q '^command: make secret-scan$' "${attempt_path}"
+	grep -q '^attempt_state: failed$' "${attempt_path}"
+	[[ $(cat invoked) == $'instructions\ndocs' ]]
+	[[ $(find .git/codex/verify -name '*.receipt' | wc -l) == "${receipts_before}" ]]
+	: >allow-docs
+	make docs-contract-check secret-scan >/dev/null
+	[[ $(cat invoked) == $'instructions\ndocs\ndocs\nsecrets' ]]
+	[[ $(find .git/codex/verify -name '*.receipt' | wc -l) == "${receipts_before}" ]]
+	# An explicitly requested aggregate still executes the entire plan; partial
+	# results never become automatic cross-candidate cache hits.
+	output=$(VERIFY_FORCE=1 bash "${script}" --files AGENTS.md README.md .gitleaks.toml)
+	attempt_path=$(sed -n 's/^verification attempt: //p' <<<"${output}")
+	grep -q '^attempt_state: passed$' "${attempt_path}"
+	[[ $(grep -c '^step_state: [123] passed ' "${attempt_path}") == 3 ]]
+	grep -q '^result: pass$' <<<"${output}"
+	# A step that mutates the selected candidate must not leave reusable success.
+	cat >Makefile <<'MAKE'
+docs-contract-check:
+	@printf 'changed during verification\n' >>README.md
+MAKE
+	receipts_before=$(find .git/codex/verify -name '*.receipt' | wc -l)
+	if output=$(VERIFY_FORCE=1 bash "${script}" --files README.md 2>&1); then
+		echo "verify self-test accepted a candidate changed by a gate" >&2
+		return 1
+	fi
+	attempt_path=$(sed -n 's/^verification attempt: //p' <<<"${output}")
+	grep -q '^step_state: 1 invalidated$' "${attempt_path}"
+	grep -q '^attempt_state: invalidated$' "${attempt_path}"
+	if grep -q '^step_state: 1 passed ' "${attempt_path}"; then return 1; fi
+	[[ $(find .git/codex/verify -name '*.receipt' | wc -l) == "${receipts_before}" ]]
+	# Interrupt only this fixture's verifier; its started step stays unverified.
+	cat >Makefile <<'MAKE'
+docs-contract-check:
+	@kill -TERM "$$VERIFY_TEST_PID"
+MAKE
+	if output=$(VERIFY_FORCE=1 bash -c 'export VERIFY_TEST_PID=$$; exec bash "$1" --locked --files README.md' _ "${script}" 2>&1); then
+		echo "verify self-test accepted an interrupted attempt" >&2
+		return 1
+	fi
+	attempt_path=$(sed -n 's/^verification attempt: //p' <<<"${output}")
+	grep -q '^step_state: 1 running ' "${attempt_path}"
+	if grep -q '^step_state: 1 passed ' "${attempt_path}"; then return 1; fi
+	if grep -q '^attempt_state: passed$' "${attempt_path}"; then return 1; fi
+	[[ $(find .git/codex/verify -name '*.receipt' | wc -l) == "${receipts_before}" ]]
+	# Persisted image commands must exercise the same version assertion and build
+	# identity as execution. A stub consumes the real argument vector without Docker.
+	(
+		mkdir stub-bin
+		cat >stub-bin/make <<'SH'
+#!/usr/bin/env bash
+printf 'APP_VERSION=%s\nVCS_REF=%s\nALLOW_FULL=%s\nREQUIRE_DOCKER=%s\n' "${APP_VERSION:-}" "${VCS_REF:-}" "${ALLOW_FULL:-}" "${REQUIRE_DOCKER:-}"
+printf '%s\n' "$@"
+SH
+		chmod +x stub-bin/make
+		export PATH="${fixture}/stub-bin:${PATH}"
+		candidate=0123456789abcdef
+		execution_head='fixture-source-head'
+		for kind in image-build image-check migration-validate; do
+			prepare_command "${kind}" 'fixture:tag; unexpected-shell-command'
+			actual=$("${step_command[@]}")
+			replayed=$(bash -c "${step_display}")
+			[[ ${actual} == "${replayed}" ]]
+			grep -q '^RUNTIME_IMAGE=fixture:tag; unexpected-shell-command$' <<<"${replayed}"
+			if [[ ${kind} == image-build ]]; then
+				grep -q '^APP_VERSION=verify-0123456789ab$' <<<"${replayed}"
+				grep -q '^VCS_REF=fixture-source-head$' <<<"${replayed}"
+			else
+				grep -q '^RUNTIME_EXPECTED_VERSION=verify-0123456789ab$' <<<"${replayed}"
+			fi
+		done
+		prepare_command make test-all
+		grep -q '^ALLOW_FULL=1$' <<<"$(bash -c "${step_display}")"
+		prepare_command integration test-integration-db
+		grep -q '^REQUIRE_DOCKER=1$' <<<"$(bash -c "${step_display}")"
+	)
 )
 
 if [[ ${mode} == self-test ]]; then
@@ -470,6 +596,7 @@ fi
 
 
 candidate=$(fingerprint_candidate)
+execution_head=$(git rev-parse HEAD)
 command_summary=none
 if ((${#displays[@]})); then command_summary=$(IFS='; '; echo "${displays[*]}"); fi
 plan_input=${tmp}/plan
@@ -504,42 +631,47 @@ fi
 
 print_plan
 
-execute() {
-	local kind=$1 argument=$2
-	case "${kind}" in
-		make)
-			case "${argument}" in
-			test-all | lint-all | check-go)
-				ALLOW_FULL=1 make "${argument}"
-				;;
-			*)
-				make "${argument}"
-				;;
-			esac
-			;;
-		fmt) make fmt-files-check FILES="${argument}" ;;
-		lint) make lint-changed PKGS="${argument}" ;;
-		test) make test-package PKG="${argument}" ;;
-		shell) make shellcheck SHELL_FILES="${argument}" ;;
-		integration-init) make integration-init-check INTEGRATION_INIT_ROWS="${argument}" ;;
-		integration) REQUIRE_DOCKER=1 make "${argument}" ;;
-		image-build) APP_VERSION="verify-${candidate:0:12}" VCS_REF="$(git rev-parse HEAD)" make runtime-image-build RUNTIME_IMAGE="${argument}" ;;
-		image-check) make runtime-image-check RUNTIME_IMAGE="${argument}" RUNTIME_EXPECTED_VERSION="verify-${candidate:0:12}" ;;
-		migration-validate) make migration-validate RUNTIME_IMAGE="${argument}" RUNTIME_EXPECTED_VERSION="verify-${candidate:0:12}" ;;
-		image-security) make container-security CONTAINER_IMAGE="${argument}" ;;
-		*) echo "unknown verification command kind: ${kind}" >&2; return 2 ;;
-	esac
-}
+# ponytail: Partial runs retain evidence, not cross-candidate cache hits. The
+# owner checks dependencies, inputs and environment after repair. Automate reuse
+# only with claim-complete dependency fingerprints; keep passing receipts separate.
+mkdir -p "${receipt_dir}"
+attempt=$(mktemp "${receipt_dir}/attempt-${candidate:0:12}.XXXXXX")
+{
+	printf 'candidate: %s\nbase_ref: %s\nresolved_base_sha: %s\nmerge_base_sha: %s\n' \
+		"${candidate}" "${base_ref}" "${resolved_base_sha}" "${merge_base_sha}"
+	printf 'environment: %s\nattempt_state: running\n' "${environment_detail}"
+	print_plan
+	for i in "${!kinds[@]}"; do
+		prepare_command "${kinds[$i]}" "${arguments[$i]}"
+		printf 'step: %s\ncommand: %s\nstep_state: %s pending\n' "$((i + 1))" "${step_display}" "$((i + 1))"
+	done
+} >"${attempt}"
+echo "verification attempt: ${attempt}"
+
 
 started=$(date +%s)
 if ((${#kinds[@]})); then
 	for i in "${!kinds[@]}"; do
 		command_started=$(date +%s)
+		printf 'step_state: %s running started_at=%s\n' "$((i + 1))" "${command_started}" >>"${attempt}"
 		echo "==> ${displays[$i]}"
-		if ! execute "${kinds[$i]}" "${arguments[$i]}"; then
+		prepare_command "${kinds[$i]}" "${arguments[$i]}"
+		if "${step_command[@]}"; then
+			candidate_after=$(fingerprint_candidate)
+			if [[ ${candidate_after} != "${candidate}" ]]; then
+				printf 'step_state: %s invalidated\nattempt_state: invalidated\n' "$((i + 1))" >>"${attempt}"
+				echo "verification candidate changed during ${displays[$i]}; see ${attempt}" >&2
+				exit 1
+			fi
+			printf 'step_state: %s passed duration=%ss\n' "$((i + 1))" "$(($(date +%s) - command_started))" >>"${attempt}"
+		else
+			command_exit=$?
 			duration=$(($(date +%s) - started))
+			printf 'step_state: %s failed exit_code=%s duration=%ss\nattempt_state: failed\n' \
+				"$((i + 1))" "${command_exit}" "$(($(date +%s) - command_started))" >>"${attempt}"
 			printf 'claim: surface-aware verification\nresult: fail\ncandidate: %s\nscope: %s\ncommand: %s\ninputs: %s\nenvironment: %s\nduration: %ss\nstatus: not_verified\ngap_or_next_owner: failed command\n' \
 				"${candidate}" "$(tr '\n' ',' <"${files_path}")" "${displays[$i]}" "$(tr '\n' ',' <"${files_path}")" "${environment_detail}" "${duration}" >&2
+			echo "partial results and pending plan: ${attempt}" >&2
 			exit 1
 		fi
 		printf '<== %s (%ss)\n' "${displays[$i]}" "$(($(date +%s) - command_started))"
@@ -548,11 +680,11 @@ fi
 duration=$(($(date +%s) - started))
 candidate_after=$(fingerprint_candidate)
 if [[ ${candidate_after} != "${candidate}" ]]; then
+	printf 'attempt_state: invalidated\n' >>"${attempt}"
 	printf 'claim: surface-aware verification\nresult: invalidated\ncandidate: %s\nstatus: not_verified\ngap_or_next_owner: candidate changed during verification\n' "${candidate}" >&2
 	exit 1
 fi
 
-mkdir -p "${receipt_dir}"
 receipt_tmp=${receipt}.tmp.$$
 {
 	printf 'claim: surface-aware verification\n'
@@ -569,4 +701,5 @@ receipt_tmp=${receipt}.tmp.$$
 	printf 'gap_or_next_owner: none\n'
 } >"${receipt_tmp}"
 mv "${receipt_tmp}" "${receipt}"
+printf 'attempt_state: passed\nreceipt: %s\n' "${receipt}" >>"${attempt}"
 cat "${receipt}"

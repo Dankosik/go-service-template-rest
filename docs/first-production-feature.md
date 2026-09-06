@@ -377,7 +377,9 @@ requires stricter network or authentication policy. Add low-cardinality feature
 metrics or spans only where they answer an operational question.
 
 Write all planned code and tests first, including independent parallel tasks.
-Move from each implemented task to the next without running checks or reviews.
+Move from each implemented task to the next without a task proof or review gate.
+[Implementation](spec-first-workflow/phases/implementation.md) owns bounded
+feedback during coding and the final repair loop.
 After the whole ledger is assembled, run `make verify` once. Include required
 OpenAPI, protobuf, container, PostgreSQL, migration, or deployment proof only
 where that aggregate does not cover the claim. Use `ALLOW_FULL=1 make check`

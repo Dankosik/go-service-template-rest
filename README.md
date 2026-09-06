@@ -122,7 +122,9 @@ flowchart LR
 3. `internal/<feature>` owns business behavior. Transport, database, and
    provider details stay under `internal/infra`.
 4. Implement planned tasks and tests, parallelizing independent work. Start
-   the next ready task without checks or review. After all ledger code is
+   the next ready task without a task proof or review gate. Follow
+   [Implementation](docs/spec-first-workflow/phases/implementation.md) for bounded
+   feedback during coding. After all ledger code is
    assembled, run the surface-aware `make verify`; use `ALLOW_FULL=1 make check`
    only for a required whole-repository claim.
 5. CI selects its checks from the changed files. Image publication is opt-in
