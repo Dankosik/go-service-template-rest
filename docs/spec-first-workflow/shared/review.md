@@ -5,28 +5,33 @@ Use fresh independent review at the boundaries selected by this contract.
 ## Trigger
 
 One fresh reviewer is required for a standalone Research macro result and each
-fixed Specification, completed Technical Design, triggered Test Design, and
-Planning result before movement. Their macro-phase boundaries are unchanged.
+fixed Specification, completed Technical Design, and Planning result before
+movement. Test authoring is Implementation work and has no separate phase review.
 
-Implementation uses Lead self-review unless independent review is explicitly
-required by the user or accepted task, materially changed behavior affects
-authorization, money, data integrity, concurrency safety, or hard-to-reverse
-migration, or a material correctness question remains uncertain, contested, or
-inadequately covered by current proof. Name the specific risk or question in
-the existing review brief. Passing tests do not waive review of materially
-changed protected invariants; review does not replace missing mandatory proof.
+Implementation tasks and subtask lanes have no review or self-review gate.
+Return implemented code and continue the ready frontier immediately. Task
+packets and protected-domain skills cannot reintroduce per-task review through
+a generic risk trigger. Standalone review requests are separate work; a reviewer subtask inside an
+implementation ledger cannot bypass this boundary.
 
-Apply the same trigger to the integrated candidate before ledger `done`, using
-cross-unit interactions and global Completion as its scope. Unit count alone
-does not require another reviewer. Reuse unit evidence and review; inspect only
-remaining integration questions or reasoning invalidated by assembly. If no
-trigger applies, the acceptance owner records that disposition in the existing
-result without a separate review report. Resolve any outstanding blocking
-findings before acceptance; a changed review disposition cannot waive them.
+Select independent review once for the final assembled delivery candidate when
+the user requires it, materially changed behavior affects authorization, money,
+data integrity, concurrency safety, or hard-to-reverse migration, or a material
+correctness question remains uncertain or contested. Scope that review to the
+changed outcome, including unit-local protected invariants and cross-unit
+interactions; do not defer a unit risk and then omit it from final review.
+Passing tests do not replace this final review or missing required proof.
 
-Direct Work and supporting phase-internal work use root self-review unless the
-boundary is high-impact, broad, hard to reverse or verify, protected-domain,
-materially contested, or explicitly requested.
+Otherwise the delivery owner completes final validation without a separate
+review report. Record the final disposition in the existing Completion result.
+Resolve outstanding blocking findings before acceptance. Reuse current evidence
+and recheck only repairs and invalidated reasoning; task count does not add
+review cycles.
+
+For a standalone Direct Work delivery, select review at its final boundary
+using the same trigger. Pre-Implementation supporting work keeps its existing
+phase method. Do not route ledger tasks through Direct Work to obtain an
+intermediate self-review or reviewer.
 
 ## Lifecycle
 
@@ -79,9 +84,8 @@ The phase adapter owns lenses and threshold, while the artifact, ledger, or
 | Standalone research synthesis | [Research](../phases/research.md#review) |
 | Completed specification | [Specification Review](../phases/specification-review.md) |
 | Technical and Go-ownership design | [Technical Design Review](../phases/technical-design-review.md) |
-| Completed Test Design | [Test Design](../phases/test-design.md#review) |
 | Planning result | [Task Review / Readiness](../phases/task-review-readiness.md) |
-| Fixed implementation unit | [Implementation Review](../phases/implementation-review.md) |
+| Single-unit final delivery or explicit standalone implementation review | [Implementation Review](../phases/implementation-review.md) |
 | Integrated implementation candidate | [Implementation Review](../phases/implementation-review.md#integrated-candidate) |
 
 A phase-owned complementary panel replaces the default reviewer only when its
