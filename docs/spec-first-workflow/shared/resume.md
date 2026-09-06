@@ -32,7 +32,10 @@ status request does not reset the task or require replaying completed phases.
    execution mode or substitute for final Completion.
 6. Resolve current files and writer identities before consuming Implemented
    outputs. Evaluate proof reuse only when final validation begins under the
-   [Evidence Contract](evidence-contract.md); resume coding without a check run.
+   [Evidence Contract](evidence-contract.md). Resume the actual execution stage:
+   coding uses Implementation's feedback boundary; final-validation repair
+   includes its focused rerun under existing authority. Retire a superseded
+   code-only repair brief without restarting the ledger or its review cycle.
 
 Resolve the ledger's Execution locators against native task state before
 resuming or redispatching; a stored locator alone does not prove work is active.

@@ -31,7 +31,7 @@ establish runtime behavior or completed acceptance. Evidence needed to choose
 an otherwise unresolved system mechanism remains with Technical Design.
 Unwritten test cases and unavailable test infrastructure do not block Planning
 or implementation from accepted behavior and design. The executor supplies the
-tests; live harness feasibility and execution wait for final validation.
+tests; Implementation owns permitted coding feedback and final harness execution.
 
 ## Execution Evidence
 
@@ -52,8 +52,8 @@ receipt or prove a fresh runtime observation. Do not rerun unchanged evidence
 as ceremony.
 
 At final validation, choose one minimal proof plan across all claims; one
-receipt may support several. Do not run a leaf included in a selected aggregate
-or add an aggregate whose extra surfaces are irrelevant. Use one surface-aware
+receipt may support several. Avoid duplicating a leaf in the initial aggregate
+plan or adding an aggregate whose extra surfaces are irrelevant. Start with one surface-aware
 `make verify` and only uncovered required proof. A full-repository gate is never
 automatic. `make plan` explains the route; it is not a gate.
 
@@ -61,20 +61,32 @@ Reuse existing proof when it would fail on the changed observable. Add a test or
 fixture only for otherwise-unproved changed behavior; unrelated historical
 coverage remains outside the unit.
 
-During ledger implementation, workers and Leads write code and required tests,
-then return `Implemented` without executing checks or reviews. Test, compile,
-lint, diagnostic, and smoke commands wait until all planned code is implemented
-and assembled. Do not run them as optional iteration, blocker recovery, a
-worker's verification assignment, or a single-unit final acceptance. Reading
-source and producing generated code are implementation; passing behavior is
-not claimed. A blocked implementation remains a gap, not permission to start
-validation of a completed subset.
+During ledger implementation, [Implementation](../phases/implementation.md#feedback-during-coding)
+owns static diagnostics and bounded behavioral feedback. Retain an actual
+scenario result with its command, inputs, environment, and exercised scope;
+evaluate scoped reuse at final validation under this contract. It creates no
+per-task receipt or acceptance stage. Workers and Leads return `Implemented`,
+not verified delivery. All required claims and final review remain with the
+whole assembled ledger; an early scenario never substitutes for an explicitly
+required final aggregate or fresh runtime observation.
 
-The integrated delivery owner runs all required proof after assembly, including
-each packet's Final validation claims. Deduplicate overlapping claims and
-run `make verify` once on the final candidate; add only uncovered required
-checks. The Orchestrator records progress and final acceptance without repeating
+The integrated delivery owner owns all required proof after assembly, including
+each packet's Final validation claims. Deduplicate overlapping claims. After
+an interrupted or failed aggregate, preserve its selected plan and completed
+step results. Reconcile the plan against the repaired candidate, adding newly
+required claims and commands. Reuse only scoped results whose dependencies,
+inputs, and environment remain valid; run failed, invalidated, and not-yet-run
+checks directly through their canonical targets. Complete only when the whole
+reconciled plan and uncovered required claims have passing evidence.
+
+Consolidated scoped evidence can establish local Completion without another
+whole `make verify` run. It is not a passing aggregate receipt. An explicitly
+required exact-candidate aggregate, CI check, runtime observation, or release
+gate still must run; do not synthesize its receipt from partial results. The
+Orchestrator records progress and final acceptance without repeating
 proof. For a single-unit delivery, the Lead is also the delivery owner.
+Repair executors run focused checks within that owner's final-validation scope
+under [Implementation](../phases/implementation.md#repair-within-final-validation).
 A reviewer runs only a missing or adversarial falsifier for its final independent
 question. Run `ALLOW_FULL=1 make check` only when the claim spans its full
 boundary. Heavy targets require `ALLOW_HEAVY=1` or CI.
