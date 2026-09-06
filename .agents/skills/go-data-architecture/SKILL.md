@@ -14,7 +14,9 @@ Every datum answers to one **authority**: the single store and writer whose acce
 
 A derived surface that cannot name its source, lag, and repair path is a second authority waiting to disagree, and retention is a designed lifecycle stage with an owner rather than a response to disk pressure.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 From every changed writer or durable schema through each reader, projection,
 export, cache, repair, and retention path, build `AuthorityRecord{datum,
 identity, writer, invariant, derived_surfaces, lag, repair, evolution,
