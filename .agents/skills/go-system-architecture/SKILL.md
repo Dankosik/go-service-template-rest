@@ -14,7 +14,9 @@ Architecture is decided by **forces**: every component, boundary, and protocol i
 
 Boundary crossings are where systems break, so each one names its authority, protocol, consistency expectation, failure behavior, and migration story — whatever stays unnamed gets invented under incident pressure by whoever is on call.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 From every new or changed runtime crossing through its migration and terminal
 failure disposition, build `Crossing{from, to, authority, protocol,
 interaction, consistency, failure, migration, forced_consequence, proof}` from
