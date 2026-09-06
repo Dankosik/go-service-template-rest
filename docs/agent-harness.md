@@ -35,10 +35,11 @@ scope reassignment.
 Carry model, reasoning effort, isolation, native identity, and task lifecycle in
 tool fields rather than prompt prose. Exclusive locks determine scheduling and
 isolation, not reasoning capability. Select capability from the remaining
-semantic judgment, protected risks, oracle strength, and interacting invariants
-under the selected adapter. Use its balanced configuration only when the focused
-check is a named mechanical command and Boundary has no protected-risk reason.
-Raise capability for weak proof or interacting invariants, or after a causal
+semantic judgment, implementation uncertainty, protected risks, and interacting
+invariants under the selected adapter. Use its balanced configuration for
+bounded implementation with closed behavior and no protected-risk reason.
+A test plan or named check is not a prerequisite for delegation or model choice.
+Raise capability for unresolved judgment or interacting invariants, or after a causal
 attempt or review exposes a missed invariant. If capability signals disagree,
 raise under the adapter.
 Expected failing tests and mechanically diagnosed setup or syntax errors do
@@ -65,10 +66,10 @@ Lifetime follows responsibility, not model size:
 | Evidence lane | One bounded evidence brief and related follow-ups under the conditions below. |
 
 Start every execution or evidence lane, including nested descendants, with a
-fresh history using the selected adapter's native controls. Supply the accepted
-result, necessary decisions,
-source locators, writable boundary, and focused proof through the existing
-Subagent Brief. Clean history excludes the parent's conversation; it does not
+fresh history using the selected adapter's native controls. Supply accepted
+behavior, necessary decisions, source locators, writable scope, and the expected
+outcome through the existing Subagent Brief. Executors choose their tests while
+coding; final-validation briefs carry execution commands after assembly. Clean history excludes the parent's conversation; it does not
 remove applicable instructions, tools, permissions, or current repository files.
 Reviewer freshness remains governed by shared Review.
 
@@ -96,10 +97,12 @@ agents by elapsed time or message count, or add a separate lifecycle manager.
 
 ## Nested Execution
 
-The Orchestrator owns the ledger; a Lead owns each unit's acceptance. A worker
+The Orchestrator owns the ledger; Leads return Implemented, and one assigned
+delivery owner owns final validation and acceptance. A worker
 may delegate a strict subset of its accepted brief only when the selected
-adapter permits descendants and Implementation's benefit, ownership, lock,
-and proof conditions hold. Missing decisions still return to their owner.
+adapter permits descendants and Implementation's benefit, ownership, and lock
+conditions hold. Missing product or architecture decisions return to their
+owner; unwritten test cases and commands do not block delegation.
 At a native depth or tool limit, the nearest capable parent dispatches the
 subset or completes it within its own authority; do not invent a new acceptance
 unit or an unsupported carrier. Use only as much nesting as the work needs.
