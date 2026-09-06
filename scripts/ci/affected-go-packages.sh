@@ -15,7 +15,7 @@ cd "${ROOT_DIR}"
 
 is_generated_go() {
 	case "$1" in
-	internal/openapi/*.gen.go | examples/reference-service/internal/openapi/*.gen.go | internal/infra/*/internal/openapi/*.gen.go | internal/infra/postgres/sqlcgen/*.go | internal/gen/proto/*.go | examples/grpc-reference-service/internal/gen/proto/*.go)
+	internal/openapi/*.gen.go | examples/reference-service/internal/openapi/*.gen.go | internal/infra/*/*.gen.go | internal/infra/postgres/sqlcgen/*.go | internal/gen/proto/*.go | examples/grpc-reference-service/internal/gen/proto/*.go)
 		return 0
 		;;
 	*)
@@ -71,7 +71,8 @@ self_test() (
 	fixture=$(mktemp -d)
 	trap 'rm -rf -- "${fixture}"' EXIT
 	mkdir -p "${fixture}/scripts/ci" "${fixture}/internal/failure" \
-		"${fixture}/internal/problem" "${fixture}/internal/testconsumer" "${fixture}/internal/openapi"
+		"${fixture}/internal/problem" "${fixture}/internal/testconsumer" "${fixture}/internal/openapi" \
+		"${fixture}/internal/infra/billing" "${fixture}/internal/billingconsumer"
 	cp "${ROOT_DIR}/scripts/ci/affected-go-packages.sh" "${fixture}/scripts/ci/"
 	printf 'module example.invalid/affected\n\n' >"${fixture}/go.mod"
 	awk '/^go / { print; exit }' "${ROOT_DIR}/go.mod" >>"${fixture}/go.mod"
@@ -81,6 +82,8 @@ self_test() (
 	printf 'package testconsumer\n' >"${fixture}/internal/testconsumer/consumer.go"
 	printf 'package testconsumer\n\nimport _ "example.invalid/affected/internal/failure"\n' >"${fixture}/internal/testconsumer/consumer_test.go"
 	printf 'package openapi\n' >"${fixture}/internal/openapi/openapi.gen.go"
+	printf 'package billing\n' >"${fixture}/internal/infra/billing/client.gen.go"
+	printf 'package billingconsumer\n\nimport _ "example.invalid/affected/internal/infra/billing"\n' >"${fixture}/internal/billingconsumer/consumer.go"
 	script=${fixture}/scripts/ci/affected-go-packages.sh
 
 	output=$(printf '%s\n' README.md | bash "${script}")
@@ -121,6 +124,13 @@ self_test() (
 	grep -qx 'format_files=' <<<"${output}"
 	grep -qx 'lint_packages=' <<<"${output}"
 	grep -q 'changed_packages=./internal/openapi' <<<"${output}"
+
+	output=$(printf '%s\n' internal/infra/billing/client.gen.go | bash "${script}")
+	grep -qx 'format_files=' <<<"${output}"
+	grep -qx 'lint_packages=' <<<"${output}"
+	grep -qx 'changed_packages=./internal/infra/billing' <<<"${output}"
+	grep -qx 'affected_test_packages=./internal/billingconsumer ./internal/infra/billing' <<<"${output}"
+	grep -qx 'fallback=false' <<<"${output}"
 
 	# Both sides of a production move must remain seeds.
 	output=$(printf '%s\n' internal/failure/failure.go internal/problem/problem.go | bash "${script}")
