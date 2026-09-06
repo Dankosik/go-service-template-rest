@@ -1,5 +1,10 @@
 # Whole-ledger implementation: instruction verification
 
+Historical record of the earlier 2026-09-06 policy. Its absolute static-check
+ban is superseded by the later user-authorized
+[repair-feedback revision](repair-feedback-verification.md). This record is
+evidence, not current execution authority.
+
 Date: 2026-09-06. Repository baseline:
 `4911f204e5fcc930ea84658742e464486c78d1e0`.
 
