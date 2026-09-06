@@ -13,6 +13,10 @@ claim cannot be wider than that boundary.
 
 `claim -> observable -> command or procedure -> result -> exercised scope -> gap`
 
+An Implemented task handoff claims code production, not verified behavior, and
+does not trigger this method. For a ledger, start execution only at its final
+validation boundary after all planned code is assembled.
+
 Apply the shared [Evidence
 Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md). For
 every claim, name the observable whose absence or incorrectness would make the
