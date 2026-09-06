@@ -11,6 +11,11 @@ metadata:
 Debugging ends at the **first broken invariant**, not at the first plausible
 explanation. Classify the request as `diagnosis_only` or `fix_authorized`.
 
+Apply this execution method during final validation or a standalone debugging
+request. A blocker inside ledger implementation does not authorize this signal
+loop: inspect source and errors, record any missing input, and continue the
+remaining code under [Implementation](../../../docs/spec-first-workflow/phases/implementation.md).
+
 ## Signal Gate
 
 For a local symptom, establish one agent-runnable command that has already been
