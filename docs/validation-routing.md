@@ -8,17 +8,18 @@ human-facing explanation.
 | Changed surface or claim | Load | Primary proof |
 | --- | --- | --- |
 | Agent instructions, roles, skills, mirrors, or template propagation | [Instructions](validation/instructions.md) | `make template-owned-purity-check` |
-| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | `make verify` once after all ledger code is implemented and assembled |
+| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | start `make verify` after assembly; continue failed plans under the Evidence Contract |
 | OpenAPI, protobuf, SQLC, or generated drift | [Generated Contracts](validation/generated.md) | matching `*-check` |
-| PostgreSQL transactions, migrations, or integration semantics | [PostgreSQL](validation/postgres.md) | `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` |
+| PostgreSQL transactions, migrations, or integration semantics | [PostgreSQL](validation/postgres.md) | `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration-db` |
 | Runtime image, container behavior, or migration rehearsal | [Containers](validation/containers.md) | `make runtime-image-build` |
 | CI/CD, workflows, Dockerfile, or shell scripts | [Delivery](validation/delivery.md) | matching delivery leaf |
 | Secrets, dependencies, Go or image vulnerability claims | [Security](validation/security.md) | matching security target |
 | Latency, throughput, allocation, contention, or capacity | [Benchmarking](benchmarking.md) | workload-matched benchmark |
 
-This router selects commands for final validation or a separate verification
-request. During ledger implementation, select planned proof without executing
-it; no leaf, fast target, or diagnostic is an exception. Run the smallest
+This router selects proof commands for final validation or a separate verification
+request. [Implementation](spec-first-workflow/phases/implementation.md#feedback-during-coding)
+owns the narrower coding-feedback allowance; a fast target is not
+automatically eligible. Run the smallest
 aggregate matching the final claim after all planned code is assembled. Missing
 Docker or an external provider narrows the claim; it is not a passing skip.
 
@@ -31,8 +32,17 @@ happen before execution; selected integration leaves force `REQUIRE_DOCKER=1`,
 and a changed candidate cannot produce a receipt. `ALLOW_FULL=1 make check`
 remains the explicit deterministic full-repository gate.
 
-`*-fast` targets are available for standalone debugging; they are not part of
-ledger implementation. They refuse CI and local tool version drift. Final proof
+Each actual run also prints a persistent attempt record with the complete plan,
+original candidate, execution environment, and each step's pending/running or
+terminal state and duration. Failed or interrupted attempts are not passing
+receipts. The [Evidence Contract](spec-first-workflow/shared/evidence-contract.md#execution-evidence)
+owns continuation and scoped reuse after repair; `make verify` does not infer
+cross-candidate dependency equivalence or automatically skip partial results.
+Use Implementation's [Progress](spec-first-workflow/phases/implementation.md#progress)
+method to supervise long-running steps and waits.
+
+`*-fast` targets are available for standalone debugging and eligible repair
+diagnostics during final validation. They refuse CI and local tool version drift. Final proof
 uses the matching canonical leaf.
 
 Final validation and blockers stay within the accepted delivery scope and its
