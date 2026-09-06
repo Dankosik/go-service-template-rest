@@ -16,5 +16,5 @@ an objective reopen condition.
 
 Use plain prose unless a compact decision table, state model, quality scenario,
 decisive example, or literal schema/type fragment closes the ambiguity more
-precisely. Keep only the decision-carrying part; exhaustive scenarios belong to
-Test Design and mechanism or placement belongs to Technical Design.
+precisely. Keep only the decision-carrying part. Implementation chooses concrete
+test cases as it writes code; mechanism or placement belongs to Technical Design.

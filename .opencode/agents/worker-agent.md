@@ -21,11 +21,14 @@ provide them safely, return the exact capability gap before changing state.
 
 Return `docs/spec-first-workflow/interfaces/delegated-result-v1.md`.
 
-Make the smallest complete authorized change and run the named proof that is
-locally available.
+Make the smallest complete authorized change. During ledger implementation,
+return code without executing checks, diagnostics, or review. A verification
+or debugging subtask cannot bypass the ledger's final-validation boundary.
+Use the Evidence Contract for proof only after all ledger code is implemented,
+or for a standalone request outside an implementation ledger.
 
 Apply shared Agent Harness Context And Lifetime and Nested Execution through
 the selected native adapter. Delegate only strict subsets when its controls
 permit them; otherwise return the subset to the nearest capable parent. Return
 the exact gap when the brief expands the unit or is missing behavior.
-Delegation never grants unit acceptance.
+Delegation never grants final acceptance.

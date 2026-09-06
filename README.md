@@ -111,7 +111,7 @@ flowchart LR
     A["Create from template"] --> B["Keep required profiles"]
     B --> C["Define the OpenAPI contract"]
     C --> D["Add domain behavior"]
-    D --> E["Run focused checks"]
+    D --> E["Finish all planned code, then validate together"]
     E --> F["CI and release"]
 ```
 
@@ -121,9 +121,10 @@ flowchart LR
    requests and responses into handwritten handlers.
 3. `internal/<feature>` owns business behavior. Transport, database, and
    provider details stay under `internal/infra`.
-4. Package tests give fast feedback. `make prove` is optional package-sized
-   iteration; `make verify` is the surface-aware final local route;
-   `ALLOW_FULL=1 make check` validates the whole repository before delivery.
+4. Implement planned tasks and tests, parallelizing independent work. Start
+   the next ready task without checks or review. After all ledger code is
+   assembled, run the surface-aware `make verify`; use `ALLOW_FULL=1 make check`
+   only for a required whole-repository claim.
 5. CI selects its checks from the changed files. Image publication is opt-in
    and happens only after the matching checks pass.
 
@@ -175,7 +176,7 @@ contract; see the [integration initializer](docs/external-integration-initialize
 | Command | Use it for |
 | --- | --- |
 | `make run` | Start the HTTP service locally |
-| `make prove PKG=./pkg FILES='...'` | Optional package-sized format, test, and lint |
+| `make prove PKG=./pkg FILES='...'` | Standalone package diagnostic, outside ledger implementation |
 | `make verify` | Run the minimal integrated surface plan |
 | `ALLOW_FULL=1 make check` | Run the full-repository aggregate once before delivery |
 | `make test-integration` | Run the container-backed integration tests |
