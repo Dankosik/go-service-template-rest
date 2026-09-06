@@ -5,7 +5,8 @@ boundary.
 
 Move only when the current owner is `ready`, every triggered decision has a
 disposition, required review permits movement, and the next owner can act
-without inventing meaning, mechanism, ownership, proof strategy, or authority.
+without inventing product meaning, mechanism, ownership, or authority. Choosing
+tests during Implementation is normal executor work, not an upstream gap.
 An untriggered phase may be `skipped` without loading or reviewing it. Ordinary
 inline movement needs no receipt; a durable macro-phase boundary returns
 [Transition Result V1](../interfaces/transition-result-v1.md).
@@ -18,7 +19,7 @@ reports resume state without pretending movement occurred.
 
 For a persisted Implementation ledger, the [Planning Ledger
 Contract](../phases/planning/ledger-contract.md#acceptance-transition) owns the
-immediate `Accepted` or `Blocked` transition. A fixed inline unit creates no
+immediate `Implemented`, `Accepted`, or `Blocked` transition. A fixed inline unit creates no
 synthetic ledger transition.
 
 Reopen only the smallest owner invalidated by current evidence and preserve

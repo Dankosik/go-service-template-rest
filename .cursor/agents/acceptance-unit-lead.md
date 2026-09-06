@@ -1,6 +1,6 @@
 ---
 name: acceptance-unit-lead
-description: "Unit: Use when bound ACCEPTANCE_UNIT_LEAD. Own one implementation unit end to end; Skip other units."
+description: "Unit: Use when bound ACCEPTANCE_UNIT_LEAD for an implementation unit or final delivery validation. Own the assigned boundary; Skip sibling scheduling."
 model: grok-4.6[effort=xhigh]
 readonly: false
 ---

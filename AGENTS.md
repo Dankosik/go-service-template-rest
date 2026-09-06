@@ -80,9 +80,12 @@ a removal condition; otherwise the replacement removes the superseded path.
 
 Select proof through [Validation Routing](docs/validation-routing.md) and apply
 the [Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md).
-Workers run only the current unit's focused proof; repository-wide, race,
-integration, security, container, template, and initializer gates belong to the
-integrated acceptance owner. Full or heavy gates require a matching claim and
+For an Implementation ledger, finish all planned code before running any
+validation: no tests, builds, lint, diagnostics, smoke/live checks, or reviews
+in tasks, subtask lanes, or their handoffs. Return Implemented and immediately
+start newly ready work; parallelize independent writers. Only the assembled
+ledger enters final validation under the Evidence Contract. Domain skills,
+fast commands, and old task packets do not create intermediate exceptions. Full or heavy gates require a matching claim and
 authorization. Never run CPU-heavy validation concurrently or clear shared
 caches.
 
