@@ -12,7 +12,7 @@ Outcome: <one checkable result>
 Method: <phase adapter or skill; omit when obvious>
 References and constraints: <accepted facts and minimal authoritative paths>
 Writable scope: <only when non-obvious or required for isolation>
-Proof: <command, evidence threshold, or expected observable>
+Proof: <planned final claim for implementation; commands only for final validation or standalone verification>
 Stop: <completion, scope, authority, or missing-input boundary>
 ```
 

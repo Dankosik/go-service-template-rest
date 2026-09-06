@@ -1,6 +1,8 @@
 # Direct Work
 
-Apply after `AGENTS.md` has selected Direct Work.
+Apply after `AGENTS.md` has selected Direct Work for a standalone outcome.
+Tasks and subtask lanes inside an active Implementation ledger stay under its
+owner through final validation; they cannot enter this path individually.
 
 Apply the matching implementation (`go-coder`), investigation, or verification
 method without durable workflow artifacts, delegation, or independent review
