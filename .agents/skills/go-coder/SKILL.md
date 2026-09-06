@@ -29,12 +29,18 @@ whose removal preserves accepted behavior and current
 
 Apply the [Evidence
 Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md) before
-adding a test. When previous behavior is runnable, observe the falsifier before
-repair; otherwise state why the proof rejects missing or wrong behavior. Route
-only a genuinely non-obvious oracle or proving layer to Test Design.
+adding a test. State why it rejects missing or wrong behavior. During ledger
+implementation, write tests and repair code without executing tests, compiles,
+lint, or diagnostics. Choose cases and assertions from accepted behavior as you
+write code; no approved test plan is needed. Execution waits for final validation
+of the entire ledger. Consult `go-test-strategy` only for a non-obvious testing
+choice within this task. Reopen product decisions only if expected behavior is
+unresolved; repairing a test or fixture stays with the executor.
 
 Complete when each criterion has a causal edit or grounded no-change disposition
-and matching proof, no superseded path, and no unresolved implementation choice.
+and its test/proof implementation, no superseded path, and no unresolved
+implementation choice. Return Implemented before proof execution; accepted
+behavior still requires final validation.
 Load one matching [implementation reference](references/index.md) only when its
 pressure changes the method; use the active workflow's validation and closeout
 contracts.
