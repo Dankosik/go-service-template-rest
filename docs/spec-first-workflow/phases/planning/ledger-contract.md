@@ -5,174 +5,112 @@ V1](../../interfaces/task-ledger-v1.md).
 
 ## Task And Acceptance Boundaries
 
-A ledger task is the smallest independently acceptable repository outcome, not
-the smallest independently implementable piece of work.
+A ledger task retains one coherent repository outcome and its final acceptance
+criteria. Keep layers of that outcome together; use subtask lanes for useful
+parallel implementation. Separate independently consumable outcomes or targets
+with different external gates. Do not create more artifacts merely to show
+partial progress: name implemented subresults in the current task status.
 
-A result is independently acceptable only when a later owner can consume it, or
-the repository can ship it, without any still-planned companion work for that
-same outcome. A green local test on a partial layer does not make the layer
-independently acceptable.
-
-Create a separate ledger task when the result can land in a valid repository
-state without that companion work, is independently shippable or consumable,
-provides a stable output to another owner or later task, or has a materially
-distinct acceptance oracle or protected-risk boundary.
-
-Keep layers of one Outcome in one unit. Split distinct Outcomes even when they
-share a request, package, or convenient worktree. When those pressures conflict,
-Outcome, oracle, and protected-risk boundary win.
-
-Do not split a task because parts can be implemented, investigated, tested, or
-repaired independently. Those parts are execution lanes under one
-Acceptance-Unit Lead when they share one postcondition and one integrated
-acceptance verdict.
-
-One ledger task is one acceptance unit. File count, diff size, desired agent
-count, and elapsed time are diagnostic signals, not boundaries. If one candidate
-cannot be integrated, reviewed, or repaired because context cannot hold it, fan
-out execution lanes or split only on a new independently acceptable Outcome or
-stable Provides. Do not slice layers to shrink context.
-
-A unit is too broad when it requires more than one independently valid candidate
-identity, acceptance verdict, or blocked receipt. Repeated peer targets with
-independent proof or blockers become sibling tasks; ledger Completion aggregates
-them.
-
-An exclusive lock is held only by the unit that mutates that surface. A
-dependency-manifest change stays a lane of the unit that requires the
-dependency unless the manifest change is itself independently acceptable.
+Implementation completion and verified acceptance are separate events.
+`Implemented` means the planned code, tests, and cleanup are present and its
+writers have joined. It does not mean any check ran or passed. Task boundaries
+do not create validation or review gates. Global Completion owns the final
+assembled result and required proof for all tasks.
 
 ## Ready Frontier
 
-Place a dependency at the first action that consumes it: implementation, unit
-acceptance, or a named external effect. [Task Packet
-V1](../../interfaces/task-packet-v1.md) owns gate annotations and the default for
-unannotated dependencies. A reviewed contract may support local preparation
-while a working provider still gates integration acceptance or applied state
-gates rollout. Planning owns this distinction; dispatch cannot weaken an
-existing dependency. Merging into an auto-deploy branch is an effect boundary.
+Place each dependency at the first action that actually consumes it:
+implementation, final acceptance, or a named external effect. [Task Packet
+V1](../../interfaces/task-packet-v1.md) owns annotations. An agreed contract can
+support independent consumer implementation while the provider's working runtime
+still gates final integration. Missing live infrastructure does not hold code
+that can be implemented from closed decisions.
 
-A unit is ready to execute when dependencies for its next action are accepted,
-no active unit overlaps its mutable owners or exclusive locks, no active unit
-may change an accepted interface or assumption it consumes, and the authority,
-environment, and focused proof for that action are available. Ordinarily it
-must be able to reach acceptance without another unfinished unit.
+A task is ready to implement when its required decisions and consumed code or
+contracts are available, writable owners and exclusive locks are free, and its
+implementation authority is present. A landed `Implemented` output satisfies a
+code dependency; no passing receipt or per-task acceptance is required. An
+acceptance annotation gates acceptance, not the start of coding; verify its
+dependencies during final validation. Local unverified code never satisfies a
+production or external-effect gate.
 
-When the packet's Boundary explicitly permits bounded preparation, its Lead
-may build an isolated candidate and run local proof while a named later gate
-is pending. Behavior, design, interfaces, and the local oracle must already be
-closed; preparation cannot guess missing decisions. The pending gate needs an
-owner able to supply it without consuming this unit's unaccepted output.
-At the declared stop,
-preserve the candidate, join or stop its lanes, and return `Blocked` naming the
-pending gate through the existing acceptance result. It provides no accepted
-output and cannot be landed as an accepted unit. Reconcile ownership and release
-execution resources; do not redispatch the same preparation until the named
-gate changes. When it closes, resume the same unit, rerun invalidated evidence,
-and complete every unit-required check before `Accepted`.
+Dispatch all ready independent work before waiting, within capacity. Parallel
+tasks and subtask lanes require disjoint writers and exclusive locks. Keep
+overlapping mutation serial. Do not wait for a whole wave or for review and
+validation of a finished task before starting newly ready work.
 
-Dispatch the complete ready frontier before waiting, within current capacity.
-A unit may be ready and still wait: start it concurrently only when owners and
-locks are free and isolation cost is smaller than the unit's work; otherwise
-start it serially on the current checkout when that checkout is free.
-Overlapping owners or locks stay serial.
+When only a later acceptance or external gate is pending, continue the local
+work supported by accepted contracts. Return `Implemented` after that work is
+complete and keep the later gate in the ledger; do not keep a Lead idle waiting
+for a provider. Return `Blocked` only when the remaining implementation needs
+an unavailable input or authority. Resume from that input without restarting
+unaffected work.
 
-The Orchestrator may assign the next ready related unit to the same Lead after
-its previous unit is accepted and landed, its lanes have stopped, and no repair
-or handoff remains. Reuse useful context when it saves startup work; use a new
-Lead when the subject, context load, or required native configuration makes
-that more reliable. Do not hold independent ready work waiting for a preferred
-Lead. The reassigned Lead loads the new packet and current checkout/base and
-consumed outputs; previous task assumptions and verdicts do not transfer. Each
-unit keeps its own proof, review disposition, and acceptance result. Only the
-Orchestrator chooses the next unit and updates its Execution locator; a reused
-Lead owns one active unit and cannot serve as its independent reviewer.
-If an earlier unit later reopens, serialize its repair or transfer its Lead
-ownership before dispatch; reuse never creates two active scopes for one Lead.
+Reuse the same Lead for a related ready task after its previous code is
+integrated and its lanes have stopped. Do not wait for verification or
+acceptance. Re-read the new packet and current inputs; reuse context only while
+it remains reliable. Reassign later repairs serially so a Lead has one active
+writable scope. The Orchestrator owns scheduling and Execution locators.
 
-After every result, integration, blocker, or accepted transition, re-read
-canonical ledger state, release completed locks, recompute the frontier, and
-immediately dispatch newly ready units. Continue waiting only when no additional
-unit can start. Do not wait for an earlier frontier to drain.
+After each result or integration, release finished scopes, recompute the
+frontier, and start newly ready work immediately. Prefer work that supplies
+missing code or contracts to other tasks. Preparation must not occupy locks or
+capacity needed by its prerequisite. Capacity is a ceiling, not a fan-out target.
+Reserve enough capacity to integrate active results and resolve blockers.
 
-Capacity is a ceiling, not a fan-out target. It counts live Leads, their
-mutable workers, and in-flight review or validation lanes. Leave spare slots
-for unlock, review, and landing. Do not fill the ceiling with Leads that still
-need children. Do not persist waves.
-
-When eligible work exceeds capacity, first reserve the lanes required to finish
-active units. Then prefer ready units whose accepted outputs unblock waiting
-work in the current ledger. Preparation must not occupy capacity or locks needed
-to produce its missing dependency. Use known dependencies; do not add duration
-estimation or a scheduling phase. Dispatch other eligible work whenever capacity
-and locks permit.
-
-A discovered exclusive lock or overlapping mutable owner updates the live
-frontier immediately. Stop only units that now conflict. Do not cancel
-unrelated running units. Outcome, Boundary, and Accept-when stay with Planning;
-a discovered write surface does not by itself reopen them.
-
-An invalidated accepted input or changed requirement stops units that consume
-it. Unrelated running units continue. Recompute the frontier; do not restart
-the ledger.
+A discovered write overlap stops only conflicting writers. An invalidated
+contract stops only work that consumes it. Continue unrelated tasks; do not
+restart the ledger or reopen Planning for a mechanical locator or lock update.
 
 ## Acceptance Transition
 
 During orchestrated execution, only the Orchestrator writes canonical ledger
-state. Each Lead returns one immutable [Acceptance Result
-V1](../../interfaces/acceptance-result-v1.md). The Orchestrator validates unit
-identity and candidate identity when present.
+state. Leads return [Acceptance Result V1](../../interfaces/acceptance-result-v1.md).
+Verify result and candidate identity when receiving an isolated handoff; this
+is integration bookkeeping, not a code-review or test gate.
 
-For `Blocked`, record the gap and route recovery without landing. Preserve
-partial work and reconcile live ownership before releasing locks or
-redispatching. Unrelated runnable work continues.
+For `Implemented`, integrate serially into the local development candidate,
+record implementation completion, release scopes, and refill the frontier.
+Implementation progress does not authorize pushing, deploying, or landing code into
+an auto-deploy branch. Preserve the external-effect boundary.
 
-For `Accepted`, the Orchestrator lands the candidate serially without semantic
-edits, checks that landing did not materially change the reviewed bytes or
-preconditions, records the Lead-owned verdict without re-adjudicating it, then
-releases locks and refills the frontier. When several results are waiting, land
-one, refill, then land the next. Do not drain the landing mailbox before
-dispatching newly unlocked work.
+Do not silently resolve semantic conflicts during integration. Return the
+conflicting delta to its Lead for repair against the assembled tree; unrelated
+work continues. Invalidate affected evidence without starting a per-task test
+or review cycle. For `Blocked`, retain partial code and the exact missing
+implementation input, reconcile writers, and route available recovery.
 
-If the reviewed bytes and accepted inputs remain equivalent after landing, reuse
-the review and focused evidence. Conflict resolution, rebasing, generated
-output, dependency movement, or manual editing that changes candidate semantics
-invalidates that review. On a landing conflict, do not silently merge. Return
-the candidate to its Lead for repair on the landed tree, rerun invalidated
-proof, and apply Review repair rules. Unrelated running units continue.
+Keep one replaceable result per task. Git owns prior candidates and repair
+history. Checkboxes track implementation completion; they do not claim passing
+behavior. Keep `status: ready` while implementation, final validation, or an
+owner-held repair can proceed. Use `blocked` only when no such authorized work
+can obtain the missing input, evidence, capability, or authority. Apply
+[Parent-Owned Recovery](../../shared/transition.md#parent-owned-recovery).
 
-When no Orchestrator exists, a root-local Lead may write its own fixed unit
-result.
+Only after every planned code task is Implemented and assembled, with no
+unfinished code or active writer, assign the existing delivery owner one final
+validation boundary covering global Completion and all task claims. A blocked
+task or an exhausted ready frontier does not permit partial final validation.
+Do not split the ledger or dispatch per-task verification assignments to bypass
+this boundary. Pending deployment or release actions do not delay the start of local
+final validation; execute them only after their required evidence and authority
+exist, and retain their proof as a Completion gate.
+That owner runs the consolidated proof through the [Evidence
+Contract](../../shared/evidence-contract.md) and any final review selected by
+[Review](../../shared/review.md), and returns a Completion result. Missing or
+failed proof leaves verification incomplete even when every task is checked.
+Return defects to their implementation owners and rerun only invalidated proof;
+do not restart task-by-task acceptance. The Orchestrator records the final
+verdict without repeating validation or review.
 
-Replace that result in place. Git owns superseded candidates, prior review
-receipts, and repair history. A delegated result, review return, candidate
-handoff, or attempted action is not ledger state.
-
-Keep `status: ready` while another unit or owner-held recovery is executable;
-an agent-owned technical, review, proof, or Planning repair with available
-authority and a concrete next discriminating action is owner-held recovery even
-when the current unit result is `Blocked`. Apply [Parent-Owned
-Recovery](../../shared/transition.md#parent-owned-recovery) to exhausted recovery;
-changing the assigned actor or effort alone does not make a gap executable.
-Owner-held recovery or a Planning reopen for one unit does not pause or cancel
-unrelated ready or running units.
-Use `blocked` only when no ready unit or owner-held recovery remains because a
-required input, evidence, native capability, or authority is unavailable after
-authorized recovery; retain the exact resumption condition. A conflicting
-`status: blocked` reopens Planning; it is not a user confirmation question.
-After the final accepted unit, verify the global Completion condition before
-`done`. Apply [Review](../../shared/review.md)'s integrated-candidate trigger to
-remaining cross-unit risks; record its verdict or not-required disposition in
-the existing Completion result. Unit count does not add a review gate. The
-delivery owner runs the final aggregate through [Evidence
-Contract](../../shared/evidence-contract.md), not after every ledger transition.
-Then load [Cleanup](../../shared/cleanup.md) and report terminal
-completion only after execution-only state is removed or Cleanup returns its
-exact blocker.
+Mark `done` only after final `Accepted` establishes Completion. Then apply
+[Cleanup](../../shared/cleanup.md). A root-local Lead may validate a standalone delivery after implementing it;
+all tasks inside a ledger share one final validation stage.
 
 ## Stop Rule
 
-The ledger is ready when every accepted obligation has one unit disposition,
-each task packet admits one independently acceptable verdict, every dependency
-names a consumed output or gate, each packet names mutable owners and exclusive
-locks, and each `Accept when` can falsify its postcondition.
+Planning is ready when each outcome has its scope, consumed inputs, writable
+owners, final observable outcomes, and dependency timing. Concrete tests are
+executor-owned implementation choices, not readiness inputs. A future live
+prerequisite is a named final execution gate. Preserve explicit user-owned
+acceptance and external-effect requirements.

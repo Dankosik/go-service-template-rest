@@ -71,5 +71,5 @@ objective refresh trigger.
 
 Record the input owner, authoritative source, required shape, availability, and
 earliest checkpoint. For a proof implication, name the current observable and
-setup availability or the missing-proof owner; Test Design still selects the
-scenario and proof level.
+setup availability or the missing-proof owner. Implementation selects concrete
+tests and their proving layer while writing the affected task.
