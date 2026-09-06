@@ -13,7 +13,9 @@ authority, asset, enforcement point, attacker action, and observable denial.
 
 `boundary -> principal -> enforcement -> action -> failure -> negative proof`
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 From every caller-controlled entrypoint to an asset or observable denial, build
 `AttackerPath{boundary, principal, asset, enforcement, action, failure,
 denial_proof}` across route exposure, verified identity, objects reached,
