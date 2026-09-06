@@ -1,15 +1,17 @@
 # Proof Obligations
 
 ## Load When
-Load this when approved behavior must become proof obligations: which level proves a claim, which scenario rows discriminate, and what each row observes.
+Load while writing a test when the smallest proving layer or failure observable
+is unclear. Resolve that choice in test code, without a preliminary matrix.
 
 ## Decide
 - Escalate a level only because the lower level cannot observe the boundary. Importance and blast radius raise the proof bar, not the level.
 - Unit proves deterministic local logic; contract proves client-visible boundary behavior; integration proves a real source-of-truth boundary; e2e smoke proves composed wiring after smaller tests already own the correctness claims.
 - When the level choice is nontrivial, name the rejected level and the evidence gap it would leave. An asserted level and a chosen one read alike until the rejection is named.
-- Give every row preconditions, input shape, level, and one observable that changes when the behavior is wrong.
+- Give the test concrete preconditions, input shape, and an assertion that
+  changes when the behavior is wrong.
 - "Returns an error" is not an observable. Name the error identity, status, persisted state, emitted message, or the side effect whose absence proves the contract.
-- Keep the matrix small enough that every row earns its place. Three rows that each discriminate prove more than a complete-looking matrix that cannot say what any row rules out.
+- Add a case only when it catches a failure the existing tests would miss.
 - `-race`, repetition, and coverage are instrumentation over a scenario, never a scenario.
 - Choose fuzz only for input-heavy logic with a cheap invariant and a seed corpus. Otherwise a named example is the stronger oracle.
 
@@ -28,5 +30,5 @@ Load this when approved behavior must become proof obligations: which level prov
 ## Prove
 Each obligation reads: risk → selected level → observable → reopen condition.
 For a nontrivial level choice, also name the rejected level and its evidence
-gap. Missing a required part prevents readiness; an obvious level choice needs
-no invented alternative.
+gap when it changes the implementation choice. No separate readiness verdict
+or test-plan approval is required; an obvious choice needs no written analysis.
