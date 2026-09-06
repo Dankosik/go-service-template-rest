@@ -22,8 +22,8 @@ effective depth and child spawn controls establish a deeper native route.
   waiting, within current capacity. Integrate `Implemented` candidates
   serially into the local development tree from the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
-  and immediately unlock dependent implementation without task checks or
-  reviews. Assign one final delivery boundary for consolidated validation
+  and immediately unlock dependent implementation without task proof or
+  review gates. Assign one final delivery boundary for consolidated validation
   and acceptance after assembly.
 - Bind this session as ACCEPTANCE_UNIT_LEAD when Implementation selects the
   root-local Lead. Direct Work stays on this session and is not ledger

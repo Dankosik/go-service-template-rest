@@ -18,10 +18,15 @@ Load [goroutine leak profiles](references/goroutine-leak-profiles.md) for
 goroutine-count growth, shutdown stalls, production liveness incidents, or
 changes to channel, lock, wait-group, and process-exit ownership.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md).
-From every changed spawn site to its join or explicit process-lifetime
-disposition, build `GoroutineStory{owner, stop, blocking_sites, unblock, join,
-bound, happens_before, proof}`. Account for shared state, callers,
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
+Trace every changed spawn site to its join or explicit process-lifetime
+disposition. For interacting goroutines, exhaustive blocking-site coverage, or
+a decision/review handoff, record
+`GoroutineStory{owner, stop, blocking_sites, unblock, join, bound, happens_before,
+proof}` per path. A single local path can keep its judgment and evidence in the
+code or existing task artifact. Account for shared state, callers,
 cancellation, close ownership, timers, and synchronization identity. Complete
 when every story names an edge or a race and every blocking site has an unblock
 disposition. The race detector can reject a story; it cannot prove one. Use
