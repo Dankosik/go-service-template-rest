@@ -30,22 +30,25 @@ from that native owner. Keep Resume only across an interruption when native
 state cannot recover the next action; refresh or remove it when work resumes.
 These fields are routing context, not acceptance evidence.
 
-Each task is its own acceptance unit. Do not add a compound acceptance-unit row
-to recover from over-splitting; reopen Planning and merge the packets. After a
-fixed unit closes, record one replaceable result from the Lead-owned
-[Acceptance Result V1](acceptance-result-v1.md):
+Tasks retain their outcome boundaries; checkboxes record implementation, while
+Completion records final validation. Return one replaceable
+[Acceptance Result V1](acceptance-result-v1.md) per task, and a final result for
+Completion after assembly:
 
 ```text
-Accepted: <unit>; evidence: <claim-matched result>; candidate: <bounded diff, tree, or commit>
+Implemented: <unit>; verification: pending final validation; candidate: <bounded diff, tree, or commit>
+Accepted: Completion; evidence: <claim-matched result>; candidate: <identity>
 Blocked: <unit>; unverified: <claim>; evidence: <narrower result>; next owner: <owner and condition>; candidate: <identity or none>
 ```
 
 Replace that result in place. Git owns superseded candidates, prior review
 receipts, and repair history.
 
-Check a task only after its Accepted result is recorded. Blocked leaves it
-unchecked and cannot satisfy successful Completion. Clear Execution and Resume
-when acceptance leaves no continuation for that unit.
+Check a task after its Implemented result is recorded and integrated. A Blocked implementation stays unchecked. An implemented task
+may remain checked while final validation is blocked; it supplies no acceptance
+claim. Clear Execution when its writers stop. Mark the goal done only after
+final Accepted proves Completion. Keep a later acceptance or effect gate visible
+even when its implementation is checked.
 
 Keep task status, dependencies, unit membership, receipts, completion, and
 blockers in the index.
