@@ -19,10 +19,12 @@ effective depth and child spawn controls establish a deeper native route.
   selects that carrier. It
   fills the independent ready frontier and does not implement, review, or
   call `spawn_subagent` for unit work. Dispatch every ready unit before
-  waiting, within current capacity. Land only `Accepted` candidates serially from
-  the
+  waiting, within current capacity. Integrate `Implemented` candidates
+  serially into the local development tree from the
   [Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
-  and record the Lead-owned verdict without re-adjudicating it.
+  and immediately unlock dependent implementation without task checks or
+  reviews. Assign one final delivery boundary for consolidated validation
+  and acceptance after assembly.
 - Bind this session as ACCEPTANCE_UNIT_LEAD when Implementation selects the
   root-local Lead. Direct Work stays on this session and is not ledger
   orchestration.
@@ -94,7 +96,8 @@ not establish termination of sibling sessions or their descendants.
 
 ## Review And Recovery
 
-Start a required independent implementation review with a fresh `reviewer-agent` and
+Only at final delivery, start a required independent implementation review
+with a fresh `reviewer-agent` and
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
 as its Method; shared Review owns continuation. When shared Review requires integrated-candidate review, this
 session binds one fresh `reviewer-agent` to that boundary and still does not
