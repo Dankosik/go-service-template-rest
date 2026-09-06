@@ -13,7 +13,9 @@ can detect is a clause.
 
 `request acceptance -> success -> failure -> replay or async recovery -> compatibility -> proof`
 
-Apply the [shared specialist contract](../../contracts/specialist-contract.md).
+For a delegated Decision or Review, or when the active artifact requires its
+result interface, load the
+[shared specialist contract](../../contracts/specialist-contract.md).
 For each affected operation, build one `ObservableCell{surface, old, accepted,
 client_consequence, owner, proof}` matrix from
 `api/openapi/service.yaml`, the serving router, `internal/problem`, and affected
