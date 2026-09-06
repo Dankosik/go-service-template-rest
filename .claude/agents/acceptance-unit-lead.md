@@ -1,6 +1,6 @@
 ---
 name: acceptance-unit-lead
-description: "Own one ledger-assigned acceptance unit through implementation, proof, required review, and its acceptance verdict."
+description: "Unit: Use when bound ACCEPTANCE_UNIT_LEAD for an implementation unit or final delivery validation. Own the assigned boundary; Skip sibling scheduling."
 model: inherit
 tools: Read, Grep, Glob, Bash, Edit, Write, Agent, SendMessage, TaskOutput, TaskStop
 ---

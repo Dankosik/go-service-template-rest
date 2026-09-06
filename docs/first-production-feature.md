@@ -44,7 +44,6 @@ when protected. Run:
 ```bash
 make openapi-generate
 go mod tidy
-make openapi-check
 ```
 
 The health-only baseline needs no request-binding helpers. The first operation
@@ -91,10 +90,10 @@ When the accepted contract is gRPC instead of, or beside, REST, define it under
 `api/proto`, generate `internal/gen/proto`, implement the generated interface
 as a thin adapter over the same feature service, and register it through
 the `newGRPCRuntime` call in `cmd/service/internal/bootstrap/run.go`. Do not duplicate the use case
-for streaming or return raw dependency statuses. Run `make proto-check` and
-the focused gRPC tests from [Native gRPC](grpc.md); add
-`BASE_REF=origin/main make proto-breaking` once the contract has a published
-base.
+for streaming or return raw dependency statuses. Include `make proto-check`
+and the relevant gRPC tests from [Native gRPC](grpc.md) in final validation;
+include `BASE_REF=origin/main make proto-breaking` when the contract has a
+published base. Do not run these checks between implementation tasks.
 <!-- profile:grpc:end -->
 
 ### Protected operations
@@ -377,12 +376,11 @@ binds every interface, so deployment must keep it private; enabling `pprof`
 requires stricter network or authentication policy. Add low-cardinality feature
 metrics or spans only where they answer an operational question.
 
-Use focused tests while iterating. Optional package-sized iteration is
-`make prove PKG=./internal/<feature> FILES='internal/<feature>/*.go'`. On the
-integrated candidate run `make verify` once. Use `ALLOW_FULL=1 make check` only
-when the intended claim spans the full repository.
-
-Run the matching container, PostgreSQL, migration, or deployment leaf when the
-change touches it. Before merge, inspect the generated diff and
+Write all planned code and tests first, including independent parallel tasks.
+Move from each implemented task to the next without running checks or reviews.
+After the whole ledger is assembled, run `make verify` once. Include required
+OpenAPI, protobuf, container, PostgreSQL, migration, or deployment proof only
+where that aggregate does not cover the claim. Use `ALLOW_FULL=1 make check`
+only when the intended claim spans the full repository. Before merge, inspect the generated diff and
 verify that the OpenAPI YAML, migrations/query sources, and generated outputs
 still have one unambiguous source of truth.

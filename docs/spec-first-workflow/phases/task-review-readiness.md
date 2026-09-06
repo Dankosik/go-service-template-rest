@@ -16,13 +16,14 @@ postcondition is not a split. Do not author the replacement ledger.
 ## Lenses
 
 Simulate the next executable unit from selection through
-acceptance or a permitted preparation stop under [Ready
+implementation completion and its eventual final validation under [Ready
 Frontier](planning/ledger-contract.md#ready-frontier), using only the fixed plan,
 cited sources, and current evidence. Resolve prerequisites and handoffs, trace
 canonical/generated order, locate non-obvious writable surfaces/resources, and
-follow the postcondition through its named check and oracle to the real path.
-For preparation, verify its bounded local proof and that missing integration
-evidence still prevents acceptance.
+trace the expected user-visible outcome to the real path. Test cases, fixtures,
+assertions, and exact commands are executor-owned choices; their absence does
+not fail Planning review. Missing final integration evidence still prevents
+Completion, without blocking independent implementation.
 
 Trace persisted artifact custody and status through each actor boundary; the
 next actor must proceed from canonical state without chat reconstruction.
@@ -35,10 +36,14 @@ or unavailable input, but continue independent paths. Inspect later units only
 for a decision/dependency that can invalidate the next accepted result.
 
 Do not reslice tasks, author replacement packets, or choose missing behavior,
-mechanism, ownership, proof, rollout, authority, or concurrency.
+mechanism, ownership, rollout, authority, or concurrency. Do not turn this
+review into a preliminary test-design exercise.
 
-`PASS` requires the next authorized work to be executable and claim-provable
-from closed inputs. `CONCERNS` may carry only a later bounded risk that cannot
-invalidate that result. Any hidden decision, unavailable input required before
-acceptance or the permitted preparation stop, invalid split, or non-dispositive
-check is `FAIL` and reopens Planning or the smallest upstream owner.
+Review is a written walkthrough, without live checks. `PASS` requires the next
+authorized implementation to be executable from closed product/design decisions,
+with a clear final observable outcome and known external gates. `CONCERNS` may
+carry only
+a later bounded risk that cannot invalidate that result. Any hidden decision,
+unavailable input required for the next implementation action, invalid split,
+or undefined product outcome is `FAIL` and reopens Planning or the
+smallest upstream owner.

@@ -73,10 +73,12 @@ INTEGRATION_INIT_ROWS=row_e1_http make integration-init-check
 make integration-init-check
 ```
 
-## Fast Go iteration
+## Standalone Go diagnostics
 
-Use active gopls diagnostics first. When package-sized feedback is useful,
-format, test, and lint only the changed files and package:
+These commands serve debugging outside an implementation ledger or repairs
+inside its final validation. During ledger implementation, write all planned
+code and tests before executing checks; there is no per-task diagnostic loop.
+For a package-sized diagnostic, use:
 
 ```bash
 make prove PKG=./path/to/changed/package FILES='path/to/changed.go'
@@ -91,8 +93,8 @@ is not required beside `make prove`.
 
 ## Ordinary Go leaves
 
-Package-sized iteration is the lock-wrapped package aggregate. Skip it when the
-change is already ready for the integrated route:
+The package aggregate is a standalone diagnostic tool. It is not an
+implementation task step and is unnecessary beside a covering final aggregate:
 
 ```bash
 make prove \
@@ -231,7 +233,7 @@ make template-owned-purity-check
 ```
 
 Use the single matching carrier check from
-[`validation/instructions.md`](validation/instructions.md) while iterating.
+[`validation/instructions.md`](validation/instructions.md) at final validation.
 The template purity target already runs every carrier check, so do not pair it
 with those leaves in the same final bundle.
 
