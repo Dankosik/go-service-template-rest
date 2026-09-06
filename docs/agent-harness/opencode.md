@@ -19,7 +19,7 @@ those control planes.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Assign an `acceptance-unit-lead` through Task, reusing a
   completed related Lead only under the shared ledger contract. That Lead owns
-  implementation and returns `Implemented` without task checks or review.
+  implementation and returns `Implemented` without task proof or review gates.
   This session integrates those candidates into the local development tree
   and immediately unlocks dependent implementation through the
   [Ledger Contract's acceptance transition](../spec-first-workflow/phases/planning/ledger-contract.md#acceptance-transition)
