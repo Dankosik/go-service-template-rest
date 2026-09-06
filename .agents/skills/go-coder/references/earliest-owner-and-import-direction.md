@@ -33,4 +33,5 @@ boundary; a portable reference does not define the target's package map.
   Routing](../../../../docs/validation-routing.md).
 - Check the imports of the package you moved into: a correct boundary adds no
   cycle and no unrelated dependency.
-- Run the tests of the old call sites and of the package that now owns the code.
+- Include tests of old call sites and the new owning package in final
+  validation; do not execute them while implementing ledger tasks.

@@ -21,15 +21,17 @@ or buying proof around it; preserve actual safety and authority requirements.
 Interpret domain proof requirements against the claim and active phase.
 Specification closes observable behavior and its nearest feasible falsifier;
 Technical Design supports the selected mechanism, invariant enforcement, and
-proof feasibility; Test Design closes an executable scenario, deterministic
-controls, independent oracle, and proving boundary. Planned proof of new
-behavior does not require completed product tests before Implementation.
+proof feasibility. The implementing agent chooses concrete test cases,
+fixtures, assertions, and commands as it writes the task's code. Neither a
+test-case matrix nor completed product tests are pre-Implementation inputs.
 
 Claims about existing behavior, including deliberately unchanged behavior,
 still require current evidence. Proposed commands and design rationale do not
-establish runtime behavior or completed acceptance. Required feasibility probes
-and evidence needed to choose a mechanism remain mandatory before the affected
-design is ready; an unavailable required input stays a gap with its owner.
+establish runtime behavior or completed acceptance. Evidence needed to choose
+an otherwise unresolved system mechanism remains with Technical Design.
+Unwritten test cases and unavailable test infrastructure do not block Planning
+or implementation from accepted behavior and design. The executor supplies the
+tests; live harness feasibility and execution wait for final validation.
 
 ## Execution Evidence
 
@@ -49,33 +51,38 @@ Routing](../../validation-routing.md). Scoped reuse does not create an aggregate
 receipt or prove a fresh runtime observation. Do not rerun unchanged evidence
 as ceremony.
 
-Before execution, choose one minimal proof plan across all claims; one receipt
-may support several. Do not run a leaf included in a selected aggregate or add
-an aggregate whose additional surfaces are irrelevant. The
-normal ladder is an optional focused falsifier, then one surface-aware
-`make verify`; `make prove` is optional iteration, and a full-repository gate
-is never automatic. `make plan` explains the route; it is not a gate.
+At final validation, choose one minimal proof plan across all claims; one
+receipt may support several. Do not run a leaf included in a selected aggregate
+or add an aggregate whose extra surfaces are irrelevant. Use one surface-aware
+`make verify` and only uncovered required proof. A full-repository gate is never
+automatic. `make plan` explains the route; it is not a gate.
 
 Reuse existing proof when it would fail on the changed observable. Add a test or
 fixture only for otherwise-unproved changed behavior; unrelated historical
 coverage remains outside the unit.
 
-The bounded-change actor owns iterative focused checks. The unit Lead validates
-reused evidence and completes the packet's required proof, including any unit
-Integrated check, before acceptance. Do not defer a unit-required check to final
-delivery. The Orchestrator records acceptance without repeating that work.
-The integrated delivery owner runs `make verify` once on the final delivery
-candidate, not after each unit or ledger transition; final delivery and global
-Completion remain pending until their required proof passes. For a single-unit
-delivery, these owners may be the same actor. Rerun `make prove` only when
-package-sized iteration is still needed and the candidate will change before
-`make verify`. A reviewer runs only a missing or adversarial falsifier for its
-independent question. Run `ALLOW_FULL=1 make check` only when the integrated claim spans its
-full-repository evidence boundary. Heavy targets require `ALLOW_HEAVY=1` or CI.
+During ledger implementation, workers and Leads write code and required tests,
+then return `Implemented` without executing checks or reviews. Test, compile,
+lint, diagnostic, and smoke commands wait until all planned code is implemented
+and assembled. Do not run them as optional iteration, blocker recovery, a
+worker's verification assignment, or a single-unit final acceptance. Reading
+source and producing generated code are implementation; passing behavior is
+not claimed. A blocked implementation remains a gap, not permission to start
+validation of a completed subset.
 
-Return [Evidence Result V1](../interfaces/evidence-result-v1.md) for each claim.
-When required proof cannot run, stop as `implementation complete; verification
-incomplete`; do not accept the unit or claim outcome completion or readiness.
+The integrated delivery owner runs all required proof after assembly, including
+each packet's Final validation claims. Deduplicate overlapping claims and
+run `make verify` once on the final candidate; add only uncovered required
+checks. The Orchestrator records progress and final acceptance without repeating
+proof. For a single-unit delivery, the Lead is also the delivery owner.
+A reviewer runs only a missing or adversarial falsifier for its final independent
+question. Run `ALLOW_FULL=1 make check` only when the claim spans its full
+boundary. Heavy targets require `ALLOW_HEAVY=1` or CI.
+
+Return [Evidence Result V1](../interfaces/evidence-result-v1.md) for final
+validation claims; implementation handoffs carry no proof result. When required
+final proof cannot run, report `implementation complete; verification incomplete`;
+do not accept Completion or claim outcome completion or readiness.
 
 Verification reports evidence and gaps. Repair, unknown-cause diagnosis, and
 missing rollout policy return to their owning methods; rerun only evidence
