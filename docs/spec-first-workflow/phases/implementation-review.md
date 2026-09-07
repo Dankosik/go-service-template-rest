@@ -12,10 +12,12 @@ multiple implemented tasks do not require separate handoffs or verdicts.
 Try to disprove the postcondition and important constraints on the real path,
 retained scope, dependencies, and claim-scoped proof. Consume the accepted
 sources, fixed candidate identity when crossing a boundary, current proof, and
-irreproducible external evidence. Reuse valid receipts and run only a missing or
-adversarial falsifier.
+irreproducible external evidence. Reuse valid results. A concrete diagnostic
+question may use an existing bounded falsifier within the [Evidence
+Contract](../shared/evidence-contract.md#required-and-optional-proof); it does not
+expand mandatory checks or authorize building a test environment.
 
-When named checks are still running on the fixed candidate, inspect the code
+When required checks are still running on the fixed candidate, inspect the code
 and supported traces without duplicating those checks. Pending execution alone
 is not a defect or unavailable proof. Receive the results before a final PASS;
 report discovered defects promptly. Failed or unavailable required proof keeps
@@ -33,7 +35,10 @@ mechanically checkable failure, and the smallest repair boundary. Style
 preferences, alternative architecture, naming improvements, speculative future
 risks, and unrelated cleanup are `FOLLOW_UP` unless they falsify the current
 Outcome, Boundary, constraint, or final validation claim. A `FOLLOW_UP` cannot fail
-the current task.
+the current task. Missing optional integration, provider, or container evidence
+alone is not a defect, FAIL, or NEEDS_PARENT. An actual in-scope defect found by
+an optional check remains blocking. Do not use a generic risk label to add a
+new acceptance condition.
 
 For a structure `TASK_DEFECT`, name the current constraint violated and the
 concrete unnecessary responsibility, dependency, duplication, or retained path.

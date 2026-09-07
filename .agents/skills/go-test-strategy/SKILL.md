@@ -20,10 +20,14 @@ when they carry an accepted contract or resource bound.
 
 For the concrete choice in front of you, identify the wrong behavior, its
 observable consequence, and deterministic inputs or fault control. Unit tests
-are sufficient when they observe that consequence. Use a real boundary when a
-mock could pass while the claimed transaction, authorization, or recovery
-behavior is absent. Do not create a scenario matrix or typed obligation record
-before writing the test.
+are sufficient when they observe that consequence. Exercise available real
+in-process boundaries where a mock would miss the wrong behavior. An explicit
+real-database or provider verification claim needs that actual boundary, but
+this method cannot make such a claim mandatory for local completion. Follow the
+[Evidence Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md#required-and-optional-proof)
+before selecting external infrastructure. Do not build a test environment,
+runner, or scenario matrix merely because a mock has limits. Small fixtures and existing
+test doubles remain normal test authoring; keep optional unobserved scope clear.
 
 Load one [decision reference](references/decision/index.md) only when its
 pressure changes the test being written. A final or explicitly requested

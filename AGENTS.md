@@ -83,16 +83,22 @@ a removal condition; otherwise the replacement removes the superseded path.
 
 ## Validation budget
 
-Select proof through [Validation Routing](docs/validation-routing.md) and apply
-the [Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md).
+Ordinary local Go development finishes after the agreed change, a matching
+build, and relevant passing unit tests, with no known in-scope defect and any
+applicable final review resolved. Stop there; do not expand acceptance to gain
+extra confidence. [Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md#local-completion)
+owns sufficiency, exceptions, and the distinction from CI, release, and runtime
+claims. [Validation Routing](docs/validation-routing.md) selects existing commands.
+Do not create test environments or runners solely to establish local completion.
+
 For an Implementation ledger, [Implementation](docs/spec-first-workflow/phases/implementation.md)
 owns bounded feedback during coding and the assembled final-validation
 boundary. Return Implemented and immediately start newly ready work; parallelize
 independent writers. Task boundaries do not create proof or review gates.
-Domain skills and old packets do not expand that execution boundary.
-Full or heavy gates require a matching claim and
-authorization. Never run CPU-heavy validation concurrently or clear shared
-caches.
+Domain skills and old packets do not expand that execution boundary or the
+required proof scope. Full or heavy gates need an applicable explicit requirement
+and authority; availability is not a trigger. Never run CPU-heavy validation
+concurrently or clear shared caches. Existing CI and release gates remain intact.
 
 ## Work Selection And Loading
 

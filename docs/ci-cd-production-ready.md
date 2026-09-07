@@ -2,33 +2,36 @@
 
 ## Local leaves
 
-Use the surface-aware route for an ordinary integrated change:
+Ordinary local Go completion uses a matching build and relevant unit tests,
+not an automatic expanded verification route. For the main service and the
+ordinary root-module suite:
 
 ```bash
-make verify
+make build
+ALLOW_FULL=1 make test-all
 ```
 
-`make plan` only diagnoses that route. Package iteration uses `make prove`.
+[Go Validation](validation/go.md) owns package scope and retained executable
+selection. [Evidence Contract](spec-first-workflow/shared/evidence-contract.md#local-completion)
+owns the finite local criterion and explicit additions. Missing optional
+integration or image observations do not block that criterion; known defects
+still do. Do not provision or repair a test environment merely to finish.
 
-Use the full deterministic owner only for a full-repository claim:
+`make verify` remains available for explicitly selected expanded verification.
+It selects affected Go packages and changed contract owners, and can select
+Docker, integration, migration, and image checks. `make plan` diagnoses this
+route without authorizing or executing it. Valid exact receipts and scoped
+results remain reusable under the Evidence Contract.
 
-```bash
-ALLOW_FULL=1 make check
-```
+`ALLOW_FULL=1 make check` is an explicit full-repository gate: formatting,
+`lint-all`, `test-all`, root-module tidy, and generated drift. `ALLOW_FULL=1 make
+test-all` is only the ordinary unit-test suite. Full and heavy execution guards
+remain unchanged; actual CI supplies its own authority. Do not impersonate CI.
 
-`make verify` selects a minimal non-overlapping set: affected Go packages
-instead of a default `test-all`, plus the exact contract owners that changed.
-It records candidate, scope, command plan, environment, result, and duration
-under Git-common metadata and reuses that exact receipt while the candidate,
-plan, and environment stay unchanged. `ALLOW_FULL=1 make check` remains the
-full-repository owner: format, `lint-all`, `test-all`, root-module tidy, and
-generated-contract drift. Direct `test-all` and `lint-all` also require
-`ALLOW_FULL=1` or `CI=true`. Heavy leaves
-(`template-init-check`, `govulncheck`, `gosec`, `audit-full-manual`) require
-`ALLOW_HEAVY=1` or CI.
-
-Real PostgreSQL, migration rehearsal, runtime images, and image scanning remain
-separate Docker-backed leaves. A host-only result does not prove them.
+Local completion does not assert platform admission, runtime behavior, or a
+release. Existing CI/release gates below remain intact and do not need duplicate
+local runs. An explicit request for green CI or a release retains that outcome
+until its real result is available.
 
 ## Pull-request and push CI
 
@@ -66,7 +69,7 @@ against the event's exact base SHA. Generated output is never edited by hand.
 ## Secrets and dependencies
 
 Pull requests, merge groups, and main pushes run redacted Gitleaks against the
-exact base-to-HEAD range. Local review additionally scans the current tree.
+exact base-to-HEAD range. The local secret-scan command also scans the current tree.
 Tag and manual admission use full history. Every mode consumes the reviewed
 baseline; missing base authority widens only to the explicit full-history gate.
 

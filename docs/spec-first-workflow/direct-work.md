@@ -10,6 +10,10 @@ unless a concrete trigger emerges. Use [Validation
 Routing](../validation-routing.md) and the [Evidence
 Contract](shared/evidence-contract.md) for claims.
 
-Return the changed outcome, proof actually run, and unverified remainder or
-next owner. Re-enter the workflow router when the outcome is no longer local,
-reversible, single-owner, or safely provable.
+Finish at the Evidence Contract's local completion criterion, without an
+automatic expanded `make verify`. Return the changed outcome, checks actually
+run, and only material optional gaps or a genuinely required next action.
+An unavailable optional environment neither blocks completion nor triggers
+workflow escalation. Re-enter the workflow router only when the outcome itself
+is no longer local, reversible, single-owner, or bounded by the accepted criteria.
+Explicit verification, CI, or release requests retain their actual scope.
