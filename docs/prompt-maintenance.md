@@ -29,7 +29,9 @@ Harness](agent-harness.md) owns native controls.
 Audit the instruction path actually loaded, including conditional skills and
 examples, for conflicting authority and unowned stops. Vendor examples are
 candidates to adapt, not overrides of repository phase, delegation, or proof
-contracts. Record the effective model and source date in the change evidence.
+contracts. For model-specific changes, record the effective model and source
+date in the change evidence; repository policy edits do not require a new model
+comparison merely to finish.
 
 ## Classification
 
@@ -124,12 +126,18 @@ prove ownership, generation, links, and shape—not model behavior.
 
 A behavior-changing instruction edit records its observed pressure, the exact
 routing, selection, or stop delta expected to change, one boundary case, and one
-retention case. Structural checks suffice for shape-only changes. Otherwise
-compare the same model and harness before and after; do not promote a one-off
-trajectory directly into a durable rule.
+retention case in existing change evidence. Static consistency review and the
+matching existing structural check can complete an accepted policy change;
+label them as static evidence, not measured model behavior.
 
-For delegated work, evaluate the specialist result and the parent's continuation
-together. A correct local blocker is not a workflow failure when the parent
+A claim of measured improvement requires a comparison with the same model and
+harness before and after, or the explicitly requested evaluation. Do not make
+that experiment a prerequisite for every policy edit or build a new evaluation
+harness just to close the task. Do not promote an isolated trajectory into a
+general measured claim.
+
+When a behavioral evaluation is actually required, evaluate delegated
+specialist results and the parent's continuation together. A correct local blocker is not a workflow failure when the parent
 resolves it and resumes. Compare technical-choice ownership, disagreement
 resolution, repeated-gap recovery, and completion without technical questions
 to the user. Retain cases for user-owned business ambiguity, unavailable
@@ -137,6 +145,7 @@ external authority, explicit phase stops, and missing required proof. Hold
 model, effort, tools, and task inputs fixed; report a static review or simulated
 trajectory as such rather than claiming live workflow improvement.
 
-Also retain mid-task correction and side-question continuation, small-change
-verification restraint, and phase handoffs before an Implementation ledger
-exists. Compare prompt changes separately from model or effort changes.
+In such an evaluation, also retain mid-task correction and side-question
+continuation, small-change verification restraint, and phase handoffs before an
+Implementation ledger exists. Compare prompt changes separately from model or
+effort changes. These evaluation lenses do not expand a policy edit's acceptance.

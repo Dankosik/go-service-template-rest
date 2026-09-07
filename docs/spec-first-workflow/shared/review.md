@@ -20,7 +20,9 @@ data integrity, concurrency safety, or hard-to-reverse migration, or a material
 correctness question remains uncertain or contested. Scope that review to the
 changed outcome, including unit-local protected invariants and cross-unit
 interactions; do not defer a unit risk and then omit it from final review.
-Passing tests do not replace this final review or missing required proof.
+Passing tests do not replace this final review. Its evidence scope stays within
+the [Evidence Contract](evidence-contract.md#local-completion): a review trigger
+does not authorize extra infrastructure or new mandatory runtime checks.
 
 Otherwise the delivery owner completes final validation without a separate
 review report. Record the final disposition in the existing Completion result.
@@ -38,7 +40,10 @@ intermediate self-review or reviewer.
 The owner fixes one candidate, its authoritative inputs, phase adapter, and
 evidence boundary. The reviewer keeps that boundary read-only, attempts to
 falsify it, and returns [Review Result V1](../interfaces/review-result-v1.md).
-Review never owns repair, integration, acceptance, or movement.
+Review never owns repair, integration, acceptance, or movement. It reuses
+available evidence and investigates concrete defects within that boundary,
+rather than starting a second verification project. Missing optional proof and
+preferences are not blocking findings; real in-scope defects still must close.
 
 Check newly adopted hard constraints against the [Evidence
 Contract](evidence-contract.md), including their original source and scope.

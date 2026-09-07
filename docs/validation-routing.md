@@ -1,50 +1,68 @@
 # Validation Routing
 
-Load only the branch selected by the changed surface or intended claim. The
-Makefile owns command composition; these files own agent-facing selection. The
-full [command reference](build-test-and-development-commands.md) remains the
-human-facing explanation.
+The [Evidence Contract](spec-first-workflow/shared/evidence-contract.md#local-completion)
+owns which checks are required. This router selects existing commands; a file
+path, domain label, or available command does not create a local acceptance gate.
+The Makefile owns command composition. The full [command
+reference](build-test-and-development-commands.md) remains the human-facing
+explanation.
 
-| Changed surface or claim | Load | Primary proof |
+## Ordinary Local Completion
+
+| Changed surface | Load | Local validation |
 | --- | --- | --- |
-| Agent instructions, roles, skills, mirrors, or template propagation | [Instructions](validation/instructions.md) | `make template-owned-purity-check` |
-| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | start `make verify` after assembly; continue failed plans under the Evidence Contract |
+| Ordinary Go behavior or unit tests | [Go](validation/go.md) | matching build and relevant unit tests after assembly |
+| Agent instructions, roles, skills, mirrors, or template propagation | [Instructions](validation/instructions.md) | static consistency review and matching existing structural check |
+
+[Implementation](spec-first-workflow/phases/implementation.md#feedback-during-coding)
+owns the narrower coding-feedback allowance. At final validation, run the local
+checks and only genuinely required additions. Stop when that boundary passes;
+unrun optional integration, image, provider, or performance checks do not block
+local completion. Missing required build or unit-test execution is not a pass.
+
+## Explicit Verification And External Gates
+
+Load a branch below only for a matching verification requirement or diagnostic
+question, within the Evidence Contract's scope and infrastructure limits.
+Regenerating changed contracts remains implementation work; this table does not
+make every available drift or runtime check mandatory locally.
+
+| Required claim | Load | Existing command |
+| --- | --- | --- |
 | OpenAPI, protobuf, SQLC, or generated drift | [Generated Contracts](validation/generated.md) | matching `*-check` |
 | PostgreSQL transactions, migrations, or integration semantics | [PostgreSQL](validation/postgres.md) | `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration-db` |
-| Runtime image, container behavior, or migration rehearsal | [Containers](validation/containers.md) | `make runtime-image-build` |
-| CI/CD, workflows, Dockerfile, or shell scripts | [Delivery](validation/delivery.md) | matching delivery leaf |
-| Secrets, dependencies, Go or image vulnerability claims | [Security](validation/security.md) | matching security target |
-| Latency, throughput, allocation, contention, or capacity | [Benchmarking](benchmarking.md) | workload-matched benchmark |
+| Runtime image, container behavior, or migration rehearsal | [Containers](validation/containers.md) | `make runtime-image-build` and the required scenario |
+| CI/CD, workflows, Dockerfile, or shell-script validation | [Delivery](validation/delivery.md) | matching delivery leaf |
+| Secrets, dependencies, Go or image vulnerability verification | [Security](validation/security.md) | matching security target |
+| Measured latency, throughput, allocation, contention, or capacity | [Benchmarking](benchmarking.md) | workload-matched benchmark |
 
-This router selects proof commands for final validation or a separate verification
-request. [Implementation](spec-first-workflow/phases/implementation.md#feedback-during-coding)
-owns the narrower coding-feedback allowance; a fast target is not
-automatically eligible. Run the smallest
-aggregate matching the final claim after all planned code is assembled. Missing
-Docker or an external provider narrows the claim; it is not a passing skip.
+Existing CI/release gates keep their own admission scope. Do not change their
+classifier or reproduce them locally merely to finish development. An explicit
+request to obtain green CI, verify a runtime scenario, or perform a release
+still requires that result; local completion alone does not complete it.
 
-`make plan` diagnoses the current worktree's selected surfaces, commands, and
-not-applicable gates; it is not a required completion gate. `make verify` prints
-and runs that non-overlapping plan and reuses an exact Git-common passing
-receipt while resolved base, merge base, candidate, plan, execution inputs, and
+`make verify` is an explicitly selected expanded, surface-aware verification
+route, not the ordinary local completion command. Its plan may include Docker,
+integration, migration, and image checks. `make plan` diagnoses that selection;
+it is not a gate and does not authorize the plan. Prefer a matching canonical
+leaf when an aggregate would add irrelevant work.
+
+For an expanded run, `make verify` reuses an exact Git-common passing receipt
+while resolved base, merge base, candidate, plan, execution inputs, and
 environment remain unchanged. Heavy authorization, Docker, and binary checks
-happen before execution; selected integration leaves force `REQUIRE_DOCKER=1`,
-and a changed candidate cannot produce a receipt. `ALLOW_FULL=1 make check`
-remains the explicit deterministic full-repository gate.
+happen before execution; selected integration leaves force `REQUIRE_DOCKER=1`.
+A changed candidate cannot produce a receipt. `ALLOW_FULL=1 make check` remains
+the explicit deterministic full-repository gate, never a default follow-up.
 
-Each actual run also prints a persistent attempt record with the complete plan,
-original candidate, execution environment, and each step's pending/running or
-terminal state and duration. Failed or interrupted attempts are not passing
-receipts. The [Evidence Contract](spec-first-workflow/shared/evidence-contract.md#execution-evidence)
-owns continuation and scoped reuse after repair; `make verify` does not infer
-cross-candidate dependency equivalence or automatically skip partial results.
-Use Implementation's [Progress](spec-first-workflow/phases/implementation.md#progress)
-method to supervise long-running steps and waits.
+Each actual expanded run prints a persistent attempt record with its plan,
+candidate, environment, step states, and durations. Failed or interrupted
+attempts are not passing receipts. The [Evidence
+Contract](spec-first-workflow/shared/evidence-contract.md#execution-evidence)
+owns continuation and scoped reuse; `make verify` does not infer cross-candidate
+equivalence. Use Implementation's [Progress](spec-first-workflow/phases/implementation.md#progress)
+method for genuinely required long-running work.
 
-`*-fast` targets are available for standalone debugging and eligible repair
-diagnostics during final validation. They refuse CI and local tool version drift. Final proof
-uses the matching canonical leaf.
-
-Final validation and blockers stay within the accepted delivery scope and its
-required evidence. Unrelated or pre-existing defects are observations, not blockers,
-unless the intended claim explicitly spans that broader surface.
+`*-fast` targets remain standalone or focused repair diagnostics; they refuse
+CI and local tool version drift. They do not establish an explicitly required
+canonical check. Unrelated or pre-existing defects remain observations unless
+the accepted task actually spans them.

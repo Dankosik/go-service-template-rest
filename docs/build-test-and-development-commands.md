@@ -1,8 +1,11 @@
 # Build, Test, and Development Commands
 
-Use the narrowest command that can falsify the claim. The Makefile exposes
-product commands and non-trivial leaf composition; ordinary tooling stays
-direct.
+[Validation Routing](validation-routing.md) selects commands within the
+[Evidence Contract](spec-first-workflow/shared/evidence-contract.md#local-completion)'s
+finite acceptance scope. This catalog describes available tools, not a checklist.
+Ordinary local Go development ends at a matching build and relevant unit tests;
+expanded checks require an explicit task requirement or their existing CI/release
+gate. The Makefile owns non-trivial composition; ordinary tooling stays direct.
 
 `Makefile` includes template-owned `make/template.mk`. A derived repository may
 add uniquely named service commands in `make/service.mk`; standard targets are
@@ -29,7 +32,8 @@ pinned by the Makefile and invoked through `npx` with telemetry disabled.
 make template-init \
   MODULE=github.com/acme/service \
   CODEOWNER=@acme/platform
-ALLOW_HEAVY=1 make template-init-check
+make build
+ALLOW_FULL=1 make test-all
 ```
 
 The default is the documented minimal service. Supported selections are the
@@ -64,8 +68,9 @@ make integration-init NAME=billing TRANSPORT=http \
   CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none
 ```
 
-While changing the initializer harness, select one named row and keep the
-current complete matrix for final acceptance:
+For explicitly requested initializer-harness verification, start with one named
+row. Run the complete matrix only when required by the task or existing CI gate;
+an ordinary integration change does not create that obligation:
 
 ```bash
 bash scripts/ci/integration-init-check.sh --list
@@ -75,7 +80,8 @@ make integration-init-check
 
 ## Verification continuation
 
-`make verify` prints the persistent attempt record in the Git-common
+When expanded verification is explicitly selected, `make verify` prints its
+persistent attempt record in the Git-common
 `codex/verify` directory. It retains the full plan, candidate, environment,
 step starts, results, and durations even when a later step fails. The last
 state for a step applies; pending or running without a terminal result is
@@ -120,13 +126,22 @@ make prove \
   FILES="internal/<package>/a.go internal/<package>/a_test.go"
 ```
 
-Completion is one surface-aware route:
+Ordinary local Go completion uses the matching deliverable build and relevant
+unit tests. For the main service and the ordinary root module:
 
 ```bash
-make verify
+make build
+ALLOW_FULL=1 make test-all
 ```
 
-`make plan` diagnoses that route without running it: it collects base-branch,
+For a bounded change, use `make test-package PKG=...` and relevant reverse
+importers selected through existing tools. Build affected retained worker
+executables with their existing targets; do not create a profile matrix.
+`test-all` has neither integration tags nor race and is not `make check`.
+[Go Validation](validation/go.md) owns the full selection rules.
+
+`make verify` is an explicit expanded route, not a follow-up local completion
+gate. `make plan` diagnoses that route without running it: it collects base-branch,
 staged, unstaged, and untracked changes, including both sides of renames,
 explains their surfaces and not-applicable gates, and prints the minimal
 command set. Do not run it as a required gate; `make verify` already prints the
@@ -168,8 +183,9 @@ ALLOW_HEAVY=1 make lint-deep
 ALLOW_HEAVY=1 make audit-full-manual
 ```
 
-Use `make lint-deep` only for whole-program dead-code and nil analysis. Use
-`make test-race` only when the claim spans concurrency-sensitive code.
+Use `make lint-deep` for explicitly required whole-program dead-code and nil
+analysis, and `make test-race` for explicitly required race verification. A
+concurrency label alone does not create a local race gate.
 `make audit-full-manual` is the rare template/release audit; it is not an
 iteration or ordinary pre-commit target. It builds one image and reuses it for
 migration rehearsal and image scanning.
@@ -261,9 +277,10 @@ one target and leaves the result in that target's working tree.
 
 ## Delivery and security
 
-When the installed native versions match the Makefile pins, use the local-only
-fast targets during iteration and retain the containerized targets for final
-proof:
+For a relevant standalone diagnostic, native versions matching the Makefile pins
+can use the local-only fast targets. Explicit canonical verification uses
+`actionlint` or `shellcheck`; [Delivery Validation](validation/delivery.md) owns
+the pinned local binaries and CI fallback. These are not extra ordinary Go gates:
 
 ```bash
 make actionlint-fast
@@ -282,7 +299,8 @@ make secret-scan-history
 
 Gitleaks consumes the reviewed baseline. Local commands use the tools module;
 CI downloads a checksum-pinned binary whose version is read from that same
-module. Local review scans the current tree and exact base-to-HEAD history.
+module. The local secret-scan command checks the current tree and exact
+base-to-HEAD history.
 Clean pull-request CI scans only that commit range; push and release admission
 scan full history.
 
@@ -298,7 +316,7 @@ The source template builds one documented PostgreSQL generated output. A
 derived repository builds its own exact source. The lifecycle check starts a
 disposable PostgreSQL only when that current profile requires it; migration
 rehearsal reuses its own database. Reuse the same image tag for lifecycle,
-migration rehearsal, and vulnerability scanning. The Dockerfile fixes output
+migration, and vulnerability scanning. The Dockerfile fixes output
 timestamps with `SOURCE_DATE_EPOCH=0`, so identical inputs rebuild to the same
 local image digest; application version and commit remain explicit build inputs.
 

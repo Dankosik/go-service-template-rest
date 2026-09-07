@@ -1,5 +1,10 @@
 # Security Validation
 
+Select these procedures for an explicit verification requirement or a concrete
+bounded diagnostic under the [Evidence Contract](../spec-first-workflow/shared/evidence-contract.md#required-and-optional-proof).
+The domain label alone does not add local gates or authorize test infrastructure.
+Existing CI and release requirements remain unchanged.
+
 Select the command that matches the claim:
 
 | Claim | Command |
