@@ -31,17 +31,24 @@ a ledger cannot use this branch.
 unit: Completion
 verdict: Accepted | Blocked
 candidate: <fixed assembled candidate>
-evidence: <consolidated claim-matched results and exact gaps>
+evidence: <local completion scope, required results, and material optional gaps; keep requested external outcomes distinct>
 review: <final review result or not_required under shared Review>
 invalidated_receipts: <evidence invalidated by repair; omit when none>
 next_owner: <exact remaining action and owner, or none>
 ```
 
-Accepted requires all mandatory final claims, resolved blocking findings, and
-any final review selected by [Review](../shared/review.md). Blocked means final
-verification or a required release action remains incomplete. Preserve genuine
-external-effect gates. Do not convert a completed subset into Completion to
-run checks early.
+Accepted requires the [Evidence Contract](../shared/evidence-contract.md#local-completion)'s
+local criterion, explicit task additions, resolved blocking findings, and any
+final review selected by [Review](../shared/review.md). Missing optional
+integration or runtime observations do not block local Accepted. Use existing
+evidence and next_owner fields to state scope and material gaps; no new status
+or proof artifact is needed.
+
+Blocked means a required criterion or an explicitly requested CI, runtime,
+release, or external action remains incomplete. Report a completed local portion
+separately without relabeling the whole larger request as Accepted. Preserve
+genuine external-effect gates. Do not convert an unfinished code subset into
+Completion to run checks early.
 
 During orchestrated execution these results are input to the Orchestrator,
 which records canonical state without repeating implementation or validation.

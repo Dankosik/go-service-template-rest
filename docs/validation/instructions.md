@@ -10,9 +10,18 @@ Use for instruction, role, skill, mirror, or template-propagation changes.
 | Qwen skill discovery | `bash scripts/harness-skills-sync.sh qwen --check --repo .` |
 | Template-source ownership and sync behavior | `make template-owned-purity-check` in the template checkout only |
 
-Run the matching check at final validation. The template-only purity target
-already includes all four carrier checks; do not run those leaves separately.
-During implementation, generate changed carriers without checking them.
+At final validation, review the changed instruction chain for consistency and
+run the matching structural check. The template-only purity target already
+includes all four carrier checks; do not run those leaves separately. During
+implementation, generate changed carriers without checking them.
+
+This can complete an instruction-policy change under [Prompt
+Maintenance](../prompt-maintenance.md#change-and-proof). It does not require
+building the application, starting a database/container, or comparing model
+trajectories unless that evaluation was explicitly requested. An unavailable
+required structural check must be reported honestly, not replaced by a claim
+that it passed. Body-only skill edits do not change the generated relative
+symlinks; regenerate views only when their discovery shape changes.
 
 After adding or removing canonical skills, run `bash
 scripts/harness-skills-sync.sh claude --apply --repo .` and `bash

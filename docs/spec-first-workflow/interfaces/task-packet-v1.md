@@ -26,8 +26,8 @@ Exclusive locks:
 
 Final validation:
 - Claim: <what must be true in the assembled ledger>
-- Checks: <known required commands or release evidence only; omit until Implementation chooses tests>
-- Observable: <result that establishes the claim>
+- Checks: <local completion checks; any explicit additional requirement with its source, or none; concrete test commands remain executor-owned>
+- Observable: <result at the selected test boundary; live observation only when explicitly required>
 
 Reopen if:
 <smallest upstream invalidation condition>
@@ -35,10 +35,15 @@ Reopen if:
 
 The implementing agent fills in test cases and commands while writing code;
 Planning needs the outcome, not a test-case inventory or approved oracle plan.
+[Evidence Contract](../shared/evidence-contract.md#required-and-optional-proof)
+owns required proof. A product claim does not automatically require a live
+scenario, and an agent-authored packet cannot expand local acceptance. Empty
+additional checks mean none; do not invent proof to fill the template.
 
 Use narrow source anchors for large inputs; name the repository for a source
 outside the current checkout. Resolve variable paths deterministically and
-record an unavailable required environment or input as a dependency gate.
+record an unavailable genuinely required environment or input as a dependency
+gate. Optional test infrastructure is a material limitation, not a gate.
 
 Unannotated dependencies gate implementation and may consume landed Implemented
 code or agreed contracts without passing checks. Keep annotations consistent
@@ -52,7 +57,9 @@ resumption.
 
 Outcome and Provides describe code to implement; Final validation defines
 the behavior to establish after the whole ledger is assembled.
-Record inability to complete as Blocked, not as an alternative success.
+Record a missing required criterion as Blocked, not as an alternative success.
+Missing optional proof does not block local completion. Keep explicitly requested
+CI, release, or external-effect requirements distinct and outstanding.
 
 Mutable owners are semantic (package, contract, bootstrap), not a guessed file
 list. Exclusive locks cannot be mutated concurrently even when files differ.

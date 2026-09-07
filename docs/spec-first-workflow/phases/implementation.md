@@ -78,8 +78,9 @@ watch loops, review, live targets, or provisioning paid resources.
 
 Stop after resolving that assumption; repeat only after a relevant repair or
 new discriminating hypothesis, using the repair method below. If the scenario
-cannot run cheaply within existing authority, retain the uncertainty for final
-validation and continue code supported by accepted contracts. A demonstrated
+cannot run cheaply within existing authority, retain the material uncertainty
+and continue code supported by accepted contracts. It does not become mandatory
+final proof merely because it was considered during coding. A demonstrated
 defect is repaired before returning the affected code as Implemented; a missing
 probe alone creates no handoff gate. Reopen invalid accepted behavior or
 architecture through its owner.
@@ -111,23 +112,27 @@ remaining implementation blocker or writer. Finishing one task, one wave, or
 all currently runnable tasks does not satisfy this condition. Do not recast a
 ledger task as a standalone delivery to start verification early.
 
-The delivery owner selects one
-non-overlapping proof plan through [Validation Routing](../../validation-routing.md)
-and the [Evidence Contract](../shared/evidence-contract.md). Run required
-packet checks here, combining claims covered by the same command. Start with one
-surface-aware `make verify`; add only required proof that it does not cover.
+The delivery owner selects one non-overlapping plan for the local completion
+criterion and explicit additions under the [Evidence Contract](../shared/evidence-contract.md#local-completion).
+Use [Validation Routing](../../validation-routing.md) for existing commands:
+ordinary Go delivery needs its matching build and relevant unit tests, not an
+automatic `make verify`. Reconcile packet requirements with their actual source;
+agent-added runtime scenarios do not become mandatory by accumulation. Combine
+claims covered by the same command.
 Apply [Review](../shared/review.md) only at this final boundary, never per task.
 Keep the assembled candidate unchanged while checks or review consume it. Join
 or stop those readers before repair, then rerun only invalidated evidence.
 
-Before an expensive environment run, compile the relevant test surface and
+Only when the accepted task explicitly requires an expensive environment run,
+compile the relevant test surface and
 collect cheap failures across the connected production/test projects, required
 tags, generated clients, and accepted intermediate release versions. Do not
 let one failing project hide independent diagnostics. Resolve those failures
 before expensive scenarios; retain sufficient current results under the Evidence
 Contract rather than rerunning them as a separate gate.
 
-For a new or changed runner or fixture, execute its smallest complete scenario
+If the task explicitly includes a runner or infrastructure fixture, execute its
+smallest complete scenario
 through setup, the intended behavior, observation, and cleanup before expanding
 the run. Reuse a still-valid result from coding when the Evidence Contract
 permits it. Bind each scenario to its own inputs.
@@ -138,8 +143,11 @@ run invalidated.
 
 ### Repair Within Final Validation
 
-Classify failure as product, test/oracle, or environment. Assign the causal
-repair and its smallest discriminating rerun to the same executor, with the
+Classify failure as product, test/oracle, or environment. For an optional check's
+unavailable or broken environment, record its material gap and stop that path;
+do not provision or repair infrastructure to finish ordinary development.
+Required checks and concrete in-scope product defects retain a repair owner,
+even if an optional check exposed the defect. Assign the causal repair and its smallest discriminating rerun to the same executor, with the
 current candidate, diagnostics, runner, writable scope, and existing resource
 authority. The executor may run that focused check after repair; an old
 implementation-only brief does not force a code-only handoff here. Keep final
@@ -177,10 +185,14 @@ retries without a fresh CPU permit or time-window negotiation. Coordinate anew
 only when authority, resource scope, or budget changes. Never run heavy checks
 concurrently or bypass effect authority.
 
-Final acceptance requires all mandatory claims, resolved blocking findings, and
-any final review selected by shared Review. Missing proof means `implementation
-complete; verification incomplete`. Continue available repairs and independent
-work; do not claim delivery, integration, or production readiness prematurely.
+Final local acceptance requires the Evidence Contract's local criterion,
+explicit task additions, resolved blocking findings, and any final review
+selected by shared Review. Stop once that boundary passes. Missing optional
+runtime proof does not block local `Accepted`; report only material limitations.
+Missing required proof remains `implementation complete; verification incomplete`
+for that scope. Continue available authorized repairs without indefinite
+environment recovery. A requested CI, release, deployment, or runtime result
+remains outstanding until actually obtained; never claim it from local tests.
 
 ## Progress
 

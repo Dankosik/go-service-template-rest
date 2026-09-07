@@ -15,23 +15,25 @@ Implementation completion and verified acceptance are separate events.
 `Implemented` means the planned code, tests, and cleanup are present and its
 writers have joined. It does not mean any check ran or passed. Task boundaries
 do not create validation or review gates. Global Completion owns the final
-assembled result and required proof for all tasks.
+assembled result under the [Evidence Contract](../../shared/evidence-contract.md#local-completion).
+It consolidates the local criterion and explicit task additions, not every
+runtime scenario an agent could propose.
 
 ## Ready Frontier
 
 Place each dependency at the first action that actually consumes it:
 implementation, final acceptance, or a named external effect. [Task Packet
 V1](../../interfaces/task-packet-v1.md) owns annotations. An agreed contract can
-support independent consumer implementation while the provider's working runtime
-still gates final integration. Missing live infrastructure does not hold code
+support independent consumer implementation while a provider runtime gates only
+an explicitly required live integration or external effect. Missing live infrastructure does not hold code
 that can be implemented from closed decisions.
 
 A task is ready to implement when its required decisions and consumed code or
 contracts are available, writable owners and exclusive locks are free, and its
 implementation authority is present. A landed `Implemented` output satisfies a
-code dependency; no passing receipt or per-task acceptance is required. An
-acceptance annotation gates acceptance, not the start of coding; verify its
-dependencies during final validation. Local unverified code never satisfies a
+code dependency; no passing receipt or per-task acceptance is required. A
+genuine acceptance requirement gates acceptance, not the start of coding;
+reconcile annotations with the Evidence Contract before final validation. Local unverified code never satisfies a
 production or external-effect gate.
 
 Dispatch all ready independent work before waiting, within capacity. Parallel
@@ -84,7 +86,8 @@ Keep one replaceable result per task. Git owns prior candidates and repair
 history. Checkboxes track implementation completion; they do not claim passing
 behavior. Keep `status: ready` while implementation, final validation, or an
 owner-held repair can proceed. Use `blocked` only when no such authorized work
-can obtain the missing input, evidence, capability, or authority. Apply
+can obtain a genuinely required input, evidence, capability, or authority.
+An optional validation environment is not such a dependency. Apply
 [Parent-Owned Recovery](../../shared/transition.md#parent-owned-recovery).
 
 Only after every planned code task is Implemented and assembled, with no
@@ -94,11 +97,14 @@ task or an exhausted ready frontier does not permit partial final validation.
 Do not split the ledger or dispatch per-task verification assignments to bypass
 this boundary. Pending deployment or release actions do not delay the start of local
 final validation; execute them only after their required evidence and authority
-exist, and retain their proof as a Completion gate.
+exist, and retain their proof as a Completion gate when those actions are
+actually included in the request. Optional environments do not create a gate.
 That owner runs the consolidated proof through the [Evidence
 Contract](../../shared/evidence-contract.md) and any final review selected by
 [Review](../../shared/review.md), and returns a Completion result. Missing or
-failed proof leaves verification incomplete even when every task is checked.
+failed required proof leaves its scope incomplete even when every task is
+checked. Passing local criteria permit local `Accepted` without optional
+runtime observations; explicitly requested external outcomes remain outstanding.
 Return defects to their implementation owners and rerun only invalidated proof;
 do not restart task-by-task acceptance. The Orchestrator records the final
 verdict without repeating validation or review.
@@ -111,6 +117,7 @@ all tasks inside a ledger share one final validation stage.
 
 Planning is ready when each outcome has its scope, consumed inputs, writable
 owners, final observable outcomes, and dependency timing. Concrete tests are
-executor-owned implementation choices, not readiness inputs. A future live
-prerequisite is a named final execution gate. Preserve explicit user-owned
-acceptance and external-effect requirements.
+executor-owned implementation choices, not readiness inputs. Name a future live
+prerequisite as a final gate only when the accepted task explicitly requires
+that execution or external effect. Empty additional-proof lists need no
+expansion. Preserve actual user-owned acceptance and external-effect requirements.

@@ -1,5 +1,10 @@
 # Delivery Validation
 
+Select these procedures for an explicit verification requirement or a concrete
+bounded diagnostic under the [Evidence Contract](../spec-first-workflow/shared/evidence-contract.md#required-and-optional-proof).
+The domain label alone does not add local gates or authorize test infrastructure.
+Existing CI and release requirements remain unchanged.
+
 The canonical local `make actionlint` and `make shellcheck` leaves download the
 pinned native release once into the Git-common tool cache and verify its SHA-256
 and reported version. CI keeps the pinned read-only Docker fallback.

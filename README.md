@@ -57,7 +57,8 @@ cd my-service
 make template-init \
   MODULE=github.com/your-org/my-service \
   CODEOWNER=@your-org/backend
-ALLOW_FULL=1 make check
+make build
+ALLOW_FULL=1 make test-all
 make run
 ```
 
@@ -124,9 +125,11 @@ flowchart LR
 4. Implement planned tasks and tests, parallelizing independent work. Start
    the next ready task without a task proof or review gate. Follow
    [Implementation](docs/spec-first-workflow/phases/implementation.md) for bounded
-   feedback during coding. After all ledger code is
-   assembled, run the surface-aware `make verify`; use `ALLOW_FULL=1 make check`
-   only for a required whole-repository claim.
+   feedback during coding. After all ledger code is assembled, finish local
+   development with the matching build and relevant unit tests under the
+   [Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md#local-completion).
+   Expanded verification needs an explicit requirement; do not add test environments
+   merely for confidence.
 5. CI selects its checks from the changed files. Image publication is opt-in
    and happens only after the matching checks pass.
 
@@ -179,12 +182,16 @@ contract; see the [integration initializer](docs/external-integration-initialize
 | --- | --- |
 | `make run` | Start the HTTP service locally |
 | `make prove PKG=./pkg FILES='...'` | Standalone package diagnostic, outside ledger implementation |
-| `make verify` | Run the minimal integrated surface plan |
-| `ALLOW_FULL=1 make check` | Run the full-repository aggregate once before delivery |
-| `make test-integration` | Run the container-backed integration tests |
+| `make build` | Build the main service; use matching retained worker targets for worker changes |
+| `ALLOW_FULL=1 make test-all` | Run the ordinary root-module unit-test suite |
+| `make test-package PKG=./pkg` | Run bounded ordinary tests; include relevant reverse importers |
+| `make verify` | Explicit expanded verification, potentially including heavy/runtime checks |
+| `ALLOW_FULL=1 make check` | Explicit full-repository verification, not a routine follow-up |
+| `ALLOW_HEAVY=1 make test-integration` | Explicit container-backed integration verification |
 
-Use the narrowest check that can catch a problem in the change. The full command
-catalog and routing rules live in
+Stop at the local completion criterion rather than adding checks for confidence.
+Local completion does not assert green CI, a deployment, or observed production
+behavior. The full command catalog and routing rules live in
 [Build, test, and development commands](docs/build-test-and-development-commands.md)
 and [Validation routing](docs/validation-routing.md).
 
