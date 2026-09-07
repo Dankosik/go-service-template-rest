@@ -47,9 +47,6 @@ func TestCodesAreStableAndTransportNeutral(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("published codes = %v, want %v", got, want)
 	}
-	if slices.Contains(got, "conflict") {
-		t.Fatal("generic conflict became a transport-neutral domain identity")
-	}
 }
 
 func TestAllCodesEnumeratesEveryDeclaredConstant(t *testing.T) {
@@ -141,9 +138,6 @@ func TestOpNamesTheStepWithoutPublishingText(t *testing.T) {
 		got := failure.ClassChain(err)
 		if got != "create article -> store row -> *net.OpError -> *errors.errorString" {
 			t.Fatalf("ClassChain() = %q, want both steps then the dependency type", got)
-		}
-		if strings.Contains(got, secret) {
-			t.Fatalf("ClassChain() = %q, want no message text", got)
 		}
 	})
 
