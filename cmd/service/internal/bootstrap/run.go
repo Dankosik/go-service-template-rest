@@ -112,7 +112,7 @@ func Run(args []string) error {
 }
 
 func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
-	loadOptions, err := parseLoadOptions(args)
+	loadOptions, err := config.ParseLoadOptions(args)
 	if err != nil {
 		return err
 	}

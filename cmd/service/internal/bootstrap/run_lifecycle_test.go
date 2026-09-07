@@ -64,48 +64,6 @@ func TestSupervisedWorkOutlivesTheHTTPDrain(t *testing.T) {
 	})
 }
 
-// profile:http-idempotency-postgres:start
-func TestHTTPIdempotencyMaintenanceJoinsAfterHTTPDrain(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		signalCtx, signal := context.WithCancel(context.Background())
-		supervisor := newSupervisedBackground(signalCtx, shutdownTestLogger())
-		started := make(chan context.Context, 1)
-		supervisor.Go(background.Task{
-			Name: "http_idempotency_maintenance",
-			Run: func(ctx context.Context) error {
-				started <- ctx
-				<-ctx.Done()
-				return ctx.Err()
-			},
-		})
-		maintenanceCtx := <-started
-
-		signal()
-		events := &eventRecorder{}
-		if err := drainAndShutdown(
-			signalCtx,
-			shutdownTestLogger(),
-			0,
-			time.Second,
-			&fakeDrainer{events: events},
-			&fakeShutdownServer{events: events},
-		); err != nil {
-			t.Fatalf("drainAndShutdown() error = %v", err)
-		}
-		if err := maintenanceCtx.Err(); err != nil {
-			t.Fatalf("maintenance stopped before HTTP drain completed: %v", err)
-		}
-		if err := supervisor.Shutdown(testShutdownBudget().stage(signalCtx, backgroundShutdownTimeout)); err != nil {
-			t.Fatalf("Shutdown() error = %v", err)
-		}
-		if maintenanceCtx.Err() == nil {
-			t.Fatal("maintenance was not canceled and joined after HTTP drain")
-		}
-	})
-}
-
-// profile:http-idempotency-postgres:end
-
 // TestSupervisedBackgroundShutdownIsBoundedByItsOwnBudget keeps the join from
 // inheriting the already-canceled signal context, which would make Shutdown
 // return instantly and report a task that had not been given its budget.

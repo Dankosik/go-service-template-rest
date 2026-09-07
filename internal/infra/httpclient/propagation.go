@@ -20,8 +20,6 @@ func (t propagationSanitizer) CloseIdleConnections() {
 
 func (t propagationSanitizer) RoundTrip(request *http.Request) (*http.Response, error) {
 	attempt := request.Clone(request.Context())
-	attempt.Header = request.Header.Clone()
-	attempt.Trailer = request.Trailer.Clone()
 	removeReservedHeaders(attempt.Header)
 	removeReservedHeaders(attempt.Trailer)
 	return t.base.RoundTrip(attempt) //nolint:wrapcheck // The transport error keeps its standard identity.

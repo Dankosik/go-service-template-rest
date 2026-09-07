@@ -9,10 +9,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
 
-func parseLoadOptions(args []string) (config.LoadOptions, error) {
-	return config.ParseLoadOptions(args)
-}
-
 func validateShutdownBudget(cfg config.Config) error {
 	return runtimeopts.ValidateGracePeriod(
 		cfg.HTTP.GracePeriod,

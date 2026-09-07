@@ -130,10 +130,8 @@ func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
 	}
 }
 
-// TestSetupMetricsPushesToOTLPCollector is the claim the finding rests on: a
-// deployment that can only be reached by a collector now receives metrics. The
-// Prometheus reader is asserted alongside it, because the OTLP reader is an
-// addition and must not have replaced the scrape path.
+// TestSetupMetricsPushesToOTLPCollector verifies that the configured collector
+// receives the recorded metric over OTLP.
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
@@ -228,10 +226,6 @@ func TestSetupMetricsSharedRootRejectsAmbientCredentials(t *testing.T) {
 // the deployments that scrape, which is the shape the template shipped with.
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
-// credentials from travelling to a collector this service named.
 func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
@@ -268,6 +262,8 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	}
 }
 
+// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
+// credentials from travelling to a collector this service named.
 func TestConflictingMetricExporterEnvNamesUnverifiableMaterial(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")

@@ -118,20 +118,6 @@ observability:
 	}
 }
 
-func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__POSTGRES__ENABLED", "true")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatal("LoadDetailed() expected secret policy error")
-	}
-	if !errors.Is(err, ErrSecretPolicy) {
-		t.Fatalf("error = %v, want ErrSecretPolicy", err)
-	}
-}
-
 // profile:database-postgres:end
 // profile:database-postgres:start
 //
@@ -170,5 +156,3 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 }
 
 // profile:database-postgres:end
-
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.

@@ -14,7 +14,7 @@ func TestParseLoadOptionsAcceptsTheSharedFlagSurface(t *testing.T) {
 
 	options, err := ParseLoadOptions([]string{
 		"--config", "base.yaml",
-		"--config-overlay", "one.yaml",
+		"--config-overlay", "  one.yaml  ",
 		"--config-overlay=two.yaml",
 	})
 	if err != nil {
@@ -34,15 +34,18 @@ func TestParseLoadOptionsRefusesWhatWouldStartTheWrongProcess(t *testing.T) {
 	t.Parallel()
 
 	for _, testCase := range []struct {
-		name string
-		args []string
+		name       string
+		args       []string
+		wantDetail string
 	}{
+		{name: "empty config path", args: []string{"--config", ""}},
+		{name: "empty overlay path", args: []string{"--config-overlay", ""}},
 		{name: "blank config path", args: []string{"--config", "   "}},
 		{name: "blank overlay path", args: []string{"--config-overlay", "   "}},
 		{name: "unknown flag", args: []string{"--unknown-flag"}},
 		// A positional argument is a mistyped flag often enough that accepting one
 		// would start a process with the configuration it was meant to replace.
-		{name: "positional argument", args: []string{"--config", "base.yaml", "serve"}},
+		{name: "positional argument", args: []string{"--config", "base.yaml", "serve"}, wantDetail: "serve"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
@@ -50,6 +53,9 @@ func TestParseLoadOptionsRefusesWhatWouldStartTheWrongProcess(t *testing.T) {
 			_, err := ParseLoadOptions(testCase.args)
 			if err == nil {
 				t.Fatalf("ParseLoadOptions(%q) error = nil, want a rejection", testCase.args)
+			}
+			if testCase.wantDetail != "" && !strings.Contains(err.Error(), testCase.wantDetail) {
+				t.Errorf("ParseLoadOptions(%q) err = %v, want detail %q", testCase.args, err, testCase.wantDetail)
 			}
 			if !strings.Contains(err.Error(), "parse flags") {
 				t.Errorf("ParseLoadOptions(%q) err = %v, want the parse flags stage named", testCase.args, err)

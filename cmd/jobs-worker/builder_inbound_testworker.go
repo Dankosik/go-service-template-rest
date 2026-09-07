@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"sync/atomic"
 
 	"github.com/example/go-service-template-rest/cmd/jobs-worker/internal/bootstrap"
 	"github.com/example/go-service-template-rest/internal/config"
@@ -18,8 +17,6 @@ import (
 	"github.com/riverqueue/river"
 	"go.opentelemetry.io/otel/metric"
 )
-
-var inboundTestCalls atomic.Int64
 
 func init() {
 	buildWorkers = func(_ context.Context, cfg config.Config, log *slog.Logger) (bootstrap.WorkersRuntime, error) {
@@ -35,7 +32,6 @@ func init() {
 				if err := inboundwebhook.Bind(reg, "orders", func(raw json.RawMessage) (json.RawMessage, error) {
 					return raw, nil
 				}, func(_ context.Context, delivery inboundwebhook.VerifiedDelivery, _ json.RawMessage) error {
-					inboundTestCalls.Add(1)
 					if marker := os.Getenv("INBOUND_WEBHOOK_TEST_MARKER"); marker != "" {
 						file, err := os.OpenFile(marker, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 						if err != nil {

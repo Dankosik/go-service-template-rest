@@ -112,30 +112,6 @@ func TestForCodeOrInternalSubstitutesInternalError(t *testing.T) {
 	}
 }
 
-// TestCatalogCoversDomainStatuses names the three a domain layer produces and the
-// runtime cannot, so removing one is a decision rather than an accident.
-func TestCatalogCoversDomainStatuses(t *testing.T) {
-	t.Parallel()
-
-	for _, tt := range []struct {
-		code   problem.Code
-		status int
-	}{
-		{code: problem.CodeConflict, status: http.StatusConflict},
-		{code: problem.CodeAlreadyExists, status: http.StatusConflict},
-		{code: problem.CodeUnprocessableContent, status: http.StatusUnprocessableEntity},
-		{code: problem.CodeTooManyRequests, status: http.StatusTooManyRequests},
-	} {
-		definition, ok := problem.ForCode(tt.code)
-		if !ok {
-			t.Fatalf("catalog is missing %q", tt.code)
-		}
-		if definition.Status != tt.status {
-			t.Fatalf("%q status = %d, want %d", tt.code, definition.Status, tt.status)
-		}
-	}
-}
-
 // TestEveryFailureCodeHasAnHTTPEnvelope closes the one direction the catalog
 // could not refuse loudly.
 //

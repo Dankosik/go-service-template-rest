@@ -17,10 +17,6 @@ const (
 	jobsTailBudget     = riverHardStopClose + diagnosticsClose + telemetryClose
 )
 
-func parseLoadOptions(args []string) (config.LoadOptions, error) {
-	return config.ParseLoadOptions(args)
-}
-
 func validateRuntimeConfig(cfg config.Config) error {
 	if !cfg.Postgres.Enabled {
 		return fmt.Errorf("%w: jobs worker requires postgres.enabled", config.ErrValidate)

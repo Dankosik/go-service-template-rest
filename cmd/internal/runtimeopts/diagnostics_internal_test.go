@@ -22,7 +22,7 @@ func TestDiagnosticsListenerStopForcesLocalTimeoutAndJoins(t *testing.T) {
 			<-request.Context().Done()
 		}),
 	}
-	served := &DiagnosticsListener{server: server, component: "test", done: make(chan struct{})}
+	served := &DiagnosticsListener{server: server, done: make(chan struct{})}
 	go func() {
 		defer close(served.done)
 		if serveErr := server.Serve(listener); !errors.Is(serveErr, http.ErrServerClosed) {

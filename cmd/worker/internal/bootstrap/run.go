@@ -35,7 +35,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	if buildHandler == nil {
 		return fmt.Errorf("%w: worker feature handler builder is not registered", natsjs.ErrRejected)
 	}
-	loadOptions, err := parseLoadOptions(args)
+	loadOptions, err := config.ParseLoadOptions(args)
 	if err != nil {
 		return err
 	}

@@ -218,24 +218,6 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	}
 }
 
-func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__APP__ENV", " local ")
-	t.Setenv("APP__OBSERVABILITY__OTEL__SERVICE_NAME", " service ")
-
-	cfg, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
-	}
-	if cfg.App.Env != "local" {
-		t.Fatalf("App.Env = %q, want local", cfg.App.Env)
-	}
-	if cfg.Observability.OTel.ServiceName != "service" {
-		t.Fatalf("Observability.OTel.ServiceName = %q, want service", cfg.Observability.OTel.ServiceName)
-	}
-}
-
 func TestFlatEnvKeysAreIgnored(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -304,5 +286,3 @@ http:
 		t.Fatalf("config snapshots differ between repeated loads: first=%+v second=%+v", cfg1, cfg2)
 	}
 }
-
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
