@@ -107,8 +107,10 @@ func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
 		env  map[string]string
 	}{
 		{name: "unsupported scheme", cfg: MetricExporterConfig{OTLPEndpoint: "ftp://collector.example"}},
+		// #nosec G101 -- Synthetic credentials verify rejection of userinfo before exporter construction.
 		{name: "userinfo", cfg: MetricExporterConfig{OTLPEndpoint: "https://user:secret@collector.example"}},
 		{name: "query", cfg: MetricExporterConfig{OTLPEndpoint: "https://collector.example/v1/metrics?token=secret"}},
+		// #nosec G101 -- Synthetic credentials verify the same rejection for ambient endpoints.
 		{name: "ambient endpoint", env: map[string]string{otelExporterMetricsEndpointEnv: "https://user:secret@platform.example"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

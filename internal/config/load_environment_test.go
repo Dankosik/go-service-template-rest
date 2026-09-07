@@ -200,6 +200,7 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	headers := " authorization=Bearer token, x-trace= spaced value "
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", headers)
 	// profile:database-postgres:start
+	// #nosec G101 -- Non-secret DSN fixture verifies exact preservation of credential-bearing input.
 	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
 	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
 	// profile:database-postgres:end

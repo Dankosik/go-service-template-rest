@@ -22,6 +22,7 @@ func writeTempConfig(t *testing.T, content string) string {
 func readEnvExample(t *testing.T, path string) map[string]string {
 	t.Helper()
 
+	// #nosec G304 -- Callers supply the repository-owned env/.env.example fixture path.
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("os.ReadFile(%q) error = %v", path, err)

@@ -6,6 +6,7 @@ import (
 )
 
 func TestValidateMessagingConfig(t *testing.T) {
+	// #nosec G101 -- This is a fixture path, not credential contents; validation performs no file I/O.
 	valid := MessagingConfig{
 		URLs:            " tls://one.example:4222 , tls://two.example:4222 ",
 		CredentialsFile: " /run/secrets/nats.creds ", Stream: " EVENTS ",

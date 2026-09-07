@@ -138,6 +138,7 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 
 	t.Run("postgres_enabled_with_dsn_allowed", func(t *testing.T) {
 		resetConfigEnv(t)
+		// #nosec G101 -- Fixed configuration fixture; no database connection is opened.
 		dsn := "postgres://app:app@localhost:5432/app?sslmode=disable"
 		t.Setenv("APP__POSTGRES__ENABLED", "true")
 		t.Setenv("APP__POSTGRES__DSN", dsn)
