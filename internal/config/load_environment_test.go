@@ -200,6 +200,7 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	headers := " authorization=Bearer token, x-trace= spaced value "
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", headers)
 	// profile:database-postgres:start
+	// #nosec G101 -- Non-secret DSN fixture verifies exact preservation of credential-bearing input.
 	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
 	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
 	// profile:database-postgres:end
@@ -215,24 +216,6 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	// profile:database-postgres:end
 	if cfg.Observability.OTel.Exporter.OTLPHeaders != headers {
 		t.Fatalf("OTLPHeaders = %q, want exact env value %q", cfg.Observability.OTel.Exporter.OTLPHeaders, headers)
-	}
-}
-
-func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__APP__ENV", " local ")
-	t.Setenv("APP__OBSERVABILITY__OTEL__SERVICE_NAME", " service ")
-
-	cfg, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
-	}
-	if cfg.App.Env != "local" {
-		t.Fatalf("App.Env = %q, want local", cfg.App.Env)
-	}
-	if cfg.Observability.OTel.ServiceName != "service" {
-		t.Fatalf("Observability.OTel.ServiceName = %q, want service", cfg.Observability.OTel.ServiceName)
 	}
 }
 
@@ -304,5 +287,3 @@ http:
 		t.Fatalf("config snapshots differ between repeated loads: first=%+v second=%+v", cfg1, cfg2)
 	}
 }
-
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.

@@ -73,14 +73,8 @@ func RegisterPprofHandlers(mux *http.ServeMux) {
 // listener, its serving goroutine, and the join, so a composition root only
 // starts it, watches one channel, and stops it — which is what lets a lifecycle
 // function read as lifecycle instead of as HTTP mechanics.
-//
-// component prefixes its two failures, for the reason [InstallTelemetry] takes
-// one: the binaries already publish their own names, and an operator matching on
-// "listen for worker diagnostics" should not have to know which shared helper
-// produced it.
 type DiagnosticsListener struct {
-	server    *http.Server
-	component string
+	server *http.Server
 	// done closes once Serve has returned and serveErr is written, so serveErr
 	// needs no lock: the close is the only publication of it.
 	done     chan struct{}
@@ -103,9 +97,8 @@ func ListenDiagnostics(
 		return nil, fmt.Errorf("listen for %s diagnostics: %w", component, err)
 	}
 	served := &DiagnosticsListener{
-		server:    DiagnosticsServer(ready, metrics, pprofEnabled),
-		component: component,
-		done:      make(chan struct{}),
+		server: DiagnosticsServer(ready, metrics, pprofEnabled),
+		done:   make(chan struct{}),
 	}
 	go func() {
 		defer close(served.done)

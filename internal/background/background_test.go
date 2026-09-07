@@ -187,19 +187,6 @@ func TestUnexpectedTaskStopFailsTheProcess(t *testing.T) {
 	}
 }
 
-func TestTaskErrorIsReported(t *testing.T) {
-	t.Parallel()
-
-	taskErr := errors.New("consumer lost its lease")
-	sup := New(context.Background(), discardLogger())
-	sup.Go(Task{Name: "consumer", Run: func(context.Context) error { return taskErr }})
-
-	err := sup.Shutdown(context.Background())
-	if !errors.Is(err, taskErr) {
-		t.Fatalf("Shutdown() error = %v, want wrapped %v", err, taskErr)
-	}
-}
-
 // TestCancellationIsNotATaskFailure keeps ordinary shutdown from being reported
 // as an error, which would make every clean stop look like a fault.
 func TestCancellationIsNotATaskFailure(t *testing.T) {

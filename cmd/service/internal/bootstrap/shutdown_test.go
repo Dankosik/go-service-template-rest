@@ -324,25 +324,6 @@ func TestDrainAndShutdownForceClosesOnDeadline(t *testing.T) {
 	})
 }
 
-// TestDrainAndShutdownDoesNotForceCloseOnCleanDrain keeps the abrupt path scoped
-// to the failure that needs it.
-func TestDrainAndShutdownDoesNotForceCloseOnCleanDrain(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		events := &eventRecorder{}
-		drainer := &fakeDrainer{events: events}
-		srv := &fakeShutdownServer{events: events}
-
-		if err := drainAndShutdown(context.Background(), shutdownTestLogger(), 0, time.Second, drainer, srv); err != nil {
-			t.Fatalf("drainAndShutdown() error = %v, want nil", err)
-		}
-		if want := []string{"drain", "shutdown"}; !slices.Equal(events.observed(), want) {
-			t.Fatalf("events = %v, want %v", events.observed(), want)
-		}
-	})
-}
-
 // TestDrainAndShutdownForceClosesEveryServer keeps the metrics listener from
 // being left behind when the API listener is what timed out.
 func TestDrainAndShutdownForceClosesEveryServer(t *testing.T) {

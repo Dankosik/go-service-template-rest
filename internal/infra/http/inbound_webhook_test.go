@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -97,8 +96,6 @@ func TestInboundWebhookRawDispatch(t *testing.T) {
 func TestInboundWebhookRequestValidation(t *testing.T) {
 	t.Parallel()
 
-	receiver := &recordingReceiver{outcome: inboundwebhook.OutcomeAccepted}
-	handler := inboundRouter(t, receiver, RouterConfig{})
 	cases := []struct {
 		name    string
 		path    string
@@ -113,6 +110,9 @@ func TestInboundWebhookRequestValidation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
+			receiver := &recordingReceiver{outcome: inboundwebhook.OutcomeAccepted}
+			handler := inboundRouter(t, receiver, RouterConfig{})
 			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, tc.path, strings.NewReader(`{}`))
 			req.Header.Set("Content-Type", tc.ctype)
 			for key, values := range tc.headers {
@@ -126,13 +126,13 @@ func TestInboundWebhookRequestValidation(t *testing.T) {
 			if strings.Contains(resp.Body.String(), "msg_123") || strings.Contains(resp.Body.String(), "v1,sig") {
 				t.Fatalf("response leaked submitted value: %s", resp.Body.String())
 			}
+			receiver.mu.Lock()
+			defer receiver.mu.Unlock()
+			if receiver.calls != 0 {
+				t.Fatalf("receiver calls = %d, want none for malformed requests", receiver.calls)
+			}
 		})
 	}
-	receiver.mu.Lock()
-	if receiver.calls != 0 {
-		t.Fatalf("receiver calls = %d, want none for malformed requests", receiver.calls)
-	}
-	receiver.mu.Unlock()
 
 	unknown := &recordingReceiver{outcome: inboundwebhook.OutcomeUnknownEndpoint}
 	unknownHandler := inboundRouter(t, unknown, RouterConfig{})
@@ -296,7 +296,6 @@ func TestInboundWebhookResponseContract(t *testing.T) {
 			t.Fatalf("status = %d want 504 body=%q", resp.Code, resp.Body.String())
 		}
 	})
-	_ = io.Discard
 }
 
 // profile:inbound-webhooks-standard:end

@@ -11,10 +11,9 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/background"
-	// profile:bootstrap-config:start
 	"github.com/example/go-service-template-rest/internal/config"
-	// profile:bootstrap-config:end
 	"github.com/example/go-service-template-rest/internal/failure"
+
 	// profile:http-idempotency-postgres:start
 	"github.com/example/go-service-template-rest/internal/httpidempotency"
 	// profile:http-idempotency-postgres:end
@@ -112,7 +111,7 @@ func Run(args []string) error {
 }
 
 func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
-	loadOptions, err := parseLoadOptions(args)
+	loadOptions, err := config.ParseLoadOptions(args)
 	if err != nil {
 		return err
 	}

@@ -53,7 +53,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if buildWorkers == nil {
 		return errors.New("jobs worker builder is not registered")
 	}
-	loadOptions, err := parseLoadOptions(args)
+	loadOptions, err := config.ParseLoadOptions(args)
 	if err != nil {
 		return err
 	}

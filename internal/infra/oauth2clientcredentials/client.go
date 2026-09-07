@@ -45,9 +45,6 @@ func New(cfg Config) (*Client, error) {
 }
 
 func newClient(acquire acquireToken, closeIdle func()) *Client {
-	if closeIdle == nil {
-		closeIdle = func() {}
-	}
 	processCtx, cancel := context.WithCancel(context.Background())
 	client := &Client{closeIdle: closeIdle, cancel: cancel}
 	if acquire != nil {

@@ -78,6 +78,7 @@ func TestJobsWorkerRequiresWebhookSecretsWhenEnabled(t *testing.T) {
 func setJobsWorkerConfigEnv(t *testing.T) {
 	t.Helper()
 	clearConfigEnv(t)
+	// #nosec G101 -- Fixed configuration fixture; the loader performs no database I/O.
 	for key, value := range map[string]string{
 		"APP__APP__ENV":                 "local",
 		"APP__POSTGRES__ENABLED":        "true",

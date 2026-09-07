@@ -132,6 +132,9 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 	if received.Header.Get("X-Provider") != "retained" || request.Header.Get("Traceparent") != "stale" {
 		t.Fatal("sanitizer changed an allowed or original header")
 	}
+	if request.Trailer.Get("Baggage") != "secret=trailer" {
+		t.Fatal("sanitizer changed the original trailer")
+	}
 	if baseCalls != 1 {
 		t.Fatalf("base calls = %d, want 1", baseCalls)
 	}

@@ -132,39 +132,6 @@ func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 	_ = cleanup(cleanupCtx)
 }
 
-func TestWorkerCompositionHelpers(t *testing.T) {
-	options, err := parseLoadOptions([]string{
-		"--config", "config.yaml",
-		"--config-overlay", "first.yaml",
-		"--config-overlay", "second.yaml",
-	})
-	if err != nil {
-		t.Fatalf("parseLoadOptions() error = %v", err)
-	}
-	if options.ConfigPath != "config.yaml" || len(options.ConfigOverlays) != 2 || options.ConfigOverlays[1] != "second.yaml" {
-		t.Fatalf("parseLoadOptions() = %+v", options)
-	}
-	for _, args := range [][]string{
-		{"--config", ""},
-		{"--config-overlay", ""},
-		{"unexpected"},
-	} {
-		if _, err := parseLoadOptions(args); err == nil {
-			t.Fatalf("parseLoadOptions(%q) error = nil", args)
-		}
-	}
-
-	clientCfg := runtimeopts.Messaging(config.MessagingConfig{
-		URLs: " nats://one:4222, nats://two:4222 ", Stream: "EVENTS", MaxPayloadBytes: 1024,
-	})
-	if len(clientCfg.URLs) != 2 || clientCfg.URLs[0] != "nats://one:4222" || clientCfg.URLs[1] != "nats://two:4222" {
-		t.Fatalf("runtimeopts.Messaging() URLs = %q", clientCfg.URLs)
-	}
-	if clientCfg.Stream != "EVENTS" || clientCfg.MaxPayloadBytes != 1024 {
-		t.Fatalf("runtimeopts.Messaging() = %+v", clientCfg)
-	}
-}
-
 func TestHandlerCleanupSafetyTracksWorkerExit(t *testing.T) {
 	stopped := make(chan struct{})
 	close(stopped)

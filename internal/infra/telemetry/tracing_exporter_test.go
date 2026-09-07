@@ -147,6 +147,7 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 			raw:     "ftp://otel.example.com:4318/v1/traces",
 			wantErr: "unsupported scheme",
 		},
+		// #nosec G101 -- Synthetic credentials verify userinfo rejection and error redaction.
 		{
 			name:    "userinfo",
 			raw:     "https://user:secret-value@otel.example.com:4318/v1/traces",

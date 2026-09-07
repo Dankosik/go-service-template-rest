@@ -7,6 +7,7 @@ import (
 )
 
 func TestOutboundAuthConfigIsThePortableMinimum(t *testing.T) {
+	// #nosec G101 -- Fixed non-secret input for configuration validation; no token request is made.
 	valid := OutboundAuthConfig{
 		TokenURL:     "HTTPS://AUTH.EXAMPLE.COM/oauth/token",
 		ClientID:     "client",

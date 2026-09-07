@@ -95,13 +95,6 @@ func TestBuildTraceSampler(t *testing.T) {
 	}
 }
 
-func TestExporterOptionTypeCompatibility(t *testing.T) {
-	t.Parallel()
-
-	// Guard against accidental option-type drift when upgrading OTLP exporter package.
-	var _ []otlptracehttp.Option
-}
-
 func setupTracingForEnvPolicyTest(t *testing.T, exporter TraceExporterConfig) error {
 	t.Helper()
 

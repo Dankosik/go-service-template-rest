@@ -49,7 +49,7 @@ func isHealthCheck(fullMethod string) bool {
 // is a trust decision, and over-matching there publishes an RPC nobody meant to
 // publish.
 // profile:authn-bearer:start
-// internal/infra/oidcjwt/grpc.go names Check exactly for that reason.
+// internal/infra/bearerauthn/grpc.go names Check exactly for that reason.
 // profile:authn-bearer:end
 func isHealthMethod(fullMethod string) bool {
 	return strings.HasPrefix(fullMethod, healthMethodPrefix)
