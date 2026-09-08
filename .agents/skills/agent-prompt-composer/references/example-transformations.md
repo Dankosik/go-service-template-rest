@@ -1,57 +1,49 @@
 # Example Transformations
 
-These examples show the shortest routing-sufficient prompt for each fixture.
+These examples calibrate tone and useful detail. They are work messages, not
+formats to copy. Technical precision belongs where it defines the requested
+result; the executor chooses the working method.
 
 ## Example 1: HTTP OPTIONS / CORS Policy Bug
 
 Raw fixture: `files/http-options-cors.md`
 
 ```md
-Fix and regression-test HTTP `OPTIONS` handling: a known non-preflight route returns `204 No Content` with the correct `Allow` header, while disabled CORS preflight remains fail-closed. Preserve intentional `problem+json` behavior; OpenAPI and generated bindings stay unchanged.
+Please fix OPTIONS handling for existing routes. A normal OPTIONS request should return 204 with the correct Allow header. CORS preflight must still be rejected when CORS is disabled.
 
-Inspect `internal/infra/http/router.go` and `internal/infra/http/router_contract_test.go`. Current router ownership makes this reversible, one-owner work with focused `./internal/infra/http` tests as bounded proof. Reopen if inspection disproves that ownership, contract neutrality, or proof boundary.
-
-Path: `direct` -> Implementation.
+Keep the problem+json behavior stable, and leave OpenAPI unchanged unless the public contract actually changes. There may be relevant tests in router_contract_test.go.
 ```
 
 ## Example 2: Repo-Local Skill / Prompt Tooling Request
 
-Raw fixture: `files/skill-tooling.md`
+Raw fixture: `files/skill-tooling.md` (explicitly requests English output)
 
 ```md
-Revise `.agents/skills/agent-prompt-composer/` so arbitrary messy input becomes the shortest routing-sufficient English Intake prompt, not a translation. Canonical Intake owns the contract; preserve exact identifiers and add repository context only when it changes routing. Keep the skill and useful examples aligned, create no global or home-directory skill, and validate with `git diff --check`.
+Please update this repository's agent-prompt-composer skill so it can turn rough notes, dictation, and mixed-language input into a clear English task message for someone already working here. It should capture what the user wants and include useful repository context so the recipient can get started.
 
-Path: `direct` -> Implementation.
+Keep the change local to this repository and update the examples to reflect it.
 ```
 
 ## Example 3: Flaky Shutdown / Drain Investigation
 
-Raw fixture: `files/flaky-shutdown.md`
+Raw fixture: `files/flaky-shutdown.md` (mixed language; this version uses English)
 
 ```md
-Find and fix the root cause of the flaky shutdown/drain path where `context canceled` may be swallowed or a worker may fail to stop, hanging the test. Preserve graceful shutdown and readiness; do not raise the timeout unless evidence makes timeout behavior the contract. Start with `cmd/service/internal/bootstrap/`, `internal/health/service.go`, and nearby lifecycle tests. Success requires targeted regression proof plus race or integration proof when the affected boundary demands it.
+Please investigate and fix the intermittent shutdown/drain hang. It looks like context canceled may be getting swallowed, or a worker may not be stopping. Bootstrap and health/readiness are possible starting points.
 
-If bounded inspection cannot identify the failing owner or reproducer, stop with the evidence and smallest next diagnostic target.
-
-Path: `structured` -> Research, because the lifecycle cause and proof boundary remain open.
+We need shutdown to finish reliably while preserving graceful drain and readiness behavior. Don't just increase the timeout to hide the hang. Check for a race or integration issue if the investigation points there.
 ```
 
 ## Example 4: Ready Native Orchestrator Entry
 
-Codex:
+The user wants to continue an accepted ledger and stop before live rollout.
+For Codex:
 
 ```text
 $orchestrator
-Use specs/category-mapping-knn-first/tasks.md. Stop before live rollout.
+Please continue the work in specs/category-mapping-knn-first/tasks.md. Stop before live rollout.
 ```
 
-Claude Code or Qwen Code:
-
-```text
-/orchestrator
-Use specs/category-mapping-knn-first/tasks.md. Stop before live rollout.
-```
-
-The native skill and ledger own role behavior, workflow, accepted decisions,
-proof, and current state; the prompt carries only the locator and missing stop
-delta.
+Use the target environment's invocation syntax, such as `/orchestrator` in
+Claude Code. The ledger supplies the detailed task state; the message explains
+the request and preserves the user's rollout boundary.

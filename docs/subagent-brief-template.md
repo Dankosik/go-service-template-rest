@@ -1,10 +1,13 @@
 # Subagent Brief Template
 
-Use only the fields that can change the delegated result or stop decision.
+Write the assignment as a work message to a capable colleague, following
+[Prompt Composition](prompt-composition.md). The fields below are optional
+prompts for relevant information, not a required message format. Use natural
+prose when it is clearer, and keep only what matters to this assignment.
 
 Describe the result the parent needs to consume, rather than an activity such
 as "explore" or "review". When its purpose is not obvious, name the decision or
-next action it informs in Outcome.
+next action it informs.
 
 ```text
 Mode: decide | implement | investigate | verify | review

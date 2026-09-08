@@ -97,7 +97,7 @@ turning missing technical policy into a user decision.
 | Review result fields and verdict values | [Review Result V1](spec-first-workflow/interfaces/review-result-v1.md) |
 | Read-only lane eligibility | [Read-Only Delegation](spec-first-workflow/shared/read-only-delegation.md) |
 | Read-only lane result fields | [Lane Result V1](spec-first-workflow/interfaces/lane-result-v1.md) |
-| Prompt packaging and no-duplication contract | [Prompt Composition](prompt-composition.md) |
+| Task messages, useful context, and executor discretion | [Prompt Composition](prompt-composition.md) |
 | Resume after interruption and terminal cleanup | Their separate shared owners |
 | Domain judgment | `.agents/skills/<domain>` |
 | Domain decision result fields | [Decision Result V1](spec-first-workflow/interfaces/decision-result-v1.md) |
