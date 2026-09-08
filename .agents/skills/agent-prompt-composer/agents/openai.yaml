@@ -1,5 +1,5 @@
 interface:
   display_name: "Agent Prompt Composer"
-  short_description: "Package a repository-grounded prompt"
+  short_description: "Write clear task messages for a capable colleague"
 policy:
   allow_implicit_invocation: false

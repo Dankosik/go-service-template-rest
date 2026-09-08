@@ -3,51 +3,67 @@
 Read this owner when writing a prompt for another agent, session, phase, or
 repository-native entry skill.
 
-A prompt is a locator plus the smallest missing decision delta. Repository
-instructions own how to work; accepted artifacts own behavior, mechanism,
-proof, and current state. Point to those owners instead of copying them.
+Write as if sending a work message to a capable colleague who will carry out
+the task. Explain what needs to happen, why it matters when useful, and what a
+good result means. Trust the receiver to choose how to investigate, implement,
+and check the work.
 
-## Native Entry Fast Path
+## The Message
 
-When the target has a native skill or default prompt and its artifact is ready,
-return only:
+Recover the intended request from rough notes, dictation, repetition, or mixed
+languages. Keep the user's meaning and level of commitment. Use the requested
+language; otherwise follow the conversation. Return a message ready to send.
 
-```text
-<native-skill-entry>
-Use <artifact path>.          # only when discovery is ambiguous
-<new authority or stop delta> # only when absent from the artifact
-```
+Use ordinary sentences and familiar words. Add a short list when it makes
+distinct requirements easier to read. Let the task determine the length and
+shape; neither a fixed template nor the fewest possible words is the goal.
 
-Use `$<skill>` in Codex and `/<skill>` in Claude Code, Qwen Code, Grok Build, Cursor, or OpenCode.
-The syntax selects a carrier; it does not change the skill's semantic
-contract. In Grok Build a user prompt in the primary session is the launch;
-do not require a prepared CLI launch. OpenCode discovers `.agents/skills`
-through the `skill` tool; `/orchestrator` is the project command that binds the
+Include context the receiver needs to understand the request, especially facts
+that would otherwise remain in this conversation. Link relevant files or
+accepted work with a brief explanation of their purpose. Repository
+instructions and accepted artifacts supply the detailed working context;
+a short restatement is useful when it makes the request understandable.
+
+Preserve exact user-supplied values, identifiers, behavior, scope, and authority
+limits. Carry explicit phase stops and external-effect boundaries across a
+handoff. Distinguish a suspected cause from a verified fact. Use
+[Intake](spec-first-workflow/phases/intake.md) when a missing user-owned decision
+would materially change the request; technical choices belong to the receiver.
+
+## Leave Room For Judgment
+
+Describe the desired outcome and real constraints. Leave investigation order,
+tools, implementation details, and routine validation to the executor unless
+the user has chosen them or an established requirement makes them necessary.
+An uncertain starting point can be a useful lead without becoming an instruction
+to follow a particular path.
+
+Avoid role play, motivational language, prompt-engineering formulas, prescribed
+reasoning steps, and reminders to be competent or thorough. Do not invent scope,
+acceptance gates, approval rounds, or stop conditions while polishing a request.
+The receiver discovers repository instructions through its normal environment.
+
+## Entry Points And Handoffs
+
+A ready artifact can make the message very short: ask the receiver to continue
+the work it describes and include any new context or limit. Use a native skill
+invocation when it selects the requested workflow, without reducing every
+message to an invocation and a path.
+
+Use `$<skill>` in Codex and `/<skill>` in Claude Code, Qwen Code, Grok Build,
+Cursor, or OpenCode. The syntax selects the entry point; it does not change the
+task. In Grok Build, the primary-session message launches the work. OpenCode
+discovers `.agents/skills` through the `skill` tool; `/orchestrator` binds the
 Orchestrator carrier.
 
-This is normally one to three lines. Omit any line already supplied by the
-native entrypoint, current repository, or named artifact.
-
-## General Prompt
-
-Retain only information unavailable to the receiving agent that can change its
-accepted outcome, business meaning, scope, authority, target, first owner, or
-stop/reopen condition. Preserve exact user-supplied values and identifiers. Use
-[Intake](spec-first-workflow/phases/intake.md) only when one of those decisions
-is unresolved.
-
-Do not restate role duties, repository workflow, phase methods, read order,
-artifact contents, accepted architecture, review history, proof matrix,
-validation commands, model/effort/isolation fields, or generic quality language.
-Do not tell the receiver to read `AGENTS.md`; the harness and repository own
-instruction discovery. The receiving agent loads its current authorities.
-
-Use the [Subagent Brief Template](subagent-brief-template.md) for a delegated
-lane and [Transition](spec-first-workflow/shared/transition.md) for boundary state;
-neither changes this no-duplication rule.
+Use the [Subagent Brief Template](subagent-brief-template.md) for information
+needed by a delegated lane and [Transition](spec-first-workflow/shared/transition.md)
+for boundary state. Required machine fields and exact protocol tokens keep
+their existing contracts; the accompanying request can still use natural prose.
 
 ## Completion
 
-The receiver can start from the locator and authoritative state without chat
-reconstruction, and removing any remaining sentence would lose a decision that
-no named owner supplies.
+The message is ready when a capable colleague could understand the task,
+recognize the result and real limits, and begin without reconstructing the
+conversation. Remove wording that manages their every move or adds no useful
+meaning; keep the context that makes the request clear.
