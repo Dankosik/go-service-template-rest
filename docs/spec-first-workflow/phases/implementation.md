@@ -123,13 +123,19 @@ Apply [Review](../shared/review.md) only at this final boundary, never per task.
 Keep the assembled candidate unchanged while checks or review consume it. Join
 or stop those readers before repair, then rerun only invalidated evidence.
 
-Only when the accepted task explicitly requires an expensive environment run,
-compile the relevant test surface and
-collect cheap failures across the connected production/test projects, required
-tags, generated clients, and accepted intermediate release versions. Do not
-let one failing project hide independent diagnostics. Resolve those failures
-before expensive scenarios; retain sufficient current results under the Evidence
-Contract rather than rerunning them as a separate gate.
+Within the selected validation plan, collect cheap mechanical failures before
+expensive execution. Cover affected production/test projects, required build
+variants, generated clients, and accepted intermediate release versions;
+one failing project must not hide independent diagnostics.
+
+When runtime or integration proof is already required, prioritize the smallest
+existing scenario that can expose incompatibility at the changed boundary
+before broader scenario expansion. Select from the actual change: startup
+configuration, migration/runtime compatibility, serialized values, or retained
+background processing. Use representative inputs for the suspected failure.
+
+This ordering adds no mandatory scenarios or infrastructure. Reuse sufficient
+current evidence under the Evidence Contract.
 
 If the task explicitly includes a runner or infrastructure fixture, execute its
 smallest complete scenario
@@ -146,13 +152,20 @@ run invalidated.
 Classify failure as product, test/oracle, or environment. For an optional check's
 unavailable or broken environment, record its material gap and stop that path;
 do not provision or repair infrastructure to finish ordinary development.
-Required checks and concrete in-scope product defects retain a repair owner,
-even if an optional check exposed the defect. Assign the causal repair and its smallest discriminating rerun to the same executor, with the
-current candidate, diagnostics, runner, writable scope, and existing resource
-authority. The executor may run that focused check after repair; an old
-implementation-only brief does not force a code-only handoff here. Keep final
-acceptance with the delivery owner. A read-only reviewer never becomes the
-repair executor.
+Required checks and concrete in-scope defects retain a repair owner, including
+defects exposed by optional checks. Assign diagnosis, source or fixture repair,
+execution-input preparation, and the smallest discriminating rerun to the same
+executor, with the current candidate, diagnostics, runner, writable scope,
+and existing resource authority.
+
+The executor continues this loop without a coordinator handoff between edits,
+input preparation, and reruns. Return the repaired result with its evidence,
+or a concrete blocker requiring another owner's decision. Retire superseded
+code-only repair briefs when entering this stage.
+
+Preserve required candidate identities, validation locks, and review
+independence. Final acceptance stays with the delivery owner; publication
+and production effects retain their applicable authority and gates.
 
 When the cause is still uncertain, select the next run for the explanations it
 can distinguish. If failure occurred before the intended behavior, check the

@@ -156,7 +156,16 @@ review gate. Assign one general-purpose Lead the final delivery boundary after
 assembly; it owns consolidated proof and acceptance. The Orchestrator records
 that final result without repeating it.
 
-Send only the changed dependency, question, status, or identity. Use
+Send a message when it supplies a new input, changes a constraint or dependency,
+answers a blocking question, or corrects the current approach. Let an active
+owner continue an authorized repair loop without repeated "continue" or
+status requests.
+
+While no intervention is needed, use native result delivery or event-driven
+waiting. Inspect progress at the agreed checkpoint or on a failure signal;
+silence alone does not justify another instruction or reassignment.
+
+Use
 `collaboration.send_message` to steer an active agent; it does not start a turn.
 For idle or completed work, use `collaboration.followup_task` within the permitted
 reuse boundary. Before waiting for the requested result, establish that dispatch
