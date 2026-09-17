@@ -14,9 +14,12 @@ Load this reference when:
 permanent blocking. It does not prevent leaks, and an empty profile is not
 proof that no goroutine is leaking.
 
-Before implementation, record the goroutine owner, maximum population, stop
+For interacting goroutines, exhaustive blocking-site coverage, or a required
+decision/review handoff, record the goroutine owner, maximum population, stop
 signal, every blocking site and its unblock event, join point, and whether any
-abandonment is valid only because the process exits next.
+abandonment is valid only because the process exits next. Otherwise a single
+local path may keep the same grounded judgment and evidence in code or existing
+task state, retaining every relevant blocking, unblock, and join disposition.
 
 ## Coverage
 
@@ -50,7 +53,7 @@ joined.
 - Use `testing/synctest` for deterministic time and scheduling.
 - Use package `goleak` for unexpected test survivors, including unsupported
   blocking classes.
-- Use `-race` for conflicting shared-memory access.
+- Retain race evidence for conflicting shared-memory access.
 - Use the ordinary `goroutine` profile for broad inventory, including I/O waits.
 - Use `goroutineleak` for high-confidence production partial deadlocks.
 
@@ -67,9 +70,10 @@ or returning from a reusable component while owned goroutines still run.
 ## Prove
 
 For a changed concurrent path, deterministically reach each relevant blocking
-site, stop its owner, assert the join, run the package's existing `goleak`
-gate, use `-race` when shared state overlaps, and test the pprof gate when
-diagnostics routing changes.
+site, stop its owner, assert the join, retain survivor, race, and diagnostics
+evidence where their respective claims apply, and use
+[Validation Routing](../../../../docs/validation-routing.md) to select the
+existing commands and timing.
 
 During an incident, capture build identity, `goroutineleak`, the ordinary
 goroutine profile, timestamp and workload, and whether pprof exposure changed.

@@ -43,6 +43,6 @@ statement, a template, a subprocess, or a filesystem path.
 
 Table cases at the owning boundary for accepted, rejected, boundary-length, and
 duplicate inputs, asserting that rejection happens before the side effect rather
-than that a status was returned. `make gosec` and `make govulncheck` run
-`govulncheck`, which find pattern and dependency classes; neither shows an
-allowlist is complete.
+than that a status was returned. [Security Validation](../../../../docs/validation/security.md)
+owns scanner selection and execution routing. Static pattern and dependency
+scans do not establish that an allowlist is complete.

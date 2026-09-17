@@ -1,6 +1,6 @@
 ---
 name: go-api-contract
-description: "Observable contract. Use when a REST change can alter what a deployed client distinguishes across success, error, replay, async recovery, or compatibility."
+description: "Use when a REST change can alter what a deployed client distinguishes across success, error, replay, async recovery, or compatibility."
 metadata:
   invocation: model
   kind: method
@@ -16,11 +16,14 @@ can detect is a clause.
 For a delegated Decision or Review, or when the active artifact requires its
 result interface, load the
 [shared specialist contract](../../contracts/specialist-contract.md).
-For each affected operation, build one `ObservableCell{surface, old, accepted,
+When meaningful ordering, comparison, exhaustive accounting, or a required
+decision/review handoff needs structured representation, build `ObservableCell{surface, old, accepted,
 client_consequence, owner, proof}` matrix from
 `api/openapi/service.yaml`, the serving router, `internal/problem`, and affected
 consumers. Each changed cell names the old behavior, accepted behavior, client
 consequence, canonical owner, and proof.
+Otherwise, a single local path may use a grounded observable judgment and
+matching proof while retaining each affected negative, replay, and unknown outcome.
 
 Status, body shape or absence, error code and details, default and nullability,
 pagination order and cursor, resource identity, retry outcome, and unknown

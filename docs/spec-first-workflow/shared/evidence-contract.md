@@ -1,18 +1,16 @@
 # Evidence Contract
 
-Canonical sufficiency and evidence semantics for local completion, verification,
-and external readiness claims.
+Evidence semantics and exceptions for local completion, verification, and
+external readiness claims. Load for claim scope, reuse, additional required
+proof, external readiness, or unavailable infrastructure; ordinary local work
+uses [AGENTS.md](../../../AGENTS.md#validation-budget) without loading this file.
 
 ## Local Completion
 
-For ordinary Go development, local completion requires the agreed behavior and
-tests to be implemented, the relevant deliverable to build, relevant unit tests
-to pass, and no known concrete defect in the changed outcome. Resolve any final
-review selected by [Review](review.md). These are sufficient local acceptance
-criteria, not a guarantee that every production behavior has been observed.
-Choose existing commands through [Validation Routing](../../validation-routing.md).
-Instruction-only work instead uses static consistency review and the matching
-existing structural check; it does not require building or running the service.
+The ordinary local criterion is owned by [AGENTS.md](../../../AGENTS.md#validation-budget).
+It establishes sufficient local acceptance, not observation of every production
+path. For mixed or specialized proof, [Validation Routing](../../validation-routing.md)
+selects existing commands.
 
 Unit tests must meaningfully check changed behavior in the existing style and
 actually execute or have valid reusable results. Written tests alone, a selector

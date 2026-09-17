@@ -8,32 +8,22 @@ admission concurrency, or how many requests may be in flight at once.
 
 ## Decide
 
-- `GOMAXPROCS` is deliberately unset (`cmd/service/internal/bootstrap/runtime_limits.go`).
-  Since Go 1.25 the runtime defaults it from the cgroup CPU bandwidth limit and
-  re-reads it as that limit changes; setting it through the environment or
-  `runtime.GOMAXPROCS` disables **both** behaviors. An `automaxprocs`-style
-  dependency is a regression here, not an addition.
-- `GOMEMLIMIT` is published at startup as `runtime.memory_limit_ratio` (default
-  `0.9`) times the detected cgroup limit, through automemlimit's
-  `memlimit.FromCgroup` and `debug.SetMemoryLimit`. It is skipped when the
-  platform already set `GOMEMLIMIT`, when there is no cgroup limit, or when the
-  ratio rounds to zero — each skip logs `runtime_memory_limit_skipped` with a
-  `reason`. Whether the GC has a limit is a log line to read, not a guess.
-- `GOGC` is never set by this service. Changing it is a new decision trading CPU
-  for memory against a limit the GC already has; state which one is scarce.
-- The admission constants are ordered on purpose across `internal/config/http_config.go`
-  and `internal/config/postgres_config.go`, each stating the relation from its own side:
-  `http.max_in_flight` (256) sits **above** `postgres.max_open_conns` (25) so
-  shedding engages after the pool saturates rather than before it is used, and
-  `http.max_connections` (4096) sits above both so the informative `503` stays
-  the common rejection and the kernel backlog is only the backstop. Raising the
-  pool to "match" concurrency moves the queue somewhere with no answer to send.
-- Admitted request bodies cost `http.max_in_flight` × `http.max_body_bytes`
-  (defaults: 256 MiB). `reportRequestBufferBudget` compares that product against
-  a quarter of the GC's limit and warns `runtime_request_buffer_budget_exceeded`.
-  Raising `max_body_bytes` for uploads multiplies it, and the first symptom
-  otherwise is GC CPU against a limit live data has already passed, then an OOM
-  kill — while readiness still reports healthy.
+- `cmd/service/internal/bootstrap/runtime_memory_limit.go` owns memory-limit
+  application and skip reasons. Preserve Go's container-aware `GOMAXPROCS`
+  default unless the accepted workload requires an override; an environment or
+  runtime override disables automatic CPU-limit updates.
+- Compare memory policy with the detected container limit and platform settings.
+  Read the owner's applied/skipped startup signal before claiming a GC limit;
+  changing `GOGC` trades CPU for memory and needs evidence of which is scarce.
+- `internal/config/http_config.go` and `internal/config/postgres_config.go` own
+  admission, connection and pool capacity. Use their current values and the
+  accepted workload instead of copying defaults into this method. Raising the
+  pool to match HTTP concurrency can move a queue into the database rather than
+  improve throughput; preserve an informative overload rejection path.
+- `cmd/service/internal/bootstrap/runtime_request_buffer_budget.go` owns the
+  request-buffer estimate and warning. Relate admitted bodies to container
+  memory before increasing body size or in-flight concurrency; readiness alone
+  does not establish memory headroom.
 
 ## Reject
 

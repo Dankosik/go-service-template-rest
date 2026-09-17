@@ -25,7 +25,12 @@ A cache read can return the correct value while the entry is stale, because the 
 - "The migration applies cleanly" as the whole migration claim, with no old/new compatibility and no backfill resumption.
 
 ## Reopen
-- Durable proof here lives in `./test/...` behind `//go:build integration`. `pgtest.DSN(tb)` and `pgtest.Migrated(tb, …)` create a per-test database on one shared, digest-pinned container, so a real-database row costs little and a mock is rarely the honest choice.
+- When engine-owned semantics are the claim, durable proof belongs in
+  `./test/...` behind `//go:build integration`. `pgtest.DSN(tb)` and
+  `pgtest.Migrated(tb, …)` create a per-test database on one shared,
+  digest-pinned container; retain real-store evidence instead of a mock for
+  those semantics. [Validation Routing](../../../../../docs/validation-routing.md)
+  selects commands and timing.
 - A fake cache proves serialization and TTL only if the fake implements them; connection-failure and eviction behavior need the real client.
 
 ## Prove

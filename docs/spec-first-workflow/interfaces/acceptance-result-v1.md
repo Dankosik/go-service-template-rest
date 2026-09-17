@@ -37,9 +37,12 @@ invalidated_receipts: <evidence invalidated by repair; omit when none>
 next_owner: <exact remaining action and owner, or none>
 ```
 
-Accepted requires the [Evidence Contract](../shared/evidence-contract.md#local-completion)'s
-local criterion, explicit task additions, resolved blocking findings, and any
-final review selected by [Review](../shared/review.md). Missing optional
+Accepted requires the ordinary local criterion in
+[AGENTS.md](../../../AGENTS.md#validation-budget), explicit task additions,
+resolved blocking findings, and any final review selected by
+[Review](../shared/review.md). Load the
+[Evidence Contract](../shared/evidence-contract.md) for explicit additions,
+reuse, claim scope, or unavailable infrastructure. Missing optional
 integration or runtime observations do not block local Accepted. Use existing
 evidence and next_owner fields to state scope and material gaps; no new status
 or proof artifact is needed.

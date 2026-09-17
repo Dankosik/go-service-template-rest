@@ -1,6 +1,6 @@
 # Reference Selector
 
-State the expected decision effect and load one matching reference by default.
+Load one matching reference; load another only for an independent pressure.
 
 | Pressure | Load | Required effect |
 | --- | --- | --- |

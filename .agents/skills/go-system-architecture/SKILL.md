@@ -1,6 +1,6 @@
 ---
 name: go-system-architecture
-description: "Runtime boundary design. Use when a change adds or changes a component crossing, protocol, source of truth, consistency expectation, failure model, or migration topology."
+description: "Use when a change adds or changes a component crossing, protocol, source of truth, consistency expectation, failure model, or migration topology."
 metadata:
   invocation: model
   kind: method
@@ -17,11 +17,14 @@ Boundary crossings are where systems break, so each one names its authority, pro
 For a delegated Decision or Review, or when the active artifact requires its
 result interface, load the
 [shared specialist contract](../../contracts/specialist-contract.md).
-From every new or changed runtime crossing through its migration and terminal
-failure disposition, build `Crossing{from, to, authority, protocol,
+When meaningful ordering, comparison, exhaustive accounting, or a required
+decision/review handoff needs structured representation, trace each new or changed crossing through its migration and terminal
+failure disposition in `Crossing{from, to, authority, protocol,
 interaction, consistency, failure, migration, forced_consequence, proof}` from
 accepted behavior, current components, contracts, sources of truth, consumers,
 and rollout topology. Choose the smallest coherent runtime boundaries.
+Otherwise, a single local crossing may retain its grounded architecture judgment
+and proof, including its migration and terminal failure disposition.
 
 [Distributed system design](../../../docs/universal-disciplines/distributed-system-design/SKILL.md)
 owns the general force, estimate, and failure-model method.

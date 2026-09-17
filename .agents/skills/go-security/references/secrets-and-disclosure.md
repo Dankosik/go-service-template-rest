@@ -30,9 +30,9 @@ repository.
 
 ## Reject
 
-- A live-looking credential in a fixture, example, or doc: `make secret-scan`
-  runs gitleaks against the change with `.gitleaks.toml` and
-  `.gitleaks.baseline.json`, so a plausible value either fails the gate or
+- A live-looking credential in a fixture, example, or doc: the repository's
+  configured secret scan uses `.gitleaks.toml` and `.gitleaks.baseline.json`,
+  so a plausible value either fails its claim-matched evidence or
   teaches the next reader to reuse it. Obviously fake placeholders do neither.
 - Treating scanners as proof of a privacy or access rule: `make govulncheck`
   and `make gosec` cover dependency and pattern classes independently and say
@@ -41,7 +41,7 @@ repository.
 ## Prove
 
 Assert the raw value is absent from the error, the log, the response, and the
-telemetry, rather than asserting a redactor was called. `make secret-scan`
-covers the change against its base ref and `make secret-scan-history` covers
-full history; run the scan after touching config, docs, CI, deployment,
-examples, or fixtures.
+telemetry, rather than asserting a redactor was called. For a secret-scan
+claim after touching config, docs, CI, deployment, examples, or fixtures,
+[Validation Routing](../../../../docs/validation-routing.md) selects the
+existing scope and timing.

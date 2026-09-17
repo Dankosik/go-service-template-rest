@@ -1,6 +1,6 @@
 ---
 name: go-reliability
-description: "Retry and deadline budgets. Use for any Go decision or review involving end-to-end deadlines, per-attempt timeouts, retry or backoff counts, overload, readiness, drain, shutdown, or rollout recovery."
+description: "Use for any Go decision or review involving end-to-end deadlines, per-attempt timeouts, retry or backoff counts, overload, readiness, drain, shutdown, or rollout recovery."
 metadata:
   invocation: model
   kind: method

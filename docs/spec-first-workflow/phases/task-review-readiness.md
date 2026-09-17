@@ -22,8 +22,10 @@ cited sources, and current evidence. Resolve prerequisites and handoffs, trace
 canonical/generated order, locate non-obvious writable surfaces/resources, and
 trace the expected user-visible outcome to the real path. Test cases, fixtures,
 assertions, and exact commands are executor-owned choices; their absence does
-not fail Planning review. Missing final integration evidence still prevents
-Completion, without blocking independent implementation.
+not fail Planning review. Missing final integration evidence prevents
+Completion only when the accepted claim requires it, without blocking
+independent implementation. Optional integration evidence does not block local
+completion.
 
 Trace persisted artifact custody and status through each actor boundary; the
 next actor must proceed from canonical state without chat reconstruction.

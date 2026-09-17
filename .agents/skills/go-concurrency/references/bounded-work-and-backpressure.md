@@ -20,4 +20,6 @@ Symptom: the diff launches a goroutine per item, adds a worker pool, `errgroup.S
 ## Prove
 - Prove the bound by exceeding it: drive more items than the limit and fail on the first observed overflow of a counter the test owns.
 - Prove the submitter: fill the pool, cancel, and assert the producer returns.
-- Add `-race`, or `make test-race`, when the bound itself is tracked in shared state.
+- When the bound itself is tracked in shared state, retain race evidence for
+  that claim; [Validation Routing](../../../../docs/validation-routing.md)
+  selects the existing command and timing.

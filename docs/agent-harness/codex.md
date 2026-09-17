@@ -9,11 +9,9 @@ field availability alone does not authorize its use.
   Use collaboration subagents for all internal execution and review, including
   mutable work and cross-repository work. Do not create separate Codex App chats
   or use App task handoff as an execution carrier or fallback.
-- Before Planning, the existing root can coordinate a full-outcome request
-  through [Transition](../spec-first-workflow/shared/transition.md#cross-phase-continuation).
-  Use fresh collaboration subagents for phase actors. At ready Planning, bind
-  the current root as Ledger Orchestrator or dispatch a fixed-unit Lead as
-  Implementation requires; preserve returned identities across that transition.
+- For cross-phase work selected by [Transition](../spec-first-workflow/shared/transition.md#cross-phase-continuation),
+  map phase actors to fresh collaboration subagents and the continuation owner
+  to the existing root.
 - Subagents start in the parent's working context. Before working in another
   checkout, apply [Repository
   Boundaries](../spec-first-workflow/shared/repository-boundaries.md) and use the
@@ -31,9 +29,8 @@ field availability alone does not authorize its use.
   disjoint writable owners and locks for shared checkouts. If required tools,
   configuration, or write access cannot be provided to the subagent, report
   that exact capability gap; do not bypass it with another control plane.
-- Phase actors and Leads may spawn their own specialists and fresh reviewers.
-  Preserve macro-phase focus and review independence. The parent remains
-  responsible for consuming results; the root need not relay every child call.
+- Phase actors and Leads may call collaboration tools directly for descendants;
+  the root need not relay child calls.
 - Use a fresh project subagent with no inherited turns for independent review.
 - A Goal is optional and thread-local. Create one only after an explicit user
   request or system/developer instruction; task duration is not authorization.
@@ -56,10 +53,8 @@ bounded work locally within current role authority; do not create App chats.
 
 Use `gpt-6-astra` for every decision-owning role: the root coordinator,
 Ledger Orchestrator, phase owner, Acceptance-Unit Lead, domain specialist,
-independent reviewer, and adjudicator. Model capability does not merge
-role responsibilities: the Orchestrator routes, the delivery Lead accepts,
-and the fresh reviewer challenges a fixed candidate. Acceptance still requires
-all mandatory proof and resolution of material review findings.
+independent reviewer, and adjudicator. [Agent Harness](../agent-harness.md)
+owns role authority and context lifetime.
 
 The installed Codex catalog supports `low`, `medium`, `high`, `xhigh`, `max`,
 and `ultra` for Astra, with a native default of `medium`; this project chooses
@@ -96,24 +91,11 @@ authority. Use `evidence-agent` for advisory research, not a lower-model
 `specialist-agent` or `reviewer-agent` verdict. Do not select `gpt-5.6-sol`
 for any role, execution, evidence work, escalation, or fallback.
 
-Before delegating, Astra supplies accepted behavior, the expected outcome,
-writable scope, and genuine product/architecture reopen conditions in the
-existing Subagent Brief. Routine coding choices, test cases, fixtures,
-assertions, and test commands belong to the executor as it writes the task.
-No prior test plan, named check, or passing proof is needed to delegate.
-A contract conflict or missing product decision returns to Astra with the
-available evidence and a proposal; the executor cannot change accepted behavior,
-add an unaccepted fallback, or grant final acceptance. Missing test cases and
-commands are implementation work, not an upstream gap.
-
-Return Implemented and continue the ledger under Implementation's execution
-boundary. At final
-validation after assembly, Astra assesses the combined code and evidence;
-shared Review selects any final independent reviewer. Terra or Luna can repair
-code and test failures then, with only invalidated checks rerun under the
-delivery owner. Return unresolved judgment or stalled diagnosis to Astra.
-A missed invariant raises Astra's effort under Models; no extra per-task gate
-is created. Astra may implement directly when delegation would cost more.
+For executor briefs, use [Agent Harness](../agent-harness.md#context-and-lifetime).
+Implementation owns handoff, repair, and final-validation timing. Return
+unresolved judgment or stalled diagnosis to Astra; a missed invariant raises
+Astra's effort under Models. Astra may implement directly when delegation would
+cost more.
 
 This Codex policy specializes Agent Harness's capability selection: raise
 effort within Astra for decision-owning roles; execution and evidence work may
@@ -144,26 +126,11 @@ through installed structured fields where available. Retain each returned agent
 identity/task path and assigned checkout. Use `collaboration.list_agents` to
 inspect the tree, messages and follow-ups to steer it, and
 `collaboration.wait_agent` for event-driven waiting. Never wait on a lane that
-returned no identity. Dispatch all independent
-ready lanes before waiting, within current capacity; capacity is a ceiling, not
-a fan-out target. Concurrent mutable units and lanes require disjoint packet
-mutable owners and exclusive locks. Consume and integrate results serially
-under the Lead. Integrate `Implemented` candidates serially into the local
-development tree from the
-[Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md),
-then immediately unlock dependent implementation without a task proof or
-review gate. Assign one general-purpose Lead the final delivery boundary after
-assembly; it owns consolidated proof and acceptance. The Orchestrator records
-that final result without repeating it.
-
-Send a message when it supplies a new input, changes a constraint or dependency,
-answers a blocking question, or corrects the current approach. Let an active
-owner continue an authorized repair loop without repeated "continue" or
-status requests.
-
-While no intervention is needed, use native result delivery or event-driven
-waiting. Inspect progress at the agreed checkpoint or on a failure signal;
-silence alone does not justify another instruction or reassignment.
+returned no identity. Use
+[Implementation](../spec-first-workflow/phases/implementation.md) for ready-lane
+dispatch, serial integration, and the assembled acceptance boundary;
+[Agent Harness](../agent-harness.md#delegation-interface) owns capacity,
+progress intervention, and writable-scope isolation.
 
 Use
 `collaboration.send_message` to steer an active agent; it does not start a turn.
@@ -172,11 +139,9 @@ reuse boundary. Before waiting for the requested result, establish that dispatch
 started an active turn or already returned that result from native status or
 events. Message delivery and a retained agent id do not establish execution.
 If dispatch is uncertain, reconcile once before resuming or replacing the lane;
-do not wait on an idle lane or resend blindly. Send sibling
-dependencies to the affected sibling and inform the parent when they change a
-shared assumption or acceptance state. Apply shared Context And Lifetime before
-reusing an identity; send only the delta for permitted corrections or evidence
-follow-ups.
+do not wait on an idle lane or resend blindly. Apply shared Context And Lifetime
+before reusing an identity; send only the delta for permitted corrections or
+evidence follow-ups.
 For a sequential Lead reassignment admitted by the Planning Ledger Contract,
 use a follow-up with the new packet and current candidate/input locators.
 Re-evaluate model and effort for the new unit under Models; reuse the native
@@ -192,31 +157,22 @@ agent when a clean context or changed strategy is more reliable.
 For isolated work, validate the actual worktree and base before accepting its
 bytes. For an `Implemented` isolated candidate, the Worktree Lead returns an
 Acceptance Result with the fixed candidate and exact `HANDOFF_READY`.
-The Orchestrator, or a root-local Lead, lands that
-candidate serially and records the verdict without re-adjudicating it.
-Handoff is routing evidence, not acceptance.
+The Orchestrator, or a root-local Lead, lands that candidate serially and
+records the verdict without re-adjudicating it. Handoff is routing evidence,
+not acceptance.
 
 ## Review And Recovery
 
-Only at final delivery, start a required independent implementation review
-with a fresh `reviewer-agent` and
-[Implementation Review](../spec-first-workflow/phases/implementation-review.md)
-as its Method; shared Review owns same-reviewer rechecks. When Review requires
-integrated-candidate review, the
-Orchestrator task binds one fresh `reviewer-agent` to that boundary and still
-does not accept units. Raise its model/effort fields for a
-justified highest-consequence boundary. Keep the fixed candidate unchanged.
+When [Review](../spec-first-workflow/shared/review.md) selects an independent
+review, map it to a fresh `reviewer-agent` with `fork_turns: "none"` and the
+selected phase review method. Use native model/effort fields under Models.
 
 Reconcile unknown dispatch or result state from the native subagent tree, the
 canonical ledger, and Git candidate identity. Zero or multiple exact matches
-remain an unknown outcome; do not redispatch blindly. If implementation
-invalidates an upstream decision, the Lead repairs the smallest owner when it
-can, or the Orchestrator dispatches that phase to a fresh authorized carrier
-selected through the Native Map. A phase actor may stop after its durable
-handoff, but the Orchestrator keeps its identity, waits for that actor, re-reads
-the transition, and resumes the same unit. It does not ask the user to confirm
-technical routing within existing authority. Add no
-scheduler, journal, or recovery database.
+remain an unknown outcome; do not redispatch blindly. For upstream reopen and
+continuation, use
+[Transition](../spec-first-workflow/shared/transition.md); keep returned agent
+identities so native completion and the durable result can be reconciled.
 
 Do not equate a parent interrupt with subtree termination. Confirm descendant
 state through native controls before cleanup or writable-scope reassignment.

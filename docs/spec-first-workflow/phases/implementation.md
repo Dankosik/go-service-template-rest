@@ -28,9 +28,8 @@ state transitions from the authoritative contract before expanding scenarios.
 Keep that construction in test code, not a separate preparation artifact.
 Execution follows the feedback and final-validation boundaries below.
 
-Implement directly when
-handoff costs more than it saves. Run independent tasks and useful subtask lanes
-in parallel when accepted interfaces are stable, writable owners and exclusive
+Implement directly when handoff costs more than it saves. Run independent tasks
+and useful subtask lanes in parallel when accepted interfaces are stable, writable owners and exclusive
 locks are disjoint, and capacity permits. Integrate mutations serially. Apply
 [Agent Harness](../../agent-harness.md) when delegating or replacing a lane.
 
@@ -77,9 +76,9 @@ continue. This allowance does not include aggregate suites, full matrices,
 watch loops, review, live targets, or provisioning paid resources.
 
 Stop after resolving that assumption; repeat only after a relevant repair or
-new discriminating hypothesis, using the repair method below. If the scenario
-cannot run cheaply within existing authority, retain the material uncertainty
-and continue code supported by accepted contracts. It does not become mandatory
+new discriminating hypothesis. On failure, use [Validation Repair](implementation/validation-repair.md).
+If the scenario cannot run cheaply within existing authority, retain the
+material uncertainty and continue code supported by accepted contracts. It does not become mandatory
 final proof merely because it was considered during coding. A demonstrated
 defect is repaired before returning the affected code as Implemented; a missing
 probe alone creates no handoff gate. Reopen invalid accepted behavior or
@@ -112,11 +111,14 @@ remaining implementation blocker or writer. Finishing one task, one wave, or
 all currently runnable tasks does not satisfy this condition. Do not recast a
 ledger task as a standalone delivery to start verification early.
 
-The delivery owner selects one non-overlapping plan for the local completion
-criterion and explicit additions under the [Evidence Contract](../shared/evidence-contract.md#local-completion).
-Use [Validation Routing](../../validation-routing.md) for existing commands:
-ordinary Go delivery needs its matching build and relevant unit tests, not an
-automatic `make verify`. Reconcile packet requirements with their actual source;
+The delivery owner selects one non-overlapping plan for the ordinary local
+criterion in [AGENTS.md](../../../AGENTS.md#validation-budget) and any explicit
+additions. Ordinary Go delivery uses [Go Validation](../../validation/go.md):
+matching build and relevant unit tests, not an automatic `make verify`. Use
+[Validation Routing](../../validation-routing.md) only for mixed surfaces or a
+specialized command branch. Load the [Evidence Contract](../shared/evidence-contract.md)
+when judging explicit additions, reuse, claim scope, or unavailable
+infrastructure. Reconcile packet requirements with their actual source;
 agent-added runtime scenarios do not become mandatory by accumulation. Combine
 claims covered by the same command.
 Apply [Review](../shared/review.md) only at this final boundary, never per task.
@@ -128,109 +130,18 @@ expensive execution. Cover affected production/test projects, required build
 variants, generated clients, and accepted intermediate release versions;
 one failing project must not hide independent diagnostics.
 
-When runtime or integration proof is already required, prioritize the smallest
-existing scenario that can expose incompatibility at the changed boundary
-before broader scenario expansion. Select from the actual change: startup
-configuration, migration/runtime compatibility, serialized values, or retained
-background processing. Use representative inputs for the suspected failure.
+For a required runtime/integration scenario or runner fixture, load
+[Validation Scenarios](implementation/validation-scenarios.md) before execution.
+On a check failure, load [Validation Repair](implementation/validation-repair.md).
+Before isolated or remote execution, load [Execution Inputs](implementation/execution-inputs.md).
+Before a potentially long check or resource wait, load [Progress](implementation/progress.md).
+These branches do not add checks or change the assembled validation boundary.
 
-This ordering adds no mandatory scenarios or infrastructure. Reuse sufficient
-current evidence under the Evidence Contract.
-
-If the task explicitly includes a runner or infrastructure fixture, execute its
-smallest complete scenario
-through setup, the intended behavior, observation, and cleanup before expanding
-the run. Reuse a still-valid result from coding when the Evidence Contract
-permits it. Bind each scenario to its own inputs.
-Preserve safe root-cause diagnostics and give cleanup a bounded
-lifetime independent of a failed or cancelled scenario. Reuse the prepared
-environment while its state and inputs remain valid; reset only what a failed
-run invalidated.
-
-### Repair Within Final Validation
-
-Classify failure as product, test/oracle, or environment. For an optional check's
-unavailable or broken environment, record its material gap and stop that path;
-do not provision or repair infrastructure to finish ordinary development.
-Required checks and concrete in-scope defects retain a repair owner, including
-defects exposed by optional checks. Assign diagnosis, source or fixture repair,
-execution-input preparation, and the smallest discriminating rerun to the same
-executor, with the current candidate, diagnostics, runner, writable scope,
-and existing resource authority.
-
-The executor continues this loop without a coordinator handoff between edits,
-input preparation, and reruns. Return the repaired result with its evidence,
-or a concrete blocker requiring another owner's decision. Retire superseded
-code-only repair briefs when entering this stage.
-
-Preserve required candidate identities, validation locks, and review
-independence. Final acceptance stays with the delivery owner; publication
-and production effects retain their applicable authority and gates.
-
-When the cause is still uncertain, select the next run for the explanations it
-can distinguish. If failure occurred before the intended behavior, check the
-nearest broken setup precondition first. After repairing it, return to the
-original scenario; successful setup does not establish product behavior.
-
-Repair the defect class at its shared source: compare a broken fixture with
-the complete required shape, trace retained callers before deleting a helper,
-and retained references before deleting durable data. Gather related failures
-in that affected scope instead of repairing only the first reported line.
-If another attempt yields the same failure without new discriminating evidence,
-apply [Parent-Owned Recovery](../shared/transition.md#parent-owned-recovery)
-before rerunning; do not repeat the whole pipeline or increase timeouts blindly.
-
-After an aggregate failure, continue its pending plan under the Evidence
-Contract's scoped-reuse rules. A focused repair does not automatically schedule
-the whole aggregate again; retain every not-yet-run or newly affected claim.
-
-For isolated or remote execution, use the existing runner and one current
-candidate record in task state or its manifest. Resolve source/patch or image
-identities, stages, checksums, and host-specific paths there. Verify the actual
-execution inputs before consuming a result; do not reconstruct ad hoc transfer
-commands or treat a workstation path as a remote path. After repair, update
-the replacement record and invalidate only affected evidence. This bookkeeping
-needs no new scheduler or registry.
-
-Use existing validation locks; do not hold them while editing or waiting.
-Within established scope and heavy-run authority, lock availability schedules
-retries without a fresh CPU permit or time-window negotiation. Coordinate anew
-only when authority, resource scope, or budget changes. Never run heavy checks
-concurrently or bypass effect authority.
-
-Final local acceptance requires the Evidence Contract's local criterion,
-explicit task additions, resolved blocking findings, and any final review
-selected by shared Review. Stop once that boundary passes. Missing optional
-runtime proof does not block local `Accepted`; report only material limitations.
+Final local acceptance requires the AGENTS.md local criterion, explicit task
+additions, resolved blocking findings, and any final review selected by shared
+Review. Stop once that boundary passes. Missing optional runtime proof does not
+block local `Accepted`; report only material limitations.
 Missing required proof remains `implementation complete; verification incomplete`
 for that scope. Continue available authorized repairs without indefinite
 environment recovery. A requested CI, release, deployment, or runtime result
 remains outstanding until actually obtained; never claim it from local tests.
-
-## Progress
-
-Before a potentially long check or resource wait, choose a bounded observation
-checkpoint and the result or progress signal expected by then. Use the prior
-comparable duration, tool timeout, and current environment when available;
-without a baseline, begin with an early checkpoint and adjust from observation.
-Keep the command/native locator and checkpoint in existing execution state.
-This is an executor-owned monitoring choice, not a new user deadline or permit.
-
-Use native yielding or background execution so the owner can inspect the run
-at that checkpoint. Inspect actual stage, logs, process/resource state, or lock
-owner; a live process or repeated elapsed-time message alone is not progress.
-Continue useful work with a new observation checkpoint when evidence supports
-it. If the expected result is absent, diagnose the wait or stalled stage before
-another long wait or rerun. Preserve safe cleanup and required proof; exceeding
-a checkpoint neither grants acceptance nor makes cancelling an effect safe.
-
-In the existing status, name implemented subresults, the next concrete result,
-and any current delay: implementation, product repair, test repair, environment,
-resource wait, usage limit, or external dependency. Distinguish implementation
-from verified behavior. No extra report or ledger level is required.
-
-Use an explicitly accepted task deadline or execution budget to expose likely
-overruns and reconsider a stalled approach. Keep its value in the existing
-task-local artifact; do not infer one when none was accepted. A target is not
-measured speed or permission to omit accepted scope or final proof. Report
-measured waiting intervals only when existing logs establish their start and end.

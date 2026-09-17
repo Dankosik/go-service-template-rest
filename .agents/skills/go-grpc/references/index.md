@@ -1,7 +1,8 @@
 # Reference Selector
 
 Each row names a pressure where this repository's own wiring overrides the
-obvious gRPC answer. State the expected behavior change before loading.
+obvious gRPC answer. Load one matching reference; load another only for an
+independent pressure.
 
 Server composition, interceptor order, streaming cardinalities and concurrency,
 client channel construction and propagation, health and drain, transport limits,

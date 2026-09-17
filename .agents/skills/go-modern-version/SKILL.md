@@ -1,6 +1,6 @@
 ---
 name: go-modern-version
-description: "Go version idioms. Use when the module's Go version can change a language or standard-library choice in the planned diff, or modernization is requested."
+description: "Use when the module's Go version can change a language or standard-library choice in the planned diff, or modernization is requested."
 metadata:
   invocation: model
   kind: method

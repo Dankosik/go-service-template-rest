@@ -15,9 +15,12 @@ Implementation completion and verified acceptance are separate events.
 `Implemented` means the planned code, tests, and cleanup are present and its
 writers have joined. It does not mean any check ran or passed. Task boundaries
 do not create validation or review gates. Global Completion owns the final
-assembled result under the [Evidence Contract](../../shared/evidence-contract.md#local-completion).
-It consolidates the local criterion and explicit task additions, not every
-runtime scenario an agent could propose.
+assembled result under the ordinary local criterion in
+[AGENTS.md](../../../../AGENTS.md#validation-budget). Load the
+[Evidence Contract](../../shared/evidence-contract.md) for explicit additions,
+reuse, claim scope, or unavailable infrastructure. It consolidates that
+criterion and explicit task additions, not every runtime scenario an agent
+could propose.
 
 ## Ready Frontier
 
@@ -33,7 +36,8 @@ contracts are available, writable owners and exclusive locks are free, and its
 implementation authority is present. A landed `Implemented` output satisfies a
 code dependency; no passing receipt or per-task acceptance is required. A
 genuine acceptance requirement gates acceptance, not the start of coding;
-reconcile annotations with the Evidence Contract before final validation. Local unverified code never satisfies a
+reconcile annotations with AGENTS.md and, when needed, the Evidence Contract
+before final validation. Local unverified code never satisfies a
 production or external-effect gate.
 
 Dispatch all ready independent work before waiting, within capacity. Parallel

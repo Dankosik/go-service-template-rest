@@ -2,18 +2,23 @@
 
 ## Local leaves
 
-Ordinary local Go completion uses a matching build and relevant unit tests,
-not an automatic expanded verification route. For the main service and the
-ordinary root-module suite:
+Ordinary local Go completion uses a matching build and relevant unit tests
+under [AGENTS.md](../AGENTS.md#validation-budget), not an automatic expanded
+verification route. [Go Validation](validation/go.md) owns package-scoped
+commands first; use the root-module suite when `go.mod`/`go.sum` changes or the
+package graph cannot bound the change:
 
 ```bash
 make build
+make test-package PKG=./path/to/package
+```
+
+```bash
 ALLOW_FULL=1 make test-all
 ```
 
-[Go Validation](validation/go.md) owns package scope and retained executable
-selection. [Evidence Contract](spec-first-workflow/shared/evidence-contract.md#local-completion)
-owns the finite local criterion and explicit additions. Missing optional
+Load the [Evidence Contract](spec-first-workflow/shared/evidence-contract.md)
+for explicit additions, reuse, or unavailable infrastructure. Missing optional
 integration or image observations do not block that criterion; known defects
 still do. Do not provision or repair a test environment merely to finish.
 
@@ -68,10 +73,10 @@ against the event's exact base SHA. Generated output is never edited by hand.
 
 ## Secrets and dependencies
 
-Pull requests, merge groups, and main pushes run redacted Gitleaks against the
-exact base-to-HEAD range. The local secret-scan command also scans the current tree.
-Tag and manual admission use full history. Every mode consumes the reviewed
-baseline; missing base authority widens only to the explicit full-history gate.
+The canonical [CI workflow](../.github/workflows/ci.yml) owns scanner routing.
+It retains current-worktree coverage, release/manual full-history, and
+missing-base failure. [Security Validation](validation/security.md) owns the
+corresponding local command selection.
 
 Dependency Review rejects new high-severity dependencies on pull requests.
 `govulncheck` runs on runtime Go pull requests. `gosec` runs inside `lint-pr`

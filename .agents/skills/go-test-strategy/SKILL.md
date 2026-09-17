@@ -1,6 +1,6 @@
 ---
 name: go-test-strategy
-description: "Falsification design. Use while writing tests when a failure observable, deterministic control, or proving layer is non-obvious; resolve that choice inside the current implementation task."
+description: "Use while implementing Go tests when the observable failure, deterministic control, or smallest proving layer is non-obvious."
 metadata:
   invocation: model
   kind: method
@@ -37,6 +37,5 @@ delegated, use the [shared specialist contract](../../contracts/specialist-contr
 
 Done when the testing choice can be implemented in the current task. Repair
 fixtures and assertions locally; reopen a product owner only when expected
-behavior is actually undefined. The active workflow and [Evidence
-Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md) own
-validation timing and task completion.
+behavior is actually undefined. The active workflow owns validation timing and
+task completion.

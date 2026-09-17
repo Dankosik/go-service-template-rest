@@ -18,4 +18,7 @@ Load for any change under `migrations/`: a column, constraint, index, type or en
 - `IF NOT EXISTS` as *evidence* that an existing object matches the intended definition — a name collision is not definition equality. Reconciling an out-of-band build this way is fine once the deployed definition is checked rather than assumed.
 
 ## Prove
-`make migration-check`, `make migration-validate`, and `make sqlc-check`. State which step is irreversible and what the `Down` section actually restores.
+the migration, SQLC, and generated-contract evidence required by the claim;
+[Validation Routing](../../../../docs/validation-routing.md) selects existing
+commands and timing. State which step is irreversible and what the `Down`
+section actually restores.

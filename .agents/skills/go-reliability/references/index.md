@@ -1,8 +1,8 @@
 # Reference Selector
 
 Each row names a place where this repository already made the decision and its
-implementation is the constraint. State the expected behavior change before
-loading. Both branches use this selector: the branch decides what you return,
+implementation is the constraint. Load one matching reference; load another
+only for an independent pressure. Both branches use this selector: the branch decides what you return,
 the affected layer decides what you read.
 
 Retry eligibility, backoff, jitter, `Retry-After`, and ambiguous outcomes have

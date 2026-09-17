@@ -1,6 +1,6 @@
 # Reference Selector
 
-State which architecture decision the selected reference can change.
+Load one matching reference; load another only for an independent pressure.
 
 | Pressure | Load | Required effect |
 | --- | --- | --- |

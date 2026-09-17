@@ -1,8 +1,8 @@
 # Workflow Router
 
 Select the smallest non-direct execution path and current decision owner. This
-file defines routing, not phase methods. If `AGENTS.md` selected Direct Work,
-follow [Direct Work](spec-first-workflow/direct-work.md) and stop routing here.
+file defines routing, not phase methods. If [AGENTS.md](../AGENTS.md#direct-work)
+selected Direct Work, stop routing here.
 
 ## Path
 

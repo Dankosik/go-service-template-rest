@@ -1,8 +1,8 @@
 # Reference Selector
 
 Each row names a pressure where this repository, a pinned version, or a
-documented API contract overrides the obvious answer. State the expected
-behavior change before loading.
+documented API contract overrides the obvious answer. Load one matching
+reference; load another only for an independent pressure.
 
 Proof level, workload identity, comparability, and completion policy have no
 reference here: [Benchmarking](../../../../../docs/benchmarking.md) owns them.

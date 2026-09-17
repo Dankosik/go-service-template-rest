@@ -126,8 +126,8 @@ flowchart LR
    the next ready task without a task proof or review gate. Follow
    [Implementation](docs/spec-first-workflow/phases/implementation.md) for bounded
    feedback during coding. After all ledger code is assembled, finish local
-   development with the matching build and relevant unit tests under the
-   [Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md#local-completion).
+   development with the matching build and relevant unit tests under
+   [AGENTS.md](AGENTS.md#validation-budget).
    Expanded verification needs an explicit requirement; do not add test environments
    merely for confidence.
 5. CI selects its checks from the changed files. Image publication is opt-in
@@ -144,7 +144,9 @@ reliability, testing, delivery, and Go maintenance. Small local edits stay
 direct. Bigger changes can record decisions under `specs/` so another session
 can continue without guessing.
 
-Before handwritten Go edits, agents load version-specific guidance from
+When the affected module's Go version can change a language or standard-library
+choice, or modernization is requested, agents load
+[Go Modern Version](.agents/skills/go-modern-version/SKILL.md). It routes to
 [JetBrains Modern Go Guidelines](https://github.com/JetBrains/go-modern-guidelines),
 pinned in `tools/go.mod`; focused and pull-request lint enforce `modernize`.
 

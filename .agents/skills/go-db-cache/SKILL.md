@@ -1,6 +1,6 @@
 ---
 name: go-db-cache
-description: "Runtime data access. Use when SQL or transaction boundaries, query semantics, cache freshness or invalidation, or bounded fallback determine a request path."
+description: "Use when SQL or transaction boundaries, query semantics, cache freshness or invalidation, or bounded fallback determine a request path."
 metadata:
   invocation: model
   kind: method

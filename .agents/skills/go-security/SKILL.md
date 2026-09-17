@@ -1,6 +1,6 @@
 ---
 name: go-security
-description: "Attacker paths. Use when identity, authorization, tenancy, tokens, secrets, injection, SSRF, abuse, or another trust boundary changes what an attacker can reach."
+description: "Use when identity, authorization, tenancy, tokens, secrets, injection, SSRF, abuse, or another trust boundary changes what an attacker can reach."
 metadata:
   invocation: model
   kind: method
@@ -16,12 +16,15 @@ authority, asset, enforcement point, attacker action, and observable denial.
 For a delegated Decision or Review, or when the active artifact requires its
 result interface, load the
 [shared specialist contract](../../contracts/specialist-contract.md).
-From every caller-controlled entrypoint to an asset or observable denial, build
+When meaningful ordering, comparison, exhaustive accounting, or a required
+decision/review handoff needs structured representation, trace each caller-controlled entrypoint to an asset or observable denial in
 `AttackerPath{boundary, principal, asset, enforcement, action, failure,
 denial_proof}` across route exposure, verified identity, objects reached,
 outbound destinations, secrets, and caller-controlled work. Missing identity,
 ambiguous tenant, or absent policy denies. Every accepted control needs focused
 negative proof because an allow test also passes against a bypass.
+Otherwise, a single local attacker path may retain its grounded judgment and
+negative proof for its denial outcome.
 
 Decide against existing owners: `internal/infra/oidcjwt` verifies tokens,
 `api/openapi/service.yaml` declares default auth, `internal/infra/httpclient`
