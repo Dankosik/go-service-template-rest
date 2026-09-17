@@ -1,6 +1,6 @@
 # Reference Selector
 
-State the decision pressure and behavior-change thesis before loading.
+Load one matching reference; load another only for an independent pressure.
 
 | Symptom or decision pressure | Load | Behavior change |
 | --- | --- | --- |

@@ -43,5 +43,7 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
   reports conflicting access on the paths that executed, and nothing else.
 
 ## Prove
-- Focused test with `-count=1 -vet=off`.
-- `ALLOW_HEAVY=1 make test-race` when the changed path shares state across goroutines.
+- Retain fresh focused evidence for the time or ordering observable.
+- When the changed path shares state across goroutines, retain race evidence
+  for that claim. [Validation Routing](../../../../docs/validation-routing.md)
+  selects existing commands and timing.

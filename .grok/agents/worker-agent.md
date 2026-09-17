@@ -17,8 +17,10 @@ Return `docs/spec-first-workflow/interfaces/delegated-result-v1.md`.
 Make the smallest complete authorized change. Apply Implementation's execution
 boundary for bounded feedback during coding and focused reruns during final
 validation repair. A verification or debugging subtask cannot create an early
-acceptance stage. Use the Evidence Contract for final or standalone proof;
-return actual repair results and gaps without claiming delivery acceptance.
+acceptance stage. Ordinary local proof follows AGENTS.md; load the Evidence
+Contract only for claim scope, reuse, additional required proof, or unavailable
+infrastructure. Return actual repair results and gaps without claiming delivery
+acceptance.
 
 Apply shared Agent Harness Context And Lifetime and Nested Execution through
 the selected native adapter. Delegate only strict subsets when its controls

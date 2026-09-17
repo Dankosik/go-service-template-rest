@@ -1,7 +1,9 @@
 # Validation Routing
 
-The [Evidence Contract](spec-first-workflow/shared/evidence-contract.md#local-completion)
-owns which checks are required. This router selects existing commands; a file
+Use this router for mixed surfaces or specialized verification. [AGENTS.md](../AGENTS.md#validation-budget)
+owns ordinary local completion; load the [Evidence Contract](spec-first-workflow/shared/evidence-contract.md)
+for claim scope, reuse, additional proof, or infrastructure gaps.
+This router selects existing commands; a file
 path, domain label, or available command does not create a local acceptance gate.
 The Makefile owns command composition. The full [command
 reference](build-test-and-development-commands.md) remains the human-facing
@@ -59,7 +61,7 @@ candidate, environment, step states, and durations. Failed or interrupted
 attempts are not passing receipts. The [Evidence
 Contract](spec-first-workflow/shared/evidence-contract.md#execution-evidence)
 owns continuation and scoped reuse; `make verify` does not infer cross-candidate
-equivalence. Use Implementation's [Progress](spec-first-workflow/phases/implementation.md#progress)
+equivalence. Use Implementation's [Progress](spec-first-workflow/phases/implementation/progress.md)
 method for genuinely required long-running work.
 
 `*-fast` targets remain standalone or focused repair diagnostics; they refuse

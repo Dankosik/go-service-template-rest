@@ -1,7 +1,8 @@
 # Reference Selector
 
 Each row names a pressure where this repository's own wiring overrides the
-obvious answer. State the expected behavior change before loading; load one.
+obvious answer. Load one matching reference; load another only for an
+independent pressure.
 
 | Symptom | Load | Behavior change |
 | --- | --- | --- |

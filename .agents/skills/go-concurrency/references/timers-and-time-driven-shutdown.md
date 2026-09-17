@@ -31,4 +31,6 @@ Symptom: the diff touches `time.After`, `time.Tick`, `time.NewTimer`, `time.NewT
 - Prove prompt shutdown by asserting the stop call returns after the signal, with the test timeout as the diagnostic guard.
 - Use fake time supported by the target module to prove interval and backoff
   behavior without waiting for it.
-- Add `-race`, or `make test-race`, when a timer callback touches state another goroutine reads.
+- When a timer callback touches state another goroutine reads, retain race
+  evidence for that claim; [Validation Routing](../../../../docs/validation-routing.md)
+  selects the existing command and timing.

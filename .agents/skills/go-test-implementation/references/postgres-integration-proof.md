@@ -40,9 +40,9 @@ concurrent claims, tenant isolation, or a cache whose backend behavior matters.
   produced no evidence for the claim it was cited under.
 
 ## Prove
-- Repository unit test: focused package command with `-count=1 -vet=off`.
-- Integration proof: follow [PostgreSQL Validation](../../../../docs/validation/postgres.md)
-  for the focused tagged selector and the final claim-matched gate.
-- Migration-sensitive change: pair the integration command with the repository's
-  migration validation, since `pgtest.Migrated` runs migrations per database and
-  a broken migration fails every case at setup.
+- Retain focused unit evidence where Go-owned behavior is the claim.
+- For engine-owned integration semantics, use the repository's PostgreSQL
+  validation route; for a migration-sensitive claim, retain its matching
+  migration evidence because `pgtest.Migrated` runs migrations per database and
+  a broken migration fails every case at setup. [Validation Routing](../../../../docs/validation-routing.md)
+  selects existing commands and timing.

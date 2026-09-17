@@ -42,6 +42,7 @@ pagination, batching, fan-out, retries, or a paid provider call.
 Assert the denial and the absence of the effect — no provider call, no enqueue,
 no mutation — because a `429` alone does not show the work was skipped.
 `middleware_ratelimit_test.go` and `middleware_inflight_test.go` hold the
-transport-level cases; run `ALLOW_HEAVY=1 make test-race` when fan-out or worker bounds
-change. Detailed worker-pool lifetime and race questions belong to
+transport-level cases. When fan-out or worker bounds change, retain race
+evidence for that claim; [Validation Routing](../../../../docs/validation-routing.md)
+selects the existing command and timing. Detailed worker-pool lifetime and race questions belong to
 `go-concurrency`.

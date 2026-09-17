@@ -25,8 +25,11 @@ accepted change, without modernizing unrelated files.
 
 ## Prove
 
-Select scoped lint and any modernization check through [Validation
-Routing](../../../../docs/validation-routing.md). When a swap replaces a
+Select scoped lint and any modernization check through [Go
+Validation](../../../../docs/validation/go.md) or, for mixed surfaces,
+[Validation Routing](../../../../docs/validation-routing.md). When a swap replaces a
 policy-carrying helper, require proof of nil versus empty, zero-value fallback,
-order, or shallow versus deep copy as applicable. Reuse or add that proof through
-the [Evidence Contract](../../../../docs/spec-first-workflow/shared/evidence-contract.md).
+order, or shallow versus deep copy as applicable. Reuse or add that proof under
+the ordinary local criterion; load the
+[Evidence Contract](../../../../docs/spec-first-workflow/shared/evidence-contract.md)
+when judging reuse or additional required proof.

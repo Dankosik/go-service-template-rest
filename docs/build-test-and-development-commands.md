@@ -1,8 +1,11 @@
 # Build, Test, and Development Commands
 
-[Validation Routing](validation-routing.md) selects commands within the
-[Evidence Contract](spec-first-workflow/shared/evidence-contract.md#local-completion)'s
-finite acceptance scope. This catalog describes available tools, not a checklist.
+Ordinary local Go commands come from [Go Validation](validation/go.md) under
+[AGENTS.md](../AGENTS.md#validation-budget). [Validation Routing](validation-routing.md)
+selects mixed or specialized commands. Load the
+[Evidence Contract](spec-first-workflow/shared/evidence-contract.md) for claim
+scope, reuse, additional required proof, or unavailable infrastructure. This
+catalog describes available tools, not a checklist.
 Ordinary local Go development ends at a matching build and relevant unit tests;
 expanded checks require an explicit task requirement or their existing CI/release
 gate. The Makefile owns non-trivial composition; ordinary tooling stays direct.

@@ -1,6 +1,6 @@
 ---
 name: go-language-simplifier
-description: "Indirection economics. Use when opaque Go control flow, predicates, names, helpers, or deduplication obscure intent and behavior must remain unchanged."
+description: "Use when simplifying Go control flow, predicates, names, or helpers while preserving observable behavior."
 metadata:
   invocation: model
   kind: method

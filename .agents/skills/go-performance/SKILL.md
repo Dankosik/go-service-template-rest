@@ -1,6 +1,6 @@
 ---
 name: go-performance
-description: "Measured performance decisions. Use when a workload or budget can change the mechanism, or when an optimization claim needs a comparable baseline, attribution, and delta."
+description: "Use when a workload or budget can change the mechanism, or when an optimization claim needs a comparable baseline, attribution, and delta."
 metadata:
   invocation: model
   kind: method

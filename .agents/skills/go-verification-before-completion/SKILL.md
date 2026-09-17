@@ -1,6 +1,6 @@
 ---
 name: go-verification-before-completion
-description: "Evidence boundaries for claims. Use for verification-only work or when existing evidence may not prove the requested scope."
+description: "Use for Go verification-only work or when deciding whether existing evidence supports a requested claim at its stated scope."
 metadata:
   invocation: model
   kind: method
@@ -10,19 +10,20 @@ metadata:
 
 An **evidence boundary** is the behavior a proof would fail on. An empirical
 claim cannot be wider than that boundary. Local development acceptance is a
-separate sufficiency decision owned by the Evidence Contract, not a claim that
-every production path has been observed.
+separate sufficiency decision owned by [AGENTS.md](../../../AGENTS.md#validation-budget),
+not a claim that every production path has been observed.
 
 `claim -> observable -> command or procedure -> result -> exercised scope -> gap`
 
 An Implemented task handoff claims code production, not verified behavior, and
-does not trigger this method. For a ledger, use this method at final validation
-after all planned code is assembled; [Implementation](../../../docs/spec-first-workflow/phases/implementation.md#feedback-during-coding)
-owns bounded feedback during coding.
+does not trigger this method. Reaching final validation alone does not trigger
+it either: use it when a proof boundary or claim-to-evidence match needs a
+decision. [Implementation](../../../docs/spec-first-workflow/phases/implementation.md)
+owns ledger feedback and final-validation timing.
 
-Apply the shared [Evidence
-Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md). Select
-only its local criterion and genuinely explicit additions. This skill and its
+Apply the [Evidence
+Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md) to the
+claim or sufficiency question. This skill and its
 references do not create new gates or authorize test infrastructure. For a
 verification claim, name the observable whose absence or incorrectness would make the
 selected proof fail. Record the exact command or procedure, relevant

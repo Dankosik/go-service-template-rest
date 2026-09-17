@@ -1,6 +1,6 @@
 ---
 name: go-observability
-description: "Operator evidence. Use when an operational question needs a signal, SLI, SLO, or alert, or when an emitted field or label changes correlation, privacy, cardinality, or cost."
+description: "Use when an operational question needs a signal, SLI, SLO, or alert, or when an emitted field or label changes correlation, privacy, cardinality, or cost."
 metadata:
   invocation: model
   kind: method

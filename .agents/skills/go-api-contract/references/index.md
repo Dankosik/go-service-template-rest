@@ -1,7 +1,8 @@
 # Reference Selector
 
 Each row names a pressure where this repository or a current specification
-overrides the obvious answer. State the expected behavior change before loading.
+overrides the obvious answer. Load one matching reference; load another only
+for an independent pressure.
 
 Resource shape, method choice, status selection, pagination mechanics, and
 request validation ordering have no reference here: decide them against the

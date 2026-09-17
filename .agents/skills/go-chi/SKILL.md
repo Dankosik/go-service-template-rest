@@ -1,6 +1,6 @@
 ---
 name: go-chi
-description: "Chi route composition. Use when a change adds, mounts, moves, or reviews routes, middleware, fallbacks, CORS, or bounded route identity."
+description: "Use when a Go change adds, mounts, moves, or reviews Chi routes, middleware, fallbacks, CORS, or bounded route identity."
 metadata:
   invocation: model
   kind: method

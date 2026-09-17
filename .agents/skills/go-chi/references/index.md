@@ -1,6 +1,8 @@
 # Reference Selector
 
-State which runtime judgment the selected reference changes. Both branches use this selector: the branch decides what you return, the route node decides what you read.
+Load one matching reference; load another only for an independent pressure.
+Both branches use this selector: the branch decides what you return, the route
+node decides what you read.
 
 | Symptom | Load | Behavior change |
 | --- | --- | --- |

@@ -8,8 +8,10 @@ can be unknown. Schema and cross-service recovery remain with their owners.
 ## Decide
 
 Derive the transaction from the business facts that must become true together
-and execute through `postgres.Pool.InTx`. Repository methods accept
-`postgres.Querier` so callers own whether they run inside that boundary.
+and execute through the package-level `postgres.InTx` in
+`internal/infra/postgres/transaction.go`, passing the configured `*pgxpool.Pool`.
+Bind generated queries with `Queries.WithTx(tx)` inside its callback;
+`internal/infra/postgres/sqlcgen/db.go` owns the generated query seam.
 
 Retry the whole use case only for classified serialization/deadlock outcomes and
 only after its observable writes are idempotent through conflict handling,

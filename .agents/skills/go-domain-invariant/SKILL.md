@@ -1,6 +1,6 @@
 ---
 name: go-domain-invariant
-description: "Domain invariants. Use when business acceptance, rejection, transitions, replay meaning, or effect order changes what states and moves are legal."
+description: "Use when business acceptance, rejection, transitions, replay meaning, or effect order changes what states and moves are legal."
 metadata:
   invocation: model
   kind: method
@@ -19,10 +19,13 @@ owns effect order, duplicate meaning, and out-of-order meaning.
 For a delegated Decision or Review, or when the active artifact requires its
 result interface, load the
 [shared specialist contract](../../contracts/specialist-contract.md).
-From every changed accepting path through its false case and replay, build
+When meaningful ordering, comparison, exhaustive accounting, or a required
+decision/review handoff needs structured representation, trace each changed accepting path through its false case and replay in
 `InvariantRecord{rule, owner, accepting_paths, transitions, false_case,
 rejection, effect_order, replay, mixed_version, proof}`. A rule is incomplete
 until every accepting path and invalid move has a disposition.
+Otherwise, a single local path may retain its grounded invariant judgment and
+proof for its false-case and replay disposition.
 
 ## Choose The Branch
 

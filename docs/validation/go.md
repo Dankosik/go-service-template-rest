@@ -1,52 +1,52 @@
 # Go Validation
 
-During ledger implementation, use only the coding feedback allowed by
-[Implementation](../spec-first-workflow/phases/implementation.md#feedback-during-coding).
-For affected packages, `gopls check` or compile-only `go test -c` with the required
-tags can expose type errors in production and test code. Keep binary outputs
-outside source paths. `go test -run '^$'` is not compile-only: it can execute
-package initialization and TestMain. Neither diagnostic establishes behavior.
-`gopls references file.go:line:column` locates callers for semantic renames or
-signature changes; it does not test or accept the code.
+## Bounded Local Change
 
-For standalone debugging or focused repair during final validation,
-`make prove PKG=... FILES='...'`
-is the lock-wrapped package check. Both fields are required; there is no
-`./...` default. `make test-watch` and `make lint-fast` are also diagnostic
-commands, not steps in ledger execution or substitutes for final evidence.
+Use the local completion criterion in [AGENTS.md](../../AGENTS.md#validation-budget).
+For a ledger, run these checks once on the assembled delivery candidate under
+[Implementation](../spec-first-workflow/phases/implementation.md#final-validation),
+not per task; task handoffs stay `Implemented`.
 
-The integrated delivery owner starts with a matching build and relevant
-unit tests on the assembled delivery candidate, not once per ledger unit.
-[Evidence Contract](../spec-first-workflow/shared/evidence-contract.md#local-completion)
-owns local completion and explicit additions. Task handoffs stay `Implemented`.
-For the main service and the ordinary root-module test suite:
+Start with the matching build and tests for the affected package:
 
 ```bash
 make build
-ALLOW_FULL=1 make test-all
+make test-package PKG=./path/to/package
 ```
+
+Include relevant reverse importers selected through existing repository tooling.
+`make plan` may diagnose scope without executing its expanded plan; do not build
+another package-selection mechanism. A separate Go module needs its own
+relevant checks.
 
 `make build` builds the service, not every worker. Use the existing
 `build-worker`, `build-outbox-relay`, or `build-jobs-worker` targets when those
 retained executables are part of the change. Include required build variants;
 do not invent a matrix of template profiles.
 
-For a bounded change, use `make test-package PKG=./path/to/package` and relevant
-reverse importers selected through existing repository tooling. `make plan` may
-diagnose that scope without executing its expanded plan. Do not build a new
-package-selection mechanism. Use `test-all` when root `go.mod`/`go.sum` change,
-the relevant closure is broad, or the package graph cannot reliably bound it.
-A separate Go module needs its own relevant checks.
+Confirm required tests actually ran or have valid reusable results. A zero-test
+selector, skipped required test, or startup error is not passing evidence.
+Load the [Evidence Contract](../spec-first-workflow/shared/evidence-contract.md)
+when judging reuse, proof scope, explicit additions, or unavailable infrastructure.
 
-`ALLOW_FULL=1` on `test-all` permits the ordinary module-wide test suite; it does
-not select `make check`, race, integration tags, or Docker. Confirm the required
-tests actually ran or have valid reusable results. A zero-test selector, skipped
-required test, or startup error is not passing behavior evidence.
+## Broad Go Change
+
+Use the root-module suite when root `go.mod`/`go.sum` changes, the relevant
+closure is broad, or the package graph cannot reliably bound it:
+
+```bash
+ALLOW_FULL=1 make test-all
+```
+
+`ALLOW_FULL=1` here permits the ordinary module-wide test suite; it does not
+select `make check`, race, integration tags, or Docker.
 
 Stop after the local criterion and any applicable final review pass. Formatting
 and required generation remain normal implementation work. Do not append lint,
 `make verify`, integration, race, runtime-image, or performance runs merely for
 confidence. Existing CI gates remain unchanged.
+
+## Explicit Expanded Verification
 
 Use `make verify` only for an explicitly selected expanded verification scope.
 It formats changed handwritten files, lints changed packages, tests the
@@ -69,3 +69,20 @@ Formatting and linters own mechanical style; tests own behavior. Use
 `-count=1` only when a required race or environment claim needs fresh execution.
 Final validation uses `VALIDATION_JOBS=2` and one Git-common process lock by
 default; CI raises the shared budget explicitly.
+
+## Coding And Repair Diagnostics
+
+During ledger implementation, use only the coding feedback allowed by
+[Implementation](../spec-first-workflow/phases/implementation.md#feedback-during-coding).
+For affected packages, `gopls check` or compile-only `go test -c` with the required
+tags can expose type errors in production and test code. Keep binary outputs
+outside source paths. `go test -run '^$'` is not compile-only: it can execute
+package initialization and TestMain. Neither diagnostic establishes behavior.
+`gopls references file.go:line:column` locates callers for semantic renames or
+signature changes; it does not test or accept the code.
+
+For standalone debugging or focused repair during final validation,
+`make prove PKG=... FILES='...'`
+is the lock-wrapped package check. Both fields are required; there is no
+`./...` default. `make test-watch` and `make lint-fast` are also diagnostic
+commands, not steps in ledger execution or substitutes for final evidence.

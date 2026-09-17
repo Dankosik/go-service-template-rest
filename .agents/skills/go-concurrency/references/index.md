@@ -1,6 +1,6 @@
 # Reference Selector
 
-State how the selected reference changes the review judgment.
+Load one matching reference; load another only for an independent pressure.
 
 | Symptom | Load | Behavior change |
 | --- | --- | --- |

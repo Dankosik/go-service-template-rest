@@ -1,6 +1,6 @@
 ---
 name: go-distributed
-description: "Durable recovery. Use when cross-service consistency, replay, ordering, compensation, redrive, or reconciliation must survive process or owner boundaries."
+description: "Use when cross-service consistency, replay, ordering, compensation, redrive, or reconciliation must survive process or owner boundaries."
 metadata:
   invocation: model
   kind: method

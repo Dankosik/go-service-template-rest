@@ -8,25 +8,14 @@ exercises its changed surface.
 ## Decide
 
 Command fitness means the regression would fail, not that the command is broad.
-Read the repository command owner and prefer the narrowest fresh focused test;
-add a gate only for a wider surface.
-
-| Surface | Matching gate |
-| --- | --- |
-| OpenAPI or generated bindings | `make openapi-check` |
-| Docker/multi-package behavior | `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` |
-| Shared-memory race | focused `go test -race` or `ALLOW_HEAVY=1 make test-race` |
-| Order/scheduler sensitivity | focused `go test -shuffle=on -count=<n>` |
-| `t.Parallel()` policy | `make test-parallelism-check` |
-| SQL/migration drift | `make sqlc-check`, `ALLOW_HEAVY=1 make migration-validate` |
-
-Use `-count=1` when cache could hide whether current code/environment ran. A
-zero-exit `-run` can match no tests; verify execution when one named test carries
-the claim. Bare `go test ./...` cannot prove integration tags, contract drift,
-fuzz, race, or coverage. A skipped Docker suite is not integration evidence.
+[Validation Routing](../../../../../docs/validation-routing.md) owns existing
+command composition and execution timing. Give it the claim: generated
+contract drift, real engine semantics, shared-memory race, scheduler behavior,
+or the relevant policy surface. A skipped Docker run is not integration
+evidence, and a zero-exit selector must still exercise the named claim.
 
 ## Prove
 
-Map obligation -> narrowest command that would fail -> wider gate only when
-needed -> residual limit. Report the actual execution/result through Evidence
-Result V1 rather than promoting a command beyond its scope.
+Map obligation -> observable -> residual limit. Validation Routing selects the
+command; report actual execution/result through Evidence Result V1 rather than
+promoting a command beyond its scope.

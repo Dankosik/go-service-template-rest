@@ -88,7 +88,8 @@ turning missing technical policy into a user decision.
 | One phase's unique decision | Its phase owner |
 | Artifact persistence | [Artifacts](spec-first-workflow/shared/artifacts.md) |
 | Status values and transitions | [Artifact Lifecycle V1](spec-first-workflow/interfaces/artifact-lifecycle-v1.md) |
-| Proof semantics | [Evidence Contract](spec-first-workflow/shared/evidence-contract.md) |
+| Ordinary local completion | `AGENTS.md` |
+| Evidence scope, reuse, and sufficiency exceptions | [Evidence Contract](spec-first-workflow/shared/evidence-contract.md) |
 | Proof result fields | [Evidence Result V1](spec-first-workflow/interfaces/evidence-result-v1.md) |
 | Task/acceptance split and ready frontier | [Planning Ledger Contract](spec-first-workflow/phases/planning/ledger-contract.md) |
 | Implementation carrier and execution topology | [Implementation](spec-first-workflow/phases/implementation.md) |

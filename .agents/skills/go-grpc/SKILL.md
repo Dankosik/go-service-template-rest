@@ -1,6 +1,6 @@
 ---
 name: go-grpc
-description: "gRPC typed status paths. Use when grpc-go composition, interceptors, status mapping, streaming, credentials, Protobuf compatibility, limits, health, or shutdown changes an RPC."
+description: "Use when grpc-go composition, interceptors, status mapping, streaming, credentials, Protobuf compatibility, limits, health, or shutdown changes an RPC."
 metadata:
   invocation: model
   kind: method
@@ -16,11 +16,14 @@ and metadata, and that mapping is policy.
 For a delegated Decision or Review, or when the active artifact requires its
 result interface, load the
 [shared specialist contract](../../contracts/specialist-contract.md).
-For every changed RPC, build `RPCPath{method, proto, registration,
+When meaningful ordering, comparison, exhaustive accounting, or a required
+decision/review handoff needs structured representation, build `RPCPath{method, proto, registration,
 interceptors, deadline, limits, status, details, metadata, stream_end,
 health_shutdown, proof}` from canonical `.proto` through the terminal client
 observable. Schema evolution uses Buf gates rather than hand edits; deadlines
 propagate; each stream names its end and half-close semantics.
+Otherwise, a single local RPC path may retain its grounded judgment and proof
+for its terminal client observable.
 
 Use [Native gRPC](../../../docs/grpc.md) to select the matching architecture
 leaf. Load the [reference selector](references/index.md) for a changed

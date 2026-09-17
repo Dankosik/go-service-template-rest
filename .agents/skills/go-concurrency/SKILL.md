@@ -1,6 +1,6 @@
 ---
 name: go-concurrency
-description: "Happens-before in Go. Use when correctness depends on overlapping goroutines, publication of shared state, bounded concurrent work, or stopping and joining goroutines."
+description: "Use when correctness depends on overlapping goroutines, publication of shared state, bounded concurrent work, or stopping and joining goroutines."
 metadata:
   invocation: model
   kind: method

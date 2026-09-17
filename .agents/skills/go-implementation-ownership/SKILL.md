@@ -1,6 +1,6 @@
 ---
 name: go-implementation-ownership
-description: "Source ownership in Go. Use when accepted behavior is closed but its package, file, canonical source, dependency direction, or proof location is not."
+description: "Use when accepted Go behavior is closed but its package, file, canonical source, dependency direction, or proof location is not."
 metadata:
   invocation: model
   kind: method
@@ -16,13 +16,16 @@ means placement is not decided.
 For a delegated Decision or Review, or when the active artifact requires its
 result interface, load the
 [shared specialist contract](../../contracts/specialist-contract.md).
-For every changed responsibility, build `OwnerRecord{responsibility,
+When meaningful ordering, comparison, exhaustive accounting, or a required
+decision/review handoff needs structured representation, build `OwnerRecord{responsibility,
 canonical_source, package, file, dependency_direction, sequence_owner,
 existing_proof_location_if_known, competing_paths, cleanup}` from accepted
 behavior through callers, wiring, generated and manual sources, and cleanup.
 Ownerless, duplicated, or competing production paths are findings. Implementation
 chooses new test cases, files, and proving layers while writing code; their
 absence does not block the ownership decision.
+Otherwise, a single local responsibility may retain its grounded ownership
+judgment and proof, including competing-path disposition.
 
 The nearest record wins: read package `doc.go`, `README.md`, and seam comments
 before [Repository Architecture](../../../docs/repo-architecture.md), [Project

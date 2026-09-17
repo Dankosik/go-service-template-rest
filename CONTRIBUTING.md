@@ -45,11 +45,13 @@ only explains that route. Neither is a mandatory local completion step.
 Do not also run its `fmt-check`, `lint-all`, or `test-all` leaves. `make test` and
 `make lint` require `PKG` and do not default to `./...`.
 
-[Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md#local-completion)
-owns the stop rule and exceptions. Do not create runners or environments for
-extra confidence. Missing optional Docker/provider observations are material
-gaps to disclose, not blockers to repair. Existing CI/release gates and explicit
-task requirements remain intact; a known real defect still requires correction.
+[AGENTS.md](AGENTS.md#validation-budget) owns the ordinary local stop rule.
+Load the [Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md)
+for exceptions, reuse, additional required proof, or unavailable infrastructure.
+Do not create runners or environments for extra confidence. Missing optional
+Docker/provider observations are material gaps to disclose, not blockers to
+repair. Existing CI/release gates and explicit task requirements remain intact;
+a known real defect still requires correction.
 
 Heavy commands remain available with an explicit grant:
 
