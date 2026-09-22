@@ -60,6 +60,7 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
 		return w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed)
 	}
+	//nolint:contextcheck // Decoding extracts remote metadata; handlerRoot owns the admitted work.
 	decoded, remote, decodeErr := decodeMessage(source, metadata)
 	if decodeErr != nil {
 		return w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed)

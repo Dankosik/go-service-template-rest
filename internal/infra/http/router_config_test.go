@@ -41,9 +41,9 @@ func TestTraceNonWebhookRequest(t *testing.T) {
 	}{
 		{name: "nil request", want: true},
 		{name: "nil URL", request: &http.Request{}, want: true},
-		{name: "webhook prefix", request: httptest.NewRequest(http.MethodPost, "/webhooks/orders", nil), want: false},
-		{name: "webhook path without trailing slash", request: httptest.NewRequest(http.MethodPost, "/webhooks", nil), want: true},
-		{name: "ordinary path", request: httptest.NewRequest(http.MethodGet, "/health/live", nil), want: true},
+		{name: "webhook prefix", request: httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/webhooks/orders", nil), want: false},
+		{name: "webhook path without trailing slash", request: httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/webhooks", nil), want: true},
+		{name: "ordinary path", request: httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health/live", nil), want: true},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
