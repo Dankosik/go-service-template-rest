@@ -135,7 +135,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
 		defer cancelStop()
 		stopErr := client.StopAndCancel(stopCtx)
-		cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+		cleanupSafe = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 		if !cleanupSafe {
 			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", stopCtx.Err()))
 		}
@@ -183,11 +183,11 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, cfg.HTTP.ShutdownTimeout)
 	stopErr := client.Stop(stopCtx)
 	cancelStop()
-	cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+	cleanupSafe = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 	if !cleanupSafe {
 		hardStopCtx, cancelHardStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
 		stopErr = client.StopAndCancel(hardStopCtx)
-		cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+		cleanupSafe = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 		if !cleanupSafe {
 			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", hardStopCtx.Err()))
 		} else if errors.Is(stopErr, context.DeadlineExceeded) {
@@ -202,17 +202,4 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	}
 	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
 	return errors.Join(trigger, stopErr, diagnosticsErr)
-}
-
-func riverStoppedBeforeReturn(stopErr error, stopped <-chan struct{}) bool {
-	if stopErr == nil {
-		<-stopped
-		return true
-	}
-	select {
-	case <-stopped:
-		return true
-	default:
-		return false
-	}
 }

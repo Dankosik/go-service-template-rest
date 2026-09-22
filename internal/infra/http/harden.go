@@ -97,7 +97,7 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg HardenConfig, apiS
 	// and belongs in neither trace attributes nor span names, so this public route
 	// stays correlated through its access log rather than exporting the raw path.
 	if traceRequest == nil {
-		traceRequest = traceInboundWebhookRequest
+		traceRequest = traceNonWebhookRequest
 	}
 	// profile:inbound-webhooks-standard:end
 	if traceRequest != nil {
@@ -132,7 +132,7 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg HardenConfig, apiS
 }
 
 // profile:inbound-webhooks-standard:start
-func traceInboundWebhookRequest(request *http.Request) bool {
+func traceNonWebhookRequest(request *http.Request) bool {
 	return request == nil || request.URL == nil || !strings.HasPrefix(request.URL.Path, "/webhooks/")
 }
 

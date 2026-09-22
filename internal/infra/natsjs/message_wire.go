@@ -142,6 +142,8 @@ type remoteContext struct {
 	span trace.SpanContext
 }
 
+// decodeMessage reads envelope data and remote trace metadata; its caller attaches
+// that metadata to the handler context after admission.
 func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message, remoteContext, error) {
 	header := msg.Headers()
 	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))

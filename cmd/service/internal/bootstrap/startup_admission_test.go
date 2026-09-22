@@ -45,15 +45,15 @@ func TestStartupAdmissionStartsReadinessWatcherAfterPublishingReady(t *testing.T
 		checkReturned = true
 		return nil
 	}, time.Second)
-	ready, stopped, err := waitForStartupAdmission(
+	ready, err := waitForStartupAdmission(
 		context.Background(),
 		t.Context(),
 		args,
 		admissionErrCh,
 		make(chan serverResult),
 	)
-	if err != nil || !ready || stopped || watcherStarts != 1 {
-		t.Fatalf("admission = ready:%t stopped:%t watcher starts:%d err:%v", ready, stopped, watcherStarts, err)
+	if err != nil || !ready || watcherStarts != 1 {
+		t.Fatalf("admission = ready:%t watcher starts:%d err:%v", ready, watcherStarts, err)
 	}
 }
 

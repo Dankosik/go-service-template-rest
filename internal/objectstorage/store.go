@@ -12,6 +12,8 @@ import (
 //nolint:iface // Consumers compose the provider-neutral port outside this package.
 type Store interface {
 	Upload(ctx context.Context, key string, source io.Reader, options UploadOptions) error
+	// Download returns a live streaming body. The caller keeps ctx valid while
+	// reading and must close Body; Read can return an error after partial bytes.
 	Download(ctx context.Context, key string) (Object, error)
 	Metadata(ctx context.Context, key string) (Metadata, error)
 	Delete(ctx context.Context, key string) error
@@ -19,14 +21,20 @@ type Store interface {
 }
 
 type UploadOptions struct {
+	// Size is the declared object length in bytes. Zero is an empty object;
+	// negative and unknown lengths are unsupported.
 	Size        int64
 	ContentType string
+	// IfNotExists requests create-only upload. The shipped S3 adapter supports
+	// it only for single-request uploads of 8 MiB or less.
 	IfNotExists bool
 }
 
 type Object struct {
 	Metadata
 
+	// Body is the stream returned by Download. Close releases resources but does
+	// not validate unread data.
 	Body io.ReadCloser
 }
 

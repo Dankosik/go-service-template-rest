@@ -57,11 +57,11 @@ func New(
 	}
 	processCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	metrics := newJWKSMetrics(meterProvider)
-	returnFirstError := false
+	ignoreFirstHTTPRequestError := false
 	keys, err := keyfunc.NewDefaultOverrideCtx(processCtx, []string{jwksURI}, keyfunc.Override{
 		Client:                    jwksClient,
 		HTTPTimeout:               providerTimeout,
-		NoErrorReturnFirstHTTPReq: &returnFirstError,
+		NoErrorReturnFirstHTTPReq: &ignoreFirstHTTPRequestError,
 		RateLimitWaitMax:          time.Nanosecond,
 		RefreshInterval:           refreshInterval,
 		RefreshUnknownKID:         rate.NewLimiter(rate.Every(refreshCooldown), 1),

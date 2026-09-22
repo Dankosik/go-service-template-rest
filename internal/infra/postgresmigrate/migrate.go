@@ -54,11 +54,15 @@ const (
 )
 
 // MigrateUp applies every pending canonical migration under the Goose session lock.
+// On error, its RunResult can describe partial completed work but is not an
+// authoritative read of current database state.
 func MigrateUp(ctx context.Context, opts MigrationOptions) (RunResult, error) {
 	return migrate(ctx, opts, directionUp)
 }
 
-// MigrateDown rolls every applied migration back on a disposable database.
+// MigrateDown rolls every applied migration back on a disposable database. On
+// error, its RunResult can describe partial completed work but is not an
+// authoritative read of current database state.
 //
 // Production composition deliberately exposes only MigrateUp.
 func MigrateDown(ctx context.Context, opts MigrationOptions) (RunResult, error) {

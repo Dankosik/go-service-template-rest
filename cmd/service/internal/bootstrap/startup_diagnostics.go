@@ -34,21 +34,13 @@ func newDiagnosticsServer(cfg config.Config, metrics *telemetry.Metrics, errorLo
 	mux.Handle("GET /metrics", metrics.Handler())
 	mux.Handle("GET /debug/buildinfo", buildInfoHandler(cfg))
 
-	writeTimeout := cfg.HTTP.WriteTimeout
+	srv := newHTTPServer(cfg.HTTP, mux, errorLog)
 	if cfg.Observability.Pprof.Enabled {
 		runtimeopts.RegisterPprofHandlers(mux)
-		writeTimeout = max(writeTimeout, pprofWriteTimeout)
+		srv.WriteTimeout = max(srv.WriteTimeout, pprofWriteTimeout)
 	}
 
-	return &http.Server{
-		Handler:           mux,
-		ErrorLog:          errorLog,
-		ReadHeaderTimeout: cfg.HTTP.ReadHeaderTimeout,
-		ReadTimeout:       cfg.HTTP.ReadTimeout,
-		WriteTimeout:      writeTimeout,
-		IdleTimeout:       cfg.HTTP.IdleTimeout,
-		MaxHeaderBytes:    cfg.HTTP.MaxHeaderBytes,
-	}
+	return srv
 }
 
 // buildInfo answers "which build is this process running".

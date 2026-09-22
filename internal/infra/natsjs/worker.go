@@ -30,6 +30,9 @@ type Worker struct {
 	handlerCancel context.CancelFunc
 }
 
+// Run starts this single-use worker and must begin before normal shutdown.
+// Canceling ctx starts the drain, but active handlers use a separate context
+// and keep running until their delivery settles or a forced shutdown cancels it.
 func (w *Worker) Run(ctx context.Context) error {
 	if !w.started.CompareAndSwap(false, true) {
 		return fmt.Errorf("%w: worker already started", ErrRejected)
@@ -113,6 +116,8 @@ func (w *Worker) startConsumers(handlerRoot context.Context) ([]jetstream.Consum
 	return consumers, nil
 }
 
+// StartDrain prevents new worker deliveries and publications through the
+// shared Client. It does not cancel active handler contexts.
 func (w *Worker) StartDrain() {
 	if !w.draining.CompareAndSwap(false, true) {
 		return
@@ -125,6 +130,9 @@ func (w *Worker) StartDrain() {
 	w.client.StopPublish()
 }
 
+// Shutdown starts the drain and waits for Run before shutting down the Client.
+// A forced-shutdown error only reports that its context expired; it does not
+// prove a handler observed cancellation or finished.
 func (w *Worker) Shutdown(ctx context.Context) error {
 	w.StartDrain()
 	select {

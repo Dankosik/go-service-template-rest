@@ -1,12 +1,15 @@
 package natsjs
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestMessageIsImmutable(t *testing.T) {
@@ -42,5 +45,61 @@ func TestMessageIsImmutable(t *testing.T) {
 	carrier.Set("test", "value")
 	if carrier.Get("test") != "value" || !slices.Contains(carrier.Keys(), "test") {
 		t.Fatalf("header carrier = %#v", carrier)
+	}
+}
+
+func TestRemoteTraceMetadataPreservesHandlerContext(t *testing.T) {
+	t.Parallel()
+
+	const remoteTraceID = "4bf92f3577b34da6a3ce929d0e0e4736"
+	localSpan := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: trace.TraceID{1},
+		SpanID:  trace.SpanID{2},
+	})
+	for _, testCase := range []struct {
+		name        string
+		header      string
+		wantTraceID string
+		wantRemote  bool
+	}{
+		{name: "missing", wantTraceID: localSpan.TraceID().String()},
+		{name: "invalid", header: "invalid", wantTraceID: localSpan.TraceID().String()},
+		{name: "remote", header: "00-" + remoteTraceID + "-00f067aa0ba902b7-01", wantTraceID: remoteTraceID, wantRemote: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			type valueKey struct{}
+			root, cancel := context.WithTimeout(context.WithValue(t.Context(), valueKey{}, "retained"), time.Minute)
+			defer cancel()
+			root = trace.ContextWithSpanContext(root, localSpan)
+			source := unitSource(t, 1)
+			if testCase.header != "" {
+				source.header.Set("traceparent", testCase.header)
+			}
+			_, remote, err := decodeMessage(source, source.metadata)
+			if err != nil {
+				t.Fatalf("decodeMessage() error = %v", err)
+			}
+			if remote.span.IsValid() != testCase.wantRemote {
+				t.Fatalf("decoded remote span validity = %t, want %t", remote.span.IsValid(), testCase.wantRemote)
+			}
+			linked := contextWithRemoteParent(root, remote)
+			span := trace.SpanContextFromContext(linked)
+			if span.TraceID().String() != testCase.wantTraceID || span.IsRemote() != testCase.wantRemote {
+				t.Fatalf("linked span = %v, want trace %s remote=%t", span, testCase.wantTraceID, testCase.wantRemote)
+			}
+			if got := linked.Value(valueKey{}); got != "retained" {
+				t.Fatalf("linked context value = %v, want retained", got)
+			}
+			wantDeadline, _ := root.Deadline()
+			if got, ok := linked.Deadline(); !ok || !got.Equal(wantDeadline) {
+				t.Fatalf("linked deadline = %v, %t; want %v", got, ok, wantDeadline)
+			}
+			cancel()
+			if !errors.Is(linked.Err(), context.Canceled) {
+				t.Fatalf("linked context error = %v, want cancellation", linked.Err())
+			}
+		})
 	}
 }

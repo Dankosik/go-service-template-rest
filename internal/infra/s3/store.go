@@ -19,6 +19,9 @@ import (
 	"golang.org/x/net/http/httpguts"
 )
 
+// Upload stores one object. This S3 adapter supports create-only uploads only
+// as single requests up to 8 MiB inclusive; a larger IfNotExists upload returns
+// objectstorage.ErrInvalid even when the configured object-size limit permits it.
 func (c *Client) Upload(ctx context.Context, key string, source io.Reader, options objectstorage.UploadOptions) error {
 	if err := c.validateUpload(ctx, key, source, options); err != nil {
 		return err

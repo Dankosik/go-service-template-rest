@@ -54,7 +54,8 @@ type Writer interface {
 	// that can make the check and the write atomic.
 	Create(ctx context.Context, created Article) error
 	// AppendEvent records that something happened. It must be written in the
-	// same transaction as the change it describes; see Atomically.
+	// same transaction as the change it describes; Store.Do owns that unit of
+	// work.
 	AppendEvent(ctx context.Context, event Event) error
 }
 
@@ -78,6 +79,8 @@ type Writer interface {
 // observable.
 type Store interface {
 	FindBySlug(ctx context.Context, slug string) (Article, error)
+	// Do calls fn with a transactional Writer. All Writer operations finish
+	// before fn returns; fn must not retain the Writer after that call.
 	Do(ctx context.Context, fn func(Writer) error) error
 }
 
@@ -136,16 +139,16 @@ func validateDraft(candidate Article) error {
 	if !slugPattern.MatchString(candidate.Slug) {
 		return fmt.Errorf("%w: slug must match %s", ErrInvalid, slugPattern)
 	}
-	if candidate.Title == "" || textLength(candidate.Title) > maxTitleLength {
+	if candidate.Title == "" || utf16CodeUnitCount(candidate.Title) > maxTitleLength {
 		return fmt.Errorf("%w: title must be 1..%d characters", ErrInvalid, maxTitleLength)
 	}
-	if candidate.Summary == "" || textLength(candidate.Summary) > maxSummaryLength {
+	if candidate.Summary == "" || utf16CodeUnitCount(candidate.Summary) > maxSummaryLength {
 		return fmt.Errorf("%w: summary must be 1..%d characters", ErrInvalid, maxSummaryLength)
 	}
 	return nil
 }
 
-func textLength(value string) int {
+func utf16CodeUnitCount(value string) int {
 	length := 0
 	for _, r := range value {
 		length += utf16.RuneLen(r)

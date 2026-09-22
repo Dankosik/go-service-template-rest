@@ -45,7 +45,7 @@ type serveRuntimeArgs struct {
 	// profile:grpc:start
 	grpcSrv grpcRuntimeServer
 	// profile:grpc:end
-	metricsSrv         runtimeServer
+	diagnosticsSrv     runtimeServer
 	readinessCheck     func(context.Context) error
 	backgroundFailures <-chan error
 	admission          *startupAdmissionController
@@ -70,7 +70,7 @@ type runtimeListeners struct {
 	// profile:grpc:start
 	grpc net.Listener
 	// profile:grpc:end
-	metrics net.Listener
+	diagnostics net.Listener
 }
 
 func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (runtimeListeners, string, error) {
@@ -94,13 +94,13 @@ func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (runtimeLi
 	}
 	// profile:grpc:end
 
-	if args.metricsSrv != nil && args.cfg.Observability.Metrics.Addr != "" {
-		metricsListener, metricsErr := listenConfig.Listen(ctx, "tcp", args.cfg.Observability.Metrics.Addr)
-		if metricsErr != nil {
+	if args.diagnosticsSrv != nil && args.cfg.Observability.Metrics.Addr != "" {
+		diagnosticsListener, diagnosticsListenErr := listenConfig.Listen(ctx, "tcp", args.cfg.Observability.Metrics.Addr)
+		if diagnosticsListenErr != nil {
 			listeners.close()
-			return runtimeListeners{}, "startup.metrics_listen", fmt.Errorf("listen metrics server: %w", metricsErr)
+			return runtimeListeners{}, "startup.metrics_listen", fmt.Errorf("listen metrics server: %w", diagnosticsListenErr)
 		}
-		listeners.metrics = metricsListener
+		listeners.diagnostics = diagnosticsListener
 	}
 	return listeners, "", nil
 }
@@ -114,14 +114,14 @@ func (l runtimeListeners) close() {
 		_ = l.grpc.Close()
 	}
 	// profile:grpc:end
-	if l.metrics != nil {
-		_ = l.metrics.Close()
+	if l.diagnostics != nil {
+		_ = l.diagnostics.Close()
 	}
 }
 
 func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args serveRuntimeArgs) error {
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
-		return rejectHTTPStartup(
+		return rejectRuntimeStartup(
 			bootstrapCtx,
 			args.log,
 			"startup.http_listen",
@@ -131,17 +131,17 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 
 	listeners, stage, err := bindRuntimeListeners(bootstrapCtx, args)
 	if err != nil {
-		return rejectHTTPStartup(bootstrapCtx, args.log, stage, err)
+		return rejectRuntimeStartup(bootstrapCtx, args.log, stage, err)
 	}
 	listener := listeners.http
 	// profile:grpc:start
 	grpcListener := listeners.grpc
 	// profile:grpc:end
-	metricsListener := listeners.metrics
+	diagnosticsListener := listeners.diagnostics
 
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
 		listeners.close()
-		return rejectHTTPStartup(
+		return rejectRuntimeStartup(
 			bootstrapCtx,
 			args.log,
 			"startup.http_serve",
@@ -155,7 +155,7 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 		serverCount++
 	}
 	// profile:grpc:end
-	if metricsListener != nil {
+	if diagnosticsListener != nil {
 		serverCount++
 	}
 	runErrCh := make(chan serverResult, serverCount)
@@ -171,10 +171,10 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 		}()
 	}
 	// profile:grpc:end
-	if metricsListener != nil {
+	if diagnosticsListener != nil {
 		go func() {
-			args.log.InfoContext(bootstrapCtx, "metrics server started", "addr", metricsListener.Addr().String(), "env", args.cfg.App.Env)
-			runErrCh <- serverResult{name: "metrics", err: normalizeServeError(args.metricsSrv.Serve(metricsListener))}
+			args.log.InfoContext(bootstrapCtx, "metrics server started", "addr", diagnosticsListener.Addr().String(), "env", args.cfg.App.Env)
+			runErrCh <- serverResult{name: "metrics", err: normalizeServeError(args.diagnosticsSrv.Serve(diagnosticsListener))}
 		}()
 	}
 
@@ -182,7 +182,7 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	defer cancelAdmission()
 
 	admissionErrCh := startStartupAdmission(admissionCtx, args.readinessCheck, args.cfg.HTTP.ReadinessTimeout)
-	ready, stopRequested, terminalErr := waitForStartupAdmission(
+	ready, terminalErr := waitForStartupAdmission(
 		signalCtx,
 		bootstrapCtx,
 		args,
@@ -191,7 +191,7 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	)
 	var serverErr error
 
-	if ready && !stopRequested {
+	if ready {
 		serverErr, terminalErr = waitForRuntimeStop(signalCtx, args, runErrCh)
 	}
 	cancelAdmission()
@@ -239,19 +239,10 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	// Stopped only now, so a scraper could still collect everything the drain
 	// produced. It is stopped here rather than by the caller because this function
 	// started its goroutine, and split ownership is what lets one escape.
-	diagnosticsErr := shutdownDiagnostics(signalCtx, args.log, args.shutdown, args.metricsSrv)
+	diagnosticsErr := shutdownDiagnostics(signalCtx, args.log, args.shutdown, args.diagnosticsSrv)
 
-	if drainErr != nil {
-		if terminalErr != nil {
-			return errors.Join(terminalErr, drainErr, diagnosticsErr)
-		}
-		return errors.Join(serverErr, drainErr, diagnosticsErr)
-	}
-	if terminalErr != nil {
-		return errors.Join(terminalErr, diagnosticsErr)
-	}
-	if serverErr != nil {
-		return errors.Join(serverErr, diagnosticsErr)
+	if terminalErr != nil || serverErr != nil || drainErr != nil {
+		return errors.Join(terminalErr, serverErr, drainErr, diagnosticsErr)
 	}
 	if diagnosticsErr != nil {
 		return diagnosticsErr
@@ -320,7 +311,7 @@ func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Co
 	return nil
 }
 
-func rejectHTTPStartup(
+func rejectRuntimeStartup(
 	bootstrapCtx context.Context,
 	log *slog.Logger,
 	stage string,

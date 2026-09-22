@@ -98,7 +98,7 @@ func classifyDelivery(result sendResult, err error) error {
 		return fmt.Errorf("webhook delivery retryable: HTTP %d", evidence.StatusCode)
 	case evidence.StatusCode >= 100:
 		return cancelJob(fmt.Sprintf("webhook receiver rejected delivery: HTTP %d", evidence.StatusCode))
-	case evidence.MayHaveSent:
+	case evidence.Certainty == sendCertaintyMayHaveSent:
 		return deliveryFailure("webhook delivery outcome is ambiguous", err)
 	case errors.Is(err, context.DeadlineExceeded):
 		return context.DeadlineExceeded

@@ -17,12 +17,13 @@ func TestWebhookDeliveryClassification(t *testing.T) {
 		cancelled bool
 		retry     bool
 	}{
-		{name: "accepted", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusNoContent, MayHaveSent: true}}},
-		{name: "rate limited", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusTooManyRequests, MayHaveSent: true}}, retry: true},
-		{name: "rejected", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusBadRequest, MayHaveSent: true}}, cancelled: true},
-		{name: "ambiguous", result: sendResult{Evidence: transportEvidence{MayHaveSent: true}}, retry: true},
-		{name: "local denial", result: sendResult{Evidence: transportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, cancelled: true},
-		{name: "deadline", result: sendResult{Evidence: transportEvidence{DefinitelyNotSent: true}}, err: context.DeadlineExceeded, retry: true},
+		{name: "accepted", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusNoContent, Certainty: sendCertaintyMayHaveSent}}},
+		{name: "rate limited", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusTooManyRequests, Certainty: sendCertaintyMayHaveSent}}, retry: true},
+		{name: "rejected", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusBadRequest, Certainty: sendCertaintyMayHaveSent}}, cancelled: true},
+		{name: "ambiguous", result: sendResult{Evidence: transportEvidence{Certainty: sendCertaintyMayHaveSent}}, retry: true},
+		{name: "local denial", result: sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, cancelled: true},
+		{name: "deadline", result: sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent}}, err: context.DeadlineExceeded, retry: true},
+		{name: "unspecified", result: sendResult{}, err: errors.New("transport unavailable"), retry: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -46,7 +47,7 @@ func TestWebhookFailuresPreserveSafeCause(t *testing.T) {
 	if err := prepareFailure(t.Context(), cause); !errors.Is(err, cause) {
 		t.Fatalf("prepareFailure() error = %v, want cause", err)
 	}
-	result := sendResult{Evidence: transportEvidence{MayHaveSent: true}}
+	result := sendResult{Evidence: transportEvidence{Certainty: sendCertaintyMayHaveSent}}
 	if err := classifyDelivery(result, cause); !errors.Is(err, cause) {
 		t.Fatalf("classifyDelivery() error = %v, want cause", err)
 	}

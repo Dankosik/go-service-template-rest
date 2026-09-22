@@ -15,8 +15,10 @@ type pullConsumer interface {
 
 const settlementSchedulingSlack = time.Second
 
-// NewWorker creates or updates the application-owned durable consumer. Streams
-// remain operator-owned; the NATS client and server own consumer reconciliation.
+// NewWorker creates or updates the application-owned durable consumer. A Client
+// admits one successfully created Worker, whose Run must start before normal
+// shutdown. Streams remain operator-owned; the NATS client and server own
+// consumer reconciliation.
 func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handler) (*Worker, error) {
 	if handler == nil {
 		return nil, fmt.Errorf("%w: messaging handler is required", ErrRejected)

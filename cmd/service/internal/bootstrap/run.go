@@ -326,9 +326,9 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	}
 	// profile:grpc:end
 
-	var metricsSrv runtimeServer
+	var diagnosticsSrv runtimeServer
 	if bootstrap.cfg.Observability.Metrics.Addr != "" {
-		metricsSrv = newDiagnosticsServer(bootstrap.cfg, metrics, errorLog)
+		diagnosticsSrv = newDiagnosticsServer(bootstrap.cfg, metrics, errorLog)
 	}
 
 	serveErr := wiring.serve(signalCtx, startupCtx, serveRuntimeArgs{
@@ -339,7 +339,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		// profile:grpc:start
 		grpcSrv: grpcSrv,
 		// profile:grpc:end
-		metricsSrv:         metricsSrv,
+		diagnosticsSrv:     diagnosticsSrv,
 		backgroundFailures: supervisor.Failures(),
 		// Admission refreshes rather than probing separately, so the verdict it
 		// admits on is the same one the probe route will serve. Without that, the

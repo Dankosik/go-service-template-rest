@@ -2,6 +2,7 @@ package postgreswebhook
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/netip"
@@ -33,12 +34,21 @@ func TestWebhookRequestContractAndAddressFallback(t *testing.T) {
 	result, err := tryPreparedAddresses(ctx, prepared, func(_ context.Context, candidate preparedSend) (sendResult, error) {
 		visited = append(visited, candidate.SelectedAddress)
 		if len(visited) == 1 {
-			return sendResult{Evidence: transportEvidence{DefinitelyNotSent: true}}, context.DeadlineExceeded
+			return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent}}, context.DeadlineExceeded
 		}
-		return sendResult{Evidence: transportEvidence{StatusCode: http.StatusNoContent, MayHaveSent: true}}, nil
+		return sendResult{Evidence: transportEvidence{StatusCode: http.StatusNoContent, Certainty: sendCertaintyMayHaveSent}}, nil
 	})
 	if err != nil || result.Evidence.StatusCode != http.StatusNoContent || len(visited) != 2 {
 		t.Fatalf("fallback = %+v, %v, visited=%v", result, err, visited)
+	}
+
+	visited = visited[:0]
+	result, err = tryPreparedAddresses(ctx, prepared, func(_ context.Context, candidate preparedSend) (sendResult, error) {
+		visited = append(visited, candidate.SelectedAddress)
+		return sendResult{}, context.DeadlineExceeded
+	})
+	if !errors.Is(err, context.DeadlineExceeded) || result.Evidence.Certainty != sendCertaintyUnspecified || len(visited) != 1 {
+		t.Fatalf("unspecified fallback = %+v, %v, visited=%v", result, err, visited)
 	}
 }
 
@@ -53,6 +63,29 @@ func TestWebhookURLAndDialPolicy(t *testing.T) {
 	defer cancel()
 	if _, err := transport.DialContext(ctx, "tcp", "ignored:443"); err == nil || !strings.Contains(err.Error(), errDestinationDenied.Error()) {
 		t.Fatalf("private dial error = %v", err)
+	}
+}
+
+func TestAdmitDestinationAddresses(t *testing.T) {
+	addresses := []netip.Addr{netip.MustParseAddr("::ffff:1.1.1.1"), netip.MustParseAddr("8.8.8.8")}
+	admitted, err := admitDestinationAddresses(addresses)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if addresses[0] != netip.MustParseAddr("1.1.1.1") || len(admitted) != 2 || admitted[0] != netip.MustParseAddr("1.1.1.1") {
+		t.Fatalf("admitted addresses = %v; input = %v", admitted, addresses)
+	}
+	admitted[0] = netip.Addr{}
+	if addresses[0] != netip.MustParseAddr("1.1.1.1") {
+		t.Fatalf("admitted addresses alias input: %v", addresses)
+	}
+
+	tooMany := make([]netip.Addr, maxDNSAddresses+1)
+	for i := range tooMany {
+		tooMany[i] = netip.MustParseAddr("8.8.8.8")
+	}
+	if _, err := admitDestinationAddresses(tooMany); !errors.Is(err, errDestinationDenied) {
+		t.Fatalf("raw oversized answer error = %v, want destination denial", err)
 	}
 }
 

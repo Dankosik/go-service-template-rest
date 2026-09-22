@@ -3,6 +3,10 @@ package httpx
 import (
 	"log/slog"
 	"net/http"
+
+	// profile:inbound-webhooks-standard:start
+	"net/http/httptest"
+	// profile:inbound-webhooks-standard:end
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -25,6 +29,32 @@ func TestOTelServerNameBoundsAuthorityLabels(t *testing.T) {
 		}
 	}
 }
+
+// profile:inbound-webhooks-standard:start
+func TestTraceNonWebhookRequest(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name    string
+		request *http.Request
+		want    bool
+	}{
+		{name: "nil request", want: true},
+		{name: "nil URL", request: &http.Request{}, want: true},
+		{name: "webhook prefix", request: httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/webhooks/orders", nil), want: false},
+		{name: "webhook path without trailing slash", request: httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/webhooks", nil), want: true},
+		{name: "ordinary path", request: httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health/live", nil), want: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := traceNonWebhookRequest(testCase.request); got != testCase.want {
+				t.Fatalf("traceNonWebhookRequest() = %t, want %t", got, testCase.want)
+			}
+		})
+	}
+}
+
+// profile:inbound-webhooks-standard:end
 
 //nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestHardenUsesCallerTraceFilter(t *testing.T) {

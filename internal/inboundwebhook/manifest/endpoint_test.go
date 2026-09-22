@@ -26,4 +26,27 @@ func TestParseEndpoints(t *testing.T) {
 	}
 }
 
+func TestValidEndpointID(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name  string
+		value string
+		want  bool
+	}{
+		{name: "allowed ASCII token", value: "orders_2026-aZ", want: true},
+		{name: "empty", value: "", want: false},
+		{name: "too long", value: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", want: false},
+		{name: "non ASCII", value: "orders-é", want: false},
+		{name: "invalid ASCII punctuation", value: "orders:2026", want: false},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := ValidEndpointID(testCase.value); got != testCase.want {
+				t.Fatalf("ValidEndpointID(%q) = %t, want %t", testCase.value, got, testCase.want)
+			}
+		})
+	}
+}
+
 // profile:inbound-webhooks-standard:end
