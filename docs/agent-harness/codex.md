@@ -51,7 +51,8 @@ bounded work locally within current role authority; do not create App chats.
 
 ## Models
 
-Use `gpt-6-astra` for every decision-owning role: the root coordinator,
+Unless the user explicitly selects another model, use `gpt-6-astra` for
+every decision-owning role: the root coordinator,
 Ledger Orchestrator, phase owner, Acceptance-Unit Lead, domain specialist,
 independent reviewer, and adjudicator. [Agent Harness](../agent-harness.md)
 owns role authority and context lifetime.
@@ -80,8 +81,11 @@ reasoning. Do not select `ultra` automatically for a critical role; use it only
 when the installed harness semantics and accepted delegation topology justify
 it. After a difficult unit closes, choose effort afresh for the next unit.
 
-Project and subagent defaults use Astra; inheritance and explicit overrides
-still require effective-model verification. Override those defaults through
+The project runtime leaves the root model and reasoning effort unset so the
+user configuration and native model picker own that selection. Do not restore
+root model or effort pins during configuration sync. Subagent defaults use
+Astra; inheritance and explicit overrides still require effective-model
+verification. Override subagent defaults through
 native model and effort fields only for bounded execution or evidence work:
 `gpt-5.6-luna` at `low` for closed mechanical work, `gpt-5.6-terra` at `medium`
 for ordinary implementation and at `high` or `xhigh` for harder implementation
@@ -102,11 +106,12 @@ effort within Astra for decision-owning roles; execution and evidence work may
 escalate from Luna to Terra, with unresolved judgment returning to Astra.
 Resolve supported values from the callable schema and verify the effective
 model before assigning decision authority.
-If Astra is unavailable or its selection is rejected, retain the native
+If a required Astra selection is unavailable or rejected, retain the native
 failure and stop the dependent decision or acceptance; never silently fall
-back to an execution model. Preserve an explicit user-selected model, but assigning
-a non-Astra model decision authority requires an explicit exception to this
-policy. A model name in prompt prose alone is not a native selection.
+back to an execution model. An explicit user selection in the native model
+picker overrides this policy for that task without further confirmation.
+Preserve the selected model and effort. A model name in prompt prose alone
+is not a native selection.
 
 ## Dispatch And Coordination
 

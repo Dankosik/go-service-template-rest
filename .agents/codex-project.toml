@@ -1,5 +1,4 @@
-model = "gpt-6-astra"
-model_reasoning_effort = "high"
+# Leave the root model and reasoning effort to the user configuration and picker.
 features.multi_agent_v2 = true
 
 developer_instructions = """
