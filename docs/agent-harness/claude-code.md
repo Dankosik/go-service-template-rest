@@ -1,7 +1,7 @@
 # Claude Code Harness Adapter
 
-Use the installed Agent and Goal controls as native authority. The ordinary
-nested route is supported by Claude Code 2.1.227; recheck native controls after
+Use the installed Agent and Goal controls as native authority. The Opus 5.5
+model policy requires Claude Code 2.1.280 or later; recheck native controls after
 runtime changes.
 
 ## Native Map
@@ -37,11 +37,35 @@ runtime changes.
 
 ## Models And Dispatch
 
-Use Sonnet for a closed, strongly owned Lead unit and ordinary delegated work;
-use Opus when uncertainty, protected risk, or high consequence requires it.
-Preserve a user-selected model. Carry supported model, effort, and isolation
-controls through native fields or the role carrier; the fixed brief carries
-only the missing execution-changing facts.
+Use Opus for the main session, Leads, and every delegated task. Vary reasoning
+effort with the task rather than switching model families. The current target
+is Opus 5.5: select `opus` (`opus[1m]` for the main session) and verify the
+effective version through native state. Use `claude-opus-5-5` when an alias
+resolves to an older version. Preserve an explicit user-selected model.
+For built-in subagents, pass `model: "opus"` explicitly when their own default
+selects another family.
+
+Use `low` for short mechanical evidence work, `medium` for closed implementation
+and ordinary Lead units, `high` for substantive specialist judgment or review,
+and `xhigh` for interacting invariants, protected risk, or unresolved reviewer
+conflicts. Reserve `max` for tasks whose remaining difficulty justifies the
+extra reasoning. Raise effort after unexplained causal failures or a missed
+invariant and retain it through that unit's repair.
+
+Canonical roles own the default `claude_model` and `claude_effort`; the role
+generator emits native `model` and `effort` frontmatter. Select task-specific
+effort through supported native controls: `/effort` or `--effort` for a session,
+and an `effort` override in a session-local `--agents` definition for a named
+subagent, preserving its role body and permissions. Frontmatter effort overrides
+session effort; changing only the parent's effort does not retune that child.
+Use a per-invocation effort field only when the installed tool exposes one.
+Carry model, effort, and isolation in native controls; the fixed brief carries
+only missing execution-changing facts.
+
+Model and effort controls were checked against the official
+[model configuration](https://code.claude.com/docs/en/model-config) and
+[subagent documentation](https://code.claude.com/docs/en/sub-agents) on
+2026-09-22, with Claude Code 2.1.280 installed.
 
 Apply [Context And Lifetime](../agent-harness.md#context-and-lifetime) for
 freshness and permitted reuse. A new lane starts a fresh

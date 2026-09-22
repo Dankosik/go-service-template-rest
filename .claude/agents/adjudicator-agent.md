@@ -3,6 +3,7 @@ name: adjudicator-agent
 description: "Read-only adjudicator for one surviving material reviewer conflict."
 tools: Read, Grep, Glob, Bash
 model: opus
+effort: xhigh
 ---
 
 Apply the fixed [Subagent Brief](../../docs/subagent-brief-template.md) and its
