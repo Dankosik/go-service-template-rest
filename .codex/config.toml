@@ -14,8 +14,6 @@ a healthy agent for status.
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 20
-default_subagent_model = "gpt-6-astra"
-default_subagent_reasoning_effort = "high"
 # template-owned-codex-runtime:end
 
 # template-owned-codex-agents:start

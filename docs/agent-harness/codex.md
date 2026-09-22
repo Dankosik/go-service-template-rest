@@ -51,67 +51,41 @@ bounded work locally within current role authority; do not create App chats.
 
 ## Models
 
-Unless the user explicitly selects another model, use `gpt-6-astra` for
-every decision-owning role: the root coordinator,
-Ledger Orchestrator, phase owner, Acceptance-Unit Lead, domain specialist,
-independent reviewer, and adjudicator. [Agent Harness](../agent-harness.md)
-owns role authority and context lifetime.
+Before Implementation, preserve the user's native model and effort selection;
+this repository does not choose a model for those phases. The project runtime
+does not pin the root or subagent model or effort. Verify the effective native
+selection when assigning a decision, and preserve an explicit user selection.
+Pass that selection through native model and effort fields for fresh phase
+actors when those fields are available.
 
-The installed Codex catalog supports `low`, `medium`, `high`, `xhigh`, `max`,
-and `ultra` for Astra, with a native default of `medium`; this project chooses
-`high`. The [Astra API model page](https://developers.openai.com/api/docs/models/gpt-6-astra)
-lists the first five. Codex `ultra` adds automatic task delegation to maximum
-reasoning; it is not an additional API reasoning level. Recheck the callable
-schema when the harness changes.
+During Implementation, unless the user selects another model for that task,
+use `gpt-6-sol` for the root delivery owner, Ledger Orchestrator,
+Acceptance-Unit Lead, domain specialist, independent reviewer,
+and adjudicator. Sol owns task decisions, assembled validation, review verdicts,
+and acceptance under their existing role boundaries. Use `gpt-6-luna` at
+`medium` for bounded code-writing `worker-agent` lanes and at `low` for bounded
+mechanical evidence work. Luna can implement and repair within an accepted
+contract; return unresolved decisions and material review questions to Sol.
+Sol may implement directly when delegation costs more than it saves.
 
-Select Astra effort from the remaining judgment, not the role title alone:
+Use Sol at `medium` for closed coordination and at `high` for task ownership,
+acceptance, specialist judgment, and independent review. Raise it to `xhigh`
+for interacting invariants, ambiguous recovery, weak proof, or a material
+reviewer conflict. Use `max` only when a concrete reasoning gap remains after
+`xhigh`. The [Sol](https://developers.openai.com/api/docs/models/gpt-6-sol)
+and [Luna](https://developers.openai.com/api/docs/models/gpt-6-luna) model pages
+list these effort levels. Recheck the callable schema when the harness changes.
 
-| Effort | Use when |
-| --- | --- |
-| `low` | Mechanical retrieval or status readback with no new judgment; prefer a bounded helper when delegation is worthwhile. |
-| `medium` | Coordination only applies closed ledger decisions or routes known results; no new decision, acceptance, or review verdict is needed. |
-| `high` | Default for phase decisions, implementation ownership, acceptance, domain judgment, and independent review. |
-| `xhigh` | Interacting cross-domain invariants, ambiguous recovery, weak proof, a material reviewer conflict, or a failed causal attempt requires deeper reasoning. |
-| `max` | A concrete unresolved reasoning gap remains after `xhigh`, and additional depth justifies the time and usage within the accepted budget. |
-| `ultra` | Maximum reasoning with automatic delegation, only when the installed harness preserves the accepted topology, role authority, and capacity. |
-
-Raise effort before the affected decision or remaining repair. Missing facts,
-authority, or a broken harness require recovery through their owner, not more
-reasoning. Do not select `ultra` automatically for a critical role; use it only
-when the installed harness semantics and accepted delegation topology justify
-it. After a difficult unit closes, choose effort afresh for the next unit.
-
-The project runtime leaves the root model and reasoning effort unset so the
-user configuration and native model picker own that selection. Do not restore
-root model or effort pins during configuration sync. Subagent defaults use
-Astra; inheritance and explicit overrides still require effective-model
-verification. Override subagent defaults through
-native model and effort fields only for bounded execution or evidence work:
-`gpt-5.6-luna` at `low` for closed mechanical work, `gpt-5.6-terra` at `medium`
-for ordinary implementation and at `high` or `xhigh` for harder implementation
-within an accepted contract. These models may reason about implementation
-details and propose alternatives; Astra retains decision and acceptance
-authority. Use `evidence-agent` for advisory research, not a lower-model
-`specialist-agent` or `reviewer-agent` verdict. Do not select `gpt-5.6-sol`
-for any role, execution, evidence work, escalation, or fallback.
-
-For executor briefs, use [Agent Harness](../agent-harness.md#context-and-lifetime).
-Implementation owns handoff, repair, and final-validation timing. Return
-unresolved judgment or stalled diagnosis to Astra; a missed invariant raises
-Astra's effort under Models. Astra may implement directly when delegation would
-cost more.
-
-This Codex policy specializes Agent Harness's capability selection: raise
-effort within Astra for decision-owning roles; execution and evidence work may
-escalate from Luna to Terra, with unresolved judgment returning to Astra.
-Resolve supported values from the callable schema and verify the effective
-model before assigning decision authority.
-If a required Astra selection is unavailable or rejected, retain the native
-failure and stop the dependent decision or acceptance; never silently fall
-back to an execution model. An explicit user selection in the native model
-picker overrides this policy for that task without further confirmation.
-Preserve the selected model and effort. A model name in prompt prose alone
-is not a native selection.
+Select the Implementation model and effort through native controls before the
+dependent work. The root model remains controlled by the user's picker;
+subagent briefs carry their own model and effort fields. If the root task has a
+different effective model, assign implementation ownership to a Sol Lead
+through the native subagent controls rather than claiming root-local Sol
+acceptance. If a required selection is unavailable or rejected, retain the
+native failure and stop only the dependent decision or acceptance. A model
+name in prompt prose alone is not a native selection. For executor briefs,
+apply [Agent Harness](../agent-harness.md#context-and-lifetime);
+Implementation owns handoff, repair, and final-validation timing.
 
 ## Dispatch And Coordination
 
