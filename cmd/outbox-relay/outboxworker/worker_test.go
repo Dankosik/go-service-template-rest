@@ -70,3 +70,27 @@ func TestWorkerPublishesStableIdentityAndTrace(t *testing.T) {
 		t.Fatalf("Work(ambiguous publish) error = %v, want ErrAmbiguous", err)
 	}
 }
+
+func TestWorkerFormatsZeroVersionForPublisher(t *testing.T) {
+	t.Parallel()
+
+	args := postgresoutbox.PublishJob{
+		ID: "event-1", Type: "order.updated", Version: 0,
+		OccurredAt: time.Unix(1, 0).UTC(), Payload: json.RawMessage(`{"order_id":"order-1"}`),
+		Subject: "events.orders",
+	}
+	var published natsjs.Event
+	worker := newWorker(func(_ context.Context, event natsjs.Event) (natsjs.PublishResult, error) {
+		published = event
+		return natsjs.PublishResult{}, nil
+	})
+	if err := worker.Work(t.Context(), &river.Job[postgresoutbox.PublishJob]{
+		JobRow: &rivertype.JobRow{},
+		Args:   args,
+	}); err != nil {
+		t.Fatalf("Work() error = %v", err)
+	}
+	if published.Schema != "v0" {
+		t.Fatalf("published schema = %q, want v0", published.Schema)
+	}
+}

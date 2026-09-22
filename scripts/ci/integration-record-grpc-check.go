@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -28,18 +29,23 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s: parse: %v\n", filename, err)
 		os.Exit(1)
 	}
-
-	grpcAlias := importAlias(parsed, "/internal/infra/grpcclient")
-	oauthAlias := importAlias(parsed, "/internal/infra/oauth2clientcredentials")
-	credentialsAlias := importAlias(parsed, "google.golang.org/grpc/credentials")
-	if grpcAlias == "" || credentialsAlias == "" {
-		fmt.Fprintf(os.Stderr, "%s: missing gRPC owners\n", filename)
+	if err := checkGRPCClient(parsed, authMode); err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", filename, err)
 		os.Exit(1)
+	}
+}
+
+func checkGRPCClient(file *ast.File, authMode string) error {
+	grpcAlias := importAlias(file, "/internal/infra/grpcclient")
+	oauthAlias := importAlias(file, "/internal/infra/oauth2clientcredentials")
+	credentialsAlias := importAlias(file, "google.golang.org/grpc/credentials")
+	if grpcAlias == "" || credentialsAlias == "" {
+		return errors.New("missing gRPC owners")
 	}
 
 	targetBindings, tlsBindings, connectionBindings := 0, 0, 0
 	authConfigBindings, authConnectionBindings, returnedClients := 0, 0, 0
-	for _, declaration := range parsed.Decls {
+	for _, declaration := range file.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok || function.Recv != nil || function.Name.Name != "New" || function.Body == nil {
 			continue
@@ -98,7 +104,7 @@ func main() {
 	if authMode == "oauth2-client-credentials" {
 		wantConnections, wantAuthConfig, wantAuthConnections = 0, 1, 1
 	}
-	closeOnce, authClose, connectionClose := closeFlow(parsed, authMode)
+	closeOnce, authClose, connectionClose := closeFlow(file, authMode)
 	wantAuthClose := 0
 	if authMode == "oauth2-client-credentials" {
 		wantAuthClose = 1
@@ -106,11 +112,11 @@ func main() {
 	if targetBindings != 1 || tlsBindings != 1 || connectionBindings != wantConnections ||
 		authConfigBindings != wantAuthConfig || authConnectionBindings != wantAuthConnections ||
 		returnedClients != 1 || closeOnce != 1 || authClose != wantAuthClose || connectionClose != 1 {
-		fmt.Fprintf(os.Stderr, "%s: target=%d tls=%d conn=%d authConfig=%d authConn=%d returned=%d once=%d authClose=%d connClose=%d\n",
-			filename, targetBindings, tlsBindings, connectionBindings, authConfigBindings, authConnectionBindings,
+		return fmt.Errorf("target=%d tls=%d conn=%d authConfig=%d authConn=%d returned=%d once=%d authClose=%d connClose=%d",
+			targetBindings, tlsBindings, connectionBindings, authConfigBindings, authConnectionBindings,
 			returnedClients, closeOnce, authClose, connectionClose)
-		os.Exit(1)
 	}
+	return nil
 }
 
 func targetAssignment(assignment *ast.AssignStmt) bool {

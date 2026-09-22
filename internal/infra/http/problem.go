@@ -38,6 +38,10 @@ func notFoundProblem() problemResponse {
 	return problemResponse{code: problem.CodeNotFound, detail: "resource not found"}
 }
 
+func requestEntityTooLargeProblem() problemResponse {
+	return problemResponse{code: problem.CodeRequestEntityTooLarge, detail: "request body exceeds limit"}
+}
+
 // timeBudgetExceededProblem is what a request that outlived its deadline
 // answers.
 //

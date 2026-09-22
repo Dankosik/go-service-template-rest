@@ -34,8 +34,9 @@ var (
 	ErrTaskStopped = errors.New("background task stopped unexpectedly")
 )
 
-// Task is one supervised unit of work. Run must return when its context is done;
-// a task that ignores cancellation is bounded only by the shutdown budget.
+// Task is one supervised long-lived unit of work. Run must return when its
+// context is done; a task that ignores cancellation is bounded only by the
+// shutdown budget. A nil return before shutdown becomes ErrTaskStopped.
 type Task struct {
 	Name string
 	Run  func(context.Context) error
@@ -97,9 +98,9 @@ func New(ctx context.Context, log *slog.Logger) *Supervisor {
 	}
 }
 
-// Go starts task unless Shutdown has begun. A panic inside Run is recovered and
-// converted into an error so the process can run its ordered drain instead of
-// losing shutdown telemetry.
+// Go starts a long-lived task unless Shutdown has begun. A panic inside Run is
+// recovered and converted into an error so the process can run its ordered
+// drain instead of losing shutdown telemetry.
 func (s *Supervisor) Go(task Task) {
 	name := cmp.Or(task.Name, "unnamed")
 	if task.Run == nil {
@@ -208,6 +209,8 @@ func (s *Supervisor) recordStop(name string, err error) {
 	}
 }
 
+// Failures reports only the first recorded task failure. It is neither a full
+// error stream nor a shutdown-completion signal, and Shutdown does not close it.
 func (s *Supervisor) Failures() <-chan error {
 	return s.failures
 }

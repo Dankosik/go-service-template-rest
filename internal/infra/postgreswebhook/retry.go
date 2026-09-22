@@ -22,11 +22,18 @@ const (
 	retryAfterMetadataKey = "webhook_retry_after_at"
 )
 
+type sendCertainty uint8
+
+const (
+	sendCertaintyUnspecified sendCertainty = iota
+	sendCertaintyDefinitelyNotSent
+	sendCertaintyMayHaveSent
+)
+
 type transportEvidence struct {
-	StatusCode        int
-	DefinitelyNotSent bool
-	MayHaveSent       bool
-	LocalDenial       bool
+	StatusCode  int
+	Certainty   sendCertainty
+	LocalDenial bool
 }
 
 func parseRetryAfter(raw, date string, attemptedAt time.Time, maxDelay time.Duration) (time.Duration, bool) {

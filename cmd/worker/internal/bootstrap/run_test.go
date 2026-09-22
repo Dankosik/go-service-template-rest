@@ -132,20 +132,6 @@ func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 	_ = cleanup(cleanupCtx)
 }
 
-func TestHandlerCleanupSafetyTracksWorkerExit(t *testing.T) {
-	stopped := make(chan struct{})
-	close(stopped)
-	if !handlerStoppedBeforeReturn(nil, stopped) {
-		t.Fatal("completed graceful worker was not safe to clean up")
-	}
-	if !handlerStoppedBeforeReturn(errors.New("forced"), stopped) {
-		t.Fatal("completed forced worker was not safe to clean up")
-	}
-	if handlerStoppedBeforeReturn(errors.New("forced"), make(chan struct{})) {
-		t.Fatal("running forced handler was marked safe to clean up")
-	}
-}
-
 // TestWorkerRunLoopPanicIsRecovered covers the loop this process exists to run.
 // It ran bare, so a panic in the fetch or ack bookkeeping took the process down
 // before the drain, the handler join, and the telemetry flush that records why.

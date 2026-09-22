@@ -22,6 +22,11 @@ const (
 	FailureCleanup FailureStage = "cleanup"
 )
 
+// RunResult describes migrations completed before MigrateUp or MigrateDown
+// returned. It remains useful with an error: AppliedCount reports completed
+// migrations, and After can be derived from them rather than read back from the
+// database. Early failures leave versions zero, and cleanup can fail after work
+// completed; an errored result is not authoritative database state.
 type RunResult struct {
 	Before       int64
 	Target       int64

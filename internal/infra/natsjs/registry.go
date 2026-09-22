@@ -112,6 +112,13 @@ type Publisher struct {
 	routes   map[routeKey]string
 }
 
+// SchemaForVersion returns the NATS event-schema spelling for version. It
+// formats every uint16, including zero; registry admission and parsing own
+// whether a particular version is valid.
+func SchemaForVersion(version uint16) string {
+	return "v" + strconv.FormatUint(uint64(version), 10)
+}
+
 func (p *Publisher) Publish(ctx context.Context, event domainevent.Event) error {
 	if err := event.Validate(); err != nil {
 		return fmt.Errorf("validate domain event: %w", err)
@@ -122,7 +129,7 @@ func (p *Publisher) Publish(ctx context.Context, event domainevent.Event) error 
 	}
 	_, err := p.producer.Publish(ctx, Event{
 		Subject: subject, MessageID: event.ID, PublicationID: event.ID,
-		Type: event.Type, Schema: "v" + strconv.FormatUint(uint64(event.Version), 10),
+		Type: event.Type, Schema: SchemaForVersion(event.Version),
 		CreatedAt: event.OccurredAt, Payload: event.Payload,
 	})
 	return err
@@ -157,7 +164,7 @@ func schemaVersion(schema string) (uint16, error) {
 		return 0, fmt.Errorf("invalid event schema %q", schema)
 	}
 	version, err := strconv.ParseUint(schema[1:], 10, 16)
-	if err != nil || version == 0 || schema != "v"+strconv.FormatUint(version, 10) {
+	if err != nil || version == 0 || schema != SchemaForVersion(uint16(version)) {
 		return 0, fmt.Errorf("invalid event schema %q", schema)
 	}
 	return uint16(version), nil

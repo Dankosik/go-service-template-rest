@@ -118,18 +118,20 @@ func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, err
 		resolved[i] = endpoint
 	}
 	fanoutFingerprint := fingerprintFanout(event.OwnerScope, event.ID, body, resolved)
+	// The first delivery deterministically anchors owner/event acceptance;
+	// FanoutFingerprint identifies the whole fan-out and DeliveryID identifies
+	// the receiver/generation delivery.
 	eventAnchor := deriveStableID("whe_", event.OwnerScope, event.ID)
 	prepared := Prepared{client: d.client, deliveries: make([]deliveryArgs, 0, len(ordered))}
-	for i, receiver := range ordered {
-		endpoint := resolved[i]
-		deliveryID := deriveJobID(event.OwnerScope, event.ID, string(receiver), endpoint.Generation)
+	for i, endpoint := range resolved {
+		deliveryID := deriveDeliveryID(event.OwnerScope, event.ID, endpoint.ReceiverID, endpoint.Generation)
 		acceptanceID := deliveryID
 		if i == 0 {
 			acceptanceID = eventAnchor
 		}
 		args := deliveryArgs{
 			AcceptanceID: acceptanceID, DeliveryID: deliveryID,
-			OwnerScope: event.OwnerScope, ReceiverID: string(receiver), ReceiverGeneration: endpoint.Generation,
+			OwnerScope: event.OwnerScope, ReceiverID: endpoint.ReceiverID, ReceiverGeneration: endpoint.Generation,
 			URL: endpoint.URL, ActiveKeyReference: endpoint.ActiveKeyReference,
 			PredecessorKeyReference: endpoint.PredecessorKeyReference,
 			FanoutFingerprint:       fanoutFingerprint, Body: body,
@@ -275,7 +277,7 @@ func validateEvent(event Event) error {
 	return nil
 }
 
-func deriveJobID(owner, eventID, receiver string, generation int64) string {
+func deriveDeliveryID(owner, eventID, receiver string, generation int64) string {
 	return deriveStableID("whd_", owner, eventID, receiver, strconv.FormatInt(generation, 10))
 }
 

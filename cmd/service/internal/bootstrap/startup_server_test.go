@@ -148,7 +148,7 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 		log:            slog.New(slog.DiscardHandler),
 		healthSvc:      health.New(),
 		httpSrv:        newFakeRuntimeServer(),
-		metricsSrv:     newFakeRuntimeServer(),
+		diagnosticsSrv: newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      new(startupAdmissionController),
 		shutdown:       testShutdownBudget(),
@@ -166,7 +166,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 	t.Parallel()
 
 	appSrv := newFakeRuntimeServer()
-	metricsSrv := newFakeRuntimeServer()
+	diagnosticsSrv := newFakeRuntimeServer()
 	admission := new(startupAdmissionController)
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
@@ -185,7 +185,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 			log:            slog.New(slog.DiscardHandler),
 			healthSvc:      health.New(),
 			httpSrv:        appSrv,
-			metricsSrv:     metricsSrv,
+			diagnosticsSrv: diagnosticsSrv,
 			readinessCheck: func(context.Context) error { return nil },
 			admission:      admission,
 			shutdown:       testShutdownBudget(),
@@ -194,7 +194,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 
 	for name, started := range map[string]<-chan struct{}{
 		"application": appSrv.serveStarted,
-		"metrics":     metricsSrv.serveStarted,
+		"diagnostics": diagnosticsSrv.serveStarted,
 	} {
 		waittest.ReceiveSignal(t, started, time.Second, name+" server start")
 	}
@@ -598,7 +598,7 @@ func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 		log:            slog.New(slog.DiscardHandler),
 		healthSvc:      health.New(),
 		httpSrv:        apiServer,
-		metricsSrv:     diagnosticsServer,
+		diagnosticsSrv: diagnosticsServer,
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      new(startupAdmissionController),
 		shutdown:       testShutdownBudget(),

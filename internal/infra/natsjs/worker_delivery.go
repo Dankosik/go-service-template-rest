@@ -42,10 +42,10 @@ type handlerResult struct {
 	started    time.Time
 }
 
-// handle runs one delivery end to end: admit it, invoke the feature handler
-// under its own span and timeout, then settle the source message with the
-// broker. A returned error stops the worker; an ordinary retry, dead-letter, or
-// shutdown cancellation returns nil.
+// handle runs one delivery end to end: check its delivery bounds and envelope,
+// invoke the feature handler under its own span and timeout, then settle the
+// source message with the broker. A returned error stops the worker; an
+// ordinary retry, dead-letter, or shutdown cancellation returns nil.
 func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error {
 	metadata, err := source.Metadata()
 	if err != nil {
@@ -53,17 +53,24 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 		return fmt.Errorf("%w: source metadata unavailable", ErrTerminal)
 	}
 	current := delivery{source: source, metadata: metadata}
-	decoded, base, err := w.admit(handlerRoot, current)
-	if errors.Is(err, errSettledWithoutHandler) {
-		return nil
+	if wireSize(source) > w.cfg.MaxDeliveryBytes || len(source.Data()) > w.client.cfg.MaxPayloadBytes {
+		w.client.telemetry.logTerminalDelivery(handlerRoot, source.Subject(), metadata, reasonDeliveryBound, nil)
+		return fmt.Errorf("%w: retained source exceeds admitted message bound", ErrTerminal)
 	}
-	if err != nil {
-		return err
+	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
+		return w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed)
+	}
+	decoded, remote, decodeErr := decodeMessage(source, metadata)
+	if decodeErr != nil {
+		return w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed)
+	}
+	if metadata.NumDelivered > w.attemptLimit() {
+		return w.deadLetter(handlerRoot, source, metadata, decoded, deadLetterExhausted)
 	}
 	current.message = decoded
 
 	ctx, span := w.client.telemetry.tracer.Start(
-		base, consumeSpanName(w.cfg.FilterSubject), consumeSpanOptions(decoded, w.cfg.FilterSubject)...,
+		contextWithRemoteParent(handlerRoot, remote), consumeSpanName(w.cfg.FilterSubject), consumeSpanOptions(decoded, w.cfg.FilterSubject)...,
 	)
 	defer span.End()
 	handlerCtx, cancel := context.WithTimeout(ctx, w.cfg.HandlerTimeout)
@@ -73,49 +80,6 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	cancel()
 
 	return w.settle(ctx, handlerRoot, current, result)
-}
-
-// errSettledWithoutHandler reports that a gate in admit already settled the
-// delivery with the broker — it was dead-lettered — so the feature handler must
-// not run and the worker must not fault. Worker.handle is the only reader; it
-// never reaches a caller.
-var errSettledWithoutHandler = errors.New("delivery settled without the handler")
-
-// admit runs every gate that applies before the feature handler sees a message:
-// the delivery bounds this worker was configured with, envelope decoding, and
-// the attempt budget.
-//
-// A nil error means the handler may run, and the results are its envelope and
-// its context. [errSettledWithoutHandler] means a gate dead-lettered the
-// delivery itself, which finishes the message without the handler and without
-// faulting the worker. Every other error stops the worker.
-func (w *Worker) admit(handlerRoot context.Context, current delivery) (Message, context.Context, error) {
-	source, metadata := current.source, current.metadata
-	if wireSize(source) > w.cfg.MaxDeliveryBytes || len(source.Data()) > w.client.cfg.MaxPayloadBytes {
-		w.client.telemetry.logTerminalDelivery(handlerRoot, source.Subject(), metadata, reasonDeliveryBound, nil)
-		return Message{}, nil, fmt.Errorf("%w: retained source exceeds admitted message bound", ErrTerminal)
-	}
-	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
-		return Message{}, nil, settled(w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed))
-	}
-	decoded, remote, decodeErr := decodeMessage(source, metadata)
-	if decodeErr != nil {
-		return Message{}, nil, settled(w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed))
-	}
-	if metadata.NumDelivered > w.attemptLimit() {
-		return Message{}, nil, settled(w.deadLetter(handlerRoot, source, metadata, decoded, deadLetterExhausted))
-	}
-	return decoded, contextWithRemoteParent(handlerRoot, remote), nil
-}
-
-// settled turns a completed dead-letter into the signal that the handler must
-// not run. A dead-letter that failed keeps its own error, which stops the
-// worker; that is the one case a gate must not swallow.
-func settled(deadLetterErr error) error {
-	if deadLetterErr != nil {
-		return deadLetterErr
-	}
-	return errSettledWithoutHandler
 }
 
 // settle records the delivery's outcome and gives the broker its instruction:

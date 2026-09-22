@@ -2,8 +2,6 @@ package httpx
 
 import (
 	"net/http"
-
-	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 const contentTypeOptionsHeader = "X-Content-Type-Options"
@@ -27,7 +25,7 @@ func RequestBodyLimit(maxBytes int64, next http.Handler) http.Handler {
 			return
 		}
 		if r.ContentLength > maxBytes {
-			writeProblem(w, r, problemResponse{code: problem.CodeRequestEntityTooLarge, detail: "request body exceeds limit"})
+			writeProblem(w, r, requestEntityTooLargeProblem())
 			return
 		}
 		if r.Body != nil {

@@ -35,7 +35,7 @@ func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter,
 func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r *http.Request, err error) {
 	logStrictRequestError(log, r, err)
 	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-		writeProblem(w, r, problemResponse{code: problem.CodeRequestEntityTooLarge, detail: "request body exceeds limit"})
+		writeProblem(w, r, requestEntityTooLargeProblem())
 		return
 	}
 	// The one place a rejection tells the caller more than "invalid". The detail

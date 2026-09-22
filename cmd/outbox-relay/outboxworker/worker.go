@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
@@ -47,7 +46,7 @@ func (w *Worker) Work(
 		MessageID:     args.ID,
 		PublicationID: args.ID,
 		Type:          args.Type,
-		Schema:        "v" + strconv.FormatUint(uint64(args.Version), 10),
+		Schema:        natsjs.SchemaForVersion(args.Version),
 		CreatedAt:     args.OccurredAt,
 		Payload:       args.Payload,
 	})

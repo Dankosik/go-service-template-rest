@@ -68,7 +68,7 @@ func TestWebhookBoundedAttempt(t *testing.T) {
 	if !errors.Is(err, errDestinationDenied) {
 		t.Fatalf("send() error = %v, want destination denial", err)
 	}
-	if !result.Evidence.DefinitelyNotSent || result.Evidence.MayHaveSent || time.Since(started) > time.Second {
+	if result.Evidence.Certainty != sendCertaintyDefinitelyNotSent || time.Since(started) > time.Second {
 		t.Fatalf("bounded denial result = %+v", result)
 	}
 }

@@ -34,7 +34,7 @@ func (r *Runtime) ResolveHTTP(
 	}
 	request := authenticatedRequest(input)
 	if request == nil {
-		return reqctx.Principal{}, r.recordRejection(ctx, transportHTTP, failure(KindMalformed))
+		return reqctx.Principal{}, r.recordVerificationOutcome(ctx, transportHTTP, failure(KindMalformed))
 	}
 
 	// The credential is taken off the request as soon as this boundary owns it,

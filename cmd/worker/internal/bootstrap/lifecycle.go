@@ -19,7 +19,7 @@ import (
 
 // errWorkerPanic reports a run loop that ended in a recovered panic rather than
 // by returning. It explains the exit; whether cleanup is still safe is decided
-// by handlerStoppedBeforeReturn, which asks the drain instead, because the
+// by runtimeopts.StoppedBeforeReturn, which asks the drain instead, because the
 // handlers a panicking consume loop leaves running are the ones that matter.
 var errWorkerPanic = errors.New("worker run loop panicked")
 
@@ -97,7 +97,7 @@ func runWorkerLifecycle(
 	backgroundCtx, backgroundCancel := context.WithTimeout(processCtx, backgroundClose)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	backgroundCancel()
-	cleanupSafe := handlerStoppedBeforeReturn(workerErr, workerDone)
+	cleanupSafe := runtimeopts.StoppedBeforeReturn(workerErr, workerDone)
 	if !workerResultRead {
 		select {
 		case runErr := <-workerResult:
@@ -156,19 +156,4 @@ func superviseWorkerRun(
 		result <- runErr
 	}()
 	runErr = run(ctx)
-}
-
-func handlerStoppedBeforeReturn(workerErr error, workerDone <-chan struct{}) bool {
-	if workerErr == nil {
-		<-workerDone
-		return true
-	}
-	select {
-	case <-workerDone:
-		return true
-	default:
-		// A handler that ignored forced cancellation may still use its
-		// dependencies. Process exit owns their cleanup in this path.
-		return false
-	}
 }

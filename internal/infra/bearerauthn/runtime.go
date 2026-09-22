@@ -65,14 +65,14 @@ const (
 func (r *Runtime) verifyCredential(ctx context.Context, values []string, carrier transport) (Result, error) {
 	token, err := bearerToken(values)
 	if err != nil {
-		return Result{}, r.recordRejection(ctx, carrier, err)
+		return Result{}, r.recordVerificationOutcome(ctx, carrier, err)
 	}
 	verified, err := r.verifier.Verify(ctx, token)
 	if err == nil && !validResult(verified) {
 		verified = Result{}
 		err = failure(KindUnavailable)
 	}
-	return verified, r.recordRejection(ctx, carrier, sanitizeVerifierError(err))
+	return verified, r.recordVerificationOutcome(ctx, carrier, sanitizeVerifierError(err))
 }
 
 func validResult(result Result) bool {
@@ -81,7 +81,7 @@ func validResult(result Result) bool {
 		(strings.TrimSpace(result.Principal.Subject) != "" || strings.TrimSpace(result.Principal.ClientID) != "")
 }
 
-func (r *Runtime) recordRejection(ctx context.Context, carrier transport, err error) error {
+func (r *Runtime) recordVerificationOutcome(ctx context.Context, carrier transport, err error) error {
 	r.metrics.recordVerification(ctx, carrier, err)
 	return err
 }

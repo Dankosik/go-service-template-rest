@@ -65,17 +65,10 @@ func prepareSend(ctx context.Context, resolver *net.Resolver, attempt deliveryAt
 	if err != nil {
 		return preparedSend{}, fmt.Errorf("resolve webhook destination: %w", err)
 	}
-	if len(addresses) == 0 || len(addresses) > maxDNSAddresses {
-		return preparedSend{}, fmt.Errorf("%w: destination returned an invalid address count", errDestinationDenied)
+	addresses, err = admitDestinationAddresses(addresses)
+	if err != nil {
+		return preparedSend{}, err
 	}
-	for i := range addresses {
-		addresses[i] = addresses[i].Unmap()
-		if !outboundtrust.PublicAddress(addresses[i]) {
-			return preparedSend{}, fmt.Errorf("%w: destination answer contains a non-public address", errDestinationDenied)
-		}
-	}
-	slices.SortFunc(addresses, func(a, b netip.Addr) int { return bytes.Compare(a.AsSlice(), b.AsSlice()) })
-	addresses = slices.Compact(addresses)
 
 	active, err := manifest.resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.KeyReference)
 	if err != nil {
@@ -94,9 +87,24 @@ func prepareSend(ctx context.Context, resolver *net.Resolver, attempt deliveryAt
 		return preparedSend{}, err
 	}
 	return preparedSend{
-		Attempt: attempt, URL: parsed, Addresses: slices.Clone(addresses),
+		Attempt: attempt, URL: parsed, Addresses: addresses,
 		SelectedAddress: addresses[0], Signature: signature,
 	}, nil
+}
+
+func admitDestinationAddresses(addresses []netip.Addr) ([]netip.Addr, error) {
+	if len(addresses) == 0 || len(addresses) > maxDNSAddresses {
+		return nil, fmt.Errorf("%w: destination returned an invalid address count", errDestinationDenied)
+	}
+	for i := range addresses {
+		addresses[i] = addresses[i].Unmap()
+		if !outboundtrust.PublicAddress(addresses[i]) {
+			return nil, fmt.Errorf("%w: destination answer contains a non-public address", errDestinationDenied)
+		}
+	}
+	slices.SortFunc(addresses, func(a, b netip.Addr) int { return bytes.Compare(a.AsSlice(), b.AsSlice()) })
+	addresses = slices.Compact(addresses)
+	return slices.Clone(addresses), nil
 }
 
 func tryPreparedAddresses(
@@ -105,14 +113,14 @@ func tryPreparedAddresses(
 	send func(context.Context, preparedSend) (sendResult, error),
 ) (sendResult, error) {
 	if len(prepared.Addresses) == 0 || send == nil {
-		return sendResult{Evidence: transportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, ErrConfig
+		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, ErrConfig
 	}
 	var result sendResult
 	var err error
 	for _, address := range prepared.Addresses {
 		prepared.SelectedAddress = address
 		result, err = send(ctx, prepared)
-		if err == nil || !result.Evidence.DefinitelyNotSent {
+		if err == nil || result.Evidence.Certainty != sendCertaintyDefinitelyNotSent {
 			return result, err
 		}
 	}
@@ -121,7 +129,7 @@ func tryPreparedAddresses(
 
 func send(ctx context.Context, prepared preparedSend) (sendResult, error) {
 	if prepared.URL == nil || !prepared.SelectedAddress.IsValid() || !attemptContextBounded(ctx, prepared.Attempt.Deadline) {
-		return sendResult{Evidence: transportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, fmt.Errorf("%w: prepared send is invalid", ErrConfig)
+		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, fmt.Errorf("%w: prepared send is invalid", ErrConfig)
 	}
 	wroteRequest := false
 	trace := &httptrace.ClientTrace{WroteRequest: func(httptrace.WroteRequestInfo) { wroteRequest = true }}
@@ -139,7 +147,7 @@ func attemptContextBounded(ctx context.Context, attemptDeadline time.Time) bool 
 func sendWithTransport(ctx context.Context, prepared preparedSend, transport *http.Transport, wroteRequest *bool) (sendResult, error) {
 	request, err := webhookRequest(ctx, prepared)
 	if err != nil {
-		return sendResult{Evidence: transportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, err
+		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, err
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(request)
@@ -149,16 +157,23 @@ func sendWithTransport(ctx context.Context, prepared preparedSend, transport *ht
 			err = errResponseLimit
 		}
 		return sendResult{Evidence: transportEvidence{
-			DefinitelyNotSent: !wrote, MayHaveSent: wrote,
+			Certainty:   certaintyForWrite(wrote),
 			LocalDenial: !wrote && permanentTLSValidationError(err),
 		}}, fmt.Errorf("send webhook request: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	result := sendResult{
-		Evidence:   transportEvidence{StatusCode: response.StatusCode, MayHaveSent: true},
+		Evidence:   transportEvidence{StatusCode: response.StatusCode, Certainty: sendCertaintyMayHaveSent},
 		RetryAfter: response.Header.Get("Retry-After"), ResponseDate: response.Header.Get("Date"),
 	}
 	return result, nil
+}
+
+func certaintyForWrite(wrote bool) sendCertainty {
+	if wrote {
+		return sendCertaintyMayHaveSent
+	}
+	return sendCertaintyDefinitelyNotSent
 }
 
 func permanentTLSValidationError(err error) bool {

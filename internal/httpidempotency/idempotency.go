@@ -275,13 +275,15 @@ func sameJSON(left, right []byte) bool {
 		reflect.DeepEqual(leftValue, rightValue)
 }
 
-// Executor is the feature-facing seam. Bootstrap supplies the concrete
-// adapter's Execute method; the handler sees no PostgreSQL type.
+// Executor is the feature-facing seam. Bootstrap supplies an adapter closure
+// through NewExecutor, so the handler sees no PostgreSQL type. replayed reports
+// that response came from a stored confirmation. It can be true after Work ran
+// during commit-outcome reconciliation and alongside an integrity error.
 type Executor[Repository, Response any] func(
 	context.Context,
 	Request,
 	Work[Repository, Response],
-) (Response, bool, error)
+) (response Response, replayed bool, err error)
 
 type storedResult struct {
 	Schema int    `json:"schema"`

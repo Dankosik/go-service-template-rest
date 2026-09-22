@@ -112,6 +112,12 @@ func TestTypedHandlerContract(t *testing.T) {
 func TestSchemaVersionRequiresCanonicalSpelling(t *testing.T) {
 	t.Parallel()
 
+	if got := SchemaForVersion(0); got != "v0" {
+		t.Fatalf("SchemaForVersion(0) = %q, want v0", got)
+	}
+	if got := SchemaForVersion(65535); got != "v65535" {
+		t.Fatalf("SchemaForVersion(65535) = %q, want v65535", got)
+	}
 	if got, err := schemaVersion("v1"); err != nil || got != 1 {
 		t.Fatalf("schemaVersion(v1) = %d, %v", got, err)
 	}

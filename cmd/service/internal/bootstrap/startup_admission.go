@@ -78,17 +78,20 @@ func startStartupAdmission(
 // resolve in the same scheduling window as a server exit or a background
 // failure, and admitting traffic to a process that is already failing is the one
 // outcome this function exists to prevent.
+//
+// A successful admission returns true, nil. A stop before admission returns
+// false, nil; a rejected admission returns false and its terminal error.
 func waitForStartupAdmission(
 	signalCtx context.Context,
 	bootstrapCtx context.Context,
 	args serveRuntimeArgs,
 	admissionErrCh <-chan error,
 	runErrCh <-chan serverResult,
-) (ready bool, stopRequested bool, terminalErr error) {
+) (ready bool, terminalErr error) {
 	select {
 	case err := <-admissionErrCh:
 		if err != nil {
-			return false, false, rejectHTTPStartup(
+			return false, rejectRuntimeStartup(
 				bootstrapCtx,
 				args.log,
 				"startup.readiness",
@@ -97,9 +100,9 @@ func waitForStartupAdmission(
 		}
 		select {
 		case result := <-runErrCh:
-			return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
+			return false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
 		case err := <-args.backgroundFailures:
-			return false, false, rejectHTTPStartup(
+			return false, rejectRuntimeStartup(
 				bootstrapCtx,
 				args.log,
 				"startup.background",
@@ -115,25 +118,25 @@ func waitForStartupAdmission(
 			if args.onReady != nil {
 				args.onReady()
 			}
-			return true, false, nil
+			return true, nil
 		}
 	case <-signalCtx.Done():
 		args.log.InfoContext(signalCtx, "shutdown signal received")
-		return false, true, nil
+		return false, nil
 	case <-bootstrapCtx.Done():
 		select {
 		case <-signalCtx.Done():
 			args.log.InfoContext(signalCtx, "shutdown signal received")
-			return false, true, nil
+			return false, nil
 		default:
 		}
 		err := fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
 		args.log.ErrorContext(bootstrapCtx, "startup budget exhausted before readiness", "err", err)
-		return false, false, err
+		return false, err
 	case result := <-runErrCh:
-		return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
+		return false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
 	case err := <-args.backgroundFailures:
-		return false, false, rejectHTTPStartup(
+		return false, rejectRuntimeStartup(
 			bootstrapCtx,
 			args.log,
 			"startup.background",
