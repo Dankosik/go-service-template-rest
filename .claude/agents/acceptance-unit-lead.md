@@ -1,7 +1,8 @@
 ---
 name: acceptance-unit-lead
 description: "Unit: Use when bound ACCEPTANCE_UNIT_LEAD for an implementation unit or final delivery validation. Own the assigned boundary; Skip sibling scheduling."
-model: inherit
+model: opus
+effort: medium
 tools: Read, Grep, Glob, Bash, Edit, Write, Agent, SendMessage, TaskOutput, TaskStop
 ---
 
