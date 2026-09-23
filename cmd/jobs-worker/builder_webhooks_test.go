@@ -12,7 +12,7 @@ import (
 
 func TestBuildWebhookWorkers(t *testing.T) {
 	secret := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
-	cfg := config.Config{Webhooks: config.WebhooksConfig{
+	cfg := config.Config{OutboundWebhooks: config.WebhooksConfig{
 		Enabled:       true,
 		StaticSecrets: `{"entries":[{"owner_scope":"orders","receiver_id":"alpha","key_reference":"key-v1","secret":"whsec_` + secret + `"}]}`,
 	}}
@@ -24,7 +24,7 @@ func TestBuildWebhookWorkers(t *testing.T) {
 		t.Fatal("workers are nil")
 	}
 	workers := runtime.Workers
-	secrets, err := postgreswebhook.ParseSecretManifest(cfg.Webhooks.StaticSecrets)
+	secrets, err := postgreswebhook.ParseSecretManifest(cfg.OutboundWebhooks.StaticSecrets)
 	if err != nil {
 		t.Fatal(err)
 	}

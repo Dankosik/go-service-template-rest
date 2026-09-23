@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
@@ -45,12 +44,11 @@ type serveRuntimeArgs struct {
 	// profile:grpc:start
 	grpcSrv grpcRuntimeServer
 	// profile:grpc:end
-	diagnosticsSrv            runtimeServer
-	readinessCheck            func(context.Context) error
-	backgroundFailures        <-chan error
-	admission                 *startupAdmissionController
-	onReady                   func()
-	readinessPropagationDelay time.Duration
+	diagnosticsSrv     runtimeServer
+	readinessCheck     func(context.Context) error
+	backgroundFailures <-chan error
+	admission          *startupAdmissionController
+	onReady            func()
 	// profile:messaging-nats-jetstream:start
 	preDrain func()
 	// profile:messaging-nats-jetstream:end
@@ -205,7 +203,7 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	}
 	// profile:messaging-nats-jetstream:end
 
-	effectiveReadinessPropagationDelay := args.readinessPropagationDelay
+	effectiveReadinessPropagationDelay := args.cfg.HTTP.ReadinessPropagationDelay
 	if !ready {
 		effectiveReadinessPropagationDelay = 0
 	}
@@ -217,11 +215,11 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	// configuration none of that window was ever collected — the Prometheus target
 	// simply went down for the last fifteen seconds of every pod's life, which is
 	// exactly the fifteen seconds a rolling deploy is judged on.
-	drainer := startupDrainer(args.healthSvc)
+	drainer := shutdownDrainer(args.healthSvc)
 	applicationServers := []shutdownServer{args.httpSrv}
 	// profile:grpc:start
 	if args.grpcSrv != nil {
-		drainer = startupDrainSet{args.healthSvc, args.grpcSrv}
+		drainer = shutdownDrainSet{args.healthSvc, args.grpcSrv}
 		applicationServers = append(applicationServers, args.grpcSrv)
 	}
 	// profile:grpc:end

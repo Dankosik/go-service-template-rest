@@ -40,7 +40,9 @@ type entry struct {
 	PredecessorKeyReference string `json:"predecessor_key_reference,omitempty"`
 }
 
-// ParseEndpoints parses the non-secret endpoint document.
+// ParseEndpoints parses the non-secret endpoint document. An exact empty string
+// returns an empty endpoint snapshot; a non-empty document with no entries is
+// rejected.
 func ParseEndpoints(raw string) (*Endpoints, error) {
 	if raw == "" {
 		return &Endpoints{endpoints: map[string]Endpoint{}}, nil

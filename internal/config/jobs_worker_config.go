@@ -61,7 +61,7 @@ func validateJobsWorkerConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:webhooks-durable:start
-	if cfg.Webhooks.Enabled && cfg.Webhooks.StaticSecrets == "" {
+	if cfg.OutboundWebhooks.Enabled && cfg.OutboundWebhooks.StaticSecrets == "" {
 		return fmt.Errorf("%w: webhooks.static_secrets must be supplied through environment", ErrValidate)
 	}
 	// profile:webhooks-durable:end

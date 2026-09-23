@@ -354,16 +354,19 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 	}
 
 	err := serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
-		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: 25 * time.Millisecond}},
+		cfg: config.Config{HTTP: config.HTTPConfig{
+			Addr:                      "127.0.0.1:0",
+			ShutdownTimeout:           25 * time.Millisecond,
+			ReadinessPropagationDelay: time.Hour,
+		}},
 		log:       logger,
 		healthSvc: svc,
 		httpSrv:   srv,
 		readinessCheck: func(context.Context) error {
 			return errors.New("readiness failed")
 		},
-		admission:                 new(startupAdmissionController),
-		shutdown:                  testShutdownBudget(),
-		readinessPropagationDelay: time.Hour,
+		admission: new(startupAdmissionController),
+		shutdown:  testShutdownBudget(),
 	})
 
 	if err == nil {

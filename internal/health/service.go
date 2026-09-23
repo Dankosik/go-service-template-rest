@@ -63,11 +63,11 @@ func staleBudget(interval, probeBudget time.Duration) time.Duration {
 	return probeBudget + staleRefreshMultiplier*max(interval, probeBudget)
 }
 
-// readinessState is the immutable result of one refresh. consecutiveFailures
+// readinessState is the immutable cached verdict of one refresh. consecutiveFailures
 // counts failed evaluations since the last healthy one, so a single slow
 // round-trip cannot evict an instance that is still serving.
 type readinessState struct {
-	err                 error
+	verdictErr          error
 	consecutiveFailures int
 	evaluatedAt         time.Time
 }
@@ -102,7 +102,7 @@ func (t *readinessTransitions) publishStale(service *Service, state *readinessSt
 }
 
 func (s *Service) armStaleness(state *readinessState, transitions *readinessTransitions) *time.Timer {
-	if transitions.notify == nil || state.err != nil || s.draining.Load() {
+	if transitions.notify == nil || state.verdictErr != nil || s.draining.Load() {
 		return nil
 	}
 	staleAfter := time.Duration(s.staleAfter.Load())
@@ -135,7 +135,7 @@ func (s *Service) Cached() error {
 	if err := s.staleness(state); err != nil {
 		return err
 	}
-	return state.err
+	return state.verdictErr
 }
 
 func (s *Service) staleness(state *readinessState) error {
@@ -196,7 +196,7 @@ func (s *Service) Watch(
 		_ = s.Refresh(ctx, probeBudget, failureThreshold)
 	}
 	state := s.state.Load()
-	transitions := readinessTransitions{previousErr: state.err, notify: onTransition}
+	transitions := readinessTransitions{previousErr: state.verdictErr, notify: onTransition}
 	staleTimer := s.armStaleness(state, &transitions)
 
 	ticker := time.NewTicker(interval)
@@ -214,7 +214,7 @@ func (s *Service) Watch(
 				staleTimer.Stop()
 			}
 			state = s.state.Load()
-			currentErr := state.err
+			currentErr := state.verdictErr
 			if s.draining.Load() {
 				currentErr = ErrDraining
 			}
@@ -242,18 +242,18 @@ func (s *Service) Refresh(ctx context.Context, probeBudget time.Duration, failur
 	}
 
 	failures := 1
-	reported := err
+	verdictErr := err
 	if previous := s.state.Load(); previous != nil {
 		failures = previous.consecutiveFailures + 1
 		// Hold the previous verdict until the streak reaches the threshold. A
 		// previously healthy instance stays in rotation through a blip; one that
 		// was already failing keeps reporting the newest cause. A service that
 		// has never been healthy has no previous verdict and fails immediately.
-		if previous.err == nil && failures < failureThreshold {
-			reported = previous.err
+		if previous.verdictErr == nil && failures < failureThreshold {
+			verdictErr = previous.verdictErr
 		}
 	}
-	s.state.Store(&readinessState{err: reported, consecutiveFailures: failures, evaluatedAt: evaluatedAt})
+	s.state.Store(&readinessState{verdictErr: verdictErr, consecutiveFailures: failures, evaluatedAt: evaluatedAt})
 	return err
 }
 

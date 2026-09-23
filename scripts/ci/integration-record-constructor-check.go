@@ -37,6 +37,8 @@ func runConstructorCheck(arguments []string) (int, error) {
 	return 0, nil
 }
 
+// checkConstructorAST matches the expected constructor shape, not equivalent
+// data flow in every form. Refactoring the adapter may require updating this check.
 func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, authMode string) error {
 	alias := importAlias(parsed, importSuffix)
 	if alias == "" || alias == "." || alias == "_" {

@@ -42,7 +42,7 @@ func TestWebhooksConfigDefaultsDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Webhooks != (WebhooksConfig{}) {
-		t.Fatalf("default webhooks = %+v", cfg.Webhooks)
+	if cfg.OutboundWebhooks != (WebhooksConfig{}) {
+		t.Fatalf("default webhooks = %+v", cfg.OutboundWebhooks)
 	}
 }

@@ -14,14 +14,15 @@ func TestParseLoadOptionsAcceptsTheSharedFlagSurface(t *testing.T) {
 
 	options, err := ParseLoadOptions([]string{
 		"--config", "base.yaml",
+		"--config", "  replacement.yaml  ",
 		"--config-overlay", "  one.yaml  ",
 		"--config-overlay=two.yaml",
 	})
 	if err != nil {
 		t.Fatalf("ParseLoadOptions() error = %v", err)
 	}
-	if options.ConfigPath != "base.yaml" {
-		t.Errorf("ConfigPath = %q, want base.yaml", options.ConfigPath)
+	if options.ConfigPath != "replacement.yaml" {
+		t.Errorf("ConfigPath = %q, want replacement.yaml", options.ConfigPath)
 	}
 	// Order matters: overlays are applied in the order they were given, so the
 	// last one wins on a key two of them set.

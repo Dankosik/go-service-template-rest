@@ -367,7 +367,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 				// profile:grpc:end
 			)
 		},
-		readinessPropagationDelay: bootstrap.cfg.HTTP.ReadinessPropagationDelay,
 		// profile:messaging-nats-jetstream:start
 		preDrain: messaging.StartDrain,
 		// profile:messaging-nats-jetstream:end
@@ -391,7 +390,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	closeOwners()
 
 	return errors.Join(
-		runErr,
 		serveErr,
 		// profile:messaging-nats-jetstream:start
 		messagingErr,

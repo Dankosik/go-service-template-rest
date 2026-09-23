@@ -69,12 +69,10 @@ func runWorkerLifecycle(
 	workerDone := make(chan struct{})
 	go superviseWorkerRun(runtimeCtx, log, worker.Run, workerResult, workerDone)
 	var triggerErr error
-	workerResultRead := false
 	select {
 	case <-signalCtx.Done():
 	case triggerErr = <-supervisor.Failures():
 	case triggerErr = <-workerResult:
-		workerResultRead = true
 	case <-diagnostics.Stopped():
 		// diagnostics.Stop below carries whatever Serve reported.
 		triggerErr = errors.New("worker diagnostics stopped unexpectedly")
@@ -98,14 +96,12 @@ func runWorkerLifecycle(
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	backgroundCancel()
 	cleanupSafe := runtimeopts.StoppedBeforeReturn(workerErr, workerDone)
-	if !workerResultRead {
-		select {
-		case runErr := <-workerResult:
-			if triggerErr == nil {
-				triggerErr = runErr
-			}
-		default:
+	select {
+	case runErr := <-workerResult:
+		if triggerErr == nil {
+			triggerErr = runErr
 		}
+	default:
 	}
 	return cleanupSafe, shutdownDeadline, errors.Join(
 		triggerErr,

@@ -9,8 +9,8 @@ import (
 )
 
 // ParseLoadOptions reads the configuration flags every binary in this repository
-// accepts out of args: -config once, and -config-overlay repeatably in the order
-// the overlays are applied.
+// accepts out of args: -config may be repeated, with the last path winning, and
+// -config-overlay may be repeated, with overlays applied in their given order.
 //
 // Usage output is discarded because a composition root reports its own startup
 // rejection through the process logger, and flag's default output would print a

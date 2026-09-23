@@ -150,16 +150,5 @@ func serverStoppedBeforeReadiness(ctx context.Context, args serveRuntimeArgs, re
 	if result.err != nil {
 		err = fmt.Errorf("%s server stopped before readiness: %w", result.name, result.err)
 	}
-	args.log.ErrorContext(
-		ctx,
-		"startup_blocked",
-		startupLogArgs(
-			startupLogComponentStartupProbes,
-			result.name+"_serve",
-			"error",
-			"error.type", "startup_error",
-			"err", err,
-		)...,
-	)
-	return err
+	return rejectRuntimeStartup(ctx, args.log, "startup."+result.name+"_serve", err)
 }
