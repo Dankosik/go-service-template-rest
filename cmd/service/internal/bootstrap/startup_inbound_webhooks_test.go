@@ -152,7 +152,7 @@ func TestInboundWebhookRequestBufferBudget(t *testing.T) {
 		Runtime: config.RuntimeConfig{MemoryLimitRatio: 0.9},
 	}
 	var logged bytes.Buffer
-	reportRequestBufferBudget(slog.New(slog.NewJSONHandler(&logged, nil)), cfg, 1000)
+	reportRequestBufferBudget(slog.New(slog.NewJSONHandler(&logged, nil)), cfg, memoryLimit{containerBytes: 1000, gcBytes: 900})
 	if !strings.Contains(logged.String(), `"request_buffers.worst_case_bytes":400`) {
 		t.Fatalf("log = %s", logged.String())
 	}

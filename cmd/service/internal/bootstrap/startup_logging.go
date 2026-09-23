@@ -29,9 +29,9 @@ func startupLogArgs(component, operation, outcome string, extra ...any) []any {
 	return append(args, extra...)
 }
 
-// logProcessExit writes the last record of the process, through the default
-// logger rather than a captured one: it runs after the deferred teardown that
-// may have replaced what the bootstrap logger wrote to.
+// logProcessExit writes the last record of the process through the default
+// logger rather than a captured one. Run defers it before the configured logger
+// exists, so only the default read at call time reaches that logger.
 func logProcessExit(ctx context.Context, runErr error) {
 	if runErr != nil {
 		slog.ErrorContext(
@@ -55,7 +55,7 @@ func bootstrapLoggerStage(cfg config.Config) *slog.Logger {
 }
 
 func bootstrapReportStage(
-	bootstrapCtx context.Context,
+	startupCtx context.Context,
 	log *slog.Logger,
 	cfg config.Config,
 	loadOptions config.LoadOptions,
@@ -64,7 +64,7 @@ func bootstrapReportStage(
 	tracingInitErr error,
 ) {
 	log.InfoContext(
-		bootstrapCtx,
+		startupCtx,
 		"config_validated",
 		startupLogArgs(
 			"config_validator",
@@ -80,7 +80,7 @@ func bootstrapReportStage(
 		// configuration keys and environment variables, never secret values,
 		// and an operator cannot act on a bare reason class.
 		log.WarnContext(
-			bootstrapCtx,
+			startupCtx,
 			"startup_dependency_degraded",
 			startupLogArgs(
 				startupLogComponentStartupProbes,
@@ -95,7 +95,7 @@ func bootstrapReportStage(
 	}
 
 	log.InfoContext(
-		bootstrapCtx,
+		startupCtx,
 		"startup_config_summary",
 		startupLogArgs(
 			"config_loader",

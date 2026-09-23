@@ -3,12 +3,22 @@
 package main
 
 import (
+	"fmt"
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"path"
 	"strconv"
 	"strings"
 )
+
+func parseFile(filename string) (*ast.File, error) {
+	parsed, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
+	if err != nil {
+		return nil, fmt.Errorf("%s: parse: %w", filename, err)
+	}
+	return parsed, nil
+}
 
 func clientLiteralFields(expression ast.Expr) map[string]string {
 	return literalIdentFields(pointerCompositeLiteral(expression))
@@ -16,6 +26,18 @@ func clientLiteralFields(expression ast.Expr) map[string]string {
 
 func literalIdentFields(literal *ast.CompositeLit) map[string]string {
 	fields := map[string]string{}
+	for key, value := range keyedFields(literal) {
+		if identifier, ok := value.(*ast.Ident); ok {
+			fields[key] = identifier.Name
+		}
+	}
+	return fields
+}
+
+// keyedFields maps each identifier key of a keyed composite literal to its
+// value. A nil literal has no fields.
+func keyedFields(literal *ast.CompositeLit) map[string]ast.Expr {
+	fields := map[string]ast.Expr{}
 	if literal == nil {
 		return fields
 	}
@@ -24,10 +46,8 @@ func literalIdentFields(literal *ast.CompositeLit) map[string]string {
 		if !pairOK {
 			continue
 		}
-		key, keyOK := pair.Key.(*ast.Ident)
-		value, valueOK := pair.Value.(*ast.Ident)
-		if keyOK && valueOK {
-			fields[key.Name] = value.Name
+		if key, keyOK := pair.Key.(*ast.Ident); keyOK {
+			fields[key.Name] = pair.Value
 		}
 	}
 	return fields
@@ -56,35 +76,34 @@ func importAlias(file *ast.File, suffix string) string {
 	return ""
 }
 
+// usableImportAlias is importAlias restricted to a name a selector can use; a
+// missing, dot, or blank import yields "".
+func usableImportAlias(file *ast.File, suffix string) string {
+	alias := importAlias(file, suffix)
+	if alias == "." || alias == "_" {
+		return ""
+	}
+	return alias
+}
+
+// oauthConfigMapping matches alias.New(alias.Config{...}) with the canonical
+// OAuth client-credentials field mapping.
 func oauthConfigMapping(call *ast.CallExpr, alias string) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "New" || !ownedBy(selector, alias) || len(call.Args) != 1 {
+	if !selectorNamed(call.Fun, alias, "New") || len(call.Args) != 1 {
 		return false
 	}
 	literal, ok := call.Args[0].(*ast.CompositeLit)
-	if !ok {
+	if !ok || !selectorNamed(literal.Type, alias, "Config") {
 		return false
 	}
-	fields := map[string]ast.Expr{}
-	for _, element := range literal.Elts {
-		pair, pairOK := element.(*ast.KeyValueExpr)
-		if !pairOK {
-			continue
-		}
-		key, keyOK := pair.Key.(*ast.Ident)
-		if keyOK {
-			fields[key.Name] = pair.Value
-		}
-	}
+	fields := keyedFields(literal)
 	scopes, ok := fields["Scopes"].(*ast.CallExpr)
-	if !ok || len(scopes.Args) != 1 {
+	if !ok || len(scopes.Args) != 1 || !selectorNamed(scopes.Fun, "strings", "Fields") {
 		return false
 	}
-	stringsFields, ok := scopes.Fun.(*ast.SelectorExpr)
 	return expressionPath(fields["TokenURL"]) == "cfg.OAuth.TokenURL" &&
 		expressionPath(fields["ClientID"]) == "cfg.OAuth.ClientID" &&
 		expressionPath(fields["ClientSecret"]) == "cfg.OAuth.ClientSecret" &&
-		ok && stringsFields.Sel.Name == "Fields" && ownedBy(stringsFields, "strings") &&
 		expressionPath(scopes.Args[0]) == "cfg.OAuth.Scopes"
 }
 
@@ -93,9 +112,10 @@ func ownedBy(selector *ast.SelectorExpr, ownerName string) bool {
 	return ok && owner.Name == ownerName
 }
 
-func selectorTypeIs(expression ast.Expr, ownerName, typeName string) bool {
+// selectorNamed reports whether expression is exactly owner.name.
+func selectorNamed(expression ast.Expr, ownerName, name string) bool {
 	selector, ok := expression.(*ast.SelectorExpr)
-	return ok && selector.Sel.Name == typeName && ownedBy(selector, ownerName)
+	return ok && selector.Sel.Name == name && ownedBy(selector, ownerName)
 }
 
 func identifierIs(expression ast.Expr, name string) bool {

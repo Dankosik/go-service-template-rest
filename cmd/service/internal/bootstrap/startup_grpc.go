@@ -33,7 +33,7 @@ func serviceGRPCBindings(
 	bindings := grpcRuntimeBindings{
 		// Register an owned service here, as
 		// func(registrar grpc.ServiceRegistrar) { foov1.RegisterFooServer(registrar, impl) }.
-		// See docs/grpc/runtime-and-streaming.md, "Register it in bootstrap".
+		// See docs/grpc/runtime-and-streaming.md.
 		Services: nil,
 	}
 	// profile:authn-bearer:start

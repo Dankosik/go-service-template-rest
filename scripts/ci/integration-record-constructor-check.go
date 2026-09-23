@@ -5,8 +5,6 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 )
 
@@ -26,22 +24,42 @@ func runConstructorCheck(arguments []string) (int, error) {
 		return 2, fmt.Errorf("usage: integration-record-constructor-check FILE IMPORT_SUFFIX EXPECTED FORBIDDEN AUTH")
 	}
 
-	filename, importSuffix, expected, forbidden, authMode := arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]
-	parsed, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
-	if err != nil {
-		return 1, fmt.Errorf("%s: parse: %w", filename, err)
+	filename, importSuffix, expected, forbidden := arguments[0], arguments[1], arguments[2], arguments[3]
+	auth, ok := constructorAuthModes[arguments[4]]
+	if !ok {
+		return 2, fmt.Errorf("unknown AUTH %q", arguments[4])
 	}
-	if err := checkConstructorAST(parsed, importSuffix, expected, forbidden, authMode); err != nil {
+	parsed, err := parseFile(filename)
+	if err != nil {
+		return 1, err
+	}
+	if err := checkConstructorAST(parsed, importSuffix, expected, forbidden, auth); err != nil {
 		return 1, fmt.Errorf("%s: %w", filename, err)
 	}
 	return 0, nil
 }
 
+// constructorAuth is what one AUTH mode requires of the adapter constructor.
+type constructorAuth struct {
+	// oauth requires an OAuth client-credentials client between the transport
+	// and the generated client.
+	oauth bool
+	// doer is the identifier the generated client must be built on.
+	doer string
+	// bindings is how many auth, authConfig, and doer bindings are required.
+	bindings int
+}
+
+var constructorAuthModes = map[string]constructorAuth{
+	"none":                      {doer: "transport"},
+	"oauth2-client-credentials": {oauth: true, doer: "doer", bindings: 1},
+}
+
 // checkConstructorAST matches the expected constructor shape, not equivalent
 // data flow in every form. Refactoring the adapter may require updating this check.
-func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, authMode string) error {
-	alias := importAlias(parsed, importSuffix)
-	if alias == "" || alias == "." || alias == "_" {
+func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden string, auth constructorAuth) error {
+	alias := usableImportAlias(parsed, importSuffix)
+	if alias == "" {
 		return fmt.Errorf("missing usable import ending in %s", importSuffix)
 	}
 
@@ -52,8 +70,8 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 	doerBindings := 0
 	authConfigBindings := 0
 	returnedClients := 0
-	openapiAlias := importAlias(parsed, "/internal/openapi")
-	oauthAlias := importAlias(parsed, "/internal/infra/oauth2clientcredentials")
+	openapiAlias := usableImportAlias(parsed, "/internal/openapi")
+	oauthAlias := usableImportAlias(parsed, "/internal/infra/oauth2clientcredentials")
 	for _, declaration := range parsed.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok || function.Recv != nil || function.Name.Name != "New" || function.Body == nil {
@@ -68,7 +86,7 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 			if !ok {
 				continue
 			}
-			if authMode == "oauth2-client-credentials" && assigned.Name == "doer" {
+			if auth.oauth && assigned.Name == "doer" {
 				if source, ok := assignment.Rhs[0].(*ast.Ident); ok && source.Name == "authenticated" {
 					doerBindings++
 				}
@@ -78,24 +96,17 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 			if !ok {
 				continue
 			}
-			selector, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				continue
-			}
-			if assigned.Name == "transport" && selector.Sel.Name == expected {
-				owner, ownerOK := selector.X.(*ast.Ident)
-				if ownerOK && owner.Name == alias && validArguments(expected, call.Args) {
-					expectedAssignments++
-				}
+			if assigned.Name == "transport" && selectorNamed(call.Fun, alias, expected) && validArguments(expected, call.Args) {
+				expectedAssignments++
 			}
 
-			if assigned.Name == "generated" && openapiAlias != "" && generatedClientCall(call, openapiAlias, authMode) {
+			if assigned.Name == "generated" && openapiAlias != "" && generatedClientCall(call, openapiAlias, auth.doer) {
 				generatedBindings++
 			}
-			if authMode == "oauth2-client-credentials" && assigned.Name == "authenticated" && oauthHTTPCall(call) {
+			if auth.oauth && assigned.Name == "authenticated" && oauthHTTPCall(call) {
 				authBindings++
 			}
-			if authMode == "oauth2-client-credentials" && assigned.Name == "auth" && oauthConfigCall(call, oauthAlias) {
+			if auth.oauth && assigned.Name == "auth" && oauthConfigMapping(call, oauthAlias) {
 				authConfigBindings++
 			}
 		}
@@ -108,19 +119,15 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 			if fields["generated"] != "generated" || fields["transport"] != "transport" {
 				continue
 			}
-			if authMode == "oauth2-client-credentials" && fields["auth"] != "auth" {
+			if auth.oauth && fields["auth"] != "auth" {
 				continue
 			}
 			returnedClients++
 		}
 	}
 
-	wantAuthBindings, wantDoerBindings, wantAuthConfigBindings := 0, 0, 0
-	if authMode == "oauth2-client-credentials" {
-		wantAuthBindings, wantDoerBindings, wantAuthConfigBindings = 1, 1, 1
-	}
 	if expectedAssignments != 1 || forbiddenCalls != 0 || generatedBindings != 1 || returnedClients != 1 ||
-		authBindings != wantAuthBindings || doerBindings != wantDoerBindings || authConfigBindings != wantAuthConfigBindings {
+		authBindings != auth.bindings || doerBindings != auth.bindings || authConfigBindings != auth.bindings {
 		return fmt.Errorf("constructor=%d forbidden=%d generated=%d returned=%d auth=%d authConfig=%d doer=%d",
 			expectedAssignments, forbiddenCalls, generatedBindings, returnedClients, authBindings, authConfigBindings, doerBindings)
 	}
@@ -134,8 +141,7 @@ func countForbiddenCalls(file *ast.File, alias, forbidden string) int {
 		if !ok {
 			return true
 		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if ok && selector.Sel.Name == forbidden && ownedBy(selector, alias) {
+		if selectorNamed(call.Fun, alias, forbidden) {
 			count++
 		}
 		return true
@@ -143,47 +149,30 @@ func countForbiddenCalls(file *ast.File, alias, forbidden string) int {
 	return count
 }
 
-func generatedClientCall(call *ast.CallExpr, openapiAlias, authMode string) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "NewClient" || !ownedBy(selector, openapiAlias) || len(call.Args) != 2 {
+func generatedClientCall(call *ast.CallExpr, openapiAlias, wantDoer string) bool {
+	if !selectorNamed(call.Fun, openapiAlias, "NewClient") || len(call.Args) != 2 {
 		return false
 	}
 	baseURL, ok := call.Args[0].(*ast.CallExpr)
 	if !ok {
 		return false
 	}
-	baseSelector, ok := baseURL.Fun.(*ast.SelectorExpr)
-	if !ok || baseSelector.Sel.Name != "BaseURL" || !ownedBy(baseSelector, "transport") {
+	if !selectorNamed(baseURL.Fun, "transport", "BaseURL") {
 		return false
 	}
 	option, ok := call.Args[1].(*ast.CallExpr)
 	if !ok || len(option.Args) != 1 {
 		return false
 	}
-	optionSelector, ok := option.Fun.(*ast.SelectorExpr)
-	if !ok || optionSelector.Sel.Name != "WithHTTPClient" || !ownedBy(optionSelector, openapiAlias) {
+	if !selectorNamed(option.Fun, openapiAlias, "WithHTTPClient") {
 		return false
-	}
-	wantDoer := "transport"
-	if authMode == "oauth2-client-credentials" {
-		wantDoer = "doer"
 	}
 	doer, ok := option.Args[0].(*ast.Ident)
 	return ok && doer.Name == wantDoer
 }
 
 func oauthHTTPCall(call *ast.CallExpr) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	return ok && selector.Sel.Name == "HTTP" && ownedBy(selector, "auth") && len(call.Args) == 1 && identifierIs(call.Args[0], "transport")
-}
-
-func oauthConfigCall(call *ast.CallExpr, alias string) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "New" || !ownedBy(selector, alias) || len(call.Args) != 1 {
-		return false
-	}
-	literal, ok := call.Args[0].(*ast.CompositeLit)
-	return ok && selectorTypeIs(literal.Type, alias, "Config") && oauthConfigMapping(call, alias)
+	return selectorNamed(call.Fun, "auth", "HTTP") && len(call.Args) == 1 && identifierIs(call.Args[0], "transport")
 }
 
 func returnedClientFields(expression ast.Expr) map[string]string {
@@ -201,19 +190,10 @@ func returnedClientFields(expression ast.Expr) map[string]string {
 
 func validArguments(constructor string, arguments []ast.Expr) bool {
 	if constructor == "NewExternalHTTPS" {
-		return len(arguments) == 2 && selectorIs(arguments[0], "cfg", "BaseURL") &&
-			selectorIs(arguments[1], "cfg", "Limits")
+		return len(arguments) == 2 && selectorNamed(arguments[0], "cfg", "BaseURL") &&
+			selectorNamed(arguments[1], "cfg", "Limits")
 	}
 	return constructor == "NewPrivateHTTPS" && len(arguments) == 3 &&
-		selectorIs(arguments[0], "cfg", "BaseURL") && selectorIs(arguments[1], "cfg", "PrivateDNSSuffix") &&
-		selectorIs(arguments[2], "cfg", "Limits")
-}
-
-func selectorIs(expression ast.Expr, ownerName, fieldName string) bool {
-	selector, ok := expression.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != fieldName {
-		return false
-	}
-	owner, ok := selector.X.(*ast.Ident)
-	return ok && owner.Name == ownerName
+		selectorNamed(arguments[0], "cfg", "BaseURL") && selectorNamed(arguments[1], "cfg", "PrivateDNSSuffix") &&
+		selectorNamed(arguments[2], "cfg", "Limits")
 }
