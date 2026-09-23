@@ -156,11 +156,11 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// The GC limit is published before any dependency allocates, so the first
 	// large allocation is already collected against the container's real ceiling
 	// rather than against math.MaxInt64.
-	containerLimitBytes := applyMemoryLimit(bootstrap.log, bootstrap.cfg.Runtime.MemoryLimitRatio)
-	// Reported against the same number, because http.max_in_flight and
+	appliedMemoryLimit := applyMemoryLimit(bootstrap.log, bootstrap.cfg.Runtime.MemoryLimitRatio)
+	// Reported against the applied GC limit, because http.max_in_flight and
 	// http.max_body_bytes bound a heap the GC was just handed a ceiling for and
 	// nothing else multiplies the two.
-	reportRequestBufferBudget(bootstrap.log, bootstrap.cfg, containerLimitBytes)
+	reportRequestBufferBudget(bootstrap.log, bootstrap.cfg, appliedMemoryLimit)
 
 	// profile:object-storage:start
 	objectStorage, err := wiring.initObjectStorage(startupCtx, bootstrap.cfg.ObjectStorage)

@@ -24,22 +24,30 @@ const memoryLimitEnv = "GOMEMLIMIT"
 // garbage collector, and reports what it decided so the choice is visible in the
 // startup log rather than inferred from an exit code.
 //
-// It returns the detected container limit, or zero when there is none, so the
-// caller can relate the process's other byte budgets to the same number.
+// It returns the detected container limit and the GC limit it applied, or the
+// zero value when it applied none, so the caller can relate the process's other
+// byte budgets to the same numbers.
 //
 // ratio <= 0 disables detection.
-func applyMemoryLimit(log *slog.Logger, ratio float64) int64 {
+func applyMemoryLimit(log *slog.Logger, ratio float64) memoryLimit {
 	return applyMemoryLimitFrom(log, ratio, memlimit.FromCgroup)
 }
 
-func applyMemoryLimitFrom(log *slog.Logger, ratio float64, detect func() (uint64, error)) int64 {
+// memoryLimit is what applyMemoryLimit decided. The zero value means no GC
+// limit was applied.
+type memoryLimit struct {
+	containerBytes int64
+	gcBytes        int64
+}
+
+func applyMemoryLimitFrom(log *slog.Logger, ratio float64, detect func() (uint64, error)) memoryLimit {
 	if ratio <= 0 {
 		log.Info(
 			"runtime_memory_limit_skipped",
 			"component", "runtime_limits",
 			"reason", "detection_disabled",
 		)
-		return 0
+		return memoryLimit{}
 	}
 	if raw, ok := os.LookupEnv(memoryLimitEnv); ok && strings.TrimSpace(raw) != "" {
 		log.Info(
@@ -48,7 +56,7 @@ func applyMemoryLimitFrom(log *slog.Logger, ratio float64, detect func() (uint64
 			"reason", "already_set_by_platform",
 			"env", memoryLimitEnv,
 		)
-		return 0
+		return memoryLimit{}
 	}
 
 	detected, err := detect()
@@ -69,7 +77,7 @@ func applyMemoryLimitFrom(log *slog.Logger, ratio float64, detect func() (uint64
 			"reason", "no_container_limit",
 			"err", err,
 		)
-		return 0
+		return memoryLimit{}
 	}
 	if detected == 0 || detected > math.MaxInt64 {
 		log.Warn(
@@ -78,7 +86,7 @@ func applyMemoryLimitFrom(log *slog.Logger, ratio float64, detect func() (uint64
 			"reason", "unusable_container_limit",
 			"limit.bytes", detected,
 		)
-		return 0
+		return memoryLimit{}
 	}
 	limit := int64(detected)
 
@@ -91,7 +99,7 @@ func applyMemoryLimitFrom(log *slog.Logger, ratio float64, detect func() (uint64
 			"limit.bytes", limit,
 			"ratio", ratio,
 		)
-		return 0
+		return memoryLimit{}
 	}
 
 	debug.SetMemoryLimit(applied)
@@ -102,5 +110,5 @@ func applyMemoryLimitFrom(log *slog.Logger, ratio float64, detect func() (uint64
 		"ratio", ratio,
 		"gomemlimit.bytes", applied,
 	)
-	return limit
+	return memoryLimit{containerBytes: limit, gcBytes: applied}
 }
