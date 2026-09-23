@@ -38,6 +38,9 @@ func (r *Runtime) UnaryInterceptor() grpc.UnaryServerInterceptor {
 
 // StreamInterceptor authenticates every stream once and bounds its
 // handler-visible context and message operations by the verified token lifetime.
+// The bound holds fully for protobuf messages; receiving a non-protobuf message
+// is checked against it only before and after the read, which can block past
+// expiry.
 func (r *Runtime) StreamInterceptor() grpc.StreamServerInterceptor {
 	return func(
 		server any,
@@ -160,7 +163,7 @@ func (s serverStreamWithContext) Context() context.Context {
 func (s serverStreamWithContext) RecvMsg(message any) error {
 	received, ok := message.(proto.Message)
 	if !ok {
-		return s.recvMsg(message)
+		return s.recvNonProtoMsg(message)
 	}
 	detached := received.ProtoReflect().Type().New().Interface()
 	if err := waitMessageOperation(s.ctx, func() error {
@@ -185,7 +188,7 @@ func (s serverStreamWithContext) SendMsg(message any) error {
 	return nil
 }
 
-func (s serverStreamWithContext) recvMsg(message any) error {
+func (s serverStreamWithContext) recvNonProtoMsg(message any) error {
 	if err := s.ctx.Err(); err != nil {
 		return fmt.Errorf("receive authenticated gRPC message: %w", err)
 	}

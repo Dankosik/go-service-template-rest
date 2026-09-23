@@ -208,7 +208,7 @@ func (c *Client) do(request *http.Request, maxBodyBytes int64, cancelOperation f
 	response.Body = &boundedBody{
 		body:         response.Body,
 		remaining:    maxBodyBytes,
-		complete:     releaseAdmissionAndCancelOperation,
+		release:      releaseAdmissionAndCancelOperation,
 		contextError: contextError,
 	}
 	return response, nil
@@ -218,7 +218,7 @@ type boundedBody struct {
 	body         io.ReadCloser
 	remaining    int64
 	tooLarge     bool
-	complete     func()
+	release      func()
 	contextError func() error
 }
 
@@ -234,12 +234,12 @@ func (b *boundedBody) Read(buffer []byte) (int, error) {
 		n = int(b.remaining)
 		b.remaining = 0
 		b.tooLarge = true
-		b.complete()
+		b.release()
 		return n, ErrResponseTooLarge
 	}
 	b.remaining -= int64(n)
 	if err != nil {
-		b.complete()
+		b.release()
 		if contextErr := b.contextError(); contextErr != nil {
 			err = contextErr
 		}
@@ -249,7 +249,7 @@ func (b *boundedBody) Read(buffer []byte) (int, error) {
 
 func (b *boundedBody) Close() error {
 	err := b.body.Close()
-	b.complete()
+	b.release()
 	if err != nil {
 		return fmt.Errorf("close outbound HTTP response body: %w", err)
 	}
