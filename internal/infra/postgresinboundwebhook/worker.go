@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"go.opentelemetry.io/otel/metric"
@@ -38,6 +39,54 @@ type storedReceipt struct {
 	ReceivedAt time.Time
 	Payload    []byte
 	State      string
+}
+
+// receiptRows reads and terminalizes receipts; the worker never enqueues jobs.
+type receiptRows struct {
+	pool *pgxpool.Pool
+}
+
+func (r receiptRows) loadByID(ctx context.Context, receiptID string) (storedReceipt, error) {
+	row, err := sqlcgen.New(r.pool).GetInboundWebhookReceiptByID(ctx, receiptID)
+	if err != nil {
+		return storedReceipt{}, fmt.Errorf("load inbound webhook receipt: %w", err)
+	}
+	return storedReceipt{
+		ReceiptID:  row.ReceiptID,
+		EndpointID: row.EndpointID,
+		DeliveryID: row.DeliveryID,
+		SignedAt:   row.SignedAt.Time,
+		ReceivedAt: row.ReceivedAt.Time,
+		Payload:    row.Payload,
+		State:      row.Outcome,
+	}, nil
+}
+
+func (r receiptRows) MarkHandled(ctx context.Context, receiptID string) (bool, error) {
+	n, err := sqlcgen.New(r.pool).MarkInboundWebhookHandled(ctx, receiptID)
+	if err != nil {
+		return false, fmt.Errorf("mark inbound webhook handled: %w", err)
+	}
+	return n == 1, nil
+}
+
+func (r receiptRows) MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error) {
+	n, err := sqlcgen.New(r.pool).MarkInboundWebhookQuarantined(ctx, sqlcgen.MarkInboundWebhookQuarantinedParams{
+		ReceiptID:      receiptID,
+		TerminalReason: &reason,
+	})
+	if err != nil {
+		return false, fmt.Errorf("mark inbound webhook quarantined: %w", err)
+	}
+	return n == 1, nil
+}
+
+func (r receiptRows) MarkFailed(ctx context.Context, receiptID string) (bool, error) {
+	n, err := sqlcgen.New(r.pool).MarkInboundWebhookFailed(ctx, receiptID)
+	if err != nil {
+		return false, fmt.Errorf("mark inbound webhook failed: %w", err)
+	}
+	return n == 1, nil
 }
 
 type receiptStateStore interface {
@@ -69,11 +118,7 @@ func AddWorker(workers *river.Workers, pool *pgxpool.Pool, registry *inboundwebh
 	if workers == nil || pool == nil {
 		return errors.New("inbound webhook workers and postgres pool are required")
 	}
-	store, err := newPostgresStore(pool)
-	if err != nil {
-		return err
-	}
-	worker, err := newWorker(store, registry, newTelemetry(meter, log))
+	worker, err := newWorker(receiptRows{pool: pool}, registry, newTelemetry(meter, log))
 	if err != nil {
 		return err
 	}

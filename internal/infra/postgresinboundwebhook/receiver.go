@@ -256,47 +256,4 @@ func (s *postgresStore) Accept(ctx context.Context, record receiptRecord) (inbou
 	return outcome, nil
 }
 
-func (s *postgresStore) loadByID(ctx context.Context, receiptID string) (storedReceipt, error) {
-	row, err := sqlcgen.New(s.pool).GetInboundWebhookReceiptByID(ctx, receiptID)
-	if err != nil {
-		return storedReceipt{}, fmt.Errorf("load inbound webhook receipt: %w", err)
-	}
-	return storedReceipt{
-		ReceiptID:  row.ReceiptID,
-		EndpointID: row.EndpointID,
-		DeliveryID: row.DeliveryID,
-		SignedAt:   row.SignedAt.Time,
-		ReceivedAt: row.ReceivedAt.Time,
-		Payload:    row.Payload,
-		State:      row.Outcome,
-	}, nil
-}
-
-func (s *postgresStore) MarkHandled(ctx context.Context, receiptID string) (bool, error) {
-	n, err := sqlcgen.New(s.pool).MarkInboundWebhookHandled(ctx, receiptID)
-	if err != nil {
-		return false, fmt.Errorf("mark inbound webhook handled: %w", err)
-	}
-	return n == 1, nil
-}
-
-func (s *postgresStore) MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error) {
-	n, err := sqlcgen.New(s.pool).MarkInboundWebhookQuarantined(ctx, sqlcgen.MarkInboundWebhookQuarantinedParams{
-		ReceiptID:      receiptID,
-		TerminalReason: &reason,
-	})
-	if err != nil {
-		return false, fmt.Errorf("mark inbound webhook quarantined: %w", err)
-	}
-	return n == 1, nil
-}
-
-func (s *postgresStore) MarkFailed(ctx context.Context, receiptID string) (bool, error) {
-	n, err := sqlcgen.New(s.pool).MarkInboundWebhookFailed(ctx, receiptID)
-	if err != nil {
-		return false, fmt.Errorf("mark inbound webhook failed: %w", err)
-	}
-	return n == 1, nil
-}
-
 // profile:inbound-webhooks-standard:end
