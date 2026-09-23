@@ -150,10 +150,11 @@ func TestParsePoolConfigRejectsSharedFileDefaultDSNKeys(t *testing.T) {
 func TestNormalizePostgresDSNSuppressesFileDefaultKeys(t *testing.T) {
 	t.Parallel()
 
-	normalizedURL, err := normalizePostgresURLDSN("postgres://user:pass@localhost:5432/app?sslmode=disable")
+	rawURL, err := url.Parse("postgres://user:pass@localhost:5432/app?sslmode=disable")
 	if err != nil {
-		t.Fatalf("normalizePostgresURLDSN() error = %v", err)
+		t.Fatalf("url.Parse() error = %v", err)
 	}
+	normalizedURL := normalizePostgresURLDSN(rawURL)
 	parsedURL, err := url.Parse(normalizedURL)
 	if err != nil {
 		t.Fatalf("url.Parse(normalizedURL) error = %v", err)
@@ -216,21 +217,19 @@ func TestParsePoolConfigRejectsUnprobeableTarget(t *testing.T) {
 	}
 }
 
-// TestProbeAddressFromPoolConfigExtractsTheSingleTarget keeps the positive case:
-// the host:port a readiness probe dials, which is what the rejections above
-// exist to guarantee is unambiguous.
-func TestProbeAddressFromPoolConfigExtractsTheSingleTarget(t *testing.T) {
+// TestRequireSingleTCPTargetAcceptsTheSingleTarget keeps the positive case the
+// rejections above exist to guarantee is unambiguous.
+func TestRequireSingleTCPTargetAcceptsTheSingleTarget(t *testing.T) {
 	t.Parallel()
 
 	config, err := parsePoolConfig("postgres://user:pass@localhost:5432/app?sslmode=disable")
 	if err != nil {
 		t.Fatalf("parsePoolConfig() error = %v", err)
 	}
-	address, err := postgresProbeAddressFromPoolConfig(config)
-	if err != nil {
-		t.Fatalf("postgresProbeAddressFromPoolConfig() error = %v", err)
+	if err := requireSingleTCPTarget(config); err != nil {
+		t.Fatalf("requireSingleTCPTarget() error = %v", err)
 	}
-	if address != "localhost:5432" {
-		t.Fatalf("postgresProbeAddressFromPoolConfig() = %q, want localhost:5432", address)
+	if config.ConnConfig.Host != "localhost" || config.ConnConfig.Port != 5432 {
+		t.Fatalf("target = %s:%d, want localhost:5432", config.ConnConfig.Host, config.ConnConfig.Port)
 	}
 }
