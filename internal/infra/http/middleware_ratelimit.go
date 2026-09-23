@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -91,10 +90,12 @@ func RateLimit(limiter RateLimiter, key RateLimitKeyFunc, next http.Handler) htt
 			return
 		}
 
-		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(retryAfter)))
 		writeProblem(w, r, problemResponse{
 			code:   problem.CodeTooManyRequests,
 			detail: "too many requests for this caller",
+			// A limiter that reports no wait still gets the one-second floor:
+			// a 429 always says when to come back.
+			retryAfter: max(retryAfter, time.Nanosecond),
 		})
 	})
 }

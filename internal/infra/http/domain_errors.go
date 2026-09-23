@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
-	"strconv"
 
 	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/problem"
@@ -41,10 +40,11 @@ func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.
 		}
 
 		if mapped, ok := failure.Classify(err, domainErrors); ok {
-			if mapped.RetryAfter > 0 {
-				w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(mapped.RetryAfter)))
-			}
-			writeProblem(w, r, problemResponse{code: problem.Code(mapped.Code), detail: mapped.Detail})
+			writeProblem(w, r, problemResponse{
+				code:       problem.Code(mapped.Code),
+				detail:     mapped.Detail,
+				retryAfter: mapped.RetryAfter,
+			})
 			return
 		}
 

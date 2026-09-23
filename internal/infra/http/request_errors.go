@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	// profile:authn-bearer:start
+	"time"
+	// profile:authn-bearer:end
 
 	"github.com/example/go-service-template-rest/internal/failure"
 	// profile:authn-bearer:start
@@ -77,6 +80,11 @@ func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter,
 }
 
 // profile:authn-bearer:start
+
+// bearerUnavailableRetryAfter is the Retry-After hint while authentication trust
+// cannot be established.
+const bearerUnavailableRetryAfter = 30 * time.Second
+
 func writeBearerRejection(w http.ResponseWriter, r *http.Request, kind bearerauthn.Kind, challenge string) {
 	// In bearerauthn.Kind declaration order, as that package's errors.go is, so
 	// a category added there lands in one obvious place here.
@@ -96,8 +104,11 @@ func writeBearerRejection(w http.ResponseWriter, r *http.Request, kind beareraut
 		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 		writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
 	case bearerauthn.KindUnavailable:
-		w.Header().Set("Retry-After", "30")
-		writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "authentication trust is unavailable"})
+		writeProblem(w, r, problemResponse{
+			code:       problem.CodeServiceUnavailable,
+			detail:     "authentication trust is unavailable",
+			retryAfter: bearerUnavailableRetryAfter,
+		})
 	default:
 		w.Header().Set("WWW-Authenticate", challenge)
 		writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/samber/lo"
@@ -28,6 +29,9 @@ type problemResponse struct {
 	// caller leaves it empty, because a failure this service chose to sanitize
 	// has nothing field-shaped to point at.
 	invalidParams []fieldViolation
+	// retryAfter, when positive, is advertised as a Retry-After header in whole
+	// seconds, rounded up.
+	retryAfter time.Duration
 }
 
 // notFoundProblem is what an unrouted path answers.
@@ -156,6 +160,9 @@ func writeProblem(w http.ResponseWriter, r *http.Request, response problemRespon
 	}
 	if r != nil {
 		p.RequestId = lo.EmptyableToPtr(reqctx.RequestID(r.Context()))
+	}
+	if response.retryAfter > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(response.retryAfter)))
 	}
 
 	// Encode before committing the status, as the generated response writers

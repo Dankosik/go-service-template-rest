@@ -6,14 +6,14 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
-const inboundUnavailableRetryAfter = 1
+const inboundUnavailableRetryAfter = time.Second
 
 var errInboundWebhookStrictFallback = errors.New("inbound webhook strict fallback is unreachable")
 
@@ -32,8 +32,11 @@ type inboundRawServer struct {
 
 func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request, endpointID string, params openapi.ReceiveWebhookParams) {
 	if s.receiver == nil {
-		w.Header().Set("Retry-After", strconv.Itoa(inboundUnavailableRetryAfter))
-		writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "inbound webhook receiver is unavailable"})
+		writeProblem(w, r, problemResponse{
+			code:       problem.CodeServiceUnavailable,
+			detail:     "inbound webhook receiver is unavailable",
+			retryAfter: inboundUnavailableRetryAfter,
+		})
 		return
 	}
 	body, err := io.ReadAll(r.Body)
@@ -63,8 +66,11 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 		}
 		switch {
 		case errors.Is(receiveErr, inboundwebhook.ErrUnavailable):
-			w.Header().Set("Retry-After", strconv.Itoa(inboundUnavailableRetryAfter))
-			writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "inbound webhook storage is unavailable"})
+			writeProblem(w, r, problemResponse{
+				code:       problem.CodeServiceUnavailable,
+				detail:     "inbound webhook storage is unavailable",
+				retryAfter: inboundUnavailableRetryAfter,
+			})
 		default:
 			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"})
 		}
@@ -80,8 +86,11 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 	case inboundwebhook.OutcomeConflict:
 		writeProblem(w, r, problemResponse{code: problem.CodeConflict, detail: "inbound webhook delivery conflicts"})
 	case inboundwebhook.OutcomeUnavailable:
-		w.Header().Set("Retry-After", strconv.Itoa(inboundUnavailableRetryAfter))
-		writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "inbound webhook storage is unavailable"})
+		writeProblem(w, r, problemResponse{
+			code:       problem.CodeServiceUnavailable,
+			detail:     "inbound webhook storage is unavailable",
+			retryAfter: inboundUnavailableRetryAfter,
+		})
 	default:
 		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"})
 	}
