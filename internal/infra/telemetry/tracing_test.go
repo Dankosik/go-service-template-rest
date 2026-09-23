@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -142,13 +141,13 @@ func requireErrorDoesNotContain(t *testing.T, err error, forbidden string) {
 	}
 }
 
-func exportOneTestSpan(t *testing.T, options []otlptracehttp.Option) {
+func exportOneTestSpan(t *testing.T, endpoint TraceExporterEndpoint, cfg TraceExporterConfig) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	exporter, err := otlptracehttp.New(ctx, options...)
+	exporter, err := newOTLPTraceExporter(ctx, endpoint, cfg)
 	if err != nil {
 		t.Fatalf("create OTLP trace exporter: %v", err)
 	}

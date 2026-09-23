@@ -151,22 +151,14 @@ func newOTLPMetricReader(
 	endpoint ExporterEndpoint,
 	cfg MetricExporterConfig,
 ) (sdkmetric.Reader, error) {
-	// Only when this service named the destination. When the platform's own
-	// variables named it, the platform owns the whole exporter configuration and
-	// its credentials belong to the collector it also named.
-	if endpoint.fromConfig() {
-		if err := rejectConflictingAmbientEnv(metricExporterEnvConflicts); err != nil {
-			return nil, err
-		}
+	headers, err := otlpExporterHeaders(endpoint, metricExporterEnvConflicts, cfg.OTLPHeaders)
+	if err != nil {
+		return nil, err
 	}
 
 	exporterOptions := []otlpmetrichttp.Option{otlpmetrichttp.WithEndpointURL(endpoint.URL)}
-	if headers := strings.TrimSpace(cfg.OTLPHeaders); headers != "" {
-		parsedHeaders, err := parseOTLPHeaders(headers)
-		if err != nil {
-			return nil, err
-		}
-		exporterOptions = append(exporterOptions, otlpmetrichttp.WithHeaders(parsedHeaders))
+	if len(headers) != 0 {
+		exporterOptions = append(exporterOptions, otlpmetrichttp.WithHeaders(headers))
 	}
 
 	exporter, err := otlpmetrichttp.New(ctx, exporterOptions...)

@@ -3,7 +3,6 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
@@ -50,30 +49,21 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (endpoint TraceExporte
 		return TraceExporterEndpoint{}, nil, err
 	}
 
-	exporterOptions, endpoint, err := buildTraceExporterOptions(cfg.Exporter)
+	endpoint, err = resolveTraceExporterEndpoint(cfg.Exporter)
 	if err != nil {
 		return TraceExporterEndpoint{}, nil, err
 	}
-	if !endpoint.Configured() {
-		// Keep valid trace IDs for propagation and log correlation without recording spans that cannot be exported.
-		sampler = sdktrace.NeverSample()
-	}
 
-	options := []sdktrace.TracerProviderOption{
-		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sampler),
-	}
+	options := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
 	if endpoint.Configured() {
-		if endpoint.fromConfig() {
-			if err := rejectConflictingAmbientEnv(traceExporterEnvConflicts); err != nil {
-				return endpoint, nil, err
-			}
-		}
-		exporter, err := otlptracehttp.New(ctx, exporterOptions...)
+		exporter, err := newOTLPTraceExporter(ctx, endpoint, cfg.Exporter)
 		if err != nil {
-			return endpoint, nil, fmt.Errorf("create otlp trace exporter: %w", err)
+			return endpoint, nil, err
 		}
-		options = append(options, sdktrace.WithBatcher(exporter))
+		options = append(options, sdktrace.WithSampler(sampler), sdktrace.WithBatcher(exporter))
+	} else {
+		// Keep valid trace IDs for propagation and log correlation without recording spans that cannot be exported.
+		options = append(options, sdktrace.WithSampler(sdktrace.NeverSample()))
 	}
 
 	otelSetupMu.Lock()
@@ -103,26 +93,26 @@ func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
 	}
 }
 
-func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option, TraceExporterEndpoint, error) {
-	options := make([]otlptracehttp.Option, 0, 2)
-	endpoint, err := resolveTraceExporterEndpoint(cfg)
+func newOTLPTraceExporter(
+	ctx context.Context,
+	endpoint TraceExporterEndpoint,
+	cfg TraceExporterConfig,
+) (sdktrace.SpanExporter, error) {
+	headers, err := otlpExporterHeaders(endpoint, traceExporterEnvConflicts, cfg.OTLPHeaders)
 	if err != nil {
-		return nil, TraceExporterEndpoint{}, err
-	}
-	if !endpoint.Configured() {
-		return options, endpoint, nil
+		return nil, err
 	}
 
-	options = append(options, otlptracehttp.WithEndpointURL(endpoint.URL))
-	if headers := strings.TrimSpace(cfg.OTLPHeaders); headers != "" {
-		parsedHeaders, err := parseOTLPHeaders(headers)
-		if err != nil {
-			return nil, TraceExporterEndpoint{}, err
-		}
-		options = append(options, otlptracehttp.WithHeaders(parsedHeaders))
+	exporterOptions := []otlptracehttp.Option{otlptracehttp.WithEndpointURL(endpoint.URL)}
+	if len(headers) != 0 {
+		exporterOptions = append(exporterOptions, otlptracehttp.WithHeaders(headers))
 	}
 
-	return options, endpoint, nil
+	exporter, err := otlptracehttp.New(ctx, exporterOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("create otlp trace exporter: %w", err)
+	}
+	return exporter, nil
 }
 
 // resolveTraceExporterEndpoint reports which OTLP traces endpoint the exporter
