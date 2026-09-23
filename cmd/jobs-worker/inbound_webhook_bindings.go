@@ -1,4 +1,4 @@
-//go:build !jobs_test_worker && !inbound_webhook_test_worker
+//go:build !jobs_test_worker
 
 // profile:inbound-webhooks-standard:start
 package main
@@ -16,18 +16,25 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
+// bindInboundWebhookWorkers adds the inbound webhook worker once register has
+// bound a handler for every configured endpoint; an endpoint left without one
+// fails startup.
 func bindInboundWebhookWorkers(
 	cfg config.Config,
 	workers *river.Workers,
 	pool *pgxpool.Pool,
 	meter metric.MeterProvider,
 	log *slog.Logger,
+	register func(*inboundwebhook.Registry) error,
 ) error {
 	endpoints, err := inboundmanifest.ParseEndpoints(cfg.InboundWebhooks.Endpoints)
 	if err != nil {
 		return fmt.Errorf("parse inbound webhook endpoints: %w", err)
 	}
 	registry := inboundwebhook.NewRegistry()
+	if err := register(registry); err != nil {
+		return fmt.Errorf("bind inbound webhook handlers: %w", err)
+	}
 	if err := registry.RequireExact(endpoints.IDs()); err != nil {
 		return fmt.Errorf("bind inbound webhook handlers: %w", err)
 	}

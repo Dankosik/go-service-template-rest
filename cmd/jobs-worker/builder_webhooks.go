@@ -14,6 +14,9 @@ import (
 	"github.com/example/go-service-template-rest/cmd/jobs-worker/internal/bootstrap"
 	"github.com/example/go-service-template-rest/internal/config"
 
+	// profile:inbound-webhooks-standard:start
+	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	// profile:inbound-webhooks-standard:end
 	// profile:webhooks-durable:start
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
 	// profile:webhooks-durable:end
@@ -53,7 +56,7 @@ func buildWebhookWorkers(
 	registration := bootstrap.WorkerRegistration{Workers: workers}
 	// profile:inbound-webhooks-standard:start
 	registration.Bind = func(_ context.Context, pool *pgxpool.Pool, meter metric.MeterProvider) error {
-		return bindInboundWebhookWorkers(cfg, workers, pool, meter, log)
+		return bindInboundWebhookWorkers(cfg, workers, pool, meter, log, registerInboundWebhookHandlers)
 	}
 	registered = true
 	// profile:inbound-webhooks-standard:end
@@ -62,3 +65,14 @@ func buildWebhookWorkers(
 	}
 	return registration, nil
 }
+
+// profile:inbound-webhooks-standard:start
+
+// registerInboundWebhookHandlers is where a derived service binds each
+// configured inbound endpoint's handler with inboundwebhook.Bind. The template
+// ships none, so any configured endpoint fails startup until one is bound.
+func registerInboundWebhookHandlers(*inboundwebhook.Registry) error {
+	return nil
+}
+
+// profile:inbound-webhooks-standard:end
