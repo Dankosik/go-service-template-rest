@@ -63,7 +63,7 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 	accepted = true
 	return &Worker{
 		client: c, cfg: cfg, consumer: consumer, dlqStream: dlqStream, handler: handler,
-		fatal: make(chan error, 1), runDone: make(chan struct{}), drain: make(chan struct{}),
+		terminal: make(chan error, 1), runDone: make(chan struct{}), drain: make(chan struct{}),
 	}, nil
 }
 

@@ -56,7 +56,7 @@ func unitWorker(t *testing.T, broker jetstream.JetStream, handler Handler) *Work
 		cfg:       cfg,
 		dlqStream: "EVENTS_DLQ",
 		handler:   handler,
-		fatal:     make(chan error, 1),
+		terminal:  make(chan error, 1),
 		runDone:   make(chan struct{}),
 		drain:     make(chan struct{}),
 	}

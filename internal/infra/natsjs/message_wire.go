@@ -63,10 +63,10 @@ func validateRequiredValue(name, value string) error {
 	if value == "" {
 		return fmt.Errorf("%w: %s is required", ErrRejected, name)
 	}
-	return validateOptionalValue(name, value)
+	return validateHeaderValue(name, value)
 }
 
-// validateOptionalValue rejects what must not travel in a NATS header.
+// validateHeaderValue rejects what must not travel in a NATS header.
 //
 // UTF-8 validity is checked before the scan below rather than left to it.
 // Ranging a string yields U+FFFD for each invalid byte, and U+FFFD is not a
@@ -79,7 +79,7 @@ func validateRequiredValue(name, value string) error {
 // test, so C1 (U+0080-U+009F) is refused alongside C0. Those bytes are as
 // unreadable in a subscriber's log line as the ASCII ones, and a header is read
 // far more often than it is parsed.
-func validateOptionalValue(name, value string) error {
+func validateHeaderValue(name, value string) error {
 	if len(value) > maxHeaderValueBytes {
 		return fmt.Errorf("%w: %s exceeds %d bytes", ErrRejected, name, maxHeaderValueBytes)
 	}

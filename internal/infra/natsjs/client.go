@@ -23,12 +23,12 @@ type Client struct {
 	producer  *Producer
 	telemetry *telemetry
 
-	ready       atomic.Bool
-	draining    atomic.Bool
-	intentional atomic.Bool
-	terminal    chan error
-	closed      chan struct{}
-	closedOnce  sync.Once
+	ready          atomic.Bool
+	draining       atomic.Bool
+	closeRequested atomic.Bool
+	terminal       chan error
+	closed         chan struct{}
+	closedOnce     sync.Once
 
 	probeMu       sync.RWMutex
 	consumer      pullConsumer
@@ -88,7 +88,7 @@ func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 		nats.ClosedHandler(func(_ *nats.Conn) {
 			c.ready.Store(false)
 			c.closedOnce.Do(func() { close(c.closed) })
-			if !c.intentional.Load() {
+			if !c.closeRequested.Load() {
 				c.signalTerminal(fmt.Errorf("%w: connection closed after reconnect exhaustion", ErrTerminal))
 			}
 		}),
@@ -170,7 +170,7 @@ func (c *Client) Shutdown(ctx context.Context) error {
 		return nil
 	}
 	c.StopPublish()
-	c.intentional.Store(true)
+	c.closeRequested.Store(true)
 	if err := c.nc.Drain(); err != nil && !errors.Is(err, nats.ErrConnectionClosed) {
 		c.Close()
 		return fmt.Errorf("%w: messaging connection drain failed", ErrTerminal)
@@ -188,7 +188,7 @@ func (c *Client) Close() {
 	if c == nil {
 		return
 	}
-	c.intentional.Store(true)
+	c.closeRequested.Store(true)
 	c.ready.Store(false)
 	c.draining.Store(true)
 	if c.nc != nil {
