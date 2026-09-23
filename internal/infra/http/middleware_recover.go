@@ -1,7 +1,6 @@
 package httpx
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -35,7 +34,7 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 				panic(http.ErrAbortHandler)
 			}
 
-			route := cmp.Or(joinMethodAndPattern(request.Method, routePathTemplateForRequest(request)), "<unmatched>")
+			route := routeLabel(request.Method, routePathTemplateForRequest(request))
 			// debug.Stack is taken here, inside the deferred recovery, because
 			// that is the only point the panicking frames still exist.
 			log.ErrorContext(

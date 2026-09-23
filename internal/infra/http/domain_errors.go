@@ -115,12 +115,10 @@ func recordUnhandledResponseError(log *slog.Logger, r *http.Request, err error) 
 	// whose job is reporting a failure must not become a second one.
 	//nolint:contextcheck // There is no parent context when the request is nil, which is the only case this branch exists for.
 	ctx := context.Background()
-	route := "<unmatched>"
+	route := routeLabel("", "")
 	if r != nil {
 		ctx = r.Context()
-		if matched := joinMethodAndPattern(r.Method, routePathTemplateForRequest(r)); matched != "" {
-			route = matched
-		}
+		route = routeLabel(r.Method, routePathTemplateForRequest(r))
 	}
 
 	if log == nil {
