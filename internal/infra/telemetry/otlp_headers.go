@@ -17,11 +17,9 @@ import (
 // The refusal applies only when this service named the destination. When the
 // platform's own variables named it, the platform owns the whole exporter
 // configuration and its credentials belong to the collector it also named.
-func otlpExporterHeaders(endpoint ExporterEndpoint, envConflicts []string, raw string) (map[string]string, error) {
-	if endpoint.ConfiguredByService {
-		if err := rejectConflictingAmbientEnv(envConflicts); err != nil {
-			return nil, err
-		}
+func otlpExporterHeaders(endpoint ExporterEndpoint, raw string) (map[string]string, error) {
+	if err := rejectConflictingAmbientEnv(endpoint); err != nil {
+		return nil, err
 	}
 	headers := strings.TrimSpace(raw)
 	if headers == "" {

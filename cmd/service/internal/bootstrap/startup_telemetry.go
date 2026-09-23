@@ -185,13 +185,10 @@ func newTelemetryFlush(log *slog.Logger, shutdowns ...func(context.Context) erro
 }
 
 // reportAdditionalAmbientOTLPEnv names standard OTEL_EXPORTER_OTLP_* variables
-// present in addition to the endpoint source. Credential and trust conflicts
-// rejected during setup are excluded; the remaining tuning variables stay under
-// the official SDK's documented environment behavior.
-//
-// Conflicting credential and trust variables are excluded when this service
-// named the endpoint: that case fails exporter setup and is already reported as
-// degraded telemetry.
+// present in addition to the endpoint source. Variables an endpoint rejects are
+// excluded: that fails exporter setup and is already reported as degraded
+// telemetry. The remaining tuning variables stay under the official SDK's
+// documented environment behavior.
 //
 // Both signals are taken because the claim is about the process rather than
 // about traces. A variable that supplied the metrics endpoint changed something,
@@ -206,13 +203,10 @@ func reportAdditionalAmbientOTLPEnv(
 	metricsEndpoint telemetry.ExporterEndpoint,
 ) {
 	honored := []string{tracingEndpoint.Source, metricsEndpoint.Source}
+	rejected := slices.Concat(tracingEndpoint.RejectedAmbientEnv(), metricsEndpoint.RejectedAmbientEnv())
 	additional := slices.DeleteFunc(telemetry.AmbientOTLPExporterEnv(), func(name string) bool {
-		return slices.Contains(honored, name)
+		return slices.Contains(honored, name) || slices.Contains(rejected, name)
 	})
-	additional = withoutConflicting(additional, tracingEndpoint.ConfiguredByService, telemetry.ConflictingTraceExporterEnv)
-	additional = withoutConflicting(
-		additional, metricsEndpoint.ConfiguredByService, telemetry.ConflictingMetricExporterEnv,
-	)
 	if len(additional) == 0 {
 		return
 	}
@@ -238,25 +232,6 @@ func reportAdditionalAmbientOTLPEnv(
 			"config.key", telemetry.SharedOTLPExporterConfigKey,
 		)...,
 	)
-}
-
-// withoutConflicting drops the variables a signal rejects rather than ignores.
-//
-// A conflict only exists when this service named that signal's endpoint itself;
-// when the platform named it, the platform owns the credentials with it and
-// nothing was refused.
-func withoutConflicting(
-	additional []string,
-	configuredByService bool,
-	conflicting func() []string,
-) []string {
-	if !configuredByService {
-		return additional
-	}
-	rejected := conflicting()
-	return slices.DeleteFunc(additional, func(name string) bool {
-		return slices.Contains(rejected, name)
-	})
 }
 
 // reportMetricExporterState names the metric-export destination in the startup

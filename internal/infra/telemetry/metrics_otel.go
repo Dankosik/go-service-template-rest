@@ -156,7 +156,7 @@ func newOTLPMetricReader(
 	endpoint ExporterEndpoint,
 	cfg MetricExporterConfig,
 ) (sdkmetric.Reader, error) {
-	headers, err := otlpExporterHeaders(endpoint, metricExporterEnvConflicts, cfg.OTLPHeaders)
+	headers, err := otlpExporterHeaders(endpoint, cfg.OTLPHeaders)
 	if err != nil {
 		return nil, err
 	}

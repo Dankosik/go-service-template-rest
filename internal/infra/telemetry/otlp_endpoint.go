@@ -43,6 +43,9 @@ type ExporterEndpoint struct {
 	// ambient credential and trust material is a conflict: material this service
 	// cannot verify must not travel to an endpoint this service chose.
 	ConfiguredByService bool
+	// signalPath is the OTLP path of the signal this endpoint was resolved for,
+	// which selects that signal's rejected ambient variables.
+	signalPath string
 }
 
 // Configured reports whether an exporter should be built.
@@ -157,7 +160,7 @@ func (c otlpCandidate) resolve(signalPath string) (ExporterEndpoint, bool, error
 	if err != nil {
 		return ExporterEndpoint{}, false, err
 	}
-	return ExporterEndpoint{URL: endpointURL, Source: c.source}, true, nil
+	return ExporterEndpoint{URL: endpointURL, Source: c.source, signalPath: signalPath}, true, nil
 }
 
 // ambientOTLPCandidates are the standard OpenTelemetry endpoint variables in the

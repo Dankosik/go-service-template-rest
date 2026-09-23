@@ -98,7 +98,7 @@ func newOTLPTraceExporter(
 	endpoint ExporterEndpoint,
 	cfg TraceExporterConfig,
 ) (sdktrace.SpanExporter, error) {
-	headers, err := otlpExporterHeaders(endpoint, traceExporterEnvConflicts, cfg.OTLPHeaders)
+	headers, err := otlpExporterHeaders(endpoint, cfg.OTLPHeaders)
 	if err != nil {
 		return nil, err
 	}

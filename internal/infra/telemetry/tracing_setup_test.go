@@ -445,18 +445,30 @@ func TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv(t *testing.T) {
 	}
 }
 
-func TestConflictingTraceExporterEnvReportsCredentialAndTrustNamesOnly(t *testing.T) {
+func TestTraceEndpointRejectedAmbientEnvReportsCredentialAndTrustNamesOnly(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 	t.Setenv("OTEL_EXPORTER_OTLP_CLIENT_KEY", "/tmp/secret-client.key")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer metrics-only")
 
-	got := ConflictingTraceExporterEnv()
-
+	configured, err := resolveTraceExporterEndpoint(TraceExporterConfig{OTLPEndpoint: "https://collector.example"})
+	if err != nil {
+		t.Fatalf("resolveTraceExporterEndpoint(configured) error = %v", err)
+	}
 	want := []string{"OTEL_EXPORTER_OTLP_CLIENT_KEY", "OTEL_EXPORTER_OTLP_HEADERS"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("ConflictingTraceExporterEnv() = %v, want %v", got, want)
+	if got := configured.RejectedAmbientEnv(); !slices.Equal(got, want) {
+		t.Fatalf("configured RejectedAmbientEnv() = %v, want %v", got, want)
+	}
+
+	// The platform named this destination, so its credentials go with it.
+	ambient, err := resolveTraceExporterEndpoint(TraceExporterConfig{})
+	if err != nil {
+		t.Fatalf("resolveTraceExporterEndpoint(ambient) error = %v", err)
+	}
+	if got := ambient.RejectedAmbientEnv(); len(got) != 0 {
+		t.Fatalf("ambient RejectedAmbientEnv() = %v, want none", got)
 	}
 }
 

@@ -271,15 +271,20 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	}
 }
 
-// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
+// TestMetricEndpointRejectedAmbientEnvNamesUnverifiableMaterial keeps injected
 // credentials from travelling to a collector this service named.
-func TestConflictingMetricExporterEnvNamesUnverifiableMaterial(t *testing.T) {
+func TestMetricEndpointRejectedAmbientEnvNamesUnverifiableMaterial(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "authorization=Bearer traces-only")
 
-	names := ConflictingMetricExporterEnv()
+	endpoint, err := resolveMetricExporterEndpoint(MetricExporterConfig{OTLPEndpoint: "https://collector.example"})
+	if err != nil {
+		t.Fatalf("resolveMetricExporterEndpoint() error = %v", err)
+	}
+	names := endpoint.RejectedAmbientEnv()
 
 	if len(names) != 1 || names[0] != "OTEL_EXPORTER_OTLP_METRICS_HEADERS" {
-		t.Fatalf("ConflictingMetricExporterEnv() = %v, want the injected headers variable", names)
+		t.Fatalf("RejectedAmbientEnv() = %v, want the injected headers variable", names)
 	}
 }
