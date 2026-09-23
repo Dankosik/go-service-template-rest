@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Heavy steps are CI-owned: a local run names them and records a partial
+# result instead of running them. ALLOW_HEAVY=1 keeps them local.
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -80,6 +82,8 @@ prepare_command() {
 
 self_test() (
 	local output fixture scratch script attempt_path receipts_before
+	# plan_section NAME: one section of the plan in ${output}, header included.
+	plan_section() { sed -n "/^$1:\$/,/^[^ ]/p" <<<"${output}"; }
 	fixture=$(mktemp -d)
 	trap 'rm -rf -- "${fixture}"' EXIT
 	mkdir -p "${fixture}/scripts/ci" "${fixture}/make" "${fixture}/tools" \
@@ -222,12 +226,24 @@ self_test() (
 	grep -q 'make test-all' <<<"${output}"
 	grep -q 'make root-mod-check' <<<"${output}"
 
-	if CI='' ALLOW_HEAVY='' bash "${script}" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-heavy.$$"; then
-		echo "verify self-test accepted a heavy route without ALLOW_HEAVY=1" >&2
-		return 1
-	fi
-	grep -q 'set ALLOW_HEAVY=1' "${TMPDIR:-/tmp}/verify-heavy.$$"
-	rm -f "${TMPDIR:-/tmp}/verify-heavy.$$"
+	# Heavy steps are CI-owned unless ALLOW_HEAVY=1 keeps them local.
+	output=$(bash "${script}" --plan --files test/postgres_integration_test.go)
+	grep -q '^  REQUIRE_DOCKER=1 make test-integration-db$' <<<"$(plan_section ci-owned)"
+	if grep -q 'requires_heavy=true' <<<"$(plan_section commands)"; then return 1; fi
+	output=$(ALLOW_HEAVY=1 bash "${script}" --plan --files test/postgres_integration_test.go)
+	grep -q '^  REQUIRE_DOCKER=1 make test-integration-db$' <<<"$(plan_section commands)"
+	if grep -q '^ci-owned:$' <<<"${output}"; then return 1; fi
+	# A route with only CI-owned steps runs nothing locally and names CI.
+	output=$(bash "${script}" --files test/postgres_integration_test.go)
+	grep -q '^verification not applicable locally: CI owns REQUIRE_DOCKER=1 make test-integration-db$' <<<"${output}"
+	# Local steps pass while a CI-owned step remains: the receipt is partial
+	# and names CI, never a full verification.
+	printf 'echo fixture docs check passed\n' >scripts/ci/docs-contract-check.sh
+	output=$(VERIFY_FORCE=1 bash "${script}" --files README.md test/postgres_integration_test.go)
+	grep -q 'fixture docs check passed' <<<"${output}"
+	grep -q '^status: partially_verified$' <<<"${output}"
+	grep -q '^ci_owned: REQUIRE_DOCKER=1 make test-integration-db$' <<<"${output}"
+	grep -q '^gap_or_next_owner: CI$' <<<"${output}"
 
 	if ALLOW_HEAVY=1 VERIFY_DOCKER_COMMAND=missing-docker-for-verify-test bash "${script}" --files test/postgres_integration_test.go >/dev/null 2>"${TMPDIR:-/tmp}/verify-docker.$$"; then
 		echo "verify self-test accepted an integration route without Docker" >&2
@@ -342,7 +358,9 @@ SH
 )
 
 if [[ ${mode} == self-test ]]; then
-	self_test
+	# Which steps are CI-owned depends on these; CI and a workstation test the
+	# same routes.
+	CI='' ALLOW_HEAVY='' self_test
 	exit
 fi
 
@@ -401,12 +419,26 @@ docker_requirements=()
 network_requirements=()
 keys=''
 not_applicable=()
+ci_owned_displays=()
+ci_owned_details=()
+
+# CI runs every heavy step on the surfaces that select it, so a local run
+# leaves them there rather than occupying the workstation.
+ci_owned() {
+	[[ ${CI:-} != true && $1 == true && ${ALLOW_HEAVY:-} != 1 ]]
+}
 
 add_command() {
 	local kind=$1 argument=$2 reason=$3 display=$4 cost_class=$5 requires_heavy=$6 requires_docker=$7 requires_network=$8 key
 	key="${kind}|${argument}"
 	case $'\n'"${keys}" in *$'\n'"${key}"$'\n'*) return ;; esac
 	keys="${keys}${key}"$'\n'
+	if ci_owned "${requires_heavy}"; then
+		ci_owned_displays[${#ci_owned_displays[@]}]=${display}
+		ci_owned_details[${#ci_owned_details[@]}]=$(printf '    because %s\n    cost_class=%s requires_heavy=%s requires_docker=%s requires_network=%s' \
+			"${reason}" "${cost_class}" "${requires_heavy}" "${requires_docker}" "${requires_network}")
+		return
+	fi
 	kinds[${#kinds[@]}]=${kind}
 	arguments[${#arguments[@]}]=${argument}
 	reasons[${#reasons[@]}]=${reason}
@@ -554,6 +586,12 @@ print_plan() {
 				"${displays[$i]}" "${reasons[$i]}" "${cost_classes[$i]}" "${heavy_requirements[$i]}" "${docker_requirements[$i]}" "${network_requirements[$i]}"
 		done
 	fi
+	if ((${#ci_owned_displays[@]})); then
+		echo "ci-owned:"
+		for i in "${!ci_owned_displays[@]}"; do
+			printf '  %s\n%s\n' "${ci_owned_displays[$i]}" "${ci_owned_details[$i]}"
+		done
+	fi
 	if ((${#not_applicable[@]})); then echo "not applicable:"; printf '  %s\n' "${not_applicable[@]}"; fi
 }
 
@@ -562,17 +600,22 @@ if [[ ${mode} == plan ]]; then
 	exit
 fi
 
+ci_owned_summary=''
+if ((${#ci_owned_displays[@]})); then ci_owned_summary=$(IFS='; '; echo "${ci_owned_displays[*]}"); fi
+
 if ((${#kinds[@]} == 0)); then
 	print_plan
-	echo "verification not applicable: no executable checks for changed surfaces"
+	if [[ -n ${ci_owned_summary} ]]; then
+		echo "verification not applicable locally: CI owns ${ci_owned_summary}"
+	else
+		echo "verification not applicable: no executable checks for changed surfaces"
+	fi
 	exit 0
 fi
 
-requires_heavy=false
 requires_docker=false
 requires_network=false
 for i in "${!kinds[@]}"; do
-	[[ ${heavy_requirements[$i]} == true ]] && requires_heavy=true
 	[[ ${docker_requirements[$i]} == true ]] && requires_docker=true
 	[[ ${network_requirements[$i]} == true ]] && requires_network=true
 done
@@ -582,7 +625,6 @@ blocked() {
 	exit 2
 }
 
-if [[ ${requires_heavy} == true && ${ALLOW_HEAVY:-} != 1 && ${CI:-} != true ]]; then blocked "set ALLOW_HEAVY=1 before verification"; fi
 for binary in git make shasum; do command -v "${binary}" >/dev/null 2>&1 || blocked "required binary is unavailable: ${binary}"; done
 if grep -q '\.go$' "${files_path}" || is_true go_root_dependencies || is_true go_tool_dependencies || is_true go_lint_config || is_true validation_system; then
 	command -v go >/dev/null 2>&1 || blocked "required binary is unavailable: go"
@@ -696,9 +738,13 @@ receipt_tmp=${receipt}.tmp.$$
 	printf 'inputs: %s\n' "$(tr '\n' ',' <"${files_path}")"
 	printf 'environment: %s\n' "${environment_detail}"
 	printf 'duration: %ss\n' "${duration}"
-	printf 'status: verified\n'
+	if [[ -n ${ci_owned_summary} ]]; then printf 'status: partially_verified\n'; else printf 'status: verified\n'; fi
 	if ((${#not_applicable[@]})); then printf 'not_applicable: %s\n' "$(IFS='; '; echo "${not_applicable[*]}")"; fi
-	printf 'gap_or_next_owner: none\n'
+	if [[ -n ${ci_owned_summary} ]]; then
+		printf 'ci_owned: %s\ngap_or_next_owner: CI\n' "${ci_owned_summary}"
+	else
+		printf 'gap_or_next_owner: none\n'
+	fi
 } >"${receipt_tmp}"
 mv "${receipt_tmp}" "${receipt}"
 printf 'attempt_state: passed\nreceipt: %s\n' "${receipt}" >>"${attempt}"

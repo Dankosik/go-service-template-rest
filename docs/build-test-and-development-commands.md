@@ -149,8 +149,8 @@ staged, unstaged, and untracked changes, including both sides of renames,
 explains their surfaces and not-applicable gates, and prints the minimal
 command set. Do not run it as a required gate; `make verify` already prints the
 plan it will execute.
-`verify` rejects missing heavy authorization, Docker, or required binaries before
-the first check. It batches changed Go formatting and lint packages, tests the
+`verify` leaves heavy steps to CI unless `ALLOW_HEAVY=1` and rejects missing
+Docker or required binaries for its local steps before the first check. It batches changed Go formatting and lint packages, tests the
 reverse-importer closure, and serializes CPU/Docker work through the Git-common
 validation lock. Its exact passing receipt is shared by related worktrees and
 binds the resolved base, merge base, plan, execution inputs, tool versions, and
