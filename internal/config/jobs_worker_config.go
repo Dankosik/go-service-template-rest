@@ -26,6 +26,10 @@ func buildJobsWorkerSnapshot(source *koanf.Koanf) (Config, []string, error) {
 	return buildSnapshot(worker)
 }
 
+// isJobsWorkerKey keeps the sections the jobs worker consumes. http stays because
+// its grace period and shutdown timeout bound the worker's teardown, and the
+// inbound endpoint document stays, without its secrets, so the worker can
+// require exactly one binding per configured endpoint.
 func isJobsWorkerKey(key string) bool {
 	sections := []string{"app", "http", "log", "observability", "postgres", "jobs"}
 	// profile:webhooks-durable:start

@@ -40,9 +40,9 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 	return loadDetailedWithContext(ctx, opts, buildSnapshot, validateConfig)
 }
 
+// profile:jobs-postgres:start
 // LoadJobsWorkerDetailedWithContext loads the immutable snapshot required by
 // the jobs-worker binary. It validates only the sections that binary consumes.
-// profile:jobs-postgres:start
 func LoadJobsWorkerDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
 	return loadDetailedWithContext(ctx, opts, buildJobsWorkerSnapshot, validateJobsWorkerConfig)
 }

@@ -66,9 +66,10 @@ func (e *opError) Unwrap() error { return e.err }
 // than err.Error(). A handler's error can carry a credential, a DSN, or a token,
 // and the canary tests in internal/infra/grpc assert that none of it reaches a
 // log, span, or metric. The cost is real and worth stating: a chain built from
-// errors.New renders as "*errors.errorString" and identifies nothing. A package
-// whose failures must stay diagnosable publishes typed errors or sentinels,
-// and why their faults survive this rendering. [Op] is what covers the rest.
+// errors.New renders as "*errors.errorString" and identifies nothing, and a
+// sentinel made that way is no exception. A package whose failures must stay
+// diagnosable publishes typed errors, whose types survive this rendering, or
+// names its steps with [Op].
 //
 // Joined errors are not expanded. errors.Join reports one type for the group,
 // and walking every branch would turn a fan-out of cleanup failures into an

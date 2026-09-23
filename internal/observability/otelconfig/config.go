@@ -42,9 +42,9 @@ func TracesSamplerOrDefault(name string) string {
 	return normalized
 }
 
-// ValidateTracesSampler reports whether a sampler name and its ratio argument are
-// usable together. Both call sites previously repeated three separate predicates
-// in the same order; one entry point keeps them from drifting.
+// ValidateTracesSampler reports whether name, after [TracesSamplerOrDefault], is
+// a supported sampler and arg is a finite ratio in [0,1]. Config load and the
+// telemetry adapter both call it, so they accept the same settings.
 //
 // Messages name the settings rather than the Go parameters, so a caller can
 // prefix its own section and still produce an operator-actionable key.

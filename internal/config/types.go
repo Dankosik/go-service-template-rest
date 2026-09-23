@@ -5,15 +5,9 @@ import (
 	"time"
 )
 
-// Config is the immutable runtime snapshot built during startup.
-//
-// Each section's type, defaults, and validation live together in its own
-// <section>_config.go, so a section a build profile removes leaves with that
-// file rather than being cut out of three shared ones. What stays below is what
-// a dedicated file would not pay for: sections that are both always present and
-// small enough to read in place. HTTP and Observability are always present too
-// and still have their own files, because size, not removability, is what earns
-// one.
+// Config is the immutable runtime snapshot built during startup. Sections that
+// are always present and small are declared below; every other section lives in
+// its own <section>_config.go (see the package documentation).
 type Config struct {
 	App  AppConfig  `koanf:"app"`
 	HTTP HTTPConfig `koanf:"http"`

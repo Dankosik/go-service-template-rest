@@ -22,8 +22,8 @@ import (
 // section that a build profile removes leaves with its file. This file keeps the
 // order they run in and the helpers more than one of them shares. A rule that
 // spans two sections goes to whichever section depends on the other, and takes
-// that section's other half as a parameter — postgres against the request
-// budget, outbox against postgres — so no rule outlives the section it is about.
+// that section's other half as a parameter, so no rule outlives the section it
+// is about.
 //
 // There is deliberately no rule tying health.refresh_interval to
 // http.readiness_timeout. The readiness handler answers from cached state and

@@ -37,7 +37,10 @@
 // <section>_config.go. Those three change together — adding a field touches all
 // three — and a section a build profile removes then leaves with its file
 // instead of being cut out of three shared ones. types.go and defaults.go keep
-// the [Config] shape, the merge, and the sections small enough to read in place.
+// the [Config] shape, the merge, and the sections that are both always present
+// and small enough to read in place. HTTP and Observability are always present
+// too and still have their own files, because size, not removability, is what
+// earns one.
 //
 // A rule that spans two sections goes to whichever section depends on the other.
 // validate.go keeps only the rules that belong to neither.
@@ -46,7 +49,8 @@
 //
 // This package may not import a runtime adapter, so a rule that this package and
 // an adapter must agree on can live in neither. It goes to a pure leaf both
-// import, and a parity test pins the two together.
+// import. A parity test is needed only where one side adds its own mapping on
+// top of the leaf.
 // profile:authn-oidc-jwt:start
 // internal/authntrust is that leaf for the issuer, JWKS, and token-profile trust
 // rules.
@@ -60,5 +64,6 @@
 // document.
 // profile:inbound-webhooks-standard:end
 // internal/observability/otelconfig is that leaf for the OpenTelemetry sampler
-// vocabulary and validation.
+// vocabulary and validation, and internal/outboundtrust for the fixed HTTPS
+// target shape.
 package config
