@@ -67,10 +67,10 @@ func NewHandler(log *slog.Logger, writeToken string) (http.Handler, error) {
 		return nil, errors.New("reference service: write token is required")
 	}
 
-	repository := memory.New()
+	store := memory.New()
 	// A PostgreSQL store passes postgres.InTx behind the same article.Store port;
 	// nothing in the feature package changes.
-	articles, err := article.NewService(repository)
+	articles, err := article.NewService(store)
 	if err != nil {
 		return nil, fmt.Errorf("build article service: %w", err)
 	}

@@ -74,11 +74,7 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 		Headers: openapi.CreateArticle201ResponseHeaders{
 			Location: "/api/v1/articles/" + created.Slug,
 		},
-		Body: openapi.Article{
-			Slug:    created.Slug,
-			Title:   created.Title,
-			Summary: created.Summary,
-		},
+		Body: toAPIArticle(created),
 	}, nil
 }
 
@@ -88,9 +84,13 @@ func (h *handler) GetArticle(ctx context.Context, request openapi.GetArticleRequ
 		return nil, fmt.Errorf("get article: %w", err)
 	}
 
-	return openapi.GetArticle200JSONResponse{
-		Slug:    found.Slug,
-		Title:   found.Title,
-		Summary: found.Summary,
-	}, nil
+	return openapi.GetArticle200JSONResponse(toAPIArticle(found)), nil
+}
+
+func toAPIArticle(a article.Article) openapi.Article {
+	return openapi.Article{
+		Slug:    a.Slug,
+		Title:   a.Title,
+		Summary: a.Summary,
+	}
 }
