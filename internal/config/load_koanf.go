@@ -17,11 +17,9 @@ type loadMetadata struct {
 	failedStage               string
 }
 
+// loadKoanf merges defaults, config files, and the environment. The caller
+// checks ctx first; every error return sets metadata.failedStage.
 func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadata, error) {
-	if err := checkContext(ctx); err != nil {
-		return nil, loadMetadata{}, err
-	}
-
 	k := koanf.New(keyDelimiter)
 	metadata := loadMetadata{}
 

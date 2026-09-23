@@ -20,6 +20,8 @@ type LoadOptions struct {
 	ConfigOverlays []string
 }
 
+// LoadReport describes a load attempt. When the load returns an error,
+// FailedStage always names the stage that failed.
 type LoadReport struct {
 	LoadDuration     time.Duration
 	ValidateDuration time.Duration
@@ -52,23 +54,14 @@ func loadDetailedWithContext(
 	validate func(*Config, []string) error,
 ) (Config, LoadReport, error) {
 	if err := checkContext(ctx); err != nil {
-		return Config{}, LoadReport{}, err
+		return Config{}, LoadReport{FailedStage: StageLoadDefaults}, err
 	}
 
 	loadStarted := time.Now()
 	k, metadata, err := loadKoanf(ctx, opts)
-	report := LoadReport{
-		LoadDuration: time.Since(loadStarted),
-		FailedStage:  metadata.failedStage,
-	}
+	report := LoadReport{LoadDuration: time.Since(loadStarted)}
 	if err != nil {
-		if report.FailedStage == "" {
-			report.FailedStage = StageLoadDefaults
-		}
-		return Config{}, report, err
-	}
-	if err := checkContext(ctx); err != nil {
-		report.FailedStage = StageLoadEnv
+		report.FailedStage = metadata.failedStage
 		return Config{}, report, err
 	}
 
