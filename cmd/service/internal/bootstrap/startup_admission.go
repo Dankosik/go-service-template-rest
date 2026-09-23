@@ -102,12 +102,7 @@ func waitForStartupAdmission(
 		case result := <-runErrCh:
 			return false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
 		case err := <-args.backgroundFailures:
-			return false, rejectRuntimeStartup(
-				bootstrapCtx,
-				args.log,
-				"background",
-				fmt.Errorf("background task failed before readiness: %w", err),
-			)
+			return false, backgroundFailedBeforeReadiness(bootstrapCtx, args, err)
 		default:
 			// profile:grpc:start
 			if args.grpcSrv != nil {
@@ -136,12 +131,7 @@ func waitForStartupAdmission(
 	case result := <-runErrCh:
 		return false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
 	case err := <-args.backgroundFailures:
-		return false, rejectRuntimeStartup(
-			bootstrapCtx,
-			args.log,
-			"background",
-			fmt.Errorf("background task failed before readiness: %w", err),
-		)
+		return false, backgroundFailedBeforeReadiness(bootstrapCtx, args, err)
 	}
 }
 
@@ -151,4 +141,8 @@ func serverStoppedBeforeReadiness(ctx context.Context, args serveRuntimeArgs, re
 		err = fmt.Errorf("%s server stopped before readiness: %w", result.name, result.err)
 	}
 	return rejectRuntimeStartup(ctx, args.log, result.name+"_serve", err)
+}
+
+func backgroundFailedBeforeReadiness(ctx context.Context, args serveRuntimeArgs, err error) error {
+	return rejectRuntimeStartup(ctx, args.log, "background", fmt.Errorf("background task failed before readiness: %w", err))
 }
