@@ -19,7 +19,7 @@ func TestApplyStatementTimeoutsPublishesSessionDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parsePoolConfig() error = %v", err)
 	}
-	applyStatementTimeouts(poolConfig.ConnConfig, defaultStatementTimeout)
+	ApplyStatementTimeouts(poolConfig.ConnConfig, defaultStatementTimeout)
 	for _, name := range []string{"statement_timeout", "idle_in_transaction_session_timeout"} {
 		if got := poolConfig.ConnConfig.RuntimeParams[name]; got != "8000ms" {
 			t.Fatalf("RuntimeParams[%q] = %q, want 8000ms", name, got)
@@ -46,7 +46,7 @@ func TestRuntimeParamMillisecondsRoundsUp(t *testing.T) {
 
 func TestApplyStatementTimeoutsToleratesMissingConfig(t *testing.T) {
 	t.Parallel()
-	applyStatementTimeouts(nil, time.Second)
+	ApplyStatementTimeouts(nil, time.Second)
 }
 
 func TestApplyContextWatcherUsesCancelRequestWithServerFallback(t *testing.T) {
