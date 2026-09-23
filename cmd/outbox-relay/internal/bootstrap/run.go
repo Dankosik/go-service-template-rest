@@ -154,6 +154,10 @@ func riverClientConfig(workers *river.Workers, log *slog.Logger) *river.Config {
 	}
 }
 
+// runLifecycle admits, serves, and drains the relay. It reports whether River
+// and the background tasks joined, so run may close the pool and NATS. The
+// returned window is already canceled and serves only as the parent for
+// runtimeopts.TeardownStage in deferred cleanup.
 func runLifecycle(
 	signalCtx context.Context,
 	startupCtx context.Context,

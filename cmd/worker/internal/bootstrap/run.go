@@ -67,6 +67,9 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	// count an alert is built on.
 	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "worker")
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
+	// False means the handler did not join within the shutdown budget. Its
+	// dependencies stay intact and process exit owns them.
+	cleanupSafe := true
 	// Registered before the error is read, because tracing is installed whether
 	// or not metrics were: a worker that refuses to start over its meter still
 	// owes the span exporter the flush that lets its goroutine end.
@@ -85,7 +88,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	defer client.Close()
 	registry, handlerCleanup, err := buildHandler(startupCtx, cfg, log)
 	defer func() {
-		if handlerCleanup != nil {
+		if handlerCleanup != nil && cleanupSafe {
 			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, handlerClose)
 			defer cleanupCancel()
 			handlerCleanup(cleanupCtx)
@@ -105,11 +108,6 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	if err != nil {
 		return fmt.Errorf("initialize durable consumer: %w", err)
 	}
-	cleanupSafe, cleanupWindow, err := runWorkerLifecycle(signalCtx, startupCtx, cfg, log, metrics, client, worker)
-	// A spent shutdown budget is not successful cleanup. If the handler did not
-	// join, leave its dependencies intact and let the process exit own them.
-	if !cleanupSafe {
-		handlerCleanup = nil
-	}
+	cleanupSafe, cleanupWindow, err = runWorkerLifecycle(signalCtx, startupCtx, cfg, log, metrics, client, worker)
 	return err
 }

@@ -31,6 +31,10 @@ const (
 	workerTailBudget = diagnosticsClose + backgroundClose + handlerClose + telemetryClose
 )
 
+// runWorkerLifecycle admits, serves, and drains the consumer. cleanupSafe
+// reports whether the handler joined, so run may release what it uses. The
+// returned window is already canceled and serves only as the parent for
+// runtimeopts.TeardownStage in deferred cleanup.
 func runWorkerLifecycle(
 	signalCtx context.Context,
 	startupCtx context.Context,
@@ -39,7 +43,7 @@ func runWorkerLifecycle(
 	metrics *telemetry.Metrics,
 	client *natsjs.Client,
 	worker *natsjs.Worker,
-) (bool, context.Context, error) {
+) (cleanupSafe bool, window context.Context, err error) {
 	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
 	healthSvc := health.New(client)
 	if err := healthSvc.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
@@ -85,7 +89,8 @@ func runWorkerLifecycle(
 	}
 	healthSvc.StartDrain()
 	worker.StartDrain()
-	window, processCancel := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+	var processCancel context.CancelFunc
+	window, processCancel = runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer processCancel()
 	workerCtx, workerCancel := runtimeopts.TeardownStage(window, cfg.HTTP.ShutdownTimeout)
 	workerErr := worker.Shutdown(workerCtx)
@@ -94,7 +99,7 @@ func runWorkerLifecycle(
 	backgroundCtx, backgroundCancel := runtimeopts.TeardownStage(window, backgroundClose)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	backgroundCancel()
-	cleanupSafe := runtimeopts.StoppedBeforeReturn(workerErr, workerDone)
+	cleanupSafe = runtimeopts.StoppedBeforeReturn(workerErr, workerDone)
 	select {
 	case runErr := <-workerResult:
 		if triggerErr == nil {
