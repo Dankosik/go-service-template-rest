@@ -11,13 +11,13 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 )
 
-func TestInboundWebhookWorkerRuntimeBindIsPresent(t *testing.T) {
-	runtime, err := buildWebhookWorkers(context.Background(), config.Config{}, slog.Default())
+func TestInboundWebhookWorkerRegistrationBindIsPresent(t *testing.T) {
+	registration, err := buildWebhookWorkers(context.Background(), config.Config{}, slog.Default())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Workers == nil || runtime.Bind == nil {
-		t.Fatalf("runtime workers=%v bind=%v", runtime.Workers == nil, runtime.Bind == nil)
+	if registration.Workers == nil || registration.Bind == nil {
+		t.Fatalf("registration workers=%v bind=%v", registration.Workers == nil, registration.Bind == nil)
 	}
 }
 

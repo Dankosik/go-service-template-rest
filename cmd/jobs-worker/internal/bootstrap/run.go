@@ -29,18 +29,18 @@ import (
 	// profile:inbound-webhooks-standard:end
 )
 
-// WorkersRuntime is the builder result: validated workers and an optional
-// binder that registers workers requiring the pool after it is opened.
-type WorkersRuntime struct {
+// WorkerRegistration is the builder result: validated workers and an optional
+// binder that adds the workers requiring the pool to them once it is opened.
+type WorkerRegistration struct {
 	Workers *river.Workers
 	// profile:inbound-webhooks-standard:start
-	Bind func(context.Context, *river.Workers, *pgxpool.Pool, metric.MeterProvider) error
+	Bind func(context.Context, *pgxpool.Pool, metric.MeterProvider) error
 	// profile:inbound-webhooks-standard:end
 }
 
 // WorkersBuilder is binary-local business composition. Derived services add
 // their typed River workers here; the reusable binary has no default job kind.
-type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (WorkersRuntime, error)
+type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (WorkerRegistration, error)
 
 func Run(args []string, buildWorkers WorkersBuilder) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -85,11 +85,11 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		return err
 	}
 
-	runtime, err := buildWorkers(startupCtx, cfg, log)
+	registration, err := buildWorkers(startupCtx, cfg, log)
 	if err != nil {
 		return fmt.Errorf("build jobs workers: %w", err)
 	}
-	if runtime.Workers == nil {
+	if registration.Workers == nil {
 		return errors.New("jobs workers are not registered")
 	}
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
@@ -102,8 +102,8 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		}
 	}()
 	// profile:inbound-webhooks-standard:start
-	if runtime.Bind != nil {
-		if err := runtime.Bind(startupCtx, runtime.Workers, pool, metrics.MeterProvider()); err != nil {
+	if registration.Bind != nil {
+		if err := registration.Bind(startupCtx, pool, metrics.MeterProvider()); err != nil {
 			return fmt.Errorf("bind jobs workers: %w", err)
 		}
 	}
@@ -123,7 +123,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: cfg.Jobs.MaxWorkers},
 		},
-		Workers: runtime.Workers,
+		Workers: registration.Workers,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize River client: %w", err)

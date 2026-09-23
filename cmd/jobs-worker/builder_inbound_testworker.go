@@ -20,11 +20,11 @@ import (
 )
 
 func init() {
-	buildWorkers = func(_ context.Context, cfg config.Config, log *slog.Logger) (bootstrap.WorkersRuntime, error) {
+	buildWorkers = func(_ context.Context, cfg config.Config, log *slog.Logger) (bootstrap.WorkerRegistration, error) {
 		workers := river.NewWorkers()
-		return bootstrap.WorkersRuntime{
+		return bootstrap.WorkerRegistration{
 			Workers: workers,
-			Bind: func(_ context.Context, workers *river.Workers, pool *pgxpool.Pool, meter metric.MeterProvider) error {
+			Bind: func(_ context.Context, pool *pgxpool.Pool, meter metric.MeterProvider) error {
 				endpoints, err := inboundmanifest.ParseEndpoints(cfg.InboundWebhooks.Endpoints)
 				if err != nil {
 					return err
