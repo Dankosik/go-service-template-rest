@@ -58,16 +58,16 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	}
 	// A malformed delivery settles with no decoded message.
 	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
-		return w.deadLetter(handlerRoot, delivery{source: source, metadata: metadata}, deadLetterMalformed)
+		return w.deadLetter(handlerRoot, delivery{source: source, metadata: metadata}, DeadLetterMalformed)
 	}
 	//nolint:contextcheck // Decoding extracts remote metadata; handlerRoot owns the admitted work.
 	decoded, remote, decodeErr := decodeMessage(source, metadata)
 	if decodeErr != nil {
-		return w.deadLetter(handlerRoot, delivery{source: source, metadata: metadata}, deadLetterMalformed)
+		return w.deadLetter(handlerRoot, delivery{source: source, metadata: metadata}, DeadLetterMalformed)
 	}
 	current := delivery{source: source, metadata: metadata, message: decoded}
 	if metadata.NumDelivered > w.attemptLimit() {
-		return w.deadLetter(handlerRoot, current, deadLetterExhausted)
+		return w.deadLetter(handlerRoot, current, DeadLetterExhausted)
 	}
 
 	ctx, span := w.client.telemetry.tracer.Start(
@@ -104,13 +104,13 @@ func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, resu
 	}
 	if IsPermanent(result.err) {
 		telemetry.recordHandler(ctx, current.message, outcomePermanent, reasonHandlerPermanent, result.started)
-		return w.deadLetter(handlerRoot, current, deadLetterPermanent)
+		return w.deadLetter(handlerRoot, current, DeadLetterPermanent)
 	}
 	exhausted := current.metadata.NumDelivered >= w.attemptLimit()
 	outcome := handlerOutcome(result, exhausted)
 	if exhausted {
 		telemetry.recordHandler(ctx, current.message, outcome, reasonHandlerExhausted, result.started)
-		return w.deadLetter(handlerRoot, current, deadLetterExhausted)
+		return w.deadLetter(handlerRoot, current, DeadLetterExhausted)
 	}
 	telemetry.recordHandler(ctx, current.message, outcome, reasonHandlerRetry, result.started)
 	return w.requestRedelivery(ctx, current, w.retryDelayFor(current.metadata.NumDelivered), reasonHandlerRedeliveryRejected)

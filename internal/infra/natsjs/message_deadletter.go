@@ -24,15 +24,17 @@ import (
 // names it writes are declared with the rest of the wire contract in
 // message_wire.go, because they are one published contract.
 
-// The Dead-Letter-Reason values. They belong here rather than with the metric
-// and log labels in vocabulary.go because they travel on the wire to whatever
-// consumes the dead-letter stream: they are a published contract, and renaming
-// one is a consumer-visible change. worker_delivery.go names them; only
-// Worker.deadLetter consumes them.
+// The Dead-Letter-Reason values [DeadLetterReason] reports. They belong here
+// rather than with the metric and log labels in vocabulary.go because they
+// travel on the wire to whatever consumes the dead-letter stream: they are a
+// published contract, and changing one is a consumer-visible change.
 const (
-	deadLetterMalformed = "malformed"
-	deadLetterExhausted = "exhausted"
-	deadLetterPermanent = "permanent"
+	// DeadLetterMalformed marks a delivery whose envelope never decoded.
+	DeadLetterMalformed = "malformed"
+	// DeadLetterExhausted marks a delivery that used its whole attempt budget.
+	DeadLetterExhausted = "exhausted"
+	// DeadLetterPermanent marks a delivery the handler refused with [Permanent].
+	DeadLetterPermanent = "permanent"
 )
 
 // deadLetterMessage builds the transfer onto subject: the original identity
@@ -118,13 +120,15 @@ func RestoreDeadLetter(msg jetstream.Msg) (Event, error) {
 }
 
 // DeadLetterReason is why the worker moved one record to the dead-letter
-// stream: "malformed", "exhausted", or "permanent". It is empty for a record
-// this package did not transfer.
+// stream: [DeadLetterMalformed], [DeadLetterExhausted], or
+// [DeadLetterPermanent]. It is empty for a record this package did not
+// transfer.
 //
 // An operator reads it to decide whether a redrive can succeed at all. Only
-// "exhausted" describes a failure a later attempt may survive unchanged;
-// "permanent" was the handler's own verdict and "malformed" never decoded, so
-// both need the cause addressed before the record is worth republishing.
+// [DeadLetterExhausted] describes a failure a later attempt may survive
+// unchanged; [DeadLetterPermanent] was the handler's own verdict and
+// [DeadLetterMalformed] never decoded, so both need the cause addressed before
+// the record is worth republishing.
 func DeadLetterReason(msg jetstream.Msg) string {
 	if msg == nil {
 		return ""
