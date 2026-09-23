@@ -60,7 +60,7 @@ func bootstrapReportStage(
 	cfg config.Config,
 	loadOptions config.LoadOptions,
 	configReport config.LoadReport,
-	tracingEndpoint telemetry.TraceExporterEndpoint,
+	tracingEndpoint telemetry.ExporterEndpoint,
 	tracingInitErr error,
 ) {
 	log.InfoContext(

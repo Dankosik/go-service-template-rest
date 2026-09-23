@@ -111,7 +111,7 @@ func TestReportAdditionalAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.
 	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 		telemetry.ExporterEndpoint{},
 	)
 
@@ -177,7 +177,7 @@ func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testin
 	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{
+		telemetry.ExporterEndpoint{
 			URL:    "http://injected-collector.example:4318/v1/traces",
 			Source: "OTEL_EXPORTER_OTLP_ENDPOINT",
 		},
@@ -205,7 +205,7 @@ func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t 
 	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 		telemetry.ExporterEndpoint{
 			URL:    "http://injected-collector.example:4318/v1/metrics",
 			Source: "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
@@ -234,7 +234,7 @@ func TestReportAdditionalAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *
 		reportAdditionalAmbientOTLPEnv(
 			context.Background(),
 			slog.New(slog.NewJSONHandler(&buf, nil)),
-			telemetry.TraceExporterEndpoint{},
+			telemetry.ExporterEndpoint{},
 			telemetry.ExporterEndpoint{
 				URL:                 "https://collector.example/v1/metrics",
 				Source:              source,
@@ -277,7 +277,7 @@ func TestReportAdditionalAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 		telemetry.ExporterEndpoint{},
 	)
 
@@ -286,8 +286,8 @@ func TestReportAdditionalAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 	}
 }
 
-func configuredTestTraceEndpoint() telemetry.TraceExporterEndpoint {
-	return telemetry.TraceExporterEndpoint{
+func configuredTestTraceEndpoint() telemetry.ExporterEndpoint {
+	return telemetry.ExporterEndpoint{
 		URL:                 "http://127.0.0.1:4318/v1/traces",
 		Source:              telemetry.SharedOTLPExporterConfigKey,
 		ConfiguredByService: true,
@@ -302,7 +302,7 @@ func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
 
 	for _, tt := range []struct {
 		name     string
-		endpoint telemetry.TraceExporterEndpoint
+		endpoint telemetry.ExporterEndpoint
 		initErr  error
 		want     []string
 	}{
@@ -318,7 +318,7 @@ func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
 			// An operator debugging where traces went needs to see that the
 			// destination came from the platform, not from this service.
 			name: "initialized from the ambient endpoint variable",
-			endpoint: telemetry.TraceExporterEndpoint{
+			endpoint: telemetry.ExporterEndpoint{
 				URL:    "http://collector.example:4318/v1/traces",
 				Source: "OTEL_EXPORTER_OTLP_ENDPOINT",
 			},
@@ -329,7 +329,7 @@ func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
 		},
 		{
 			name:     "disabled",
-			endpoint: telemetry.TraceExporterEndpoint{},
+			endpoint: telemetry.ExporterEndpoint{},
 			want:     []string{`"tracing.exporter":"disabled"`},
 		},
 		{
@@ -372,7 +372,7 @@ func TestBootstrapReportStageLogsTelemetryFailureCause(t *testing.T) {
 		telemetryStageTestConfig(""),
 		config.LoadOptions{},
 		config.LoadReport{},
-		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 		errors.New("unsupported ambient otel exporter environment (OTEL_EXPORTER_OTLP_ENDPOINT)"),
 	)
 

@@ -249,7 +249,7 @@ func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
 		},
 		// No scheme, which is what a hand written manifest usually carries and
 		// what the endpoint parser refuses fail-closed.
-		Exporter: MetricExporterConfig{OTLPEndpoint: "collector:4318"},
+		Exporter: MetricExporterConfig{OTLPMetricsEndpoint: "collector:4318"},
 	})
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v, want scrape-only degradation rather than no provider", err)

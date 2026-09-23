@@ -41,7 +41,7 @@ func TestAdapterOptionsPreserveConfiguredValues(t *testing.T) {
 		t.Fatalf("Tracing() = %#v, want configured tracing adapter", tracing)
 	}
 	metrics := Metrics(cfg, "pod-1")
-	if metrics.Resource != resource || metrics.Exporter.OTLPEndpoint != "https://otel.example/v1/metrics" || metrics.Exporter.SharedOTLPEndpoint != "https://otel.example/v1/traces" || metrics.Exporter.OTLPHeaders != "authorization=Bearer token" {
+	if metrics.Resource != resource || metrics.Exporter.OTLPMetricsEndpoint != "https://otel.example/v1/metrics" || metrics.Exporter.OTLPEndpoint != "https://otel.example/v1/traces" || metrics.Exporter.OTLPHeaders != "authorization=Bearer token" {
 		t.Fatalf("Metrics() = %#v, want configured metrics adapter", metrics)
 	}
 	// profile:database-postgres:start

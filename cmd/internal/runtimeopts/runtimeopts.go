@@ -62,9 +62,9 @@ func Metrics(cfg config.Config, instanceID string) telemetry.MetricsConfig {
 	return telemetry.MetricsConfig{
 		Resource: Resource(cfg, instanceID),
 		Exporter: telemetry.MetricExporterConfig{
-			OTLPEndpoint:       cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint,
-			SharedOTLPEndpoint: cfg.Observability.OTel.Exporter.OTLPEndpoint,
-			OTLPHeaders:        cfg.Observability.OTel.Exporter.OTLPHeaders,
+			OTLPMetricsEndpoint: cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint,
+			OTLPEndpoint:        cfg.Observability.OTel.Exporter.OTLPEndpoint,
+			OTLPHeaders:         cfg.Observability.OTel.Exporter.OTLPHeaders,
 		},
 	}
 }

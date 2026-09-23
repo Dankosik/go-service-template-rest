@@ -31,14 +31,14 @@ type MetricsConfig struct {
 // MetricExporterConfig names where metrics are pushed, in addition to the
 // Prometheus registry that is always served.
 type MetricExporterConfig struct {
-	// OTLPEndpoint is observability.otel.exporter.otlp_metrics_endpoint: a full
-	// OTLP HTTP metrics endpoint. A missing path defaults to /v1/metrics.
+	// OTLPMetricsEndpoint is observability.otel.exporter.otlp_metrics_endpoint:
+	// a full OTLP HTTP metrics endpoint. A missing path defaults to /v1/metrics.
+	OTLPMetricsEndpoint string
+	// OTLPEndpoint is observability.otel.exporter.otlp_endpoint, and is used
+	// only when it names a bare collector root — in which case metrics resolve
+	// to <root>/v1/metrics. A value that already carries a path is an endpoint
+	// for one signal and says nothing about where the other one goes.
 	OTLPEndpoint string
-	// SharedOTLPEndpoint is [SharedOTLPExporterConfigKey], and is
-	// used only when it names a bare collector root — in which case metrics
-	// resolve to <root>/v1/metrics. A value that already carries a path is an
-	// endpoint for one signal and says nothing about where the other one goes.
-	SharedOTLPEndpoint string
 	// OTLPHeaders is observability.otel.exporter.otlp_headers. A collector
 	// credential belongs to the collector rather than to one signal, so the same
 	// value covers both.
@@ -185,16 +185,12 @@ func newOTLPMetricReader(
 // observability.otel.exporter.otlp_endpoint serves both signals, because naming a
 // collector root is what an operator means by it.
 func resolveMetricExporterEndpoint(cfg MetricExporterConfig) (ExporterEndpoint, error) {
-	owned := []otlpCandidate{{
-		source: MetricExporterConfigKey, raw: cfg.OTLPEndpoint, configuredByService: true,
-	}}
+	owned := []otlpCandidate{{source: MetricExporterConfigKey, raw: cfg.OTLPMetricsEndpoint}}
 	// A root only. Once the shared value carries a path it is an endpoint for one
 	// signal and says nothing about where the other one goes, so metrics fall
 	// through to their own settings instead of borrowing the traces route.
-	if shared := strings.TrimSpace(cfg.SharedOTLPEndpoint); namesOTLPRoot(shared) {
-		owned = append(owned, otlpCandidate{
-			source: SharedOTLPExporterConfigKey, raw: shared, base: true, configuredByService: true,
-		})
+	if shared := strings.TrimSpace(cfg.OTLPEndpoint); namesOTLPRoot(shared) {
+		owned = append(owned, otlpCandidate{source: SharedOTLPExporterConfigKey, raw: shared, base: true})
 	}
 
 	return resolveOTLPEndpoint(

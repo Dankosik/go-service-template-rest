@@ -18,7 +18,7 @@ import (
 // platform's own variables named it, the platform owns the whole exporter
 // configuration and its credentials belong to the collector it also named.
 func otlpExporterHeaders(endpoint ExporterEndpoint, envConflicts []string, raw string) (map[string]string, error) {
-	if endpoint.fromConfig() {
+	if endpoint.ConfiguredByService {
 		if err := rejectConflictingAmbientEnv(envConflicts); err != nil {
 			return nil, err
 		}

@@ -632,7 +632,7 @@ func TestResolveTraceExporterEndpointRejectsInvalidAmbientEndpoint(t *testing.T)
 	}
 }
 
-func setupRecordingTracing(t *testing.T, exporter TraceExporterConfig) (TraceExporterEndpoint, func(context.Context) error) {
+func setupRecordingTracing(t *testing.T, exporter TraceExporterConfig) (ExporterEndpoint, func(context.Context) error) {
 	t.Helper()
 
 	endpoint, shutdown, err := SetupTracing(context.Background(), TracingConfig{

@@ -29,7 +29,7 @@ const (
 // degradation is reported where it happens, by reportMetricExporterState.
 type telemetryStage struct {
 	flush           func(context.Context)
-	tracingEndpoint telemetry.TraceExporterEndpoint
+	tracingEndpoint telemetry.ExporterEndpoint
 	tracingErr      error
 }
 
@@ -88,7 +88,7 @@ const (
 // traceExporterState names the trace-export outcome in the one line an operator
 // already reads at startup. Without it, "this service exports no traces" is
 // only recoverable by correlating a separate warning that a log filter may drop.
-func traceExporterState(tracingEndpoint telemetry.TraceExporterEndpoint, tracingInitErr error) string {
+func traceExporterState(tracingEndpoint telemetry.ExporterEndpoint, tracingInitErr error) string {
 	switch {
 	case tracingInitErr != nil:
 		return traceExporterDegraded
@@ -110,7 +110,7 @@ func recordTraceExporterInitialization(
 	ctx context.Context,
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
-	tracingEndpoint telemetry.TraceExporterEndpoint,
+	tracingEndpoint telemetry.ExporterEndpoint,
 	tracingInitErr error,
 ) {
 	initialized := traceExporterState(tracingEndpoint, tracingInitErr) == traceExporterInitialized
@@ -202,7 +202,7 @@ func newTelemetryFlush(log *slog.Logger, shutdowns ...func(context.Context) erro
 func reportAdditionalAmbientOTLPEnv(
 	ctx context.Context,
 	log *slog.Logger,
-	tracingEndpoint telemetry.TraceExporterEndpoint,
+	tracingEndpoint telemetry.ExporterEndpoint,
 	metricsEndpoint telemetry.ExporterEndpoint,
 ) {
 	honored := []string{tracingEndpoint.Source, metricsEndpoint.Source}
