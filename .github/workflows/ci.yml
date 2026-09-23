@@ -62,6 +62,7 @@ jobs:
       documentation: ${{ steps.surfaces.outputs.documentation }}
       integration_records: ${{ steps.surfaces.outputs.integration_records }}
       validation_system: ${{ steps.surfaces.outputs.validation_system }}
+      integration_suites: ${{ steps.integration.outputs.suites }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -93,6 +94,23 @@ jobs:
           else
             bash ./scripts/ci/changed-surfaces.sh --all | tee -a "${GITHUB_OUTPUT}" >>"${GITHUB_STEP_SUMMARY}"
           fi
+      - name: Select integration suites
+        # Independent suites run as parallel legs of `integration`; each leg
+        # starts its own containers on its own runner.
+        id: integration
+        env:
+          DATABASE: ${{ steps.surfaces.outputs.db_integration }}
+          MESSAGING: ${{ steps.surfaces.outputs.messaging_integration }}
+          PROCESS: ${{ steps.surfaces.outputs.process_integration }}
+          RACE: ${{ steps.surfaces.outputs.integration_race }}
+          IMAGE: ${{ steps.surfaces.outputs.migrations == 'true' || steps.surfaces.outputs.runtime_image == 'true' || steps.surfaces.outputs.image_security == 'true' }}
+        run: |
+          set -euo pipefail
+          suites=''
+          for pair in "database:${DATABASE}" "messaging:${MESSAGING}" "process:${PROCESS}" "race:${RACE}" "image:${IMAGE}"; do
+            if [[ ${pair#*:} == true ]]; then suites+="${suites:+,}\"${pair%%:*}\""; fi
+          done
+          printf 'suites=[%s]\n' "${suites}" | tee -a "${GITHUB_OUTPUT}"
 
   quality:
     needs: changes
@@ -547,16 +565,16 @@ jobs:
 
   integration:
     needs: changes
-    if: >-
-      needs.changes.outputs.db_integration == 'true' ||
-      needs.changes.outputs.messaging_integration == 'true' ||
-      needs.changes.outputs.process_integration == 'true' ||
-      needs.changes.outputs.integration_race == 'true' ||
-      needs.changes.outputs.migrations == 'true' ||
-      needs.changes.outputs.runtime_image == 'true' ||
-      needs.changes.outputs.image_security == 'true'
+    if: needs.changes.outputs.integration_suites != '[]'
+    name: integration (${{ matrix.suite }})
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    strategy:
+      # Every selected suite reports its own result; `required` reads the
+      # aggregate, which is success only when every leg passed.
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.changes.outputs.integration_suites) }}
     env:
       GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
       TOOL_GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
@@ -565,9 +583,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: ${{ needs.changes.outputs.migrations == 'true' && '0' || '1' }}
+          fetch-depth: ${{ (matrix.suite == 'image' && needs.changes.outputs.migrations == 'true') && '0' || '1' }}
       - name: Migration history
-        if: needs.changes.outputs.migrations == 'true'
+        if: matrix.suite == 'image' && needs.changes.outputs.migrations == 'true'
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: |
@@ -592,53 +610,43 @@ jobs:
           key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
           restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
       - name: Restore integration build cache
-        if: >-
-          needs.changes.outputs.db_integration == 'true' ||
-          needs.changes.outputs.messaging_integration == 'true' ||
-          needs.changes.outputs.process_integration == 'true' ||
-          needs.changes.outputs.integration_race == 'true' ||
-          needs.changes.outputs.migrations == 'true'
+        if: matrix.suite != 'image' || needs.changes.outputs.migrations == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
           key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}
           restore-keys: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
       - name: Set up Buildx
-        if: >-
-          needs.changes.outputs.migrations == 'true' ||
-          needs.changes.outputs.runtime_image == 'true' ||
-          needs.changes.outputs.image_security == 'true'
+        if: matrix.suite == 'image'
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
       - name: Database integration
-        if: needs.changes.outputs.db_integration == 'true'
+        if: matrix.suite == 'database'
         run: bash ./scripts/ci/measure.sh integration-db -- env REQUIRE_DOCKER=1 make test-integration-db
       - name: Messaging integration
-        if: needs.changes.outputs.messaging_integration == 'true'
+        if: matrix.suite == 'messaging'
         run: bash ./scripts/ci/measure.sh integration-messaging -- env REQUIRE_DOCKER=1 make test-integration-messaging
       - name: Process integration
-        if: needs.changes.outputs.process_integration == 'true'
+        if: matrix.suite == 'process'
         run: bash ./scripts/ci/measure.sh integration-process -- env REQUIRE_DOCKER=1 make test-integration-process
       - name: Messaging integration race
-        if: needs.changes.outputs.integration_race_messaging == 'true'
+        if: matrix.suite == 'race' && needs.changes.outputs.integration_race_messaging == 'true'
         run: bash ./scripts/ci/measure.sh integration-race-messaging -- env REQUIRE_DOCKER=1 make test-messaging-race
       - name: Outbox integration race
-        if: needs.changes.outputs.integration_race_outbox == 'true'
+        if: matrix.suite == 'race' && needs.changes.outputs.integration_race_outbox == 'true'
         run: bash ./scripts/ci/measure.sh integration-race-outbox -- env REQUIRE_DOCKER=1 make test-outbox-race
       - name: Webhook integration race
-        if: needs.changes.outputs.integration_race_webhook == 'true'
+        if: matrix.suite == 'race' && needs.changes.outputs.integration_race_webhook == 'true'
         run: bash ./scripts/ci/measure.sh integration-race-webhook -- env REQUIRE_DOCKER=1 make test-webhook-race
       - name: Legacy aggregate integration race
         if: >-
+          matrix.suite == 'race' &&
           needs.changes.outputs.integration_race == 'true' &&
           needs.changes.outputs.integration_race_messaging != 'true' &&
           needs.changes.outputs.integration_race_outbox != 'true' &&
           needs.changes.outputs.integration_race_webhook != 'true'
         run: bash ./scripts/ci/measure.sh integration-race-legacy -- env REQUIRE_DOCKER=1 make test-integration-race
       - name: Production image
-        if: >-
-          needs.changes.outputs.migrations == 'true' ||
-          needs.changes.outputs.runtime_image == 'true' ||
-          needs.changes.outputs.image_security == 'true'
+        if: matrix.suite == 'image'
         env:
           APP_VERSION: sha-${{ github.sha }}
           VCS_REF: ${{ github.sha }}
@@ -647,13 +655,13 @@ jobs:
           RUNTIME_IMAGE_CACHE_TO: ${{ (github.event_name == 'push' || github.event_name == 'schedule') && 'type=gha,mode=max,scope=runtime-image' || '' }}
         run: bash ./scripts/ci/measure.sh integration-image-build -- make runtime-image-build RUNTIME_IMAGE=service:ci
       - name: Runtime image lifecycle
-        if: needs.changes.outputs.runtime_image == 'true' && needs.changes.outputs.migrations != 'true'
+        if: matrix.suite == 'image' && needs.changes.outputs.runtime_image == 'true' && needs.changes.outputs.migrations != 'true'
         run: bash ./scripts/ci/measure.sh integration-image-lifecycle -- make runtime-image-check RUNTIME_IMAGE=service:ci RUNTIME_EXPECTED_VERSION="sha-${GITHUB_SHA}"
       - name: Migration rehearsal
-        if: needs.changes.outputs.migrations == 'true'
+        if: matrix.suite == 'image' && needs.changes.outputs.migrations == 'true'
         run: bash ./scripts/ci/measure.sh integration-migration-rehearsal -- make migration-validate RUNTIME_IMAGE=service:ci RUNTIME_EXPECTED_VERSION="sha-${GITHUB_SHA}"
       - name: Image vulnerabilities
-        if: needs.changes.outputs.image_security == 'true'
+        if: matrix.suite == 'image' && needs.changes.outputs.image_security == 'true'
         run: bash ./scripts/ci/measure.sh integration-image-security -- make container-security CONTAINER_IMAGE=service:ci
 
   required:
