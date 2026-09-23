@@ -297,15 +297,11 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	if err != nil {
 		return err
 	}
-	// profile:authn-bearer:start
-	// profile:authn-bearer:end
 
 	// Shared with the diagnostics listener below, so both publish net/http's own
 	// reporting through the service logger; newHTTPServer owns why that matters.
 	errorLog := slog.NewLogLogger(bootstrap.log.Handler(), slog.LevelError)
 	srv := newHTTPServer(bootstrap.cfg.HTTP, handler, errorLog)
-	// profile:authn-bearer:start
-	// profile:authn-bearer:end
 
 	// profile:grpc:start
 	var grpcSrv grpcRuntimeServer
@@ -325,8 +321,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			return buildErr
 		}
 		grpcSrv = builtGRPC
-		// profile:authn-bearer:start
-		// profile:authn-bearer:end
 	}
 	// profile:grpc:end
 
