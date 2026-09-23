@@ -33,6 +33,20 @@ const (
 	headerDeadLetterReason = "Dead-Letter-Reason"
 )
 
+// envelopeHeaders are the publisher's own identity headers: everything the
+// envelope carries besides the broker's deduplication id and trace context.
+var envelopeHeaders = []string{headerMessageID, headerEventType, headerEventSchema, headerCreatedAt}
+
+// parseCreatedAt reads the envelope's creation time as UTC, reporting false
+// when it is absent, malformed, or zero.
+func parseCreatedAt(header nats.Header) (time.Time, bool) {
+	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))
+	if err != nil || createdAt.IsZero() {
+		return time.Time{}, false
+	}
+	return createdAt.UTC(), true
+}
+
 func validateEvent(event Event, maxPayloadBytes int) error {
 	if !validPublishSubject(event.Subject) {
 		return fmt.Errorf("%w: invalid event subject", ErrRejected)
@@ -145,8 +159,8 @@ type remoteContext struct {
 // that metadata to the handler context after admission.
 func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message, remoteContext, error) {
 	header := msg.Headers()
-	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))
-	if err != nil || createdAt.IsZero() {
+	createdAt, ok := parseCreatedAt(header)
+	if !ok {
 		return Message{}, remoteContext{}, fmt.Errorf("%w: invalid creation time", ErrRejected)
 	}
 	// The validated values are what the Message below is built from, rather than
@@ -178,7 +192,7 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message,
 		publicationID: publicationID,
 		eventType:     eventType,
 		schema:        schema,
-		createdAt:     createdAt.UTC(),
+		createdAt:     createdAt,
 		payload:       slices.Clone(msg.Data()),
 		metadata: DeliveryMetadata{
 			Stream:           metadata.Stream,

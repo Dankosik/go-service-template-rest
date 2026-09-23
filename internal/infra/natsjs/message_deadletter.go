@@ -11,6 +11,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // The dead-letter sub-protocol: a delivery the worker gave up on becomes a
@@ -97,8 +98,8 @@ func RestoreDeadLetter(msg jetstream.Msg) (Event, error) {
 		return Event{}, fmt.Errorf("%w: dead-letter metadata unavailable", ErrRejected)
 	}
 	header := msg.Headers()
-	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))
-	if err != nil || createdAt.IsZero() {
+	createdAt, ok := parseCreatedAt(header)
+	if !ok {
 		return Event{}, fmt.Errorf("%w: dead-letter record carries no restorable creation time", ErrRejected)
 	}
 	event := Event{
@@ -107,7 +108,7 @@ func RestoreDeadLetter(msg jetstream.Msg) (Event, error) {
 		PublicationID: streamRecordID(redrivePublicationPrefix, msg, metadata),
 		Type:          header.Get(headerEventType),
 		Schema:        header.Get(headerEventSchema),
-		CreatedAt:     createdAt.UTC(),
+		CreatedAt:     createdAt,
 		Payload:       slices.Clone(msg.Data()),
 	}
 	// The payload bound belongs to the producer this event is about to go
@@ -140,10 +141,7 @@ func DeadLetterReason(msg jetstream.Msg) string {
 // onto the transfer. An absent header is left absent rather than set empty, so
 // a consumer can tell "the publisher did not send this" from "it sent a blank".
 func carryIdentityHeaders(header, source nats.Header) {
-	for _, name := range []string{
-		headerMessageID, headerEventType, headerEventSchema, headerCreatedAt,
-		"traceparent", "tracestate",
-	} {
+	for _, name := range slices.Concat(envelopeHeaders, propagation.TraceContext{}.Fields()) {
 		if value := source.Get(name); value != "" {
 			header.Set(name, value)
 		}
