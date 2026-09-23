@@ -79,7 +79,7 @@ func TestArmTeardownIgnoresCanceledParentAndSetsDeadline(t *testing.T) {
 	cancelParent()
 	window, cancel := ArmTeardown(parent, time.Second)
 	defer cancel()
-	ctx := window.Context()
+	ctx := window
 	if ctx.Err() != nil {
 		t.Fatalf("ArmTeardown context is canceled: %v", ctx.Err())
 	}

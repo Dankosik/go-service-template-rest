@@ -194,7 +194,7 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 
 	// The grace period starts now, not at process start: this is the moment the
 	// platform began counting.
-	args.shutdown.start(signalCtx)
+	args.shutdown.start()
 	// profile:messaging-nats-jetstream:start
 	if args.preDrain != nil {
 		args.preDrain()
@@ -228,7 +228,7 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 		// Clamped, so a drain cannot spend budget the stages after it need. The
 		// configured value normally wins; validateShutdownGraceBudget is what
 		// keeps that true rather than leaving it to chance here.
-		args.shutdown.clamp(args.cfg.HTTP.ShutdownTimeout),
+		args.shutdown.clamp(signalCtx, args.cfg.HTTP.ShutdownTimeout),
 		drainer,
 		applicationServers...,
 	)

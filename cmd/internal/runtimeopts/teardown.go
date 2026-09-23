@@ -9,36 +9,26 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 )
 
-// TeardownWindow owns the detached process context and its optional deadline.
-// A stage cannot outlive an armed window, even if its own ceiling is longer.
-type TeardownWindow struct {
-	ctx context.Context
-}
-
 // UnarmedTeardown leaves startup-failure cleanup its full stage budget. The
 // signal's cancellation and any startup deadline do not enter that cleanup.
-func UnarmedTeardown(base context.Context) TeardownWindow {
-	return TeardownWindow{ctx: context.WithoutCancel(base)}
+func UnarmedTeardown(base context.Context) context.Context {
+	return context.WithoutCancel(base)
 }
 
 // ArmTeardown starts the one process-wide grace period when serving ends.
 // Cancel releases the process timer after ordered teardown. Stage retains the
 // deadline for deferred cleanup even if that process context is canceled first.
-func ArmTeardown(base context.Context, grace time.Duration) (TeardownWindow, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), grace)
-	return TeardownWindow{ctx: ctx}, cancel
+func ArmTeardown(base context.Context, grace time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(base), grace)
 }
 
-// Context supplies the shared process bound to teardown owners that make their
-// own bounded calls, such as the diagnostics listener.
-func (w TeardownWindow) Context() context.Context { return w.ctx }
-
-// Stage gives one teardown operation its ceiling within the process window.
+// TeardownStage gives one teardown operation its ceiling within the process
+// window. The window context carries its process deadline to every stage.
 // It detaches cancellation so a deferred cleanup can still run after the
 // process context has been canceled, while retaining the original deadline.
-func (w TeardownWindow) Stage(want time.Duration) (context.Context, context.CancelFunc) {
-	base := context.WithoutCancel(w.ctx)
-	if deadline, armed := w.ctx.Deadline(); armed {
+func TeardownStage(window context.Context, want time.Duration) (context.Context, context.CancelFunc) {
+	base := context.WithoutCancel(window)
+	if deadline, armed := window.Deadline(); armed {
 		stageDeadline := time.Now().Add(want)
 		if deadline.Before(stageDeadline) {
 			stageDeadline = deadline
@@ -48,10 +38,10 @@ func (w TeardownWindow) Stage(want time.Duration) (context.Context, context.Canc
 	return context.WithTimeout(base, want)
 }
 
-// Budget reports the time a stage may still spend within the process window.
+// TeardownBudget reports the time a stage may still spend within the process window.
 // An unarmed startup-cleanup window grants the whole requested stage budget.
-func (w TeardownWindow) Budget(want time.Duration) time.Duration {
-	deadline, armed := w.ctx.Deadline()
+func TeardownBudget(window context.Context, want time.Duration) time.Duration {
+	deadline, armed := window.Deadline()
 	if !armed {
 		return want
 	}

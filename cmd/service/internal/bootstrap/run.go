@@ -143,7 +143,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// below draws from it, so their ceilings can no longer add up past what the
 	// platform actually granted.
 	shutdown := newShutdownBudget(bootstrap.cfg.HTTP.GracePeriod)
-	defer shutdown.close()
 	// Telemetry is flushed last, so it can carry a record of everything the
 	// shutdown path below it did. The closure matters: a deferred call evaluates
 	// its arguments at registration, so building the context here rather than

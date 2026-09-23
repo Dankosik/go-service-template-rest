@@ -76,7 +76,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	defer func() {
 		if cleanupSafe {
-			cleanupCtx, cleanupCancel := cleanupWindow.Stage(telemetryClose)
+			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryClose)
 			defer cleanupCancel()
 			_ = telemetryCleanup(cleanupCtx)
 		}
@@ -132,7 +132,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 		defer cancelProcess()
 		cleanupWindow = window
-		stopCtx, cancelStop := window.Stage(riverHardStopClose)
+		stopCtx, cancelStop := runtimeopts.TeardownStage(window, riverHardStopClose)
 		defer cancelStop()
 		stopErr := client.StopAndCancel(stopCtx)
 		cleanupSafe = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
@@ -180,12 +180,12 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
 	cleanupWindow = window
-	stopCtx, cancelStop := window.Stage(cfg.HTTP.ShutdownTimeout)
+	stopCtx, cancelStop := runtimeopts.TeardownStage(window, cfg.HTTP.ShutdownTimeout)
 	stopErr := client.Stop(stopCtx)
 	cancelStop()
 	riverStopped := runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 	if !riverStopped {
-		hardStopCtx, cancelHardStop := window.Stage(riverHardStopClose)
+		hardStopCtx, cancelHardStop := runtimeopts.TeardownStage(window, riverHardStopClose)
 		stopErr = client.StopAndCancel(hardStopCtx)
 		riverStopped = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 		if !riverStopped {
@@ -200,6 +200,6 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if cleanupSafe {
 		cancelRun()
 	}
-	diagnosticsErr := diagnostics.Stop(window.Context(), diagnosticsClose)
+	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
 	return errors.Join(trigger, stopErr, diagnosticsErr)
 }

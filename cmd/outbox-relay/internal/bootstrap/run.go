@@ -65,7 +65,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	}
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	defer func() {
-		cleanupCtx, cancel := cleanupWindow.Stage(telemetryClose)
+		cleanupCtx, cancel := runtimeopts.TeardownStage(cleanupWindow, telemetryClose)
 		defer cancel()
 		_ = telemetryCleanup(cleanupCtx)
 	}()
@@ -163,7 +163,7 @@ func runLifecycle(
 	pool postgresPinger,
 	client messagingRuntime,
 	riverClient riverRuntime,
-) (cleanupSafe bool, window runtimeopts.TeardownWindow, result error) {
+) (cleanupSafe bool, window context.Context, result error) {
 	window = runtimeopts.UnarmedTeardown(signalCtx)
 	var ready atomic.Bool
 	readiness := health.New(postgresReadinessProbe{pool: pool}, client)
@@ -203,12 +203,12 @@ func runLifecycle(
 		defer cancelProcess()
 		var riverErr error
 		if started {
-			riverCtx, cancelRiver := window.Stage(outboxDrain)
+			riverCtx, cancelRiver := runtimeopts.TeardownStage(window, outboxDrain)
 			riverErr = riverClient.StopAndCancel(riverCtx)
 			cancelRiver()
 		}
-		diagnosticsErr := diagnostics.Stop(window.Context(), diagnosticsClose)
-		backgroundCtx, cancelBackground := window.Stage(backgroundClose)
+		diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
+		backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundClose)
 		backgroundErr := supervisor.Shutdown(backgroundCtx)
 		cancelBackground()
 		riverStopped := riverErr == nil
@@ -235,15 +235,15 @@ func runLifecycle(
 	readiness.StartDrain()
 	window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
-	riverCtx, cancelRiver := window.Stage(outboxDrain)
+	riverCtx, cancelRiver := runtimeopts.TeardownStage(window, outboxDrain)
 	riverErr := riverClient.Stop(riverCtx)
 	cancelRiver()
 	riverStopped := riverErr == nil
 	if riverStopped {
 		client.StopPublish()
 	}
-	diagnosticsErr := diagnostics.Stop(window.Context(), diagnosticsClose)
-	backgroundCtx, cancelBackground := window.Stage(backgroundClose)
+	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
+	backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundClose)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	var messagingErr error
 	if riverStopped {

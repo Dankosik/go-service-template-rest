@@ -39,7 +39,7 @@ func runWorkerLifecycle(
 	metrics *telemetry.Metrics,
 	client *natsjs.Client,
 	worker *natsjs.Worker,
-) (bool, runtimeopts.TeardownWindow, error) {
+) (bool, context.Context, error) {
 	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
 	healthSvc := health.New(client)
 	if err := healthSvc.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
@@ -87,11 +87,11 @@ func runWorkerLifecycle(
 	worker.StartDrain()
 	window, processCancel := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer processCancel()
-	workerCtx, workerCancel := window.Stage(cfg.HTTP.ShutdownTimeout)
+	workerCtx, workerCancel := runtimeopts.TeardownStage(window, cfg.HTTP.ShutdownTimeout)
 	workerErr := worker.Shutdown(workerCtx)
 	workerCancel()
-	diagnosticsErr := diagnostics.Stop(window.Context(), diagnosticsClose)
-	backgroundCtx, backgroundCancel := window.Stage(backgroundClose)
+	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
+	backgroundCtx, backgroundCancel := runtimeopts.TeardownStage(window, backgroundClose)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	backgroundCancel()
 	cleanupSafe := runtimeopts.StoppedBeforeReturn(workerErr, workerDone)

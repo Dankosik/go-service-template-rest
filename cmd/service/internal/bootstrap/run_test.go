@@ -1,7 +1,9 @@
 package bootstrap
 
 import (
+	// profile:object-storage:start
 	"context"
+	// profile:object-storage:end
 	"errors"
 	"os"
 	"strings"
@@ -79,21 +81,20 @@ func TestValidateShutdownGraceBudgetRejectsADrainThatCannotFit(t *testing.T) {
 func TestShutdownBudgetClampsStagesToTheRemainingGracePeriod(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		budget := newShutdownBudget(10 * time.Second)
-		budget.start(context.Background())
-		defer budget.close()
+		budget.start()
 
-		if got := budget.clamp(4 * time.Second); got != 4*time.Second {
+		if got := budget.clamp(t.Context(), 4*time.Second); got != 4*time.Second {
 			t.Fatalf("clamp(4s) with the whole period left = %s, want 4s", got)
 		}
 
 		time.Sleep(9 * time.Second)
-		if got := budget.clamp(4 * time.Second); got != time.Second {
+		if got := budget.clamp(t.Context(), 4*time.Second); got != time.Second {
 			t.Fatalf("clamp(4s) with 1s left = %s, want 1s", got)
 		}
 
 		// Past the deadline no stage may extend the process-wide grace period.
 		time.Sleep(2 * time.Second)
-		if got := budget.clamp(4 * time.Second); got != 0 {
+		if got := budget.clamp(t.Context(), 4*time.Second); got != 0 {
 			t.Fatalf("clamp(4s) past the deadline = %s, want zero", got)
 		}
 	})
@@ -107,13 +108,12 @@ func TestShutdownBudgetStartsWhenTeardownBegins(t *testing.T) {
 		budget := newShutdownBudget(10 * time.Second)
 
 		time.Sleep(time.Hour)
-		budget.start(context.Background())
-		defer budget.close()
+		budget.start()
 		// A second caller must not restart it: several points can each be the
 		// first to observe that serving ended.
-		budget.start(context.Background())
+		budget.start()
 
-		if got := budget.clamp(time.Hour); got != 10*time.Second {
+		if got := budget.clamp(t.Context(), time.Hour); got != 10*time.Second {
 			t.Fatalf("clamp() after an hour of serving = %s, want the full grace period", got)
 		}
 	})
