@@ -251,7 +251,7 @@ tidy:
 
 fmt:
 	@set -e; \
-	files="$$(git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)"; \
+	files="$$(git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do if [ -f "$$file" ]; then printf '%s\n' "$$file"; fi; done)"; \
 	goimports_files="$$(printf '%s\n' "$$files" | grep -vE '^(internal/gen/proto/|examples/grpc-reference-service/internal/gen/proto/)')"; \
 	gofumpt_files="$$(printf '%s\n' "$$goimports_files" | grep -vE '^(internal/openapi/openapi\.gen\.go$$|examples/reference-service/internal/openapi/openapi\.gen\.go$$|internal/infra/.*/internal/openapi/client\.gen\.go$$|internal/infra/postgres/sqlcgen/)')"; \
 	$(GO_TOOL) goimports -w $$goimports_files; \
@@ -276,7 +276,7 @@ mod-tidy-check: mod-check
 
 fmt-check:
 	@set -e; \
-	files="$$(git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)"; \
+	files="$$(git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do if [ -f "$$file" ]; then printf '%s\n' "$$file"; fi; done)"; \
 	goimports_files="$$(printf '%s\n' "$$files" | grep -vE '^(internal/gen/proto/|examples/grpc-reference-service/internal/gen/proto/)')"; \
 	gofumpt_files="$$(printf '%s\n' "$$goimports_files" | grep -vE '^(internal/openapi/openapi\.gen\.go$$|examples/reference-service/internal/openapi/openapi\.gen\.go$$|internal/infra/.*/internal/openapi/client\.gen\.go$$|internal/infra/postgres/sqlcgen/)')"; \
 	unformatted="$$( $(GO_TOOL) goimports -l $$goimports_files )"; \

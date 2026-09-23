@@ -375,7 +375,7 @@ verify_profile() {
 				make tools-mod-check
 			fi
 		fi
-		make openapi-drift-check sqlc-check
+		make fmt-check openapi-drift-check sqlc-check
 		git add -A
 		git -c user.name=init-check -c user.email=init-check@example.invalid commit -qm generated
 	)

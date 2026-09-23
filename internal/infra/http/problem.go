@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"math"
@@ -127,10 +128,17 @@ func writeProblem(w http.ResponseWriter, r *http.Request, response problemRespon
 		p.RequestId = lo.EmptyableToPtr(reqctx.RequestID(r.Context()))
 	}
 
+	// Encode before committing the status, as the generated response writers
+	// do: a body that cannot be encoded still leaves a clean status reply.
+	var body bytes.Buffer
+	if err := json.NewEncoder(&body).Encode(p); err != nil {
+		w.WriteHeader(definition.Status)
+		return
+	}
 	w.Header().Set("Content-Type", problemJSONContentType)
 	w.WriteHeader(definition.Status)
-	// The status and headers are already committed; callers cannot recover here.
-	_ = json.NewEncoder(w).Encode(p)
+	// The status is committed; a failed write has no caller left to tell.
+	_, _ = body.WriteTo(w)
 }
 
 func writeMalformedRequestProblem(w http.ResponseWriter, r *http.Request, violations []fieldViolation) {
