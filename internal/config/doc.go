@@ -17,8 +17,9 @@
 //   - StageParse — snapshot.go decodes the merged map into [Config], and parse.go
 //     owns the scalar conversions under it, one per kind, so a bad duration and a
 //     bad integer fail the same way.
-//   - StageValidate — validate.go runs each section's own validator and then the
-//     rules that hold only between sections.
+//   - StageValidate — validate.go runs each section's own validator in order.
+//     Validators that take a section pointer also canonicalize that section, so
+//     the returned snapshot is canonical.
 //
 // load_koanf.go is the merge those stages run inside. schema.go is what
 // load_file.go and load_koanf.go both need and neither owns: which sections

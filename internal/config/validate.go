@@ -11,9 +11,12 @@ import (
 	"time"
 )
 
-// validateConfig is pure computation over an in-memory snapshot: no I/O, and it
-// measures at 0ms in the startup log. Cancellation is observed once by the
-// caller before this runs rather than between every rule.
+// validateConfig checks and canonicalizes an in-memory snapshot: no I/O, and it
+// measures at 0ms in the startup log. Validators that take a section pointer
+// also canonicalize it (trimming, lowercasing, resolved defaults such as the R2
+// region), so the snapshot the load returns is already canonical. Cancellation
+// is observed once by the caller before this runs rather than between every
+// rule.
 //
 // Each section's rules live in its own <section>_config.go beside this one, so a
 // section that a build profile removes leaves with its file. This file keeps the
