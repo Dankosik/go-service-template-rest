@@ -98,10 +98,10 @@ func migrate(
 	if err != nil {
 		return result, stageError(FailureConfig, err)
 	}
-	closeContext := "close postgres migration database"
+	// goose Provider.Close only closes db, so closing db covers both.
 	defer func() {
 		if closeErr := db.Close(); closeErr != nil {
-			retErr = withMigrationCleanup(retErr, fmt.Errorf("%s: %w", closeContext, closeErr))
+			retErr = withMigrationCleanup(retErr, fmt.Errorf("close postgres migration database: %w", closeErr))
 		}
 	}()
 
@@ -135,7 +135,6 @@ func migrate(
 		}
 		return result, stageError(FailureSource, fmt.Errorf("build goose provider: %w", err))
 	}
-	closeContext = "close goose provider"
 	if err := provider.Ping(executionCtx); err != nil {
 		return result, stageError(FailureConnect, fmt.Errorf("ping postgres migration database: %w", err))
 	}
