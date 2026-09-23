@@ -43,7 +43,7 @@ func Run(args []string) error {
 	return run(signalCtx, args)
 }
 
-func run(signalCtx context.Context, args []string) (runErr error) {
+func run(signalCtx context.Context, args []string) error {
 	loadOptions, err := config.ParseLoadOptions(args)
 	if err != nil {
 		return err
@@ -111,10 +111,10 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("initialize River outbox worker: %w", err)
 	}
-	cleanupSafe, cleanupWindow, runErr = runLifecycle(
+	cleanupSafe, cleanupWindow, err = runLifecycle(
 		signalCtx, startupCtx, cfg, log, metrics, pool, client, riverClient,
 	)
-	return runErr
+	return err
 }
 
 func validateRuntimeConfig(cfg config.Config) error {
@@ -163,12 +163,12 @@ func runLifecycle(
 	pool postgresPinger,
 	client messagingRuntime,
 	riverClient riverRuntime,
-) (cleanupSafe bool, window context.Context, result error) {
-	window = runtimeopts.UnarmedTeardown(signalCtx)
+) (bool, context.Context, error) {
+	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
 	var ready atomic.Bool
 	readiness := health.New(postgresReadinessProbe{pool: pool}, client)
 	if err := readiness.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
-		return true, window, fmt.Errorf("admit outbox readiness: %w", err)
+		return true, unarmed, fmt.Errorf("admit outbox readiness: %w", err)
 	}
 	diagnostics, err := runtimeopts.ListenDiagnostics(
 		startupCtx,
@@ -179,7 +179,7 @@ func runLifecycle(
 		cfg.Observability.Pprof.Enabled,
 	)
 	if err != nil {
-		return true, window, err
+		return true, unarmed, err
 	}
 	runtimeCtx, cancelRuntime := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer cancelRuntime()
@@ -197,6 +197,20 @@ func runLifecycle(
 			)
 		},
 	})
+	// stopTail stops diagnostics, then the background tasks. Messaging drains
+	// under the background stage only once River has joined, because River's
+	// jobs publish through it.
+	stopTail := func(window context.Context, shutdownMessaging bool) (diagnosticsErr, backgroundErr, messagingErr error) {
+		diagnosticsErr = diagnostics.Stop(window, diagnosticsClose)
+		backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundClose)
+		defer cancelBackground()
+		backgroundErr = supervisor.Shutdown(backgroundCtx)
+		if shutdownMessaging {
+			messagingErr = client.Shutdown(backgroundCtx)
+		}
+		return diagnosticsErr, backgroundErr, messagingErr
+	}
+
 	started, err := runtimeopts.StartRuntime(startupCtx, runtimeCtx, cancelRuntime, riverClient.Start)
 	if err != nil {
 		window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
@@ -207,13 +221,8 @@ func runLifecycle(
 			riverErr = riverClient.StopAndCancel(riverCtx)
 			cancelRiver()
 		}
-		diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
-		backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundClose)
-		backgroundErr := supervisor.Shutdown(backgroundCtx)
-		cancelBackground()
-		riverStopped := riverErr == nil
-		cleanupSafe := riverStopped && !errors.Is(backgroundErr, context.DeadlineExceeded)
-		return cleanupSafe, window, errors.Join(
+		diagnosticsErr, backgroundErr, _ := stopTail(window, false)
+		return relayCleanupSafe(riverErr == nil, backgroundErr), window, errors.Join(
 			fmt.Errorf("start River outbox worker: %w", err),
 			riverErr,
 			diagnosticsErr,
@@ -242,16 +251,16 @@ func runLifecycle(
 	if riverStopped {
 		client.StopPublish()
 	}
-	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
-	backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundClose)
-	backgroundErr := supervisor.Shutdown(backgroundCtx)
-	var messagingErr error
-	if riverStopped {
-		messagingErr = client.Shutdown(backgroundCtx)
-	}
-	cancelBackground()
-	cleanupSafe = riverStopped && !errors.Is(backgroundErr, context.DeadlineExceeded)
-	return cleanupSafe, window, errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
+	diagnosticsErr, backgroundErr, messagingErr := stopTail(window, riverStopped)
+	return relayCleanupSafe(riverStopped, backgroundErr), window,
+		errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
+}
+
+// relayCleanupSafe reports whether the pool and NATS may be closed: River has
+// joined, so no job still publishes, and the background tasks that use both
+// finished within their stage.
+func relayCleanupSafe(riverStopped bool, backgroundErr error) bool {
+	return riverStopped && !errors.Is(backgroundErr, context.DeadlineExceeded)
 }
 
 type postgresReadinessProbe struct {
