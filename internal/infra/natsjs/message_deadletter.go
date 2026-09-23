@@ -98,19 +98,13 @@ func RestoreDeadLetter(msg jetstream.Msg) (Event, error) {
 		return Event{}, fmt.Errorf("%w: dead-letter record carries no restorable creation time", ErrRejected)
 	}
 	event := Event{
-		Subject:   header.Get(headerOriginalSubject),
-		MessageID: header.Get(headerMessageID),
-		PublicationID: streamRecordID(
-			redrivePublicationPrefix,
-			metadata.Stream,
-			metadata.Sequence.Stream,
-			metadata.Timestamp,
-			header.Get(jetstream.MsgIDHeader),
-		),
-		Type:      header.Get(headerEventType),
-		Schema:    header.Get(headerEventSchema),
-		CreatedAt: createdAt.UTC(),
-		Payload:   slices.Clone(msg.Data()),
+		Subject:       header.Get(headerOriginalSubject),
+		MessageID:     header.Get(headerMessageID),
+		PublicationID: streamRecordID(redrivePublicationPrefix, msg, metadata),
+		Type:          header.Get(headerEventType),
+		Schema:        header.Get(headerEventSchema),
+		CreatedAt:     createdAt.UTC(),
+		Payload:       slices.Clone(msg.Data()),
 	}
 	// The payload bound belongs to the producer this event is about to go
 	// through, which owns the configured maximum; everything checked here is the
@@ -156,13 +150,7 @@ func carryIdentityHeaders(header, source nats.Header) {
 // copies. The inputs are what identify one source delivery: the stream and
 // sequence that stored it, its store timestamp, and the publisher's own id.
 func deadLetterTransferID(source jetstream.Msg, metadata *jetstream.MsgMetadata) string {
-	return streamRecordID(
-		deadLetterTransferPrefix,
-		metadata.Stream,
-		metadata.Sequence.Stream,
-		metadata.Timestamp,
-		source.Headers().Get(jetstream.MsgIDHeader),
-	)
+	return streamRecordID(deadLetterTransferPrefix, source, metadata)
 }
 
 // The two prefixes streamRecordID is called with. They only make the derived
@@ -177,12 +165,16 @@ const (
 // broker deduplicates a retried publication instead of storing a second copy.
 // Both directions of the dead-letter path need that property: the transfer into
 // the stream and the redrive back out of it.
-func streamRecordID(prefix, stream string, sequence uint64, storedAt time.Time, publicationID string) string {
+//
+// The identity is the stream and sequence that stored the record, its store
+// timestamp, and the id it was published with. Its byte layout is the
+// deduplication contract: changing it makes a retried publication a new one.
+func streamRecordID(prefix string, msg jetstream.Msg, metadata *jetstream.MsgMetadata) string {
 	identity := strings.Join([]string{
-		stream,
-		strconv.FormatUint(sequence, 10),
-		storedAt.UTC().Format(time.RFC3339Nano),
-		publicationID,
+		metadata.Stream,
+		strconv.FormatUint(metadata.Sequence.Stream, 10),
+		metadata.Timestamp.UTC().Format(time.RFC3339Nano),
+		msg.Headers().Get(jetstream.MsgIDHeader),
 	}, "\x00")
 	digest := sha256.Sum256([]byte(identity))
 	return prefix + hex.EncodeToString(digest[:])
