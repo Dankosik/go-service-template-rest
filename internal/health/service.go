@@ -235,15 +235,18 @@ func (s *Service) Refresh(ctx context.Context, probeBudget time.Duration, failur
 	defer cancel()
 
 	err := s.evaluate(probeCtx)
-	evaluatedAt := time.Now()
-	if err == nil {
-		s.state.Store(&readinessState{evaluatedAt: evaluatedAt})
-		return nil
-	}
+	s.state.Store(nextReadiness(s.state.Load(), err, failureThreshold, time.Now()))
+	return err
+}
 
+// nextReadiness folds one evaluation result into the previous cached state.
+func nextReadiness(previous *readinessState, err error, failureThreshold int, evaluatedAt time.Time) *readinessState {
+	if err == nil {
+		return &readinessState{evaluatedAt: evaluatedAt}
+	}
 	failures := 1
 	verdictErr := err
-	if previous := s.state.Load(); previous != nil {
+	if previous != nil {
 		failures = previous.consecutiveFailures + 1
 		// Hold the previous verdict until the streak reaches the threshold. A
 		// previously healthy instance stays in rotation through a blip; one that
@@ -253,8 +256,7 @@ func (s *Service) Refresh(ctx context.Context, probeBudget time.Duration, failur
 			verdictErr = previous.verdictErr
 		}
 	}
-	s.state.Store(&readinessState{verdictErr: verdictErr, consecutiveFailures: failures, evaluatedAt: evaluatedAt})
-	return err
+	return &readinessState{verdictErr: verdictErr, consecutiveFailures: failures, evaluatedAt: evaluatedAt}
 }
 
 func (s *Service) evaluate(ctx context.Context) error {

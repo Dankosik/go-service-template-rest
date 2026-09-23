@@ -116,7 +116,7 @@ func TestFailedTaskLeavesSiblingsRunning(t *testing.T) {
 	taskErr := errors.New("consumer lost its lease")
 	sup.Go(Task{Name: "failing", Run: func(context.Context) error { return taskErr }})
 
-	if err := <-sup.Failures(); !errors.Is(err, taskErr) {
+	if err := <-sup.FirstFailure(); !errors.Is(err, taskErr) {
 		t.Fatalf("Failures() error = %v, want %v", err, taskErr)
 	}
 	if err := ctx.Err(); err != nil {
@@ -141,7 +141,7 @@ func TestCheckReportsAFailedTask(t *testing.T) {
 	}
 
 	sup.Go(Task{Name: "outbox", Run: func(context.Context) error { return taskErr }})
-	<-sup.Failures()
+	<-sup.FirstFailure()
 
 	err := sup.Check(context.Background())
 	if err == nil || !errors.Is(err, ErrTaskFailed) || !errors.Is(err, taskErr) {
@@ -181,7 +181,7 @@ func TestUnexpectedTaskStopFailsTheProcess(t *testing.T) {
 	sup := New(context.Background(), discardLogger())
 	sup.Go(Task{Name: "one_shot", Run: func(context.Context) error { return nil }})
 
-	err := <-sup.Failures()
+	err := <-sup.FirstFailure()
 	if !errors.Is(err, ErrTaskFailed) || !errors.Is(err, ErrTaskStopped) {
 		t.Fatalf("Failures() = %v, want ErrTaskFailed wrapping ErrTaskStopped", err)
 	}
@@ -339,7 +339,7 @@ func TestNilRunIsRejectedWithoutStarting(t *testing.T) {
 	sup := New(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)))
 	sup.Go(Task{Name: "broken"})
 
-	if err := <-sup.Failures(); !errors.Is(err, ErrTaskFailed) {
+	if err := <-sup.FirstFailure(); !errors.Is(err, ErrTaskFailed) {
 		t.Fatalf("Failures() = %v, want ErrTaskFailed", err)
 	}
 	if !strings.Contains(logged.String(), "background_task_invalid") {

@@ -94,7 +94,8 @@ adapter owns composition routes and JetStream mechanics.
 <!-- profile:webhooks-durable:start -->
 `internal/infra/postgreswebhook` and the enabled jobs-worker surfaces form the
 removable durable-webhook pack. The always-retained `internal/outboundtrust`
-predicate is shared with fixed-target HTTP and owns no URL, resolver, dialer,
+leaf owns the public-address predicate and the fixed HTTPS target shape shared
+with fixed-target HTTP, config, and authn trust; it owns no resolver, dialer,
 HTTP, or config policy.
 <!-- profile:webhooks-durable:end -->
 

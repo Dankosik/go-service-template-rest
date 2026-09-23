@@ -345,7 +345,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		grpcSrv: grpcSrv,
 		// profile:grpc:end
 		diagnosticsSrv:     diagnosticsSrv,
-		backgroundFailures: supervisor.Failures(),
+		backgroundFailures: supervisor.FirstFailure(),
 		// Admission refreshes rather than probing separately, so the verdict it
 		// admits on is the same one the probe route will serve. Without that, the
 		// first probe after admission could still answer 503 from an unevaluated

@@ -4,19 +4,19 @@ package config
 
 import "fmt"
 
-type WebhooksConfig struct {
+type OutboundWebhooksConfig struct {
 	Enabled       bool   `koanf:"enabled"`
 	Endpoints     string `koanf:"endpoints"`
 	StaticSecrets string `koanf:"static_secrets"`
 }
 
-func webhooksDefaults() map[string]any {
+func outboundWebhooksDefaults() map[string]any {
 	return map[string]any{
 		"webhooks.enabled": false, "webhooks.endpoints": "", "webhooks.static_secrets": "",
 	}
 }
 
-func validateWebhooks(cfg WebhooksConfig, postgres PostgresConfig, jobs JobsConfig) error {
+func validateOutboundWebhooks(cfg OutboundWebhooksConfig, postgres PostgresConfig, jobs JobsConfig) error {
 	if !cfg.Enabled {
 		return nil
 	}
@@ -25,6 +25,15 @@ func validateWebhooks(cfg WebhooksConfig, postgres PostgresConfig, jobs JobsConf
 	}
 	if cfg.Endpoints == "" {
 		return fmt.Errorf("%w: webhooks.endpoints are required", ErrValidate)
+	}
+	return nil
+}
+
+// validateJobsWorkerOutboundWebhooks is the jobs worker's rule for this section:
+// the worker delivers, so an enabled section needs its secrets.
+func validateJobsWorkerOutboundWebhooks(cfg OutboundWebhooksConfig) error {
+	if cfg.Enabled && cfg.StaticSecrets == "" {
+		return fmt.Errorf("%w: webhooks.static_secrets must be supplied through environment", ErrValidate)
 	}
 	return nil
 }

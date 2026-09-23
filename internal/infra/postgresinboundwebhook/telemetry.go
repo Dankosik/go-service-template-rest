@@ -44,6 +44,10 @@ func newTelemetry(meter metric.MeterProvider, log *slog.Logger) telemetry {
 	return telemetry{ingress: ingress, processing: processing, log: log}
 }
 
+// ingressUnavailable labels an ingress the receiver could not confirm. The port
+// reports that case only as an error, so it has no inboundwebhook.Outcome.
+const ingressUnavailable = "unavailable"
+
 func (t telemetry) recordIngress(ctx context.Context, outcome string) {
 	if t.ingress == nil {
 		return

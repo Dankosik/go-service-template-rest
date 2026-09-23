@@ -8,17 +8,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 )
 
-func TestFailedConfigStage(t *testing.T) {
-	t.Parallel()
-
-	if got := failedConfigStage(config.LoadReport{}); got != config.StageLoadDefaults {
-		t.Fatalf("failedConfigStage() = %q, want %q", got, config.StageLoadDefaults)
-	}
-	if got := failedConfigStage(config.LoadReport{FailedStage: config.StageValidate}); got != config.StageValidate {
-		t.Fatalf("failedConfigStage() = %q, want %q", got, config.StageValidate)
-	}
-}
-
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestBootstrapConfigStageReturnsConfigLoadFailure(t *testing.T) {
 	t.Setenv("APP__APP__ENV", "local")

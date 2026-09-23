@@ -17,11 +17,9 @@ type loadMetadata struct {
 	failedStage               string
 }
 
+// loadKoanf merges defaults, config files, and the environment. The caller
+// checks ctx first; every error return sets metadata.failedStage.
 func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadata, error) {
-	if err := checkContext(ctx); err != nil {
-		return nil, loadMetadata{}, err
-	}
-
 	k := koanf.New(keyDelimiter)
 	metadata := loadMetadata{}
 
@@ -29,7 +27,7 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		metadata.failedStage = StageLoadDefaults
 		return nil, metadata, fmt.Errorf("%w: load defaults: %w", ErrLoad, err)
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		metadata.failedStage = StageLoadDefaults
 		return nil, metadata, err
 	}
@@ -38,40 +36,33 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		metadata.failedStage = StageLoadFile
 		return nil, metadata, err
 	}
+	paths := opts.ConfigOverlays
 	if opts.ConfigPath != "" {
-		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, opts.ConfigPath)
+		paths = append([]string{opts.ConfigPath}, opts.ConfigOverlays...)
+	}
+	for _, path := range paths {
+		sectionScalarOverrideKeys, err := mergeConfigFile(ctx, k, path)
 		if err != nil {
 			metadata.failedStage = StageLoadFile
 			return nil, metadata, err
 		}
 		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
 	}
-	for _, overlayPath := range opts.ConfigOverlays {
-		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, overlayPath)
-		if err != nil {
-			metadata.failedStage = StageLoadFile
-			return nil, metadata, err
-		}
-		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
-	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		metadata.failedStage = StageLoadFile
 		return nil, metadata, err
 	}
 
-	namespaceValues, malformedEnvironmentKeys := collectNamespaceValues(os.Environ())
+	envValues, malformedEnvironmentKeys := collectEnvironmentValues(os.Environ())
 	metadata.malformedEnvironmentKeys = malformedEnvironmentKeys
-	if len(namespaceValues) > 0 {
-		sectionScalarOverrideKeys := removeSectionScalarOverridesInPlace(namespaceValues)
-		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
-	}
-	if len(namespaceValues) > 0 {
-		if err := k.Load(confmap.Provider(namespaceValues, keyDelimiter), nil); err != nil {
+	metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, removeSectionScalarOverridesInPlace(envValues)...)
+	if len(envValues) > 0 {
+		if err := k.Load(confmap.Provider(envValues, keyDelimiter), nil); err != nil {
 			metadata.failedStage = StageLoadEnv
 			return nil, metadata, fmt.Errorf("%w: load namespace env: %w", ErrLoad, err)
 		}
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		metadata.failedStage = StageLoadEnv
 		return nil, metadata, err
 	}

@@ -7,25 +7,25 @@ import (
 )
 
 func TestWebhooksConfigContract(t *testing.T) {
-	valid := WebhooksConfig{Enabled: true, Endpoints: `{"endpoints":[]}`}
+	valid := OutboundWebhooksConfig{Enabled: true, Endpoints: `{"endpoints":[]}`}
 	postgres := PostgresConfig{Enabled: true}
 	jobs := JobsConfig{MaxWorkers: 1}
-	if err := validateWebhooks(valid, postgres, jobs); err != nil {
-		t.Fatalf("validateWebhooks(valid) error = %v", err)
+	if err := validateOutboundWebhooks(valid, postgres, jobs); err != nil {
+		t.Fatalf("validateOutboundWebhooks(valid) error = %v", err)
 	}
 	tests := []struct {
 		name   string
-		mutate func(*WebhooksConfig, *PostgresConfig, *JobsConfig)
+		mutate func(*OutboundWebhooksConfig, *PostgresConfig, *JobsConfig)
 	}{
-		{"postgres disabled", func(_ *WebhooksConfig, p *PostgresConfig, _ *JobsConfig) { p.Enabled = false }},
-		{"jobs disabled", func(_ *WebhooksConfig, _ *PostgresConfig, j *JobsConfig) { j.MaxWorkers = 0 }},
-		{"endpoints missing", func(w *WebhooksConfig, _ *PostgresConfig, _ *JobsConfig) { w.Endpoints = "" }},
+		{"postgres disabled", func(_ *OutboundWebhooksConfig, p *PostgresConfig, _ *JobsConfig) { p.Enabled = false }},
+		{"jobs disabled", func(_ *OutboundWebhooksConfig, _ *PostgresConfig, j *JobsConfig) { j.MaxWorkers = 0 }},
+		{"endpoints missing", func(w *OutboundWebhooksConfig, _ *PostgresConfig, _ *JobsConfig) { w.Endpoints = "" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			webhooks, pg, jobConfig := valid, postgres, jobs
 			test.mutate(&webhooks, &pg, &jobConfig)
-			err := validateWebhooks(webhooks, pg, jobConfig)
+			err := validateOutboundWebhooks(webhooks, pg, jobConfig)
 			if !errors.Is(err, ErrValidate) {
 				t.Fatalf("error = %v, want ErrValidate", err)
 			}
@@ -42,7 +42,7 @@ func TestWebhooksConfigDefaultsDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.OutboundWebhooks != (WebhooksConfig{}) {
+	if cfg.OutboundWebhooks != (OutboundWebhooksConfig{}) {
 		t.Fatalf("default webhooks = %+v", cfg.OutboundWebhooks)
 	}
 }

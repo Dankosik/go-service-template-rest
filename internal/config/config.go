@@ -2,6 +2,8 @@ package config
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/knadh/koanf/v2"
@@ -20,6 +22,8 @@ type LoadOptions struct {
 	ConfigOverlays []string
 }
 
+// LoadReport describes a load attempt. When the load returns an error,
+// FailedStage always names the stage that failed.
 type LoadReport struct {
 	LoadDuration     time.Duration
 	ValidateDuration time.Duration
@@ -36,9 +40,9 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 	return loadDetailedWithContext(ctx, opts, buildSnapshot, validateConfig)
 }
 
+// profile:jobs-postgres:start
 // LoadJobsWorkerDetailedWithContext loads the immutable snapshot required by
 // the jobs-worker binary. It validates only the sections that binary consumes.
-// profile:jobs-postgres:start
 func LoadJobsWorkerDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
 	return loadDetailedWithContext(ctx, opts, buildJobsWorkerSnapshot, validateJobsWorkerConfig)
 }
@@ -49,26 +53,17 @@ func loadDetailedWithContext(
 	ctx context.Context,
 	opts LoadOptions,
 	build func(*koanf.Koanf) (Config, []string, error),
-	validate func(*Config, []string) error,
+	validate func(*Config) error,
 ) (Config, LoadReport, error) {
-	if err := checkContext(ctx); err != nil {
-		return Config{}, LoadReport{}, err
+	if err := checkLoadContext(ctx); err != nil {
+		return Config{}, LoadReport{FailedStage: StageLoadDefaults}, err
 	}
 
 	loadStarted := time.Now()
 	k, metadata, err := loadKoanf(ctx, opts)
-	report := LoadReport{
-		LoadDuration: time.Since(loadStarted),
-		FailedStage:  metadata.failedStage,
-	}
+	report := LoadReport{LoadDuration: time.Since(loadStarted)}
 	if err != nil {
-		if report.FailedStage == "" {
-			report.FailedStage = StageLoadDefaults
-		}
-		return Config{}, report, err
-	}
-	if err := checkContext(ctx); err != nil {
-		report.FailedStage = StageLoadEnv
+		report.FailedStage = metadata.failedStage
 		return Config{}, report, err
 	}
 
@@ -77,7 +72,7 @@ func loadDetailedWithContext(
 		report.FailedStage = StageParse
 		return Config{}, report, err
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		report.FailedStage = StageParse
 		return Config{}, report, err
 	}
@@ -89,9 +84,14 @@ func loadDetailedWithContext(
 		return Config{}, report, err
 	}
 
+	// Unknown keys are rejected before any section rule runs.
 	unknownKeys = append(unknownKeys, metadata.sectionScalarOverrideKeys...)
 	unknownKeys = append(unknownKeys, metadata.malformedEnvironmentKeys...)
-	err = validate(&cfg, unknownKeys)
+	if unknown := normalizeUnknownKeys(unknownKeys); len(unknown) > 0 {
+		err = fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
+	} else {
+		err = validate(&cfg)
+	}
 	report.ValidateDuration = time.Since(validateStarted)
 	if err != nil {
 		report.FailedStage = StageValidate

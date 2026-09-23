@@ -52,7 +52,7 @@ func TestPostgresInboundWebhookCommitUnknownRetry(t *testing.T) {
 		Body:       []byte(reviewedVectorBody),
 	}
 	result, err := receiver.Receive(ctx, delivery)
-	if result != inboundwebhook.OutcomeUnavailable || !errors.Is(err, inboundwebhook.ErrUnavailable) {
+	if !errors.Is(err, inboundwebhook.ErrUnavailable) {
 		t.Fatalf("commit-unknown result=%+v err=%v", result, err)
 	}
 

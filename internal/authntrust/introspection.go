@@ -23,8 +23,7 @@ const (
 // query, forced query, and fragment are forbidden so the outbound request has
 // one exact destination.
 func ValidIntrospectionEndpoint(raw string) bool {
-	parsed, ok := validHTTPSURL(raw)
-	return ok && parsed.RawQuery == "" && !parsed.ForceQuery
+	return validHTTPSTarget(raw, false)
 }
 
 // ValidIntrospectionTargetClass reports whether raw is one of the two exact
