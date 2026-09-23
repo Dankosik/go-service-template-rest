@@ -270,7 +270,10 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// profile:messaging-nats-jetstream:start
 	readinessProbes = append(readinessProbes, messaging.ReadinessProbes()...)
 	// profile:messaging-nats-jetstream:end
-	healthSvc := newReadinessService(readinessProbes, supervisor)
+	healthSvc, err := newReadinessService(bootstrap.cfg, readinessProbes, supervisor)
+	if err != nil {
+		return err
+	}
 
 	var domainErrors []failure.Mapper
 	// profile:http-idempotency-postgres:start
@@ -351,7 +354,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		// first probe after admission could still answer 503 from an unevaluated
 		// cache and have the instance pulled straight back out of rotation.
 		readinessCheck: func(ctx context.Context) error {
-			if err := healthSvc.Refresh(ctx, bootstrap.cfg.HTTP.ReadinessTimeout, bootstrap.cfg.Health.FailureThreshold); err != nil {
+			if err := healthSvc.Refresh(ctx); err != nil {
 				return fmt.Errorf("refresh initial readiness: %w", err)
 			}
 			return nil

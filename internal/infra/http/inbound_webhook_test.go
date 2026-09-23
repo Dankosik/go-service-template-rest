@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/problem"
@@ -53,7 +52,7 @@ func (r *recordingReceiver) Receive(ctx context.Context, delivery inboundwebhook
 func inboundRouter(t *testing.T, receiver inboundwebhook.Receiver, cfg RouterConfig) http.Handler {
 	t.Helper()
 	return mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{
-		Health:         health.New(),
+		Health:         newTestHealth(t),
 		InboundWebhook: receiver,
 	}, telemetry.New(), cfg)
 }

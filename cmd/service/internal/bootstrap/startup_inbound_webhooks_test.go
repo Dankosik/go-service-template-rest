@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -53,7 +52,7 @@ func TestInboundWebhookHeaderOverflowUsesListener431(t *testing.T) {
 		nil,
 		httpRuntimeBindings{
 			Handlers: httpx.Handlers{
-				Health:         health.New(),
+				Health:         newTestHealth(t),
 				ReadinessGate:  func(context.Context) error { return nil },
 				InboundWebhook: nil,
 			},

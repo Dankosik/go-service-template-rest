@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/problem"
@@ -24,7 +23,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
+		Health: newTestHealth(t),
 	}, telemetry.New(), RouterConfig{})
 
 	t.Run("not found uses problem envelope", func(t *testing.T) {
@@ -294,7 +293,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 	// Health probes are excluded from the access log by default; this test is
 	// about route labelling and correlation fields, so it opts back in.
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
+		Health: newTestHealth(t),
 	}, nil, RouterConfig{LogHealthProbes: true})
 
 	const (
@@ -353,7 +352,7 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	})
 
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
+		Health: newTestHealth(t),
 	}, metrics, RouterConfig{})
 
 	liveReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
@@ -394,7 +393,7 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
+		Health: newTestHealth(t),
 	}, telemetry.New(), RouterConfig{})
 
 	liveResp := doRequest(h, http.MethodGet, "/health/live")

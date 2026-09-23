@@ -45,8 +45,14 @@ func runWorkerLifecycle(
 	worker *natsjs.Worker,
 ) (cleanupSafe bool, window context.Context, err error) {
 	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
-	healthSvc := health.New(client)
-	if err := healthSvc.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
+	healthSvc, err := health.New(health.Policy{
+		ProbeBudget:      cfg.HTTP.ReadinessTimeout,
+		FailureThreshold: cfg.Health.FailureThreshold,
+	}, client)
+	if err != nil {
+		return true, unarmed, fmt.Errorf("build worker readiness: %w", err)
+	}
+	if err := healthSvc.Refresh(startupCtx); err != nil {
 		return true, unarmed, fmt.Errorf("admit worker readiness: %w", err)
 	}
 	diagnostics, err := runtimeopts.ListenDiagnostics(
@@ -67,7 +73,7 @@ func runWorkerLifecycle(
 	supervisor.Go(background.Task{
 		Name: "messaging_readiness",
 		Run: func(ctx context.Context) error {
-			return healthSvc.Watch(ctx, cfg.Health.RefreshInterval, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold, nil)
+			return healthSvc.Watch(ctx, cfg.Health.RefreshInterval, nil)
 		},
 	})
 	workerResult := make(chan error, 1)

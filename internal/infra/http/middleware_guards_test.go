@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
@@ -20,7 +19,7 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
+		Health: newTestHealth(t),
 	}, telemetry.New(), RouterConfig{})
 
 	resp := doRequest(h, http.MethodGet, "/health/live")
@@ -35,7 +34,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
+		Health: newTestHealth(t),
 	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
 
 	t.Run("known content length is rejected before reading", func(t *testing.T) {

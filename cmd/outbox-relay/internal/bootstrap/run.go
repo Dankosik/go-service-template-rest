@@ -173,8 +173,14 @@ func runLifecycle(
 ) (bool, context.Context, error) {
 	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
 	var admitted atomic.Bool
-	readiness := health.New(postgresReadinessProbe{pool: pool}, messaging)
-	if err := readiness.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
+	readiness, err := health.New(health.Policy{
+		ProbeBudget:      cfg.HTTP.ReadinessTimeout,
+		FailureThreshold: cfg.Health.FailureThreshold,
+	}, postgresReadinessProbe{pool: pool}, messaging)
+	if err != nil {
+		return true, unarmed, fmt.Errorf("build outbox readiness: %w", err)
+	}
+	if err := readiness.Refresh(startupCtx); err != nil {
 		return true, unarmed, fmt.Errorf("admit outbox readiness: %w", err)
 	}
 	diagnostics, err := runtimeopts.ListenDiagnostics(
@@ -195,13 +201,7 @@ func runLifecycle(
 	supervisor.Go(background.Task{
 		Name: "dependency_readiness",
 		Run: func(ctx context.Context) error {
-			return readiness.Watch(
-				ctx,
-				cfg.Health.RefreshInterval,
-				cfg.HTTP.ReadinessTimeout,
-				cfg.Health.FailureThreshold,
-				nil,
-			)
+			return readiness.Watch(ctx, cfg.Health.RefreshInterval, nil)
 		},
 	})
 	// stopTail stops diagnostics, then the background tasks. Messaging drains
