@@ -32,11 +32,7 @@ type inboundRawServer struct {
 
 func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request, endpointID string, params openapi.ReceiveWebhookParams) {
 	if s.receiver == nil {
-		writeProblem(w, r, problemResponse{
-			code:       problem.CodeServiceUnavailable,
-			detail:     "inbound webhook receiver is unavailable",
-			retryAfter: inboundUnavailableRetryAfter,
-		})
+		writeInboundUnavailable(w, r, "inbound webhook receiver is unavailable")
 		return
 	}
 	body, err := io.ReadAll(r.Body)
@@ -49,7 +45,7 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 			writeProblem(w, r, requestEntityTooLargeProblem())
 			return
 		}
-		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"})
+		writeProblem(w, r, inboundFailureProblem())
 		return
 	}
 	outcome, receiveErr := s.receiver.Receive(r.Context(), inboundwebhook.Delivery{
@@ -66,13 +62,9 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 		}
 		switch {
 		case errors.Is(receiveErr, inboundwebhook.ErrUnavailable):
-			writeProblem(w, r, problemResponse{
-				code:       problem.CodeServiceUnavailable,
-				detail:     "inbound webhook storage is unavailable",
-				retryAfter: inboundUnavailableRetryAfter,
-			})
+			writeInboundUnavailable(w, r, "inbound webhook storage is unavailable")
 		default:
-			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"})
+			writeProblem(w, r, inboundFailureProblem())
 		}
 		return
 	}
@@ -86,14 +78,26 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 	case inboundwebhook.OutcomeConflict:
 		writeProblem(w, r, problemResponse{code: problem.CodeConflict, detail: "inbound webhook delivery conflicts"})
 	case inboundwebhook.OutcomeUnavailable:
-		writeProblem(w, r, problemResponse{
-			code:       problem.CodeServiceUnavailable,
-			detail:     "inbound webhook storage is unavailable",
-			retryAfter: inboundUnavailableRetryAfter,
-		})
+		writeInboundUnavailable(w, r, "inbound webhook storage is unavailable")
 	default:
-		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"})
+		writeProblem(w, r, inboundFailureProblem())
 	}
+}
+
+// writeInboundUnavailable answers a delivery this instance cannot take right now;
+// the sender retries after the short hint.
+func writeInboundUnavailable(w http.ResponseWriter, r *http.Request, detail string) {
+	writeProblem(w, r, problemResponse{
+		code:       problem.CodeServiceUnavailable,
+		detail:     detail,
+		retryAfter: inboundUnavailableRetryAfter,
+	})
+}
+
+// inboundFailureProblem is the sanitized answer for a delivery that failed for a
+// reason the sender cannot act on.
+func inboundFailureProblem() problemResponse {
+	return problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"}
 }
 
 // profile:inbound-webhooks-standard:end
