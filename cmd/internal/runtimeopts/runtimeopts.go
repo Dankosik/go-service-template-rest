@@ -10,7 +10,7 @@
 // quietly runs without it. Keeping the mapping here is why there is one
 // place to add it.
 //
-// [InstallTelemetry], [DiagnosticsServer], [ListenDiagnostics], and the teardown
+// [InstallTelemetry], [ListenDiagnostics], and the teardown
 // primitives are here on the same reasoning rather than as exceptions to it. Each
 // replaced copies that had already drifted: a degraded exporter logged with
 // different fields, a diagnostics join spelled once as a type and once inline,

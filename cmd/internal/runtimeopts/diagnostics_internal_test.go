@@ -5,8 +5,11 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
 func TestDiagnosticsListenerStopForcesLocalTimeoutAndJoins(t *testing.T) {
@@ -55,5 +58,30 @@ func TestDiagnosticsListenerStopForcesLocalTimeoutAndJoins(t *testing.T) {
 	}
 	if err := <-requestDone; err == nil {
 		t.Fatal("forced connection close returned no client error")
+	}
+}
+
+func TestDiagnosticsServerGatesPprof(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name         string
+		pprofEnabled bool
+		wantStatus   int
+	}{
+		{name: "disabled", wantStatus: http.StatusNotFound},
+		{name: "enabled", pprofEnabled: true, wantStatus: http.StatusOK},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := diagnosticsServer(func() bool { return true }, telemetry.New(), test.pprofEnabled)
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/debug/pprof/", nil)
+			response := httptest.NewRecorder()
+			server.Handler.ServeHTTP(response, request)
+			if response.Code != test.wantStatus {
+				t.Fatalf("/debug/pprof/ status = %d, want %d", response.Code, test.wantStatus)
+			}
+		})
 	}
 }

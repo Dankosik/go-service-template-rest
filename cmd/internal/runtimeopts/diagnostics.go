@@ -20,7 +20,7 @@ import (
 // than protect anything.
 const diagnosticsReadHeaderTimeout = 5 * time.Second
 
-// DiagnosticsServer builds the private listener a background binary serves:
+// diagnosticsServer builds the private listener a background binary serves:
 // process liveness, readiness, the metrics scrape, and gated runtime profiles.
 //
 // It carries no Addr, because callers serve it on a listener they bound
@@ -36,7 +36,7 @@ const diagnosticsReadHeaderTimeout = 5 * time.Second
 // cmd/service does not use this server. Its diagnostics listener additionally
 // serves build identity and takes its timeouts from configuration, but it uses
 // [RegisterPprofHandlers] for the same profile-routing contract.
-func DiagnosticsServer(ready func() bool, metrics *telemetry.Metrics, pprofEnabled bool) *http.Server {
+func diagnosticsServer(ready func() bool, metrics *telemetry.Metrics, pprofEnabled bool) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health/live", func(writer http.ResponseWriter, _ *http.Request) {
 		writer.WriteHeader(http.StatusOK)
@@ -71,7 +71,7 @@ func RegisterPprofHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
 }
 
-// DiagnosticsListener is a bound and serving [DiagnosticsServer]. It owns its
+// DiagnosticsListener is a bound and serving diagnostics server. It owns its
 // listener, its serving goroutine, and the join, so a composition root only
 // starts it, watches one channel, and stops it — which is what lets a lifecycle
 // function read as lifecycle instead of as HTTP mechanics.
@@ -109,7 +109,7 @@ func ListenDiagnostics(
 		return nil, fmt.Errorf("listen for %s diagnostics: %w", component, err)
 	}
 	served := &DiagnosticsListener{
-		server: DiagnosticsServer(ready, metrics, pprofEnabled),
+		server: diagnosticsServer(ready, metrics, pprofEnabled),
 		done:   make(chan struct{}),
 	}
 	go func() {

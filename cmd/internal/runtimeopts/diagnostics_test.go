@@ -69,31 +69,6 @@ func TestDiagnosticsListenerStopsAndJoins(t *testing.T) {
 	}
 }
 
-func TestDiagnosticsServerGatesPprof(t *testing.T) {
-	t.Parallel()
-
-	for _, test := range []struct {
-		name         string
-		pprofEnabled bool
-		wantStatus   int
-	}{
-		{name: "disabled", wantStatus: http.StatusNotFound},
-		{name: "enabled", pprofEnabled: true, wantStatus: http.StatusOK},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			server := runtimeopts.DiagnosticsServer(func() bool { return true }, telemetry.New(), test.pprofEnabled)
-			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/debug/pprof/", nil)
-			response := httptest.NewRecorder()
-			server.Handler.ServeHTTP(response, request)
-			if response.Code != test.wantStatus {
-				t.Fatalf("/debug/pprof/ status = %d, want %d", response.Code, test.wantStatus)
-			}
-		})
-	}
-}
-
 // TestRegisterPprofHandlersServesGoroutineLeak proves the repository-owned
 // route. The standard library owns the profile algorithm, so the test does not
 // create an intentional leak in this shared test process.
