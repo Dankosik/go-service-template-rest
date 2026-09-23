@@ -45,6 +45,32 @@ has_line() {
 	[[ $'\n'"$1"$'\n' == *$'\n'"$2"$'\n'* ]]
 }
 
+# A file carrying profile markers is an initializer input: the module
+# initializer contract proves every profile's rendering of it, so changing one
+# selects that contract even outside the engine's own paths. Markdown is proven
+# only for marker structure, so prose inside a marked block stays documentation.
+# In union mode the base version counts too, so deleting a marked file or its
+# markers still selects the contract.
+profile_marker_pattern='profile:[a-z0-9-]+:(start|end)'
+
+carries_profile_markers() {
+	local file=$1
+	case "${file}" in
+	.agents/*) return 1 ;;
+	*.md)
+		[[ -n ${marker_base_ref:-} ]] || return 1
+		git diff --no-ext-diff -U0 "${marker_base_ref}" -- "${file}" 2>/dev/null |
+			grep -E "^[-+].*${profile_marker_pattern}" >/dev/null
+		return
+		;;
+	esac
+	if [[ -f ${file} ]] && grep -E "${profile_marker_pattern}" -- "${file}" >/dev/null; then
+		return 0
+	fi
+	[[ -n ${marker_base_ref:-} ]] || return 1
+	git show "${marker_base_ref}:${file}" 2>/dev/null | grep -E "${profile_marker_pattern}" >/dev/null
+}
+
 classify() {
 	local file matched
 	reset
@@ -195,6 +221,10 @@ classify() {
 				mark validation_system
 				;;
 		esac
+		# Assigned directly rather than through mark: markers route a file to
+		# the initializer, but its path still needs an owner of its own.
+		# shellcheck disable=SC2034 # emit reads every surface through ${!name}.
+		if carries_profile_markers "${file}"; then module_initializer=true; fi
 		if [[ ${matched} != true ]]; then unclassified_paths+=("${file}"); fi
 	done
 	tracking_file=false
@@ -205,6 +235,7 @@ classify() {
 union_classify() {
 	local base_ref=$1 tmp files old_files base_script current old current_status old_status name value count=0
 	local current_classified current_unclassified line
+	local marker_base_ref=${base_ref}
 	tmp=$(mktemp -d)
 	trap 'rm -rf -- "${tmp}"' RETURN
 	files=${tmp}/files
@@ -402,6 +433,40 @@ self_test() {
 		output="$(git ls-files | classify)"
 		has_line "${output}" 'classified=true'
 	fi
+	# Markers route by content, so prove it in a scratch repository: this
+	# checkout loses its markers once a service is initialized.
+	(
+		scratch=$(mktemp -d)
+		trap 'rm -rf -- "${scratch}"' EXIT
+		cd "${scratch}"
+		git init -q
+		printf 'package x\n\n// profile:grpc:start\nvar _ = 1\n\n// profile:grpc:end\n' >marked.go
+		printf 'package x\n' >plain.go
+		printf '# Doc\n\n<!-- profile:grpc:start -->\nprose\n<!-- profile:grpc:end -->\n' >marked.md
+		git add -A
+		git -c user.name=self-test -c user.email=self-test@example.invalid commit -qm base
+		output="$(printf '%s\n' marked.go | classify)"
+		has_line "${output}" 'module_initializer=true'
+		output="$(printf '%s\n' plain.go | classify)"
+		has_line "${output}" 'module_initializer=false'
+		output="$(printf '%s\n' marked.md | classify)"
+		has_line "${output}" 'module_initializer=false'
+		marker_base_ref=HEAD
+		printf 'package x\n' >marked.go
+		output="$(printf '%s\n' marked.go | classify)"
+		has_line "${output}" 'module_initializer=true'
+		printf '# Doc\n\n<!-- profile:grpc:start -->\nnew prose\n<!-- profile:grpc:end -->\n' >marked.md
+		output="$(printf '%s\n' marked.md | classify)"
+		has_line "${output}" 'module_initializer=false'
+		printf '# Doc\n\nprose\n' >marked.md
+		output="$(printf '%s\n' marked.md | classify)"
+		has_line "${output}" 'module_initializer=true'
+		mkdir unknown
+		printf 'profile:grpc:start\nprofile:grpc:end\n' >unknown/marked.xyz
+		output="$(printf '%s\n' unknown/marked.xyz | classify 2>&1)" && exit 1
+		has_line "${output}" 'module_initializer=true'
+		has_line "${output}" 'unclassified_files=unknown/marked.xyz'
+	)
 	output="$(printf '%s\n' scripts/ci/changed-surfaces.sh | bash "$0" --union HEAD)"
 	has_line "${output}" 'shell=true'
 	has_line "${output}" 'db_integration=false'

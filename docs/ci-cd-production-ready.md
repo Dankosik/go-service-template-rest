@@ -59,6 +59,10 @@ The module initializer contract runs as parallel `initializer` parts: one
 part runs the profile-independent checks with the minimal profile, and the
 other selected profiles run in parts of up to four. Only the shared part saves
 its build cache on main, so tool resolution reuses the binaries it built there.
+Besides the engine's own paths, a change to any file that carries profile
+markers selects the contract, with the canonical profiles that keep those
+blocks. A Markdown file selects it only when a marker line changes, because
+the contract proves rendered prose only for marker structure.
 The always-reported `required` job fails when any
 applicable leaf fails or is cancelled and accepts deliberate path skips.
 Pull requests and merge groups are path-aware; main pushes, tags, and manual

@@ -128,7 +128,7 @@ jobs:
             exit 0
           fi
           if [[ "${EVENT_NAME}" == pull_request || "${EVENT_NAME}" == merge_group ]]; then
-            selected=$(bash ./scripts/ci/git-changed-paths.sh --diff "${BASE_SHA}" HEAD | bash ./scripts/ci/init-module-contract-check.sh --select-from-files)
+            selected=$(bash ./scripts/ci/git-changed-paths.sh --diff "${BASE_SHA}" HEAD | bash ./scripts/ci/init-module-contract-check.sh --select-from-files "${BASE_SHA}")
           else
             selected=$(bash ./scripts/ci/init-module-contract-check.sh --list-profiles)
           fi
