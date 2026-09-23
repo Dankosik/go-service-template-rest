@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -121,7 +120,7 @@ func validateRuntimeConfig(cfg config.Config) error {
 	if !cfg.Postgres.Enabled {
 		return fmt.Errorf("%w: postgres must be enabled for outbox relay", config.ErrValidate)
 	}
-	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
+	if !cfg.Messaging.Enabled() {
 		return fmt.Errorf("%w: messaging must be enabled for outbox relay", config.ErrValidate)
 	}
 	if err := runtimeopts.RequireDiagnosticsAddr(cfg.Observability.Metrics.Addr, "outbox"); err != nil {
