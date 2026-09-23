@@ -225,7 +225,7 @@ func runLifecycle(
 	var trigger error
 	select {
 	case <-signalCtx.Done():
-	case trigger = <-supervisor.Failures():
+	case trigger = <-supervisor.FirstFailure():
 	case <-riverClient.Stopped():
 		trigger = errors.New("river outbox worker stopped unexpectedly")
 	case <-diagnostics.Stopped():

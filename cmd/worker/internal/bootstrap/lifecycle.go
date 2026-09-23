@@ -72,7 +72,7 @@ func runWorkerLifecycle(
 	var triggerErr error
 	select {
 	case <-signalCtx.Done():
-	case triggerErr = <-supervisor.Failures():
+	case triggerErr = <-supervisor.FirstFailure():
 	case triggerErr = <-workerResult:
 	case <-diagnostics.Stopped():
 		// diagnostics.Stop below carries whatever Serve reported.
