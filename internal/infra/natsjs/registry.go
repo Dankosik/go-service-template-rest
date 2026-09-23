@@ -35,8 +35,8 @@ func (t routeTable) subject(eventType string, version uint16) (string, error) {
 }
 
 type Registry struct {
-	subjects routeTable
-	handlers map[routeKey]func(context.Context, domainevent.Event) error
+	subjects      routeTable
+	eventHandlers map[routeKey]func(context.Context, domainevent.Event) error
 }
 
 func NewRegistry(routes ...Route) (*Registry, error) {
@@ -44,7 +44,7 @@ func NewRegistry(routes ...Route) (*Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Registry{subjects: subjects, handlers: make(map[routeKey]func(context.Context, domainevent.Event) error)}, nil
+	return &Registry{subjects: subjects, eventHandlers: make(map[routeKey]func(context.Context, domainevent.Event) error)}, nil
 }
 
 // Handle registers a typed handler without exposing subjects, headers,
@@ -53,7 +53,7 @@ func (r *Registry) Handle[T any](kind domainevent.Kind[T], handler func(context.
 	if handler == nil {
 		return fmt.Errorf("%w: event handler is required", ErrRejected)
 	}
-	err := r.Register(kind.Type, kind.Version, func(ctx context.Context, event domainevent.Event) error {
+	err := r.register(kind.Type, kind.Version, func(ctx context.Context, event domainevent.Event) error {
 		var payload T
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			return Permanent(fmt.Errorf("decode %s v%d: %w", event.Type, event.Version, err))
@@ -66,7 +66,9 @@ func (r *Registry) Handle[T any](kind domainevent.Kind[T], handler func(context.
 	return nil
 }
 
-func (r *Registry) Register(eventType string, version uint16, handler func(context.Context, domainevent.Event) error) error {
+// register admits one decoded-event handler for a routed kind; [Registry.Handle]
+// is the entry point that builds it from a typed handler.
+func (r *Registry) register(eventType string, version uint16, handler func(context.Context, domainevent.Event) error) error {
 	if r == nil || r.subjects == nil {
 		return fmt.Errorf("%w: event registry is required", ErrRejected)
 	}
@@ -77,17 +79,17 @@ func (r *Registry) Register(eventType string, version uint16, handler func(conte
 	if handler == nil {
 		return fmt.Errorf("%w: handler is required for %s v%d", ErrRejected, eventType, version)
 	}
-	if _, exists := r.handlers[key]; exists {
+	if _, exists := r.eventHandlers[key]; exists {
 		return fmt.Errorf("%w: duplicate handler for %s v%d", ErrRejected, eventType, version)
 	}
-	r.handlers[key] = handler
+	r.eventHandlers[key] = handler
 	return nil
 }
 
 // Handler reads the live registry. Complete registration before using the
 // returned handler for concurrent deliveries.
 func (r *Registry) Handler() (Handler, error) {
-	if r == nil || len(r.handlers) == 0 {
+	if r == nil || len(r.eventHandlers) == 0 {
 		return nil, fmt.Errorf("%w: no typed event handlers are registered", ErrRejected)
 	}
 	return func(ctx context.Context, message Message) error {
@@ -96,7 +98,7 @@ func (r *Registry) Handler() (Handler, error) {
 			return Permanent(err)
 		}
 		key := routeKey{typeName: message.Type(), version: version}
-		handler, ok := r.handlers[key]
+		handler, ok := r.eventHandlers[key]
 		if !ok {
 			return Permanent(fmt.Errorf("no handler for %s v%d", message.Type(), version))
 		}
