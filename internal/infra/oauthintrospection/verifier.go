@@ -2,7 +2,6 @@ package oauthintrospection
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -124,14 +123,10 @@ func (v *Verifier) newIntrospectionRequest(ctx context.Context, token string) (*
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", oauthBasicHeader(v.policy.clientID, v.policy.clientSecret))
+	// client_secret_basic form-encodes both values before Basic encoding
+	// (RFC 6749 section 2.3.1).
+	request.SetBasicAuth(url.QueryEscape(v.policy.clientID), url.QueryEscape(v.policy.clientSecret))
 	return request, nil
-}
-
-func oauthBasicHeader(clientID, clientSecret string) string {
-	user := url.QueryEscape(clientID)
-	password := url.QueryEscape(clientSecret)
-	return "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 }
 
 // readBoundedBody reports false for a missing, unreadable, or oversized body.
