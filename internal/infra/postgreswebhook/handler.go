@@ -56,8 +56,8 @@ func (h *handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error 
 		DeliveryID: job.Args.DeliveryID, OwnerScope: job.Args.OwnerScope,
 		ReceiverID: job.Args.ReceiverID, URL: job.Args.URL,
 		Body: job.Args.Body, AttemptedAt: attemptedAt, Deadline: deadline,
-		KeyReference:         job.Args.ActiveKeyReference,
-		PredecessorReference: job.Args.PredecessorKeyReference,
+		ActiveKeyReference:      job.Args.ActiveKeyReference,
+		PredecessorKeyReference: job.Args.PredecessorKeyReference,
 	}
 	prepared, err := prepareSend(ctx, h.resolver, attempt, h.secrets)
 	if err != nil {

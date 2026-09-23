@@ -29,23 +29,22 @@ const (
 )
 
 type deliveryAttempt struct {
-	DeliveryID           string
-	OwnerScope           string
-	ReceiverID           string
-	URL                  string
-	Body                 []byte
-	AttemptedAt          time.Time
-	Deadline             time.Time
-	KeyReference         string
-	PredecessorReference string
+	DeliveryID              string
+	OwnerScope              string
+	ReceiverID              string
+	URL                     string
+	Body                    []byte
+	AttemptedAt             time.Time
+	Deadline                time.Time
+	ActiveKeyReference      string
+	PredecessorKeyReference string
 }
 
 type preparedSend struct {
-	Attempt         deliveryAttempt
-	URL             *url.URL
-	Addresses       []netip.Addr
-	SelectedAddress netip.Addr
-	Signature       string
+	Attempt   deliveryAttempt
+	URL       *url.URL
+	Addresses []netip.Addr
+	Signature string
 }
 
 type sendResult struct {
@@ -71,32 +70,29 @@ func prepareSend(ctx context.Context, resolver *net.Resolver, attempt deliveryAt
 		return preparedSend{}, err
 	}
 
-	active, err := manifest.resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.KeyReference)
+	active, err := manifest.resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.ActiveKeyReference)
 	if err != nil {
 		return preparedSend{}, err
 	}
-	keys := [][]byte{active}
-	if attempt.PredecessorReference != "" {
-		predecessor, err := manifest.resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.PredecessorReference)
+	var predecessor []byte
+	if attempt.PredecessorKeyReference != "" {
+		predecessor, err = manifest.resolve(attempt.OwnerScope, attempt.ReceiverID, attempt.PredecessorKeyReference)
 		if err != nil {
 			return preparedSend{}, err
 		}
-		keys = append(keys, predecessor)
 	}
-	signature, err := signV1(attempt.DeliveryID, attempt.AttemptedAt, attempt.Body, keys)
+	signature, err := signV1(attempt.DeliveryID, attempt.AttemptedAt, attempt.Body, active, predecessor)
 	if err != nil {
 		return preparedSend{}, err
 	}
-	return preparedSend{
-		Attempt: attempt, URL: parsed, Addresses: addresses,
-		SelectedAddress: addresses[0], Signature: signature,
-	}, nil
+	return preparedSend{Attempt: attempt, URL: parsed, Addresses: addresses, Signature: signature}, nil
 }
 
 func admitDestinationAddresses(addresses []netip.Addr) ([]netip.Addr, error) {
 	if len(addresses) == 0 || len(addresses) > maxDNSAddresses {
 		return nil, fmt.Errorf("%w: destination returned an invalid address count", errDestinationDenied)
 	}
+	addresses = slices.Clone(addresses)
 	for i := range addresses {
 		addresses[i] = addresses[i].Unmap()
 		if !outboundtrust.PublicAddress(addresses[i]) {
@@ -104,8 +100,7 @@ func admitDestinationAddresses(addresses []netip.Addr) ([]netip.Addr, error) {
 		}
 	}
 	slices.SortFunc(addresses, func(a, b netip.Addr) int { return bytes.Compare(a.AsSlice(), b.AsSlice()) })
-	addresses = slices.Compact(addresses)
-	return slices.Clone(addresses), nil
+	return slices.Compact(addresses), nil
 }
 
 // tryPreparedAddresses tries admitted DNS addresses in order, falling back only
@@ -115,7 +110,7 @@ func admitDestinationAddresses(addresses []netip.Addr) ([]netip.Addr, error) {
 func tryPreparedAddresses(
 	ctx context.Context,
 	prepared preparedSend,
-	send func(context.Context, preparedSend) (sendResult, error),
+	send func(context.Context, preparedSend, netip.Addr) (sendResult, error),
 ) (sendResult, error) {
 	if len(prepared.Addresses) == 0 || send == nil {
 		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, ErrConfig
@@ -123,8 +118,7 @@ func tryPreparedAddresses(
 	var result sendResult
 	var err error
 	for _, address := range prepared.Addresses {
-		prepared.SelectedAddress = address
-		result, err = send(ctx, prepared)
+		result, err = send(ctx, prepared, address)
 		if err == nil || result.Evidence.Certainty != sendCertaintyDefinitelyNotSent {
 			return result, err
 		}
@@ -132,16 +126,13 @@ func tryPreparedAddresses(
 	return result, err
 }
 
-func send(ctx context.Context, prepared preparedSend) (sendResult, error) {
-	if prepared.URL == nil || !prepared.SelectedAddress.IsValid() || !attemptContextBounded(ctx, prepared.Attempt.Deadline) {
+func send(ctx context.Context, prepared preparedSend, address netip.Addr) (sendResult, error) {
+	if prepared.URL == nil || !address.IsValid() || !attemptContextBounded(ctx, prepared.Attempt.Deadline) {
 		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, fmt.Errorf("%w: prepared send is invalid", ErrConfig)
 	}
-	wroteRequest := false
-	trace := &httptrace.ClientTrace{WroteRequest: func(httptrace.WroteRequestInfo) { wroteRequest = true }}
-	attemptCtx := httptrace.WithClientTrace(ctx, trace)
-	transport := newAttemptTransport(prepared.URL.Hostname(), prepared.SelectedAddress)
+	transport := newAttemptTransport(prepared.URL.Hostname(), address)
 	defer transport.CloseIdleConnections()
-	return sendWithTransport(attemptCtx, prepared, transport, &wroteRequest)
+	return sendWithTransport(ctx, prepared, transport)
 }
 
 func attemptContextBounded(ctx context.Context, attemptDeadline time.Time) bool {
@@ -149,15 +140,17 @@ func attemptContextBounded(ctx context.Context, attemptDeadline time.Time) bool 
 	return ok && !attemptDeadline.IsZero() && !deadline.After(attemptDeadline)
 }
 
-func sendWithTransport(ctx context.Context, prepared preparedSend, transport *http.Transport, wroteRequest *bool) (sendResult, error) {
-	request, err := webhookRequest(ctx, prepared)
+func sendWithTransport(ctx context.Context, prepared preparedSend, transport *http.Transport) (sendResult, error) {
+	wroteRequest := false
+	trace := &httptrace.ClientTrace{WroteRequest: func(httptrace.WroteRequestInfo) { wroteRequest = true }}
+	request, err := webhookRequest(httptrace.WithClientTrace(ctx, trace), prepared)
 	if err != nil {
 		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, err
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(request)
 	if err != nil {
-		wrote := wroteRequest != nil && *wroteRequest
+		wrote := wroteRequest
 		if errors.Is(err, http.ErrLineTooLong) || strings.Contains(err.Error(), "server response headers exceeded") {
 			err = errResponseLimit
 		}

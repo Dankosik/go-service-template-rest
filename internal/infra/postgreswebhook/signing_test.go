@@ -13,7 +13,7 @@ func TestWebhookSigningUsesStandardWebhooks(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	attemptedAt := time.Unix(1_700_000_000, 0).UTC()
 	body := []byte(`{"type":"order.created","data":{"id":"ord-1"}}`)
-	header, err := signV1("whd_test", attemptedAt, body, [][]byte{key})
+	header, err := signV1("whd_test", attemptedAt, body, key, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +31,7 @@ func TestWebhookSigningUsesStandardWebhooks(t *testing.T) {
 	}
 
 	nextAt := attemptedAt.Add(time.Second)
-	next, err := signV1("whd_test", nextAt, body, [][]byte{key})
+	next, err := signV1("whd_test", nextAt, body, key, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestWebhookSigningRejectsKeysOutsideSharedBounds(t *testing.T) {
 	t.Parallel()
 
 	for _, size := range []int{31, 65} {
-		_, err := signV1("whd_test", time.Unix(1_700_000_000, 0), nil, [][]byte{bytes.Repeat([]byte{'k'}, size)})
+		_, err := signV1("whd_test", time.Unix(1_700_000_000, 0), nil, bytes.Repeat([]byte{'k'}, size), nil)
 		if err == nil || err.Error() != "sign webhook: key must contain 32..64 bytes" {
 			t.Fatalf("signV1(%d byte key) error = %v", size, err)
 		}
