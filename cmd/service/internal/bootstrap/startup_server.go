@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
@@ -73,13 +72,13 @@ type boundServer struct {
 }
 
 // bindRuntimeListeners binds every configured server's listener. On failure it
-// closes the listeners already bound and reports the failed stage.
-func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (bound []boundServer, failedStage string, err error) {
+// closes the listeners already bound and reports the failed operation.
+func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (bound []boundServer, failedOperation string, err error) {
 	var listenConfig net.ListenConfig
 
 	httpListener, err := listenConfig.Listen(ctx, "tcp", args.cfg.HTTP.Addr)
 	if err != nil {
-		return nil, "startup.http_listen", fmt.Errorf("listen http server: %w", err)
+		return nil, "http_listen", fmt.Errorf("listen http server: %w", err)
 	}
 	bound = append(bound, boundServer{
 		name:     "http",
@@ -93,7 +92,7 @@ func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (bound []b
 		grpcListener, grpcErr := listenConfig.Listen(ctx, "tcp", args.cfg.GRPC.Server.Addr)
 		if grpcErr != nil {
 			closeBoundListeners(bound)
-			return nil, "startup.grpc_listen", fmt.Errorf("listen gRPC server: %w", grpcErr)
+			return nil, "grpc_listen", fmt.Errorf("listen gRPC server: %w", grpcErr)
 		}
 		bound = append(bound, boundServer{
 			name:     "grpc",
@@ -108,7 +107,7 @@ func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (bound []b
 		diagnosticsListener, diagnosticsListenErr := listenConfig.Listen(ctx, "tcp", args.cfg.Observability.Metrics.Addr)
 		if diagnosticsListenErr != nil {
 			closeBoundListeners(bound)
-			return nil, "startup.metrics_listen", fmt.Errorf("listen diagnostics server: %w", diagnosticsListenErr)
+			return nil, "metrics_listen", fmt.Errorf("listen diagnostics server: %w", diagnosticsListenErr)
 		}
 		bound = append(bound, boundServer{
 			name:     "diagnostics",
@@ -131,14 +130,14 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 		return rejectRuntimeStartup(
 			bootstrapCtx,
 			args.log,
-			"startup.http_listen",
+			"http_listen",
 			fmt.Errorf("startup canceled before http listen: %w", err),
 		)
 	}
 
-	bound, stage, err := bindRuntimeListeners(bootstrapCtx, args)
+	bound, operation, err := bindRuntimeListeners(bootstrapCtx, args)
 	if err != nil {
-		return rejectRuntimeStartup(bootstrapCtx, args.log, stage, err)
+		return rejectRuntimeStartup(bootstrapCtx, args.log, operation, err)
 	}
 
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
@@ -146,7 +145,7 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 		return rejectRuntimeStartup(
 			bootstrapCtx,
 			args.log,
-			"startup.http_serve",
+			"http_serve",
 			fmt.Errorf("startup canceled before http serve: %w", err),
 		)
 	}
@@ -293,7 +292,7 @@ func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Co
 func rejectRuntimeStartup(
 	bootstrapCtx context.Context,
 	log *slog.Logger,
-	stage string,
+	operation string,
 	err error,
 ) error {
 	log.ErrorContext(
@@ -301,7 +300,7 @@ func rejectRuntimeStartup(
 		"startup_blocked",
 		startupLogArgs(
 			startupLogComponentStartupProbes,
-			strings.TrimPrefix(stage, "startup."),
+			operation,
 			"error",
 			"error.type", "startup_error",
 			"err", err,

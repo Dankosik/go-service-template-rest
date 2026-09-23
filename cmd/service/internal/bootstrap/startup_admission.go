@@ -94,7 +94,7 @@ func waitForStartupAdmission(
 			return false, rejectRuntimeStartup(
 				bootstrapCtx,
 				args.log,
-				"startup.readiness",
+				"readiness",
 				fmt.Errorf("startup readiness check failed: %w", err),
 			)
 		}
@@ -105,7 +105,7 @@ func waitForStartupAdmission(
 			return false, rejectRuntimeStartup(
 				bootstrapCtx,
 				args.log,
-				"startup.background",
+				"background",
 				fmt.Errorf("background task failed before readiness: %w", err),
 			)
 		default:
@@ -139,7 +139,7 @@ func waitForStartupAdmission(
 		return false, rejectRuntimeStartup(
 			bootstrapCtx,
 			args.log,
-			"startup.background",
+			"background",
 			fmt.Errorf("background task failed before readiness: %w", err),
 		)
 	}
@@ -150,5 +150,5 @@ func serverStoppedBeforeReadiness(ctx context.Context, args serveRuntimeArgs, re
 	if result.err != nil {
 		err = fmt.Errorf("%s server stopped before readiness: %w", result.name, result.err)
 	}
-	return rejectRuntimeStartup(ctx, args.log, "startup."+result.name+"_serve", err)
+	return rejectRuntimeStartup(ctx, args.log, result.name+"_serve", err)
 }
