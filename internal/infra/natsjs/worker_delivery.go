@@ -52,23 +52,23 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 		w.client.telemetry.logTerminalDelivery(handlerRoot, source.Subject(), nil, reasonMetadataUnavailable, nil)
 		return fmt.Errorf("%w: source metadata unavailable", ErrTerminal)
 	}
-	current := delivery{source: source, metadata: metadata}
 	if wireSize(source) > w.cfg.MaxDeliveryBytes || len(source.Data()) > w.client.cfg.MaxPayloadBytes {
 		w.client.telemetry.logTerminalDelivery(handlerRoot, source.Subject(), metadata, reasonDeliveryBound, nil)
 		return fmt.Errorf("%w: retained source exceeds admitted message bound", ErrTerminal)
 	}
+	// A malformed delivery settles with no decoded message.
 	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
-		return w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed)
+		return w.deadLetter(handlerRoot, delivery{source: source, metadata: metadata}, deadLetterMalformed)
 	}
 	//nolint:contextcheck // Decoding extracts remote metadata; handlerRoot owns the admitted work.
 	decoded, remote, decodeErr := decodeMessage(source, metadata)
 	if decodeErr != nil {
-		return w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed)
+		return w.deadLetter(handlerRoot, delivery{source: source, metadata: metadata}, deadLetterMalformed)
 	}
+	current := delivery{source: source, metadata: metadata, message: decoded}
 	if metadata.NumDelivered > w.attemptLimit() {
-		return w.deadLetter(handlerRoot, source, metadata, decoded, deadLetterExhausted)
+		return w.deadLetter(handlerRoot, current, deadLetterExhausted)
 	}
-	current.message = decoded
 
 	ctx, span := w.client.telemetry.tracer.Start(
 		contextWithRemoteParent(handlerRoot, remote), consumeSpanName(w.cfg.FilterSubject), consumeSpanOptions(decoded, w.cfg.FilterSubject)...,
@@ -104,19 +104,16 @@ func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, resu
 	}
 	if IsPermanent(result.err) {
 		telemetry.recordHandler(ctx, current.message, outcomePermanent, reasonHandlerPermanent, result.started)
-		return w.deadLetter(handlerRoot, current.source, current.metadata, current.message, deadLetterPermanent)
+		return w.deadLetter(handlerRoot, current, deadLetterPermanent)
 	}
 	exhausted := current.metadata.NumDelivered >= w.attemptLimit()
 	outcome := handlerOutcome(result, exhausted)
 	if exhausted {
 		telemetry.recordHandler(ctx, current.message, outcome, reasonHandlerExhausted, result.started)
-		return w.deadLetter(handlerRoot, current.source, current.metadata, current.message, deadLetterExhausted)
+		return w.deadLetter(handlerRoot, current, deadLetterExhausted)
 	}
 	telemetry.recordHandler(ctx, current.message, outcome, reasonHandlerRetry, result.started)
-	return w.requestRedelivery(
-		ctx, current.source, current.metadata,
-		w.retryDelayFor(current.metadata.NumDelivered), redeliveryHandler,
-	)
+	return w.requestRedelivery(ctx, current, w.retryDelayFor(current.metadata.NumDelivered), redeliveryHandler)
 }
 
 // acknowledge confirms the delivery with the broker. A lost acknowledgement is
@@ -198,32 +195,32 @@ func captureHandlerPanicFrames() []string {
 	return frames
 }
 
-func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, reason string) error {
-	msg, transferID := deadLetterMessage(source, metadata, decoded, w.cfg.DeadLetterSubject, reason)
+func (w *Worker) deadLetter(ctx context.Context, current delivery, reason string) error {
+	msg, transferID := deadLetterMessage(current.source, current.metadata, current.message, w.cfg.DeadLetterSubject, reason)
 	if err := validateEncodedMessage(msg, w.client.cfg.MaxPayloadBytes); err != nil {
 		w.client.telemetry.recordDeadLetterTransfer(ctx, outcomeRejected)
-		w.client.telemetry.logTerminalDelivery(ctx, source.Subject(), metadata, reasonDeadLetterEnvelope, nil)
+		w.client.telemetry.logTerminalDelivery(ctx, current.source.Subject(), current.metadata, reasonDeadLetterEnvelope, nil)
 		return fmt.Errorf("%w: retained source cannot fit dead-letter envelope", ErrTerminal)
 	}
 	if _, err := w.client.publishOnce(ctx, msg, transferID, w.dlqStream); err != nil {
 		outcome, _, _ := classifyPublishError(err)
 		w.client.telemetry.recordDeadLetterTransfer(ctx, outcome)
 		if outcome == outcomeAmbiguous {
-			return w.requestRedelivery(ctx, source, metadata, w.cfg.DeadLetterRetryDelay, redeliveryDeadLetter)
+			return w.requestRedelivery(ctx, current, w.cfg.DeadLetterRetryDelay, redeliveryDeadLetter)
 		}
-		w.client.telemetry.logTerminalDelivery(ctx, source.Subject(), metadata, reasonDeadLetterRejected, nil)
+		w.client.telemetry.logTerminalDelivery(ctx, current.source.Subject(), current.metadata, reasonDeadLetterRejected, nil)
 		return fmt.Errorf("%w: dead-letter publish rejected", ErrTerminal)
 	}
 	w.client.telemetry.recordDeadLetterTransfer(ctx, outcomeAccepted)
-	if !confirmAck(ctx, source) {
-		return w.requestRedelivery(ctx, source, metadata, w.cfg.DeadLetterRetryDelay, redeliverySourceAck)
+	if !confirmAck(ctx, current.source) {
+		return w.requestRedelivery(ctx, current, w.cfg.DeadLetterRetryDelay, redeliverySourceAck)
 	}
 	return nil
 }
 
-func (w *Worker) requestRedelivery(ctx context.Context, source jetstream.Msg, metadata *jetstream.MsgMetadata, delay time.Duration, reason string) error {
-	if err := source.NakWithDelay(delay); err != nil {
-		w.client.telemetry.logTerminalDelivery(ctx, source.Subject(), metadata, reason+"_rejected", nil)
+func (w *Worker) requestRedelivery(ctx context.Context, current delivery, delay time.Duration, reason string) error {
+	if err := current.source.NakWithDelay(delay); err != nil {
+		w.client.telemetry.logTerminalDelivery(ctx, current.source.Subject(), current.metadata, reason+"_rejected", nil)
 		return fmt.Errorf("%w: request delayed source redelivery", ErrTerminal)
 	}
 	return nil
