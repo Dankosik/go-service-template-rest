@@ -61,10 +61,10 @@ func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulChec
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		bootstrapCtx, cancel := context.WithCancel(t.Context())
+		startupCtx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
-		resultCh := startStartupAdmission(bootstrapCtx, func(ctx context.Context) error {
+		resultCh := startStartupAdmission(startupCtx, func(ctx context.Context) error {
 			cancel()
 			<-ctx.Done()
 			return nil

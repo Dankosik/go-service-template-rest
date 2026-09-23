@@ -193,11 +193,11 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 	admission := new(startupAdmissionController)
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
-	bootstrapCtx := context.WithoutCancel(signalCtx)
+	startupCtx := context.WithoutCancel(signalCtx)
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- serveRuntime(signalCtx, bootstrapCtx, serveRuntimeArgs{
+		runErrCh <- serveRuntime(signalCtx, startupCtx, serveRuntimeArgs{
 			cfg: config.Config{
 				App:  config.AppConfig{Env: "test"},
 				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
@@ -302,11 +302,11 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
-	bootstrapCtx := context.WithoutCancel(signalCtx)
+	startupCtx := context.WithoutCancel(signalCtx)
 
 	runErrCh := make(chan error, 1)
-	go func(signalCtx context.Context, bootstrapCtx context.Context) {
-		runErrCh <- serveRuntime(signalCtx, bootstrapCtx, serveRuntimeArgs{
+	go func(signalCtx context.Context, startupCtx context.Context) {
+		runErrCh <- serveRuntime(signalCtx, startupCtx, serveRuntimeArgs{
 			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 			log:       logger,
 			healthSvc: svc,
@@ -321,7 +321,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 			admission: admission,
 			shutdown:  testShutdownBudget(),
 		})
-	}(signalCtx, bootstrapCtx)
+	}(signalCtx, startupCtx)
 
 	waittest.ReceiveSignal(t, readinessChecked, time.Second, "internal readiness check")
 	waittest.Until(t, time.Second, func(context.Context) bool { return admission.Ready() }, "startup admission to be marked ready")
@@ -339,10 +339,10 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
-	bootstrapCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	startupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	err := serveRuntime(context.Background(), bootstrapCtx, serveRuntimeArgs{
+	err := serveRuntime(context.Background(), startupCtx, serveRuntimeArgs{
 		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:       logger,
 		healthSvc: svc,

@@ -125,25 +125,25 @@ func closeBoundListeners(bound []boundServer) {
 	}
 }
 
-func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args serveRuntimeArgs) error {
-	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
+func serveRuntime(signalCtx context.Context, startupCtx context.Context, args serveRuntimeArgs) error {
+	if err := startupRuntimeContextErr(signalCtx, startupCtx); err != nil {
 		return rejectRuntimeStartup(
-			bootstrapCtx,
+			startupCtx,
 			args.log,
 			"http_listen",
 			fmt.Errorf("startup canceled before http listen: %w", err),
 		)
 	}
 
-	bound, operation, err := bindRuntimeListeners(bootstrapCtx, args)
+	bound, operation, err := bindRuntimeListeners(startupCtx, args)
 	if err != nil {
-		return rejectRuntimeStartup(bootstrapCtx, args.log, operation, err)
+		return rejectRuntimeStartup(startupCtx, args.log, operation, err)
 	}
 
-	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
+	if err := startupRuntimeContextErr(signalCtx, startupCtx); err != nil {
 		closeBoundListeners(bound)
 		return rejectRuntimeStartup(
-			bootstrapCtx,
+			startupCtx,
 			args.log,
 			"http_serve",
 			fmt.Errorf("startup canceled before http serve: %w", err),
@@ -153,18 +153,18 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	runErrCh := make(chan serverResult, len(bound))
 	for _, b := range bound {
 		go func() {
-			args.log.InfoContext(bootstrapCtx, b.label+" server started", "addr", b.listener.Addr().String(), "env", args.cfg.App.Env)
+			args.log.InfoContext(startupCtx, b.label+" server started", "addr", b.listener.Addr().String(), "env", args.cfg.App.Env)
 			runErrCh <- serverResult{name: b.name, err: normalizeServeError(b.server.Serve(b.listener))}
 		}()
 	}
 
-	admissionCtx, cancelAdmission := context.WithCancel(bootstrapCtx)
+	admissionCtx, cancelAdmission := context.WithCancel(startupCtx)
 	defer cancelAdmission()
 
 	admissionErrCh := startStartupAdmission(admissionCtx, args.readinessCheck, args.cfg.HTTP.ReadinessTimeout)
 	ready, terminalErr := waitForStartupAdmission(
 		signalCtx,
-		bootstrapCtx,
+		startupCtx,
 		args,
 		admissionErrCh,
 		runErrCh,
@@ -279,24 +279,24 @@ func serverStoppedAfterReadiness(log *slog.Logger, result serverResult) error {
 	return fmt.Errorf("%s server stopped with error: %w", result.name, result.err)
 }
 
-func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Context) error {
+func startupRuntimeContextErr(signalCtx context.Context, startupCtx context.Context) error {
 	if err := signalCtx.Err(); err != nil {
 		return fmt.Errorf("startup signal context: %w", err)
 	}
-	if err := bootstrapCtx.Err(); err != nil {
+	if err := startupCtx.Err(); err != nil {
 		return fmt.Errorf("startup bootstrap context: %w", err)
 	}
 	return nil
 }
 
 func rejectRuntimeStartup(
-	bootstrapCtx context.Context,
+	startupCtx context.Context,
 	log *slog.Logger,
 	operation string,
 	err error,
 ) error {
 	log.ErrorContext(
-		bootstrapCtx,
+		startupCtx,
 		"startup_blocked",
 		startupLogArgs(
 			startupLogComponentStartupProbes,

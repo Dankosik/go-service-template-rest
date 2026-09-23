@@ -77,7 +77,7 @@ const (
 // binding sockets.
 type runtimeWiring struct {
 	dependencies func(context.Context, startupBootstrap) (runtimeDependencies, error)
-	serve        func(context.Context, context.Context, serveRuntimeArgs) error
+	serve        func(signalCtx, startupCtx context.Context, args serveRuntimeArgs) error
 	// profile:object-storage:start
 	initObjectStorage func(context.Context, config.ObjectStorageConfig) (objectStorageRuntime, error)
 	// profile:object-storage:end

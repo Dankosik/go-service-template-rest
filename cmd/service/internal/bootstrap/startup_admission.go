@@ -39,14 +39,14 @@ func (c *startupAdmissionController) CheckReady(context.Context) error {
 // reports its verdict on the returned channel. serveRuntime is already selecting
 // on the signal, the startup budget, and the servers by the time this resolves.
 func startStartupAdmission(
-	bootstrapCtx context.Context,
+	startupCtx context.Context,
 	readinessCheck func(context.Context) error,
 	readinessTimeout time.Duration,
 ) <-chan error {
 	resultCh := make(chan error, 1)
 
 	go func() {
-		readyCtx, cancel := withStageBudget(bootstrapCtx, readinessTimeout)
+		readyCtx, cancel := withStageBudget(startupCtx, readinessTimeout)
 		defer cancel()
 
 		if err := readyCtx.Err(); err != nil {
@@ -83,7 +83,7 @@ func startStartupAdmission(
 // false, nil; a rejected admission returns false and its terminal error.
 func waitForStartupAdmission(
 	signalCtx context.Context,
-	bootstrapCtx context.Context,
+	startupCtx context.Context,
 	args serveRuntimeArgs,
 	admissionErrCh <-chan error,
 	runErrCh <-chan serverResult,
@@ -92,7 +92,7 @@ func waitForStartupAdmission(
 	case err := <-admissionErrCh:
 		if err != nil {
 			return false, rejectRuntimeStartup(
-				bootstrapCtx,
+				startupCtx,
 				args.log,
 				"readiness",
 				fmt.Errorf("startup readiness check failed: %w", err),
@@ -100,9 +100,9 @@ func waitForStartupAdmission(
 		}
 		select {
 		case result := <-runErrCh:
-			return false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
+			return false, serverStoppedBeforeReadiness(startupCtx, args, result)
 		case err := <-args.backgroundFailures:
-			return false, backgroundFailedBeforeReadiness(bootstrapCtx, args, err)
+			return false, backgroundFailedBeforeReadiness(startupCtx, args, err)
 		default:
 			// profile:grpc:start
 			if args.grpcSrv != nil {
@@ -118,20 +118,20 @@ func waitForStartupAdmission(
 	case <-signalCtx.Done():
 		args.log.InfoContext(signalCtx, "shutdown signal received")
 		return false, nil
-	case <-bootstrapCtx.Done():
+	case <-startupCtx.Done():
 		select {
 		case <-signalCtx.Done():
 			args.log.InfoContext(signalCtx, "shutdown signal received")
 			return false, nil
 		default:
 		}
-		err := fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
-		args.log.ErrorContext(bootstrapCtx, "startup budget exhausted before readiness", "err", err)
+		err := fmt.Errorf("startup budget exhausted before readiness: %w", startupCtx.Err())
+		args.log.ErrorContext(startupCtx, "startup budget exhausted before readiness", "err", err)
 		return false, err
 	case result := <-runErrCh:
-		return false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
+		return false, serverStoppedBeforeReadiness(startupCtx, args, result)
 	case err := <-args.backgroundFailures:
-		return false, backgroundFailedBeforeReadiness(bootstrapCtx, args, err)
+		return false, backgroundFailedBeforeReadiness(startupCtx, args, err)
 	}
 }
 

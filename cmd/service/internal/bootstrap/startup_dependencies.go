@@ -185,14 +185,14 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 }
 
 func initPostgresDependency(
-	bootstrapCtx context.Context,
+	startupCtx context.Context,
 	dependencyCtx context.Context,
 	cfg config.PostgresConfig,
 	log *slog.Logger,
 ) (*pgxpool.Pool, error) {
 	if !cfg.Enabled {
 		return nil, rejectPostgresStartupForDependencyInit(
-			bootstrapCtx,
+			startupCtx,
 			log,
 			errors.New("postgres is required by the DATABASE=postgres profile"),
 		)
@@ -208,7 +208,7 @@ func initPostgresDependency(
 
 	if probeErr != nil {
 		sanitizedErr := postgresDependencyInitFailure(probeErr)
-		recordDependencyProbeRejection(bootstrapCtx, log, probeDuration, sanitizedErr)
+		recordDependencyProbeRejection(startupCtx, log, probeDuration, sanitizedErr)
 		if pg != nil {
 			pg.Close()
 		}
@@ -219,7 +219,7 @@ func initPostgresDependency(
 	// a dependency took to become usable, and a startup that is slow rather than
 	// broken is otherwise indistinguishable from one that is merely starting.
 	log.InfoContext(
-		bootstrapCtx,
+		startupCtx,
 		"startup_dependency_ready",
 		startupLogArgs(
 			startupLogComponentStartupProbes,
