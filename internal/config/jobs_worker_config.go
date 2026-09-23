@@ -11,8 +11,8 @@ import (
 
 func buildJobsWorkerSnapshot(source *koanf.Koanf) (Config, []string, error) {
 	// profile:inbound-webhooks-standard:start
-	if hasNonEmptyConfigValue(source.Get("inbound_webhooks.static_secrets")) {
-		return Config{}, nil, fmt.Errorf("%w: inbound_webhooks.static_secrets is not allowed in the jobs worker", ErrValidate)
+	if err := rejectJobsWorkerInboundSecrets(source); err != nil {
+		return Config{}, nil, err
 	}
 	// profile:inbound-webhooks-standard:end
 	values := lo.PickBy(source.All(), func(key string, _ any) bool {
@@ -58,8 +58,8 @@ func validateJobsWorkerConfig(cfg *Config) error {
 		return err
 	}
 	// profile:webhooks-durable:start
-	if cfg.OutboundWebhooks.Enabled && cfg.OutboundWebhooks.StaticSecrets == "" {
-		return fmt.Errorf("%w: webhooks.static_secrets must be supplied through environment", ErrValidate)
+	if err := validateJobsWorkerOutboundWebhooks(cfg.OutboundWebhooks); err != nil {
+		return err
 	}
 	// profile:webhooks-durable:end
 	// profile:inbound-webhooks-standard:start

@@ -29,4 +29,13 @@ func validateOutboundWebhooks(cfg OutboundWebhooksConfig, postgres PostgresConfi
 	return nil
 }
 
+// validateJobsWorkerOutboundWebhooks is the jobs worker's rule for this section:
+// the worker delivers, so an enabled section needs its secrets.
+func validateJobsWorkerOutboundWebhooks(cfg OutboundWebhooksConfig) error {
+	if cfg.Enabled && cfg.StaticSecrets == "" {
+		return fmt.Errorf("%w: webhooks.static_secrets must be supplied through environment", ErrValidate)
+	}
+	return nil
+}
+
 // profile:webhooks-durable:end
