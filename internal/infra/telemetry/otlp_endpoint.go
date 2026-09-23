@@ -63,7 +63,7 @@ func parseSignalOTLPEndpoint(raw, signalPath string) (string, error) {
 		return "", err
 	}
 
-	if path := strings.TrimSpace(parsedURL.EscapedPath()); path == "" || path == "/" {
+	if hasNoOTLPPath(parsedURL) {
 		parsedURL.Path = signalPath
 		parsedURL.RawPath = ""
 	}
@@ -188,7 +188,12 @@ func namesOTLPRoot(raw string) bool {
 	if err != nil {
 		return false
 	}
-	path := strings.TrimSpace(parsedURL.EscapedPath())
+	return hasNoOTLPPath(parsedURL)
+}
+
+// hasNoOTLPPath reports whether u carries no path beyond the root.
+func hasNoOTLPPath(u *url.URL) bool {
+	path := strings.TrimSpace(u.EscapedPath())
 	return path == "" || path == "/"
 }
 
