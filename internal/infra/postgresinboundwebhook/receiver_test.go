@@ -59,15 +59,6 @@ func (s *spyStore) Accept(context.Context, receiptRecord) (inboundwebhook.Outcom
 	return inboundwebhook.OutcomeAccepted, nil
 }
 
-func (s *spyStore) loadByID(context.Context, string) (storedReceipt, error) {
-	return storedReceipt{}, nil
-}
-func (s *spyStore) MarkHandled(context.Context, string) (bool, error) { return false, nil }
-func (s *spyStore) MarkQuarantined(context.Context, string, string) (bool, error) {
-	return false, nil
-}
-func (s *spyStore) MarkFailed(context.Context, string) (bool, error) { return false, nil }
-
 func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 	now := time.Unix(1700000000, 0).UTC()
 	store := &spyStore{}

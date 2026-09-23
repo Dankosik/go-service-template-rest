@@ -49,18 +49,14 @@ type receiptRecord struct {
 	Payload    []byte
 }
 
-type receiptStore interface {
+type receiptAcceptor interface {
 	Accept(ctx context.Context, record receiptRecord) (inboundwebhook.Outcome, error)
-	loadByID(ctx context.Context, receiptID string) (storedReceipt, error)
-	MarkHandled(ctx context.Context, receiptID string) (bool, error)
-	MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error)
-	MarkFailed(ctx context.Context, receiptID string) (bool, error)
 }
 
 // Receiver implements inboundwebhook.Receiver against PostgreSQL and River.
 type Receiver struct {
 	trust *TrustManifest
-	store receiptStore
+	store receiptAcceptor
 	now   func() time.Time
 	telem telemetry
 }
@@ -77,7 +73,7 @@ func WithClock(now func() time.Time) ReceiverOption {
 	}
 }
 
-func withStore(store receiptStore) ReceiverOption {
+func withStore(store receiptAcceptor) ReceiverOption {
 	return func(r *Receiver) {
 		if store != nil {
 			r.store = store

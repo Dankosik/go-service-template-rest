@@ -54,30 +54,7 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 		// profile:authn-bearer:start
 		if kind, ok := bearerauthn.KindOf(err); ok {
 			logStrictRequestError(log, r, err)
-			// In bearerauthn.Kind declaration order, as that package's errors.go is, so
-			// a category added there lands in one obvious place here.
-			switch kind {
-			case bearerauthn.KindMissing:
-				w.Header().Set("WWW-Authenticate", "Bearer")
-				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing"})
-			case bearerauthn.KindMalformed:
-				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_request"`)
-				writeProblem(w, r, problemResponse{code: problem.CodeBadRequest, detail: "authentication credential is malformed"})
-			case bearerauthn.KindOversize:
-				writeProblem(w, r, problemResponse{
-					code:   problem.CodeRequestHeaderFieldsTooLarge,
-					detail: "authentication credential is too large",
-				})
-			case bearerauthn.KindInvalid:
-				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
-				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
-			case bearerauthn.KindUnavailable:
-				w.Header().Set("Retry-After", "30")
-				writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "authentication trust is unavailable"})
-			default:
-				w.Header().Set("WWW-Authenticate", challenge)
-				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
-			}
+			writeBearerRejection(w, r, kind, challenge)
 			return
 		}
 		// profile:authn-bearer:end
@@ -106,6 +83,36 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 		handleMalformedGeneratedRequest(log, w, r, err)
 	}
 }
+
+// profile:authn-bearer:start
+func writeBearerRejection(w http.ResponseWriter, r *http.Request, kind bearerauthn.Kind, challenge string) {
+	// In bearerauthn.Kind declaration order, as that package's errors.go is, so
+	// a category added there lands in one obvious place here.
+	switch kind {
+	case bearerauthn.KindMissing:
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing"})
+	case bearerauthn.KindMalformed:
+		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_request"`)
+		writeProblem(w, r, problemResponse{code: problem.CodeBadRequest, detail: "authentication credential is malformed"})
+	case bearerauthn.KindOversize:
+		writeProblem(w, r, problemResponse{
+			code:   problem.CodeRequestHeaderFieldsTooLarge,
+			detail: "authentication credential is too large",
+		})
+	case bearerauthn.KindInvalid:
+		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+		writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
+	case bearerauthn.KindUnavailable:
+		w.Header().Set("Retry-After", "30")
+		writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "authentication trust is unavailable"})
+	default:
+		w.Header().Set("WWW-Authenticate", challenge)
+		writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
+	}
+}
+
+// profile:authn-bearer:end
 
 func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 	if log == nil {

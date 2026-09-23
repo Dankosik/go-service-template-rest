@@ -45,7 +45,7 @@ func ValidateConfig(cfg Config) error {
 	if !cfg.AllowUnauthenticated && strings.TrimSpace(cfg.CredentialsFile) == "" {
 		return fmt.Errorf("%w: credentials file is required", ErrRejected)
 	}
-	if !validConsumerName(cfg.Stream) {
+	if !validStreamOrConsumerName(cfg.Stream) {
 		return fmt.Errorf("%w: invalid source stream", ErrRejected)
 	}
 	if cfg.MaxPayloadBytes <= 0 {
@@ -54,9 +54,9 @@ func ValidateConfig(cfg Config) error {
 	return nil
 }
 
-// validConsumerName keeps the adapter's local vocabulary while the pure leaf
-// owns the rule shared with configuration loading.
-func validConsumerName(value string) bool {
+// validStreamOrConsumerName keeps the adapter's local vocabulary while the pure
+// leaf owns the rule shared with configuration loading.
+func validStreamOrConsumerName(value string) bool {
 	return messagingconfig.ValidStreamOrConsumerName(value)
 }
 

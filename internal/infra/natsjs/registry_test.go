@@ -1,6 +1,7 @@
 package natsjs
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -66,7 +67,12 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 	if err := publisher.Publish(t.Context(), event); err != nil {
 		t.Fatalf("Publish() error = %v", err)
 	}
-	if broker.published.Subject != "events.example" || broker.published.Header.Get(headerMessageID) != "event-2" {
+	if broker.published.Subject != "events.example" || broker.published.Header.Get(headerMessageID) != "event-2" ||
+		broker.published.Header.Get(jetstream.MsgIDHeader) != "event-2" ||
+		broker.published.Header.Get(headerEventType) != kind.Type ||
+		broker.published.Header.Get(headerEventSchema) != "v1" ||
+		broker.published.Header.Get(headerCreatedAt) != createdAt.Format(time.RFC3339Nano) ||
+		!bytes.Equal(broker.published.Data, event.Payload) {
 		t.Fatalf("wire publication = %#v", broker.published)
 	}
 }

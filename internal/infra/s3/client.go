@@ -238,4 +238,6 @@ func (c *Client) expectedBucketOwner() *string {
 	return nil
 }
 
+// Close closes idle connections only. Finish active operations and close any
+// downloaded bodies before calling it; Close does not wait for them.
 func (c *Client) Close() { c.transport.CloseIdleConnections() }

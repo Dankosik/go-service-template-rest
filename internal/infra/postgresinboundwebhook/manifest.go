@@ -104,8 +104,7 @@ func BindSecrets(endpoints *EndpointManifest, secrets *SecretManifest) (*TrustMa
 	}
 	endpointIDs := endpoints.IDs()
 	trust := &TrustManifest{
-		endpoints: make(map[string]Endpoint, len(endpointIDs)),
-		secrets:   make(map[string]endpointSecrets, len(endpointIDs)),
+		bindings: make(map[string]endpointBinding, len(endpointIDs)),
 	}
 	referenced := make(map[string]map[string]struct{})
 	for _, id := range endpointIDs {
@@ -131,8 +130,7 @@ func BindSecrets(endpoints *EndpointManifest, secrets *SecretManifest) (*TrustMa
 			bound.predecessor = bytes.Clone(predecessor)
 			referenced[id][endpoint.PredecessorKeyReference] = struct{}{}
 		}
-		trust.endpoints[id] = endpoint
-		trust.secrets[id] = bound
+		trust.bindings[id] = endpointBinding{endpoint: endpoint, secrets: bound}
 	}
 	for endpointID, keys := range secrets.secrets {
 		used := referenced[endpointID]
@@ -150,8 +148,12 @@ func BindSecrets(endpoints *EndpointManifest, secrets *SecretManifest) (*TrustMa
 
 // TrustManifest is the immutable verification snapshot.
 type TrustManifest struct {
-	endpoints map[string]Endpoint
-	secrets   map[string]endpointSecrets
+	bindings map[string]endpointBinding
+}
+
+type endpointBinding struct {
+	endpoint Endpoint
+	secrets  endpointSecrets
 }
 
 // Lookup returns the named endpoint without exposing secret bytes.
@@ -159,16 +161,16 @@ func (m *TrustManifest) Lookup(endpointID string) (Endpoint, bool) {
 	if m == nil {
 		return Endpoint{}, false
 	}
-	endpoint, ok := m.endpoints[endpointID]
-	return endpoint, ok
+	binding, ok := m.bindings[endpointID]
+	return binding.endpoint, ok
 }
 
 func (m *TrustManifest) secretsFor(endpointID string) (endpointSecrets, bool) {
 	if m == nil {
 		return endpointSecrets{}, false
 	}
-	secrets, ok := m.secrets[endpointID]
-	return secrets, ok
+	binding, ok := m.bindings[endpointID]
+	return binding.secrets, ok
 }
 
 func validDeliveryID(value string) bool {

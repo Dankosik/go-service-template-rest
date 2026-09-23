@@ -21,6 +21,8 @@ type Store interface {
 	// Delete may return ErrOutcomeUnknown after the provider applied the delete;
 	// establish the outcome before treating it as unapplied or retrying on that basis.
 	Delete(ctx context.Context, key string) error
+	// PresignGet accepts a whole-second ttl from one second through seven days;
+	// an invalid ttl returns ErrInvalid.
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 }
 

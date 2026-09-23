@@ -8,19 +8,23 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"path"
-	"strconv"
 	"strings"
 )
 
 func main() {
-	arguments := os.Args[1:]
+	status, diagnostics := runBootstrapCheck(os.Args[1:])
+	for _, diagnostic := range diagnostics {
+		fmt.Fprintln(os.Stderr, diagnostic)
+	}
+	os.Exit(status)
+}
+
+func runBootstrapCheck(arguments []string) (int, []string) {
 	if len(arguments) > 0 && arguments[0] == "--" {
 		arguments = arguments[1:]
 	}
 	if len(arguments) < 7 {
-		fmt.Fprintln(os.Stderr, "usage: integration-record-bootstrap-check STARTUP RUN IMPORT_SUFFIX INIT_FUNC CLIENT_VAR CONFIG_PATH FIELD=VALUE...")
-		os.Exit(2)
+		return 2, []string{"usage: integration-record-bootstrap-check STARTUP RUN IMPORT_SUFFIX INIT_FUNC CLIENT_VAR CONFIG_PATH FIELD=VALUE..."}
 	}
 
 	startupFile, runFile := arguments[0], arguments[1]
@@ -30,19 +34,35 @@ func main() {
 	for _, raw := range arguments[6:] {
 		field, value, ok := strings.Cut(raw, "=")
 		if !ok || field == "" || value == "" {
-			fmt.Fprintf(os.Stderr, "invalid mapping %q\n", raw)
-			os.Exit(2)
+			return 2, []string{fmt.Sprintf("invalid mapping %q", raw)}
 		}
 		expected[field] = value
 	}
 
-	startup := mustParse(startupFile)
+	startup, err := parseFile(startupFile)
+	if err != nil {
+		return 1, []string{err.Error()}
+	}
 	alias := importAlias(startup, importSuffix)
 	if alias == "" || alias == "." || alias == "_" {
-		fmt.Fprintf(os.Stderr, "%s: missing usable import ending in %s\n", startupFile, importSuffix)
-		os.Exit(1)
+		return 1, []string{fmt.Sprintf("%s: missing usable import ending in %s", startupFile, importSuffix)}
+	}
+	if diagnostic := checkStartupMapping(startup, startupFile, alias, initFunction, expected); diagnostic != "" {
+		return 1, []string{diagnostic}
 	}
 
+	run, err := parseFile(runFile)
+	if err != nil {
+		return 1, []string{err.Error()}
+	}
+	valid, diagnostics := checkRunLifecycle(run, runFile, initFunction, clientVariable, configPath)
+	if !valid {
+		return 1, diagnostics
+	}
+	return 0, diagnostics
+}
+
+func checkStartupMapping(startup *ast.File, startupFile, alias, initFunction string, expected map[string]string) string {
 	actual := map[string]string{}
 	startupFlows := 0
 	for _, declaration := range startup.Decls {
@@ -50,7 +70,7 @@ func main() {
 		if !ok || function.Recv != nil || function.Name.Name != initFunction || function.Body == nil {
 			continue
 		}
-		for index := 0; index+1 < len(function.Body.List); index++ {
+		for index := 0; index+2 < len(function.Body.List); index++ {
 			literal, ok := startupConstruction(function.Body.List[index], alias)
 			if !ok || !errorReturn(function.Body.List[index+1], true) || !clientReturn(function.Body.List[index+2]) {
 				continue
@@ -61,17 +81,18 @@ func main() {
 	}
 
 	if startupFlows != 1 {
-		fmt.Fprintf(os.Stderr, "%s: canonical startup flows=%d, want 1\n", startupFile, startupFlows)
-		os.Exit(1)
+		return fmt.Sprintf("%s: canonical startup flows=%d, want 1", startupFile, startupFlows)
 	}
 	for field, want := range expected {
 		if got := actual[field]; got != want {
-			fmt.Fprintf(os.Stderr, "%s: mapping %s=%q, want %q\n", startupFile, field, got, want)
-			os.Exit(1)
+			return fmt.Sprintf("%s: mapping %s=%q, want %q", startupFile, field, got, want)
 		}
 	}
+	return ""
+}
 
-	run := mustParse(runFile)
+func checkRunLifecycle(run *ast.File, runFile, initFunction, clientVariable, configPath string) (bool, []string) {
+	var diagnostics []string
 	runFlows := 0
 	closedVariable := strings.TrimSuffix(clientVariable, "Client") + "Closed"
 	for _, declaration := range run.Decls {
@@ -95,16 +116,16 @@ func main() {
 			assignments := assignmentsTo(function.Body, clientVariable)
 			closes := closeCalls(function.Body, clientVariable)
 			if !errorOK || !closedOK || assignments != 1 || closes < 2 {
-				fmt.Fprintf(os.Stderr, "%s: %s flow error=%t closed=%t assignments=%d closes=%d\n", runFile, clientVariable, errorOK, closedOK, assignments, closes)
+				diagnostics = append(diagnostics, fmt.Sprintf("%s: %s flow error=%t closed=%t assignments=%d closes=%d", runFile, clientVariable, errorOK, closedOK, assignments, closes))
 				continue
 			}
 			runFlows++
 		}
 	}
 	if runFlows != 1 {
-		fmt.Fprintf(os.Stderr, "%s: canonical %s lifecycle flows=%d, want 1\n", runFile, clientVariable, runFlows)
-		os.Exit(1)
+		diagnostics = append(diagnostics, fmt.Sprintf("%s: canonical %s lifecycle flows=%d, want 1", runFile, clientVariable, runFlows))
 	}
+	return runFlows == 1, diagnostics
 }
 
 func startupConstruction(statement ast.Stmt, alias string) (*ast.CompositeLit, bool) {
@@ -118,7 +139,7 @@ func startupConstruction(statement ast.Stmt, alias string) (*ast.CompositeLit, b
 		return nil, false
 	}
 	constructor, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || constructor.Sel.Name != "New" || !selectorOwnedBy(constructor, alias) {
+	if !ok || constructor.Sel.Name != "New" || !ownedBy(constructor, alias) {
 		return nil, false
 	}
 	literal, ok := call.Args[0].(*ast.CompositeLit)
@@ -195,7 +216,7 @@ func closeCalls(body *ast.BlockStmt, variable string) int {
 			return true
 		}
 		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if ok && selector.Sel.Name == "Close" && selectorOwnedBy(selector, variable) {
+		if ok && selector.Sel.Name == "Close" && ownedBy(selector, variable) {
 			count++
 		}
 		return true
@@ -203,41 +224,12 @@ func closeCalls(body *ast.BlockStmt, variable string) int {
 	return count
 }
 
-func mustParse(filename string) *ast.File {
+func parseFile(filename string) (*ast.File, error) {
 	parsed, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: parse: %v\n", filename, err)
-		os.Exit(1)
+		return nil, fmt.Errorf("%s: parse: %w", filename, err)
 	}
-	return parsed
-}
-
-func importAlias(file *ast.File, suffix string) string {
-	for _, spec := range file.Imports {
-		importPath, err := strconv.Unquote(spec.Path.Value)
-		if err != nil || !strings.HasSuffix(importPath, suffix) {
-			continue
-		}
-		if spec.Name != nil {
-			return spec.Name.Name
-		}
-		return path.Base(importPath)
-	}
-	return ""
-}
-
-func selectorTypeIs(expression ast.Expr, ownerName, typeName string) bool {
-	selector, ok := expression.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != typeName {
-		return false
-	}
-	owner, ok := selector.X.(*ast.Ident)
-	return ok && owner.Name == ownerName
-}
-
-func selectorOwnedBy(selector *ast.SelectorExpr, ownerName string) bool {
-	owner, ok := selector.X.(*ast.Ident)
-	return ok && owner.Name == ownerName
+	return parsed, nil
 }
 
 func collectMappings(prefix string, literal *ast.CompositeLit, mappings map[string]string) {
@@ -257,24 +249,4 @@ func collectMappings(prefix string, literal *ast.CompositeLit, mappings map[stri
 		}
 		mappings[field] = expressionPath(pair.Value)
 	}
-}
-
-func expressionPath(expression ast.Expr) string {
-	switch value := expression.(type) {
-	case *ast.Ident:
-		return value.Name
-	case *ast.SelectorExpr:
-		prefix := expressionPath(value.X)
-		if prefix == "" {
-			return ""
-		}
-		return prefix + "." + value.Sel.Name
-	default:
-		return ""
-	}
-}
-
-func identifierIs(expression ast.Expr, name string) bool {
-	identifier, ok := expression.(*ast.Ident)
-	return ok && identifier.Name == name
 }

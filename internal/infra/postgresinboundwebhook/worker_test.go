@@ -26,10 +26,6 @@ type memoryStore struct {
 	terminalOK   bool
 }
 
-func (s *memoryStore) Accept(context.Context, receiptRecord) (inboundwebhook.Outcome, error) {
-	return inboundwebhook.OutcomeAccepted, nil
-}
-
 func (s *memoryStore) loadByID(context.Context, string) (storedReceipt, error) {
 	if s.failLoad {
 		return storedReceipt{}, errors.New("receipt load failed")

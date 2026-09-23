@@ -127,12 +127,18 @@ func (p *Publisher) Publish(ctx context.Context, event domainevent.Event) error 
 	if !ok {
 		return fmt.Errorf("%w: no route for %s v%d", ErrRejected, event.Type, event.Version)
 	}
-	_, err := p.producer.Publish(ctx, Event{
+	_, err := p.producer.Publish(ctx, EventFromDomain(subject, event))
+	return err
+}
+
+// EventFromDomain maps a domain occurrence to the NATS publication envelope.
+// The caller supplies the routed or durably stored subject and owns admission.
+func EventFromDomain(subject string, event domainevent.Event) Event {
+	return Event{
 		Subject: subject, MessageID: event.ID, PublicationID: event.ID,
 		Type: event.Type, Schema: SchemaForVersion(event.Version),
 		CreatedAt: event.OccurredAt, Payload: event.Payload,
-	})
-	return err
+	}
 }
 
 func buildRoutes(routes []Route) (map[routeKey]string, error) {

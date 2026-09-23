@@ -42,7 +42,7 @@ func DefaultWorkerConfig(consumer, filterSubject, deadLetterSubject string, maxC
 }
 
 func ValidateWorkerConfig(cfg WorkerConfig, maxPayloadBytes int) error {
-	if !validConsumerName(cfg.Consumer) {
+	if !validStreamOrConsumerName(cfg.Consumer) {
 		return fmt.Errorf("%w: invalid durable consumer", ErrRejected)
 	}
 	if !validSubject(cfg.FilterSubject, true) {

@@ -30,8 +30,14 @@ type Options struct {
 	TracerProvider       trace.TracerProvider
 	DomainErrors         []failure.Mapper
 	Services             []RegisterService
-	UnaryPolicy          []grpc.UnaryServerInterceptor
-	StreamPolicy         []grpc.StreamServerInterceptor
+	// UnaryPolicy runs after recovery, deadline, and admission, before request
+	// validation and the handler. The enclosing boundary preserves a direct
+	// gRPC status, maps cancellation and deadlines, and sanitizes other errors.
+	UnaryPolicy []grpc.UnaryServerInterceptor
+	// StreamPolicy runs after recovery, health drain, and admission, before
+	// validation and the handler. Its errors follow the same status rule as
+	// UnaryPolicy.
+	StreamPolicy []grpc.StreamServerInterceptor
 }
 
 func withOptionDefaults(options Options) Options {

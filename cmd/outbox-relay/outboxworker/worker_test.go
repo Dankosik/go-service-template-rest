@@ -48,7 +48,8 @@ func TestWorkerPublishesStableIdentityAndTrace(t *testing.T) {
 	}
 	if published.Subject != args.Subject || published.MessageID != args.ID ||
 		published.PublicationID != args.ID || published.Type != args.Type ||
-		published.Schema != "v1" || !bytes.Equal(published.Payload, args.Payload) ||
+		published.Schema != "v1" || !published.CreatedAt.Equal(args.OccurredAt) ||
+		!bytes.Equal(published.Payload, args.Payload) ||
 		observedTrace != wantTrace {
 		t.Fatalf("published event = %#v, trace = %s", published, observedTrace)
 	}

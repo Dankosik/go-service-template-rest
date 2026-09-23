@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/riverqueue/river"
@@ -41,15 +42,10 @@ func (w *Worker) Work(
 	}
 	ctx = creationContext(ctx, job.Metadata)
 	args := job.Args
-	_, err := w.publish(ctx, natsjs.Event{
-		Subject:       args.Subject,
-		MessageID:     args.ID,
-		PublicationID: args.ID,
-		Type:          args.Type,
-		Schema:        natsjs.SchemaForVersion(args.Version),
-		CreatedAt:     args.OccurredAt,
-		Payload:       args.Payload,
-	})
+	_, err := w.publish(ctx, natsjs.EventFromDomain(args.Subject, domainevent.Event{
+		ID: args.ID, Type: args.Type, Version: args.Version,
+		OccurredAt: args.OccurredAt, Payload: args.Payload,
+	}))
 	if err != nil {
 		return fmt.Errorf("publish domain event: %w", err)
 	}
