@@ -49,3 +49,30 @@ func TestValidIntrospectionTargetClass(t *testing.T) {
 		}
 	}
 }
+
+func TestIntrospectionTargetPolicyIssue(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name          string
+		targetClass   string
+		privateSuffix string
+		want          authntrust.IntrospectionTargetIssue
+	}{
+		{name: "external", targetClass: authntrust.TargetClassExternalHTTPS, want: authntrust.IntrospectionTargetValid},
+		{name: "private", targetClass: authntrust.TargetClassPrivateHTTPS, privateSuffix: "service.internal", want: authntrust.IntrospectionTargetValid},
+		{name: "unknown class", targetClass: "external-https ", want: authntrust.IntrospectionTargetClassInvalid},
+		{name: "private suffix missing", targetClass: authntrust.TargetClassPrivateHTTPS, want: authntrust.IntrospectionPrivateSuffixRequired},
+		{name: "private whitespace suffix missing", targetClass: authntrust.TargetClassPrivateHTTPS, privateSuffix: " \t", want: authntrust.IntrospectionPrivateSuffixRequired},
+		{name: "external suffix forbidden", targetClass: authntrust.TargetClassExternalHTTPS, privateSuffix: "service.internal", want: authntrust.IntrospectionPrivateSuffixForbidden},
+		{name: "external whitespace suffix forbidden", targetClass: authntrust.TargetClassExternalHTTPS, privateSuffix: " ", want: authntrust.IntrospectionPrivateSuffixForbidden},
+		{name: "private suffix whitespace retained", targetClass: authntrust.TargetClassPrivateHTTPS, privateSuffix: " service.internal ", want: authntrust.IntrospectionTargetValid},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := authntrust.IntrospectionTargetPolicyIssue(testCase.targetClass, testCase.privateSuffix); got != testCase.want {
+				t.Fatalf("IntrospectionTargetPolicyIssue(%q, %q) = %v, want %v", testCase.targetClass, testCase.privateSuffix, got, testCase.want)
+			}
+		})
+	}
+}

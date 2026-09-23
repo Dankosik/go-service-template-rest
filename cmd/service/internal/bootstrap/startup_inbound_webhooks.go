@@ -4,7 +4,6 @@ package bootstrap
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
@@ -18,10 +17,9 @@ func initInboundWebhookReceiver(
 	cfg config.Config,
 	pool *pgxpool.Pool,
 	metrics *telemetry.Metrics,
-	log *slog.Logger,
 ) (inboundwebhook.Receiver, error) {
 	if cfg.InboundWebhooks.Endpoints == "" && cfg.InboundWebhooks.StaticSecrets == "" && pool == nil {
-		return inboundwebhook.NoopReceiver{}, nil
+		return inboundwebhook.UnknownEndpointReceiver{}, nil
 	}
 	if pool == nil {
 		return nil, errors.New("initialize inbound webhooks: postgres is required")
@@ -41,7 +39,7 @@ func initInboundWebhookReceiver(
 	receiver, err := postgresinboundwebhook.NewReceiver(
 		pool,
 		trust,
-		postgresinboundwebhook.WithMeter(metrics.MeterProvider(), log),
+		postgresinboundwebhook.WithMeter(metrics.MeterProvider()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("initialize inbound webhooks: %w", err)

@@ -14,8 +14,8 @@ import (
 var slugPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 
 const (
-	maxTitleLength   = 200
-	maxSummaryLength = 500
+	maxTitleUTF16CodeUnits   = 200
+	maxSummaryUTF16CodeUnits = 500
 )
 
 type Article struct {
@@ -139,11 +139,11 @@ func validateDraft(candidate Article) error {
 	if !slugPattern.MatchString(candidate.Slug) {
 		return fmt.Errorf("%w: slug must match %s", ErrInvalid, slugPattern)
 	}
-	if candidate.Title == "" || utf16CodeUnitCount(candidate.Title) > maxTitleLength {
-		return fmt.Errorf("%w: title must be 1..%d characters", ErrInvalid, maxTitleLength)
+	if candidate.Title == "" || utf16CodeUnitCount(candidate.Title) > maxTitleUTF16CodeUnits {
+		return fmt.Errorf("%w: title must be 1..%d characters", ErrInvalid, maxTitleUTF16CodeUnits)
 	}
-	if candidate.Summary == "" || utf16CodeUnitCount(candidate.Summary) > maxSummaryLength {
-		return fmt.Errorf("%w: summary must be 1..%d characters", ErrInvalid, maxSummaryLength)
+	if candidate.Summary == "" || utf16CodeUnitCount(candidate.Summary) > maxSummaryUTF16CodeUnits {
+		return fmt.Errorf("%w: summary must be 1..%d characters", ErrInvalid, maxSummaryUTF16CodeUnits)
 	}
 	return nil
 }

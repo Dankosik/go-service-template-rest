@@ -108,6 +108,10 @@ func admitDestinationAddresses(addresses []netip.Addr) ([]netip.Addr, error) {
 	return slices.Clone(addresses), nil
 }
 
+// tryPreparedAddresses tries admitted DNS addresses in order, falling back only
+// when the preceding attempt is known not to have sent a request. Once a write
+// may have occurred, it returns immediately so retries retain the same stable
+// delivery ID without risking a duplicate side effect at another address.
 func tryPreparedAddresses(
 	ctx context.Context,
 	prepared preparedSend,

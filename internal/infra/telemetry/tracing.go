@@ -32,14 +32,6 @@ type TraceExporterConfig struct {
 // otlp_endpoint.go.
 type TraceExporterEndpoint = ExporterEndpoint
 
-// fromConfig reports whether this service, rather than the platform, named the
-// destination. It decides whether ambient credential and trust material is a
-// conflict: material this service cannot verify must not travel to an endpoint
-// this service chose.
-func (e TraceExporterEndpoint) fromConfig() bool {
-	return e.ConfiguredByService
-}
-
 var otelSetupMu sync.Mutex
 
 // SetupTracing installs the tracer provider and reports which OTLP endpoint the

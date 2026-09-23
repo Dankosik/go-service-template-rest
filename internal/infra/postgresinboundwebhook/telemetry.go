@@ -58,6 +58,11 @@ func (t telemetry) recordProcessing(ctx context.Context, outcome string) {
 	t.processing.Add(ctx, 1, metric.WithAttributes(attribute.String(outcomeAttr, outcome)))
 }
 
+func (t telemetry) recordRetryingFailure(ctx context.Context, receiptID, class string) {
+	t.logFailure(ctx, receiptID, class)
+	t.recordProcessing(ctx, "retrying")
+}
+
 func (t telemetry) logFailure(ctx context.Context, receiptID, class string) {
 	t.log.LogAttrs(ctx, slog.LevelWarn, "inbound_webhook_processing_failed",
 		slog.String("receipt_id", receiptID),

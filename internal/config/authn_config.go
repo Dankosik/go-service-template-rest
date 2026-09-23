@@ -130,17 +130,15 @@ func validateIntrospectionConfig(cfg *AuthnConfig) error {
 			ErrValidate,
 		)
 	}
-	if !authntrust.ValidIntrospectionTargetClass(cfg.IntrospectionTargetClass) {
+	switch authntrust.IntrospectionTargetPolicyIssue(cfg.IntrospectionTargetClass, cfg.IntrospectionPrivateHostSuffix) {
+	case authntrust.IntrospectionTargetClassInvalid:
 		return fmt.Errorf(
 			"%w: authn.introspection_target_class must be one of external-https or private-https",
 			ErrValidate,
 		)
-	}
-	if cfg.IntrospectionTargetClass == authntrust.TargetClassPrivateHTTPS {
-		if strings.TrimSpace(cfg.IntrospectionPrivateHostSuffix) == "" {
-			return fmt.Errorf("%w: authn.introspection_private_host_suffix is required for private-https", ErrValidate)
-		}
-	} else if cfg.IntrospectionPrivateHostSuffix != "" {
+	case authntrust.IntrospectionPrivateSuffixRequired:
+		return fmt.Errorf("%w: authn.introspection_private_host_suffix is required for private-https", ErrValidate)
+	case authntrust.IntrospectionPrivateSuffixForbidden:
 		return fmt.Errorf("%w: authn.introspection_private_host_suffix is forbidden for external-https", ErrValidate)
 	}
 	if cfg.IntrospectionClientID == "" {

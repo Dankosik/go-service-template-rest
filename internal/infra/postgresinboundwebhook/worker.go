@@ -88,16 +88,14 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			w.telem.logFailure(ctx, receiptID, logClassPanicRecovered)
-			w.telem.recordProcessing(ctx, "retrying")
+			w.telem.recordRetryingFailure(ctx, receiptID, logClassPanicRecovered)
 			err = errPanicRecovered
 		}
 	}()
 
 	receipt, err := w.store.loadByID(ctx, receiptID)
 	if err != nil {
-		w.telem.logFailure(ctx, receiptID, logClassStorageRetryable)
-		w.telem.recordProcessing(ctx, "retrying")
+		w.telem.recordRetryingFailure(ctx, receiptID, logClassStorageRetryable)
 		if job.Attempt >= job.MaxAttempts {
 			return river.JobSnooze(terminalSnooze)
 		}
@@ -107,8 +105,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 		return nil
 	}
 	if !w.registry.HasBinding(receipt.EndpointID) {
-		w.telem.logFailure(ctx, receiptID, logClassBindingUnavailable)
-		w.telem.recordProcessing(ctx, "retrying")
+		w.telem.recordRetryingFailure(ctx, receiptID, logClassBindingUnavailable)
 		// ponytail: reuse the existing snooze; isolate a queue if binding drift becomes load.
 		return river.JobSnooze(terminalSnooze)
 	}
@@ -129,8 +126,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 	case dispatchErr == nil:
 		updated, markErr := w.store.MarkHandled(ctx, receiptID)
 		if markErr != nil {
-			w.telem.logFailure(ctx, receiptID, logClassStorageRetryable)
-			w.telem.recordProcessing(ctx, "retrying")
+			w.telem.recordRetryingFailure(ctx, receiptID, logClassStorageRetryable)
 			return errStorageUnavailable
 		}
 		if updated {
@@ -144,8 +140,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 		}
 		updated, markErr := w.store.MarkQuarantined(ctx, receiptID, reason)
 		if markErr != nil {
-			w.telem.logFailure(ctx, receiptID, logClassStorageRetryable)
-			w.telem.recordProcessing(ctx, "retrying")
+			w.telem.recordRetryingFailure(ctx, receiptID, logClassStorageRetryable)
 			return errStorageUnavailable
 		}
 		if updated {
@@ -153,12 +148,10 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 		}
 		return nil
 	case inboundwebhook.IsDecodeError(dispatchErr):
-		w.telem.logFailure(ctx, receiptID, logClassDecoderInternal)
-		w.telem.recordProcessing(ctx, "retrying")
+		w.telem.recordRetryingFailure(ctx, receiptID, logClassDecoderInternal)
 		return errDecoderFailed
 	default:
-		w.telem.logFailure(ctx, receiptID, logClassHandlerRetryable)
-		w.telem.recordProcessing(ctx, "retrying")
+		w.telem.recordRetryingFailure(ctx, receiptID, logClassHandlerRetryable)
 		return errHandlerFailed
 	}
 }

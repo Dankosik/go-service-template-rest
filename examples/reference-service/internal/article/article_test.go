@@ -157,8 +157,8 @@ func TestServiceCreateAcceptsUnicodeAtContractLimit(t *testing.T) {
 		name  string
 		title string
 	}{
-		{name: "BMP", title: strings.Repeat("я", maxTitleLength)},
-		{name: "non-BMP", title: strings.Repeat("😀", maxTitleLength/2)},
+		{name: "BMP", title: strings.Repeat("я", maxTitleUTF16CodeUnits)},
+		{name: "non-BMP", title: strings.Repeat("😀", maxTitleUTF16CodeUnits/2)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()

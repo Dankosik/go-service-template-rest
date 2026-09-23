@@ -38,18 +38,23 @@ func (d Delivery) Clone() Delivery {
 	return d
 }
 
-// Receiver is the HTTP-to-durable acceptance port.
+// Receiver is the HTTP-to-durable acceptance port. A non-nil error means the
+// receiver could not confirm acceptance; callers must treat acceptance as
+// unavailable and retry with the same delivery identity. With a nil error,
+// Accepted means a new receipt and processing job were durably accepted,
+// Duplicate means the same delivery identity and body were already accepted,
+// and Conflict means that identity was previously used with a different body.
 type Receiver interface {
 	Receive(ctx context.Context, delivery Delivery) (Outcome, error)
 }
 
-var _ Receiver = NoopReceiver{}
+var _ Receiver = UnknownEndpointReceiver{}
 
-// NoopReceiver answers every delivery as an unknown endpoint.
-type NoopReceiver struct{}
+// UnknownEndpointReceiver answers every delivery as an unknown endpoint.
+type UnknownEndpointReceiver struct{}
 
 // Receive reports an unknown endpoint without durable work.
-func (NoopReceiver) Receive(context.Context, Delivery) (Outcome, error) {
+func (UnknownEndpointReceiver) Receive(context.Context, Delivery) (Outcome, error) {
 	return OutcomeUnknownEndpoint, nil
 }
 
