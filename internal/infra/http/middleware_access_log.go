@@ -21,9 +21,7 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !log.Enabled(r.Context(), slog.LevelInfo) {
 			next.ServeHTTP(w, r)
-			if routePathTemplate := routePathTemplateForRequest(r); routePathTemplate != "" {
-				trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPRoute(routePathTemplate))
-			}
+			recordSpanRoute(r)
 			return
 		}
 
@@ -31,10 +29,7 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 			next.ServeHTTP(capturedWriter, r)
 		})
 
-		routePathTemplate := routePathTemplateForRequest(r)
-		if routePathTemplate != "" {
-			trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPRoute(routePathTemplate))
-		}
+		routePathTemplate := recordSpanRoute(r)
 		// Route identity exists only after routing completes, so the probe
 		// decision belongs here and not on the level-disabled fast path.
 		if skipHealthProbeLog(r, routePathTemplate, logHealthProbes) {
@@ -69,6 +64,16 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		}
 		log.InfoContext(r.Context(), "http_request", attrs...)
 	})
+}
+
+// recordSpanRoute publishes the matched route template on the request span and
+// returns it; it is empty when routing matched nothing.
+func recordSpanRoute(r *http.Request) string {
+	routePathTemplate := routePathTemplateForRequest(r)
+	if routePathTemplate != "" {
+		trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPRoute(routePathTemplate))
+	}
+	return routePathTemplate
 }
 
 // skipHealthProbeLog matches on the routed template rather than the raw path,

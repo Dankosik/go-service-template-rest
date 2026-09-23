@@ -81,8 +81,9 @@ func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.
 func recordUnhandledResponseError(log *slog.Logger, r *http.Request, err error) {
 	// The generated strict server calls its response handler only with a non-nil
 	// error, but RejectResponse is exported and reaches this from callers this
-	// package does not own. Nothing below is worth a record without one.
-	if err == nil {
+	// package does not own. Nothing below is worth a record without an error or
+	// a logger.
+	if err == nil || log == nil {
 		return
 	}
 	// A nil request is handled for the same reason logStrictRequestError handles
@@ -94,10 +95,6 @@ func recordUnhandledResponseError(log *slog.Logger, r *http.Request, err error) 
 	if r != nil {
 		ctx = r.Context()
 		route = routeLabel(r.Method, routePathTemplateForRequest(r))
-	}
-
-	if log == nil {
-		return
 	}
 	log.LogAttrs(
 		ctx,

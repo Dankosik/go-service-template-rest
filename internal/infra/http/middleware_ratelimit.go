@@ -66,11 +66,11 @@ func HeaderRateLimitKey(name string) RateLimitKeyFunc {
 //
 // Platform probe routes are exempt for the same reason they are exempt from
 // shedding: rate limiting a readiness probe evicts the instance.
-func RateLimit(limiter RateLimiter, key RateLimitKeyFunc, next http.Handler) http.Handler {
+func RateLimit(limiter RateLimiter, keyFor RateLimitKeyFunc, next http.Handler) http.Handler {
 	if limiter == nil {
 		return next
 	}
-	if key == nil {
+	if keyFor == nil {
 		panic("http rate limit: key is required when a limiter is configured")
 	}
 
@@ -79,12 +79,12 @@ func RateLimit(limiter RateLimiter, key RateLimitKeyFunc, next http.Handler) htt
 			next.ServeHTTP(w, r)
 			return
 		}
-		bucket := key(r)
-		if bucket == "" {
+		key := keyFor(r)
+		if key == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		allowed, retryAfter := limiter.Allow(r.Context(), bucket)
+		allowed, retryAfter := limiter.Allow(r.Context(), key)
 		if allowed {
 			next.ServeHTTP(w, r)
 			return

@@ -145,9 +145,6 @@ func retryAfterSeconds(delay time.Duration) int {
 
 func writeProblem(w http.ResponseWriter, r *http.Request, response problemResponse) {
 	definition := problem.ForCodeOrInternal(response.code)
-	if r != nil {
-		recordProblemCode(r.Context(), definition.Code)
-	}
 	p := openapi.Problem{
 		Code:          string(definition.Code),
 		Detail:        lo.EmptyableToPtr(response.detail),
@@ -159,6 +156,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, response problemRespon
 		Type:          definition.TypeURI,
 	}
 	if r != nil {
+		recordProblemCode(r.Context(), definition.Code)
 		p.RequestId = lo.EmptyableToPtr(reqctx.RequestID(r.Context()))
 	}
 	if response.retryAfter > 0 {

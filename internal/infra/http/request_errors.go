@@ -22,14 +22,14 @@ import (
 // a service declares security requirements without naming its own challenge.
 const defaultAuthenticateChallenge = "Bearer"
 
-func handleMalformedGeneratedRequest(w http.ResponseWriter, r *http.Request, err error) {
+func handleMalformedGeneratedRequest(w http.ResponseWriter, r *http.Request, err error, violations []fieldViolation) {
 	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		writeProblem(w, r, requestEntityTooLargeProblem())
 		return
 	}
 	// The one place a rejection tells the caller more than "invalid". The detail
 	// stays generic; requestViolations owns what may go beside it.
-	writeMalformedRequestProblem(w, r, requestViolations(err))
+	writeMalformedRequestProblem(w, r, violations)
 }
 
 // RejectRequest returns the validator error mapper this repository installs:
@@ -47,7 +47,8 @@ func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter,
 		challenge = defaultAuthenticateChallenge
 	}
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		logStrictRequestError(log, r, err)
+		violations := requestViolations(err)
+		logStrictRequestError(log, r, err, violations)
 		// profile:authn-bearer:start
 		if kind, ok := bearerauthn.KindOf(err); ok {
 			writeBearerRejection(w, r, kind, challenge)
@@ -75,7 +76,7 @@ func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter,
 			writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing or invalid"})
 			return
 		}
-		handleMalformedGeneratedRequest(w, r, err)
+		handleMalformedGeneratedRequest(w, r, err, violations)
 	}
 }
 
@@ -117,7 +118,7 @@ func writeBearerRejection(w http.ResponseWriter, r *http.Request, kind beareraut
 
 // profile:authn-bearer:end
 
-func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
+func logStrictRequestError(log *slog.Logger, r *http.Request, err error, violations []fieldViolation) {
 	if log == nil {
 		return
 	}
@@ -142,7 +143,7 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 	// Only the names are recorded — requestViolations owns why the reasons stay
 	// out of the record and go to the caller instead.
 	attrs := []slog.Attr{slog.String("error_chain", failure.ClassChain(err))}
-	if fields := violationFields(requestViolations(err)); len(fields) > 0 {
+	if fields := violationFields(violations); len(fields) > 0 {
 		attrs = append(attrs, slog.Any("invalid_fields", fields))
 	}
 	log.LogAttrs(ctx, slog.LevelWarn, "http_request_rejected", attrs...)

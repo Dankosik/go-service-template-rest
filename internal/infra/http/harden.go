@@ -147,7 +147,7 @@ func newRootRouter(
 	root := chi.NewRouter()
 	root.Use(middlewares...)
 	root.Mount("/", apiSubrouter)
-	applyHTTPPolicy(root)
+	applyFallbackPolicy(root)
 	return root
 }
 
