@@ -31,6 +31,7 @@ const (
 	DefaultConnectTimeout   = 3 * time.Second
 	DefaultStatementTimeout = 2 * time.Minute
 	DefaultLockTimeout      = 15 * time.Second
+	DefaultCleanupTimeout   = 15 * time.Second
 )
 
 func DefaultOptions(dsn string, source fs.FS, path string, logger *slog.Logger) MigrationOptions {
@@ -41,7 +42,7 @@ func DefaultOptions(dsn string, source fs.FS, path string, logger *slog.Logger) 
 		ConnectTimeout:   DefaultConnectTimeout,
 		StatementTimeout: DefaultStatementTimeout,
 		LockTimeout:      DefaultLockTimeout,
-		CleanupTimeout:   DefaultLockTimeout,
+		CleanupTimeout:   DefaultCleanupTimeout,
 		Logger:           logger,
 	}
 }

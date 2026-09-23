@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// rollbackTimeout bounds the detached rollback after fn or commit returns.
+const rollbackTimeout = 3 * time.Second
 
 // InTx runs fn inside one transaction, committing when it returns nil and
 // rolling back otherwise.
@@ -56,7 +60,7 @@ func runInTx(
 	marker *contextWatcherMark,
 ) (err error) {
 	defer func() {
-		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), postgresConnectTimeout)
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
 		defer cancel()
 		rollbackErr := tx.Rollback(rollbackCtx)
 		if rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
