@@ -140,13 +140,15 @@ linters:
         # it has nothing to add to the wording, and wrapping would print the
         # binary's own name twice. Same module-relative fragment rule as above.
         - cmd/internal/runtimeopts\.InstallTelemetry\(
-        # ValidateGracePeriod and ListenDiagnostics are the same case: each
-        # already returns the whole operator-facing rejection — the configuration
-        # leaf to edit, or the component whose diagnostics address was taken. The
+        # ValidateGracePeriod, RequireDiagnosticsAddr, and ListenDiagnostics are
+        # the same case: each already returns the whole operator-facing
+        # rejection — the configuration key or code-owned budget to fit, or the
+        # component whose diagnostics address is missing or taken. The
         # composition root that receives one has not reached a stage to name and
         # would only print the binary's own name twice. Same module-relative
         # fragment rule as above.
         - cmd/internal/runtimeopts\.ValidateGracePeriod\(
+        - cmd/internal/runtimeopts\.RequireDiagnosticsAddr\(
         - cmd/internal/runtimeopts\.ListenDiagnostics\(
         - github.com/riverqueue/river\.JobSnooze\(
     staticcheck:
