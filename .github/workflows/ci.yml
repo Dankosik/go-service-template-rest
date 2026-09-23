@@ -197,8 +197,13 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
-          key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}
-          restore-keys: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
+          # The commit in the key lets every push to main save the build it
+          # just did; a key without it was claimed once and never refreshed,
+          # so each run recompiled everything that changed since.
+          key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
+            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
       - name: Set up Node
         if: needs.changes.outputs.openapi == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -614,8 +619,13 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
-          key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}
-          restore-keys: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
+          # The commit in the key lets every push to main save the build it
+          # just did; a key without it was claimed once and never refreshed,
+          # so each run recompiled everything that changed since.
+          key: go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
+            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
       - name: Set up Buildx
         if: matrix.suite == 'image'
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
