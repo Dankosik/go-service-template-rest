@@ -30,15 +30,14 @@ func privateHostSuffix(configured string) string {
 }
 
 func validateTarget(raw string, policy targetPolicy) (*url.URL, error) {
-	baseURL, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || baseURL == nil || !baseURL.IsAbs() || baseURL.Opaque != "" ||
-		baseURL.Host == "" || baseURL.Hostname() == "" {
+	baseURL, issue := outboundtrust.HTTPSTarget(strings.TrimSpace(raw))
+	switch issue {
+	case outboundtrust.TargetOK:
+	case outboundtrust.TargetNotAbsolute:
 		return nil, errors.New("build outbound HTTP client: base URL must be absolute")
-	}
-	if !strings.EqualFold(baseURL.Scheme, "https") {
+	case outboundtrust.TargetNotHTTPS:
 		return nil, errors.New("build outbound HTTP client: target requires HTTPS")
-	}
-	if baseURL.User != nil || baseURL.RawQuery != "" || baseURL.ForceQuery || baseURL.Fragment != "" {
+	case outboundtrust.TargetHasUserInfoOrFragment, outboundtrust.TargetHasQuery:
 		return nil, errors.New("build outbound HTTP client: base URL cannot contain user info, query, or fragment")
 	}
 	if policy.privateSuffix == "" {
@@ -46,14 +45,12 @@ func validateTarget(raw string, policy targetPolicy) (*url.URL, error) {
 			return nil, ErrTargetDenied
 		}
 	} else {
-		hostname := strings.ToLower(strings.TrimSuffix(baseURL.Hostname(), "."))
+		hostname := strings.TrimSuffix(baseURL.Hostname(), ".")
 		if !strings.HasSuffix(hostname, policy.privateSuffix) {
 			return nil, errors.New("build outbound HTTP client: private target requires the configured DNS suffix")
 		}
 	}
-	baseURL.Scheme = "https"
-	baseURL.Host = strings.ToLower(baseURL.Host)
-	return baseURL, nil
+	return &baseURL, nil
 }
 
 func enforceDialAddress(policy targetPolicy, address string) error {

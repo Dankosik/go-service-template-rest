@@ -1,4 +1,5 @@
-// Package outboundtrust owns transport-independent public-address admission.
+// Package outboundtrust owns transport-independent outbound target rules: the
+// fixed HTTPS target shape and public-address admission.
 package outboundtrust
 
 import "net/netip"

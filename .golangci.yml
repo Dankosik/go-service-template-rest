@@ -240,6 +240,7 @@ linters:
             - __MODULE__/internal/messagingconfig
             - __MODULE__/internal/inboundwebhook/manifest
             - __MODULE__/internal/observability/otelconfig
+            - __MODULE__/internal/outboundtrust
           deny:
             - pkg: __MODULE__/internal
               desc: config parsing must not depend on features, runtime adapters, or transport contracts.
@@ -332,6 +333,10 @@ linters:
             - "**/internal/authntrust/*.go"
             - "**/internal/authntrust/**/*.go"
             - "!**/internal/authntrust/*_test.go"
+          allow:
+            # The fixed HTTPS target shape is one rule shared with config and the
+            # outbound HTTP client; outboundtrust is itself a stdlib-only leaf.
+            - __MODULE__/internal/outboundtrust
           deny:
             - pkg: __MODULE__/internal
               desc: authntrust is a pure trust-rule leaf shared by internal/config and the verifier; a dependency here would put it back out of reach of one of them.
