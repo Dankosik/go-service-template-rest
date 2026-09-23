@@ -52,6 +52,8 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 		w.client.telemetry.logTerminalDelivery(handlerRoot, source.Subject(), nil, reasonMetadataUnavailable, nil)
 		return fmt.Errorf("%w: source metadata unavailable", ErrTerminal)
 	}
+	// An oversize source is not dead-lettered: the transfer carries its whole
+	// payload, so it cannot fit the dead-letter envelope either.
 	if wireSize(source) > w.cfg.MaxDeliveryBytes || len(source.Data()) > w.client.cfg.MaxPayloadBytes {
 		w.client.telemetry.logTerminalDelivery(handlerRoot, source.Subject(), metadata, reasonDeliveryBound, nil)
 		return fmt.Errorf("%w: retained source exceeds admitted message bound", ErrTerminal)

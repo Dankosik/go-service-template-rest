@@ -9,9 +9,11 @@ import (
 	"strings"
 )
 
-// The standard OpenTelemetry endpoint variables. A signal-specific one is
-// already a complete endpoint for that signal; the signal-agnostic one is a root
-// that OTLP defines each signal's path relative to.
+// Where an OTLP endpoint can come from — this service's configuration keys and
+// the standard OpenTelemetry variables — and the path each signal appends to a
+// root. A signal-specific setting is already a complete endpoint for that
+// signal; a signal-agnostic one is a root that OTLP defines each signal's path
+// relative to.
 const (
 	// SharedOTLPExporterConfigKey names the service-owned OTLP endpoint shared
 	// by traces and metrics when it contains a collector root.
@@ -108,11 +110,12 @@ type otlpCandidate struct {
 //
 // The two lists are separate rather than one because headers are a collector
 // credential, and a configured one pins the destination to a setting this
-// service owns: past owned the endpoint would come from ambient environment, and
-// sending the service's own credentials somewhere it never named is what this
-// must not create. Without configured headers the ambient variables are honored,
-// because they are what a platform collector injects and ignoring them would
-// leave a service reporting healthy while exporting nothing.
+// service owns: once the owned settings are exhausted the endpoint would come
+// from ambient environment, and sending the service's own credentials somewhere
+// it never named is what this must not create. Without configured headers the
+// ambient variables are honored, because they are what a platform collector
+// injects and ignoring them would leave a service reporting healthy while
+// exporting nothing.
 //
 // Only an ambient parse failure names its source. An operator did not write that
 // value in this service's configuration and has to be told which injected

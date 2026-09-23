@@ -35,6 +35,8 @@ type Client struct {
 	workerClaimed atomic.Bool
 }
 
+// Connect validates cfg, dials the broker, and returns a client whose first
+// readiness probe passed. ctx bounds the dial and the probe.
 func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error) {
 	if err := ValidateConfig(cfg); err != nil {
 		return nil, err
@@ -66,6 +68,12 @@ func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error
 	return c, nil
 }
 
+// connectOptions is the connection policy. ReconnectBufSize(-1) disables the
+// client's reconnect buffer, so a publish during a disconnect fails at once
+// rather than waiting in memory for a reconnect that may never come.
+// Reconnection gives up after MaxReconnects attempts about ReconnectWait
+// apart, and the closed handler then reports a terminal fault unless this
+// client asked for the close.
 func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 	options := []nats.Option{
 		nats.Name("service-messaging"),
@@ -102,14 +110,19 @@ func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 	return options
 }
 
+// Producer returns the client's publisher.
 func (c *Client) Producer() *Producer { return c.producer }
 
+// Name identifies the client as a readiness dependency.
 func (c *Client) Name() string { return "messaging" }
 
+// Ready reports the last readiness probe's result, and false once draining
+// starts. It does no I/O.
 func (c *Client) Ready() bool {
 	return c != nil && c.ready.Load() && !c.draining.Load()
 }
 
+// Check probes the broker and records the result as readiness.
 func (c *Client) Check(ctx context.Context) error {
 	if c == nil {
 		return fmt.Errorf("%w: connection is not ready", ErrRejected)
@@ -148,6 +161,8 @@ func (c *Client) probe(ctx context.Context) error {
 	return nil
 }
 
+// Run blocks until ctx ends or the connection fails terminally, and returns
+// which one happened.
 func (c *Client) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -157,6 +172,8 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 }
 
+// StopPublish refuses new publications with [ErrDraining] and withdraws
+// readiness. Publications already in flight continue.
 func (c *Client) StopPublish() {
 	if c == nil {
 		return
@@ -165,6 +182,8 @@ func (c *Client) StopPublish() {
 	c.ready.Store(false)
 }
 
+// Shutdown stops publishing, drains the connection, and waits for it to close
+// or for ctx to end, closing it outright then.
 func (c *Client) Shutdown(ctx context.Context) error {
 	if c == nil || c.nc == nil {
 		return nil
@@ -184,6 +203,8 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	}
 }
 
+// Close closes the connection without draining. It is safe to call more than
+// once.
 func (c *Client) Close() {
 	if c == nil {
 		return

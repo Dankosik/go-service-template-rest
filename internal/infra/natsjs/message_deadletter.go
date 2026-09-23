@@ -22,8 +22,7 @@ import (
 // This is separate from message_wire.go because it changes for different
 // reasons: a redrive rule, or what an operator needs to see about why a record
 // stopped, rather than the envelope every message carries. The Original-* header
-// names it writes are declared with the rest of the wire contract in
-// message_wire.go, because they are one published contract.
+// names it writes are declared in message_wire.go, which says why.
 
 // The Dead-Letter-Reason values [DeadLetterReason] reports. They belong here
 // rather than with the metric and log labels in vocabulary.go because they

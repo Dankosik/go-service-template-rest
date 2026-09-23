@@ -67,6 +67,15 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 	}, nil
 }
 
+// desiredConsumerConfig is the durable consumer settlement depends on.
+//
+// AckWait covers one handler run, the up to two broker operations that settle
+// it — each bounded by operationTimeout — and scheduling slack, so the broker
+// does not redeliver a message whose settlement is still in flight. MaxDeliver
+// is unlimited because the worker counts attempts itself and dead-letters at
+// its attempt limit; a broker-side cap would instead stop redelivering and
+// leave the message unsettled. MaxAckPending is MaxConcurrency: one in-flight
+// message per serial consume context.
 func desiredConsumerConfig(cfg WorkerConfig) jetstream.ConsumerConfig {
 	return jetstream.ConsumerConfig{
 		Name:          cfg.Consumer,

@@ -212,6 +212,10 @@ func validateCall(ctx context.Context, key string) error {
 	return nil
 }
 
+// acquire admits one operation. At most maximumActiveOperations run at once, and
+// a call beyond that is refused with objectstorage.ErrBusy rather than queued.
+// The returned release is idempotent; a downloaded body holds its slot until it
+// reaches EOF or is closed.
 func (c *Client) acquire(ctx context.Context) (func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("object storage admission: %w", err)
