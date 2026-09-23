@@ -27,7 +27,7 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		metadata.failedStage = StageLoadDefaults
 		return nil, metadata, fmt.Errorf("%w: load defaults: %w", ErrLoad, err)
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		metadata.failedStage = StageLoadDefaults
 		return nil, metadata, err
 	}
@@ -48,21 +48,21 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		}
 		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		metadata.failedStage = StageLoadFile
 		return nil, metadata, err
 	}
 
-	namespaceValues, malformedEnvironmentKeys := collectNamespaceValues(os.Environ())
+	envValues, malformedEnvironmentKeys := collectEnvironmentValues(os.Environ())
 	metadata.malformedEnvironmentKeys = malformedEnvironmentKeys
-	metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, removeSectionScalarOverridesInPlace(namespaceValues)...)
-	if len(namespaceValues) > 0 {
-		if err := k.Load(confmap.Provider(namespaceValues, keyDelimiter), nil); err != nil {
+	metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, removeSectionScalarOverridesInPlace(envValues)...)
+	if len(envValues) > 0 {
+		if err := k.Load(confmap.Provider(envValues, keyDelimiter), nil); err != nil {
 			metadata.failedStage = StageLoadEnv
 			return nil, metadata, fmt.Errorf("%w: load namespace env: %w", ErrLoad, err)
 		}
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		metadata.failedStage = StageLoadEnv
 		return nil, metadata, err
 	}

@@ -42,7 +42,7 @@ func validateLoadOptions(opts LoadOptions) error {
 // merges its values into k. It returns the section-scalar override keys it
 // dropped.
 func mergeConfigFile(ctx context.Context, k *koanf.Koanf, path string) ([]string, error) {
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		return nil, err
 	}
 
@@ -65,7 +65,7 @@ func mergeConfigFile(ctx context.Context, k *koanf.Koanf, path string) ([]string
 			return nil, fmt.Errorf("%w: merge config file %q: %w", ErrLoad, cleanPath, err)
 		}
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		return nil, err
 	}
 	return sectionScalarOverrideKeys, nil

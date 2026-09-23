@@ -78,7 +78,7 @@ func validateConfig(cfg *Config) error {
 	}
 	// profile:jobs-postgres:end
 	// profile:webhooks-durable:start
-	if err := validateWebhooks(cfg.OutboundWebhooks, cfg.Postgres, cfg.Jobs); err != nil {
+	if err := validateOutboundWebhooks(cfg.OutboundWebhooks, cfg.Postgres, cfg.Jobs); err != nil {
 		return err
 	}
 	// profile:webhooks-durable:end

@@ -40,7 +40,7 @@ type Config struct {
 	Jobs JobsConfig `koanf:"jobs"`
 	// profile:jobs-postgres:end
 	// profile:webhooks-durable:start
-	OutboundWebhooks WebhooksConfig `koanf:"webhooks"`
+	OutboundWebhooks OutboundWebhooksConfig `koanf:"webhooks"`
 	// profile:webhooks-durable:end
 	// profile:inbound-webhooks-standard:start
 	InboundWebhooks InboundWebhooksConfig `koanf:"inbound_webhooks"`

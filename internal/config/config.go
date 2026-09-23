@@ -55,7 +55,7 @@ func loadDetailedWithContext(
 	build func(*koanf.Koanf) (Config, []string, error),
 	validate func(*Config) error,
 ) (Config, LoadReport, error) {
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		return Config{}, LoadReport{FailedStage: StageLoadDefaults}, err
 	}
 
@@ -72,7 +72,7 @@ func loadDetailedWithContext(
 		report.FailedStage = StageParse
 		return Config{}, report, err
 	}
-	if err := checkContext(ctx); err != nil {
+	if err := checkLoadContext(ctx); err != nil {
 		report.FailedStage = StageParse
 		return Config{}, report, err
 	}

@@ -4,19 +4,19 @@ package config
 
 import "fmt"
 
-type WebhooksConfig struct {
+type OutboundWebhooksConfig struct {
 	Enabled       bool   `koanf:"enabled"`
 	Endpoints     string `koanf:"endpoints"`
 	StaticSecrets string `koanf:"static_secrets"`
 }
 
-func webhooksDefaults() map[string]any {
+func outboundWebhooksDefaults() map[string]any {
 	return map[string]any{
 		"webhooks.enabled": false, "webhooks.endpoints": "", "webhooks.static_secrets": "",
 	}
 }
 
-func validateWebhooks(cfg WebhooksConfig, postgres PostgresConfig, jobs JobsConfig) error {
+func validateOutboundWebhooks(cfg OutboundWebhooksConfig, postgres PostgresConfig, jobs JobsConfig) error {
 	if !cfg.Enabled {
 		return nil
 	}

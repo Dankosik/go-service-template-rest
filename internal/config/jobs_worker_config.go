@@ -16,7 +16,7 @@ func buildJobsWorkerSnapshot(source *koanf.Koanf) (Config, []string, error) {
 	}
 	// profile:inbound-webhooks-standard:end
 	values := lo.PickBy(source.All(), func(key string, _ any) bool {
-		return jobsWorkerConfigKey(key)
+		return isJobsWorkerKey(key)
 	})
 
 	worker := koanf.New(keyDelimiter)
@@ -26,7 +26,7 @@ func buildJobsWorkerSnapshot(source *koanf.Koanf) (Config, []string, error) {
 	return buildSnapshot(worker)
 }
 
-func jobsWorkerConfigKey(key string) bool {
+func isJobsWorkerKey(key string) bool {
 	sections := []string{"app", "http", "log", "observability", "postgres", "jobs"}
 	// profile:webhooks-durable:start
 	sections = append(sections, "webhooks")
