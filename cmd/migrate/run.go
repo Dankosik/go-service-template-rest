@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
@@ -75,9 +76,11 @@ func run(args []string, stdout io.Writer) error {
 	return nil
 }
 
-func resolveMigrationSource() (fs.FS, string, error) {
+// resolveMigrationSource prefers the image's migrations over a local checkout's.
+// dir is relative to source, because fs.FS paths carry no leading slash.
+func resolveMigrationSource() (source fs.FS, dir string, err error) {
 	if err := requireDirectory(imageMigrationSourcePath); err == nil {
-		return os.DirFS("/"), "migrations", nil
+		return os.DirFS("/"), strings.TrimPrefix(imageMigrationSourcePath, "/"), nil
 	} else if !errors.Is(err, errMigrationSourceMissing) {
 		return nil, "", err
 	}
