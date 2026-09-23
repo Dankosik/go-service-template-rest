@@ -19,19 +19,6 @@ import (
 // a service declares security requirements without naming its own challenge.
 const defaultAuthenticateChallenge = "Bearer"
 
-// RejectRequest returns the validator error mapper this repository installs:
-// oversized bodies become 413, failed security requirements become 401 with a
-// WWW-Authenticate challenge, and everything else becomes a sanitized 400.
-//
-// A service wiring its own generated validator needs this, or it reproduces the
-// defect where a missing credential is reported as a malformed request.
-func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
-	if strings.TrimSpace(challenge) == "" {
-		challenge = defaultAuthenticateChallenge
-	}
-	return handleGeneratedRequestError(log, challenge)
-}
-
 func handleMalformedGeneratedRequest(w http.ResponseWriter, r *http.Request, err error) {
 	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		writeProblem(w, r, requestEntityTooLargeProblem())
@@ -42,13 +29,20 @@ func handleMalformedGeneratedRequest(w http.ResponseWriter, r *http.Request, err
 	writeMalformedRequestProblem(w, r, requestViolations(err))
 }
 
-// handleGeneratedRequestError maps a validator rejection, adding the one case
-// handleMalformedGeneratedRequest cannot classify on its own.
+// RejectRequest returns the validator error mapper this repository installs:
+// oversized bodies become 413, failed security requirements become 401 with a
+// WWW-Authenticate challenge, and everything else becomes a sanitized 400.
+//
+// A service wiring its own generated validator needs this, or it reproduces the
+// defect where a missing credential is reported as a malformed request.
 //
 // A failed security requirement is 401, not 400: the framing was fine and the
 // credential was the problem, and no client library retries with credentials on
 // a 400.
-func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
+func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
+	if strings.TrimSpace(challenge) == "" {
+		challenge = defaultAuthenticateChallenge
+	}
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		logStrictRequestError(log, r, err)
 		// profile:authn-bearer:start

@@ -25,12 +25,6 @@ import (
 // log receives the failures no mapper claimed, which are the ones answered with
 // a detail-free 500. A nil logger keeps that answer and loses the only record of
 // what caused it, so pass the service's own.
-func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
-	return handleGeneratedResponseError(log, domainErrors)
-}
-
-// handleGeneratedResponseError turns an error a generated operation returned into
-// a problem response.
 //
 // The expired-context case is checked before any service mapper: it is a
 // transport fact, and a mapper that forgot it would hide every slow dependency
@@ -39,7 +33,7 @@ func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.
 // log is only ever used for the unclassified case. A classified failure is an
 // answer this service chose, and the access log already carries its problem code;
 // recording it again at ERROR would put every 404 in the error stream.
-func handleGeneratedResponseError(log *slog.Logger, domainErrors []failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
+func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
 	domainErrors = slices.Clone(domainErrors)
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		// A handler that returns its expired context is reporting a spent
@@ -60,7 +54,7 @@ func handleGeneratedResponseError(log *slog.Logger, domainErrors []failure.Mappe
 		//
 		// It shares the 504 class with the budget above because HTTP has no
 		// portable client-canceled status, which is the resolution
-		// handleGeneratedRequestError already applies to a canceled trust check.
+		// RejectRequest already applies to a canceled trust check.
 		// The two stay separable without a second code: an abandoned request
 		// ends well inside the budget, and the access log carries its duration.
 		if errors.Is(err, context.Canceled) {

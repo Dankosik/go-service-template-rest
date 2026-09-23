@@ -180,7 +180,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	log := newTestServiceLogger(&out)
 	const attackerDetail = `invalid "token": secret-value`
 
-	options := generatedStrictServerOptions(log, handleGeneratedRequestError(log, defaultAuthenticateChallenge), nil)
+	options := generatedStrictServerOptions(log, RejectRequest(log, defaultAuthenticateChallenge), nil)
 	if options.RequestErrorHandlerFunc == nil {
 		t.Fatal("generatedStrictServerOptions() RequestErrorHandlerFunc = nil")
 	}
@@ -236,7 +236,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 	log := newTestServiceLogger(&out)
 	const attackerDetail = `invalid "token": secret-value`
 
-	options := generatedChiServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge))
+	options := generatedChiServerOptions(RejectRequest(log, defaultAuthenticateChallenge))
 	if options.ErrorHandlerFunc == nil {
 		t.Fatal("generatedChiServerOptions() ErrorHandlerFunc = nil")
 	}
