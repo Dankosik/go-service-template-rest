@@ -43,17 +43,36 @@ func (failingMeter) Int64Counter(string, ...metric.Int64CounterOption) (metric.I
 	return nil, errors.New("instrument failed")
 }
 
-func TestServerLoadPublishesAdmissionMetrics(t *testing.T) {
+func TestAdmissionPolicyPublishesAdmissionMetrics(t *testing.T) {
 	t.Parallel()
 
 	reader, provider := telemetrytest.NewManualMeterProvider(t)
-	load := newServerLoad(provider)
-	release := load.Admitted(t.Context())
-	load.Shed(t.Context())
-	load.HealthShed(t.Context())
+	policy := newAdmissionPolicy(1, 1, newServerLoad(provider))
+	noop := func(context.Context) error { return nil }
+
+	err := policy.business.around(t.Context(), func(ctx context.Context) error {
+		if got := telemetrytest.Int64SumValue(t, reader, activeRPCsInstrument); got != 1 {
+			t.Fatalf("%s while admitted = %d, want 1", activeRPCsInstrument, got)
+		}
+		assertStatusCode(t, policy.business.around(ctx, noop), codes.ResourceExhausted)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("business around: %v", err)
+	}
+	err = policy.health.around(t.Context(), func(ctx context.Context) error {
+		if got := telemetrytest.Int64SumValue(t, reader, activeRPCsInstrument); got != 0 {
+			t.Fatalf("%s while health admitted = %d, want 0", activeRPCsInstrument, got)
+		}
+		assertStatusCode(t, policy.health.around(ctx, noop), codes.ResourceExhausted)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("health around: %v", err)
+	}
 
 	for name, want := range map[string]int64{
-		activeRPCsInstrument:     1,
+		activeRPCsInstrument:     0,
 		shedRPCsInstrument:       1,
 		healthShedRPCsInstrument: 1,
 	} {
@@ -61,25 +80,24 @@ func TestServerLoadPublishesAdmissionMetrics(t *testing.T) {
 			t.Fatalf("%s = %d, want %d", name, got, want)
 		}
 	}
-	release()
-	if got := telemetrytest.Int64SumValue(t, reader, activeRPCsInstrument); got != 0 {
-		t.Fatalf("%s after release = %d, want 0", activeRPCsInstrument, got)
-	}
 }
 
-func TestServerLoadReportsInstrumentFailures(t *testing.T) {
+func TestAdmissionPolicyReportsInstrumentFailures(t *testing.T) {
 	previous := otel.GetErrorHandler()
 	t.Cleanup(func() { otel.SetErrorHandler(previous) })
 	var reported atomic.Int32
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(error) { reported.Add(1) }))
 
-	load := newServerLoad(failingMeterProvider{})
-	load.Admitted(t.Context())()
-	load.Shed(t.Context())
-	load.HealthShed(t.Context())
+	policy := newAdmissionPolicy(1, 0, newServerLoad(failingMeterProvider{}))
 	if got := reported.Load(); got != 3 {
 		t.Fatalf("reported instrument failures = %d, want 3", got)
 	}
+	// Missing instruments leave admission and refusal working.
+	noop := func(context.Context) error { return nil }
+	if err := policy.business.around(t.Context(), noop); err != nil {
+		t.Fatalf("business around without instruments: %v", err)
+	}
+	assertStatusCode(t, policy.health.around(t.Context(), noop), codes.ResourceExhausted)
 }
 
 func TestAdmissionBudgetIsProcessWide(t *testing.T) {
