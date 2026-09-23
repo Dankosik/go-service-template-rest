@@ -31,6 +31,7 @@ func bindInboundWebhookWorkers(
 	if err != nil {
 		return fmt.Errorf("parse inbound webhook endpoints: %w", err)
 	}
+	// The registry starts empty; register is the only place handlers join it.
 	registry := inboundwebhook.NewRegistry()
 	if err := register(registry); err != nil {
 		return fmt.Errorf("bind inbound webhook handlers: %w", err)

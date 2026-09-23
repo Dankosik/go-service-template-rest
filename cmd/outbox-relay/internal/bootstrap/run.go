@@ -141,11 +141,14 @@ func riverClientConfig(workers *river.Workers, log *slog.Logger) *river.Config {
 		EnableTracePropagation: true,
 	})
 	return &river.Config{
+		// -1 keeps cancelled and discarded jobs indefinitely, so unpublished
+		// intent cannot disappear through cleanup.
 		CancelledJobRetentionPeriod: -1,
 		DiscardedJobRetentionPeriod: -1,
 		Logger:                      log,
-		PollOnly:                    true,
-		Plugins:                     []rivertype.Plugin{plugin},
+		// The pool's finite statement_timeout would cancel a long-lived LISTEN.
+		PollOnly: true,
+		Plugins:  []rivertype.Plugin{plugin},
 		Queues: map[string]river.QueueConfig{
 			postgresoutbox.Queue: {MaxWorkers: defaultOutboxWorkers},
 		},

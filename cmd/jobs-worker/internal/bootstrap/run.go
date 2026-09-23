@@ -116,7 +116,8 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		JobTimeout:                  river.JobTimeoutDefault,
 		Logger:                      log,
 		MaxAttempts:                 river.MaxAttemptsDefault,
-		PollOnly:                    true,
+		// The pool's finite statement_timeout would cancel a long-lived LISTEN.
+		PollOnly: true,
 		Plugins: []rivertype.Plugin{
 			otelriver.NewMiddleware(&otelriver.MiddlewareConfig{EnableTracePropagation: true}),
 		},
@@ -196,6 +197,8 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if !riverStopped {
 		riverStopped, stopErr = hardStopRiver(window)
 	}
+	// A soft stop that ran out of time but still joined, directly or through
+	// the hard stop, is a degraded success: River finished and cleanup is safe.
 	if riverStopped && errors.Is(stopErr, context.DeadlineExceeded) {
 		stopErr = nil
 	}

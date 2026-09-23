@@ -46,8 +46,8 @@ func run(args []string, stdout io.Writer) error {
 		return wrapped
 	}
 	// Rebuilt now that the identity is known, so a migration run is attributable
-	// to the same service, version, and environment as the three long-running
-	// binaries rather than being the one job whose records carry none of them.
+	// to the same service, version, and environment as the long-running binaries
+	// rather than being the one job whose records carry none of them.
 	logger = runtimeopts.Logger(stdout, cfg)
 	if !cfg.Postgres.Enabled {
 		err := errors.New("postgres is required by the DATABASE=postgres profile")
