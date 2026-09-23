@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"time"
@@ -53,6 +54,35 @@ func requestEntityTooLargeProblem() problemResponse {
 // not be able to tell them apart.
 func timeBudgetExceededProblem() problemResponse {
 	return problemResponse{code: problem.CodeGatewayTimeout, detail: "request exceeded its time budget"}
+}
+
+// contextFailureProblem answers an error that carries an ended request context.
+//
+// A spent deadline is a spent request budget, not an internal fault, and this is
+// the path most timeouts actually take: the generated wrapper commits a response
+// on it, so RequestTimeout never sees an uncommitted one. Reporting it as 500
+// would hide every slow dependency inside the error rate.
+//
+// A caller that hung up is not a fault this service can act on either, and
+// treating one as unclassified spends an ERROR record and a 500 on every
+// abandoned request — the two signals an operator watches to decide whether the
+// service is broken. It shares the 504 class with the budget because HTTP has no
+// portable client-canceled status. The two stay separable without a second code:
+// an abandoned request ends well inside the budget, and the access log carries
+// its duration.
+//
+// Callers check this before any domain classification: it is a transport fact,
+// and a mapper that forgot it would hide every slow dependency inside the 5xx
+// rate.
+func contextFailureProblem(err error) (problemResponse, bool) {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return timeBudgetExceededProblem(), true
+	case errors.Is(err, context.Canceled):
+		return problemResponse{code: problem.CodeGatewayTimeout, detail: "request was canceled by the caller"}, true
+	default:
+		return problemResponse{}, false
+	}
 }
 
 // problemRecord carries the problem code this request was answered with back out

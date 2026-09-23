@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -36,32 +35,8 @@ import (
 func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
 	domainErrors = slices.Clone(domainErrors)
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		// A handler that returns its expired context is reporting a spent
-		// request budget, not an internal fault, and this is the path most
-		// timeouts actually take: the generated wrapper commits a response
-		// here, so RequestTimeout never sees an uncommitted one. Reporting
-		// it as 500 would hide every slow dependency inside the error rate.
-		if errors.Is(err, context.DeadlineExceeded) {
-			writeProblem(w, r, timeBudgetExceededProblem())
-			return
-		}
-
-		// Cancellation answers here rather than falling through to the
-		// unclassified arm below. A caller that hung up is not a fault this
-		// service can act on, and treating one as unclassified spends an ERROR
-		// record and a 500 on every abandoned request — the two signals an
-		// operator watches to decide whether the service is broken.
-		//
-		// It shares the 504 class with the budget above because HTTP has no
-		// portable client-canceled status, which is the resolution
-		// RejectRequest already applies to a canceled trust check.
-		// The two stay separable without a second code: an abandoned request
-		// ends well inside the budget, and the access log carries its duration.
-		if errors.Is(err, context.Canceled) {
-			writeProblem(w, r, problemResponse{
-				code:   problem.CodeGatewayTimeout,
-				detail: "request was canceled by the caller",
-			})
+		if response, ok := contextFailureProblem(err); ok {
+			writeProblem(w, r, response)
 			return
 		}
 

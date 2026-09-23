@@ -38,8 +38,8 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			writeProblem(w, r, timeBudgetExceededProblem())
+		if response, ok := contextFailureProblem(err); ok {
+			writeProblem(w, r, response)
 			return
 		}
 		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
@@ -57,9 +57,11 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 		Body:       body,
 	})
 	if receiveErr != nil {
+		if response, ok := contextFailureProblem(receiveErr); ok {
+			writeProblem(w, r, response)
+			return
+		}
 		switch {
-		case errors.Is(receiveErr, context.DeadlineExceeded), errors.Is(receiveErr, context.Canceled):
-			writeProblem(w, r, timeBudgetExceededProblem())
 		case errors.Is(receiveErr, inboundwebhook.ErrUnavailable):
 			w.Header().Set("Retry-After", strconv.Itoa(inboundUnavailableRetryAfter))
 			writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "inbound webhook storage is unavailable"})
