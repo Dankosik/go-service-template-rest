@@ -77,9 +77,6 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 		writeProblem(w, r, problemResponse{code: problem.CodeBadRequest, detail: malformedRequestProblemDetail})
 	case inboundwebhook.OutcomeConflict:
 		writeProblem(w, r, problemResponse{code: problem.CodeConflict, detail: "inbound webhook delivery conflicts"})
-	case inboundwebhook.OutcomeUnavailable:
-		w.Header().Set("Retry-After", strconv.Itoa(inboundUnavailableRetryAfter))
-		writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "inbound webhook storage is unavailable"})
 	default:
 		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"})
 	}

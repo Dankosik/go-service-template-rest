@@ -145,7 +145,7 @@ func TestPostgresInboundWebhookAtomicAcceptanceRollsBackOnJobFailure(t *testing.
 
 	receiver := inboundReceiver(t, dsn)
 	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
-	if result != inboundwebhook.OutcomeUnavailable || !errors.Is(err, inboundwebhook.ErrUnavailable) {
+	if !errors.Is(err, inboundwebhook.ErrUnavailable) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	var receipts, jobs int

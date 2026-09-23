@@ -116,7 +116,7 @@ func NewReceiver(pool *pgxpool.Pool, trust *TrustManifest, opts ...ReceiverOptio
 // Receive verifies then durably accepts one signed delivery.
 func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery) (inboundwebhook.Outcome, error) {
 	if r == nil || r.trust == nil || r.store == nil {
-		return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
+		return "", inboundwebhook.ErrUnavailable
 	}
 	delivery = delivery.Clone()
 	if _, ok := r.trust.Lookup(delivery.EndpointID); !ok {
@@ -150,14 +150,14 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 	})
 	if err != nil {
 		if errors.Is(err, postgres.ErrCommitUnknown) {
-			r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
-			return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
+			r.telem.recordIngress(ctx, ingressUnavailable)
+			return "", inboundwebhook.ErrUnavailable
 		}
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return inboundwebhook.OutcomeUnavailable, fmt.Errorf("accept inbound webhook receipt: %w", err)
+			return "", fmt.Errorf("accept inbound webhook receipt: %w", err)
 		}
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
-		return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
+		r.telem.recordIngress(ctx, ingressUnavailable)
+		return "", inboundwebhook.ErrUnavailable
 	}
 	r.telem.recordIngress(ctx, string(outcome))
 	return outcome, nil
@@ -256,7 +256,7 @@ func (s *postgresStore) Accept(ctx context.Context, record receiptRecord) (inbou
 		return nil
 	})
 	if err != nil {
-		return inboundwebhook.OutcomeUnavailable, fmt.Errorf("accept inbound webhook receipt: %w", err)
+		return "", fmt.Errorf("accept inbound webhook receipt: %w", err)
 	}
 	return outcome, nil
 }

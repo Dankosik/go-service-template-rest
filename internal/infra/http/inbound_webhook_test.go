@@ -246,7 +246,6 @@ func TestInboundWebhookResponseContract(t *testing.T) {
 		{name: "rejected", outcome: inboundwebhook.OutcomeRejected, wantStatus: http.StatusBadRequest},
 		{name: "unknown", outcome: inboundwebhook.OutcomeUnknownEndpoint, wantStatus: http.StatusNotFound},
 		{name: "conflict", outcome: inboundwebhook.OutcomeConflict, wantStatus: http.StatusConflict},
-		{name: "unavailable", outcome: inboundwebhook.OutcomeUnavailable, wantStatus: http.StatusServiceUnavailable, wantRetry: true},
 		{name: "unavailable err", err: inboundwebhook.ErrUnavailable, wantStatus: http.StatusServiceUnavailable, wantRetry: true},
 		{name: "unexpected", err: errors.New("sql canary"), wantStatus: http.StatusInternalServerError},
 	}
