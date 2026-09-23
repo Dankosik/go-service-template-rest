@@ -35,10 +35,12 @@ const (
 	deadLetterPermanent = "permanent"
 )
 
-// deadLetterMessage builds the transfer envelope: the original identity headers
-// and trace context, the Original-* record of where the message came from, and a
-// transfer id derived from that origin.
-func deadLetterMessage(source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, reason string) (*nats.Msg, string) {
+// deadLetterMessage builds the transfer onto subject: the original identity
+// headers and trace context, the Original-* record of where the message came
+// from, and a transfer id derived from that origin.
+func deadLetterMessage(
+	source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, subject, reason string,
+) (*nats.Msg, string) {
 	header := make(nats.Header)
 	carryIdentityHeaders(header, source.Headers())
 	header.Set(headerOriginalSubject, source.Subject())
@@ -57,7 +59,7 @@ func deadLetterMessage(source jetstream.Msg, metadata *jetstream.MsgMetadata, de
 	case header.Get(headerMessageID) == "":
 		header.Set(headerMessageID, transferID)
 	}
-	return &nats.Msg{Header: header, Data: slices.Clone(source.Data())}, transferID
+	return &nats.Msg{Subject: subject, Header: header, Data: slices.Clone(source.Data())}, transferID
 }
 
 // RestoreDeadLetter rebuilds the event one dead-letter record came from, so an

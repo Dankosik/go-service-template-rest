@@ -19,7 +19,7 @@ func unitDeadLetter(t *testing.T, reason string) *fakeMsg {
 	if err != nil {
 		t.Fatalf("decodeMessage() error = %v", err)
 	}
-	transfer, _ := deadLetterMessage(source, source.metadata, decoded, reason)
+	transfer, _ := deadLetterMessage(source, source.metadata, decoded, "dead.events", reason)
 	return &fakeMsg{
 		subject: "dead.events",
 		header:  transfer.Header,

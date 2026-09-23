@@ -199,8 +199,7 @@ func captureHandlerPanicFrames() []string {
 }
 
 func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, reason string) error {
-	msg, transferID := deadLetterMessage(source, metadata, decoded, reason)
-	msg.Subject = w.cfg.DeadLetterSubject
+	msg, transferID := deadLetterMessage(source, metadata, decoded, w.cfg.DeadLetterSubject, reason)
 	if err := validateEncodedMessage(msg, w.client.cfg.MaxPayloadBytes); err != nil {
 		w.client.telemetry.recordDeadLetterTransfer(ctx, outcomeRejected)
 		w.client.telemetry.logTerminalDelivery(ctx, source.Subject(), metadata, reasonDeadLetterEnvelope, nil)
