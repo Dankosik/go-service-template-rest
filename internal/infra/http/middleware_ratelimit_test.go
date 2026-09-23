@@ -310,7 +310,7 @@ func TestRouterRejectsARateLimiterWithoutAKey(t *testing.T) {
 	_, err := Harden(newTestServiceLogger(nil), telemetry.New(), HardenConfig{
 		MaxBodyBytes:   1 << 10,
 		RequestTimeout: time.Second,
-		RateLimit:      mustNewKeyedRateLimiter(t, 1, 1, 8),
+		RateLimiter:    mustNewKeyedRateLimiter(t, 1, 1, 8),
 	}, okHandler())
 	if err == nil {
 		t.Fatal("Harden() error = nil, want a rate limiter without a key to be rejected")
