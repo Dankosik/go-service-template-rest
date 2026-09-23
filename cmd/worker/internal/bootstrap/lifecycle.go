@@ -82,10 +82,8 @@ func runWorkerLifecycle(
 		// diagnostics.Stop below carries whatever Serve reported.
 		triggerErr = errors.New("worker diagnostics stopped unexpectedly")
 	}
-	if signalCtx.Err() == nil {
-		if triggerErr == nil {
-			triggerErr = errors.New("worker runtime stopped unexpectedly")
-		}
+	if triggerErr == nil && signalCtx.Err() == nil {
+		triggerErr = errors.New("worker runtime stopped unexpectedly")
 	}
 	healthSvc.StartDrain()
 	worker.StartDrain()
