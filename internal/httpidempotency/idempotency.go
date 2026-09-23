@@ -24,8 +24,8 @@ const (
 	Header      = "Idempotency-Key"
 	MaxKeyBytes = 255
 
-	maxResultBytes = 1 << 20
-	resultSchema   = 1
+	maxResultBytes      = 1 << 20
+	resultSchemaVersion = 1
 )
 
 var (
@@ -152,6 +152,7 @@ func validKey(value string) bool {
 	return true
 }
 
+// validKeyByte admits an RFC 9110 tchar.
 func validKeyByte(value byte) bool {
 	return value >= '0' && value <= '9' || value >= 'A' && value <= 'Z' || value >= 'a' && value <= 'z' ||
 		strings.ContainsRune("!#$%&'*+-.^_`|~", rune(value))
@@ -207,6 +208,9 @@ func (c Codec[Response]) Valid() bool {
 	return c.status >= http.StatusOK && c.status < http.StatusMultipleChoices
 }
 
+// Encode stores response with its status. It first checks that the response
+// survives decode and re-encode unchanged, so a replay renders the same JSON the
+// first answer did.
 func (c Codec[Response]) Encode(response Response) ([]byte, error) {
 	if !c.Valid() {
 		return nil, fmt.Errorf("%w: status %d is not a success", ErrInvalidResult, c.status)
@@ -218,7 +222,7 @@ func (c Codec[Response]) Encode(response Response) ([]byte, error) {
 	if _, err := decodeResponse[Response](body); err != nil {
 		return nil, err
 	}
-	encoded, err := json.Marshal(storedResult{Schema: resultSchema, Status: c.status, Body: body})
+	encoded, err := json.Marshal(storedResult{SchemaVersion: resultSchemaVersion, Status: c.status, Body: body})
 	if err != nil {
 		return nil, fmt.Errorf("%w: encode: %w", ErrInvalidResult, err)
 	}
@@ -237,8 +241,8 @@ func (c Codec[Response]) Decode(encoded []byte) (Response, error) {
 	if err := json.Unmarshal(encoded, &stored); err != nil {
 		return response, fmt.Errorf("%w: decode: %w", ErrInvalidResult, err)
 	}
-	if stored.Schema != resultSchema {
-		return response, fmt.Errorf("%w: result schema %d", ErrInvalidResult, stored.Schema)
+	if stored.SchemaVersion != resultSchemaVersion {
+		return response, fmt.Errorf("%w: result schema %d", ErrInvalidResult, stored.SchemaVersion)
 	}
 	if stored.Status != c.status {
 		return response, fmt.Errorf("%w: stored status %d, want %d", ErrInvalidResult, stored.Status, c.status)
@@ -282,7 +286,7 @@ type Executor[Repository, Response any] func(
 ) (response Response, replayed bool, err error)
 
 type storedResult struct {
-	Schema int    `json:"schema"`
-	Status int    `json:"status"`
-	Body   []byte `json:"body,omitempty"`
+	SchemaVersion int    `json:"schema"`
+	Status        int    `json:"status"`
+	Body          []byte `json:"body,omitempty"`
 }
