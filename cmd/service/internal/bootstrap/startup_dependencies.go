@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -208,28 +209,16 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 	probeStarted := time.Now()
 
 	pg, probeErr := initPostgres(probeCtx, runtime.cfg.Postgres)
-	parentErr := dependencyCtx.Err()
-	stageErr := probeCtx.Err()
-	if probeErr == nil {
-		if parentErr != nil {
-			probeErr = parentErr
-		} else if stageErr != nil {
-			probeErr = stageErr
-		}
-	}
+	probeErr = cmp.Or(probeErr, dependencyCtx.Err(), probeCtx.Err())
 	probeCancel()
 	probeDuration := time.Since(probeStarted)
-
-	pgReturned := false
-	defer func() {
-		if !pgReturned && pg != nil {
-			pg.Close()
-		}
-	}()
 
 	if probeErr != nil {
 		sanitizedErr := postgresDependencyInitFailure(probeErr)
 		recordDependencyProbeRejection(bootstrapCtx, runtime, probeDuration, sanitizedErr)
+		if pg != nil {
+			pg.Close()
+		}
 		return nil, sanitizedErr
 	}
 
@@ -248,7 +237,6 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 		)...,
 	)
 
-	pgReturned = true
 	return pg, nil
 }
 
