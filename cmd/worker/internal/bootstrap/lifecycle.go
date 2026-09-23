@@ -144,7 +144,7 @@ func superviseWorkerRun(
 			log.ErrorContext(
 				ctx,
 				"worker_run_loop_panic",
-				append([]any{"component", "worker"}, logctx.PanicAttrs(recovered, debug.Stack())...)...,
+				append([]any{"component", "worker"}, logctx.PanicArgs(recovered, debug.Stack())...)...,
 			)
 			runErr = errWorkerPanic
 		}

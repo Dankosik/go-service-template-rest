@@ -43,7 +43,7 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 				"http_panic_recovered",
 				append(
 					[]any{"method", request.Method, "route", route},
-					logctx.PanicAttrs(rec, debug.Stack())...,
+					logctx.PanicArgs(rec, debug.Stack())...,
 				)...,
 			)
 			if committed() {

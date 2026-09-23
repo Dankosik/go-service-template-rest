@@ -145,7 +145,7 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 			"background_task_panic",
 			append(
 				[]any{"task", name},
-				logctx.PanicAttrs(recovered, debug.Stack())...,
+				logctx.PanicArgs(recovered, debug.Stack())...,
 			)...,
 		)
 		runErr = fmt.Errorf("%w: %s", ErrPanic, name)
