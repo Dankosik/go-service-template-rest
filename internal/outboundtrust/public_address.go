@@ -2,7 +2,10 @@
 // fixed HTTPS target shape and public-address admission.
 package outboundtrust
 
-import "net/netip"
+import (
+	"net/netip"
+	"slices"
+)
 
 // ianaSpecialPurposeRegistryRevision pins both special-purpose registries used
 // below. Update the corpus with the revision, never the date alone.
@@ -53,17 +56,10 @@ func PublicAddress(address netip.Addr) bool {
 		return false
 	}
 	if address.Is4() {
-		for _, prefix := range globallyReachableIPv4SpecialPrefixes {
-			if prefix.Contains(address) {
-				return true
-			}
+		if containsAddr(globallyReachableIPv4SpecialPrefixes[:], address) {
+			return true
 		}
-		for _, prefix := range nonPublicIPv4Prefixes {
-			if prefix.Contains(address) {
-				return false
-			}
-		}
-		return true
+		return !containsAddr(nonPublicIPv4Prefixes[:], address)
 	}
 	if publicNAT64Prefix.Contains(address) {
 		bits := address.As16()
@@ -72,15 +68,12 @@ func PublicAddress(address netip.Addr) bool {
 	if !allocatedGlobalIPv6Prefix.Contains(address) {
 		return false
 	}
-	for _, prefix := range globallyReachableIPv6SpecialPrefixes {
-		if prefix.Contains(address) {
-			return true
-		}
+	if containsAddr(globallyReachableIPv6SpecialPrefixes[:], address) {
+		return true
 	}
-	for _, prefix := range nonPublicIPv6Prefixes {
-		if prefix.Contains(address) {
-			return false
-		}
-	}
-	return true
+	return !containsAddr(nonPublicIPv6Prefixes[:], address)
+}
+
+func containsAddr(prefixes []netip.Prefix, address netip.Addr) bool {
+	return slices.ContainsFunc(prefixes, func(prefix netip.Prefix) bool { return prefix.Contains(address) })
 }

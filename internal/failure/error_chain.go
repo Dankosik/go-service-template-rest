@@ -11,10 +11,10 @@ import (
 // or pathological Unwrap from deciding the size of a log record.
 const classChainDepth = 8
 
-// opNameLimit bounds one [Op] name in a rendered chain. classChainDepth alone
+// maxOpNameRunes bounds one [Op] name in a rendered chain. classChainDepth alone
 // does not bound the record: eight links of unbounded text still is, and the
 // two together are what keep a chain a fixed cost.
-const opNameLimit = 64
+const maxOpNameRunes = 64
 
 // Op names the step err came from, so a record written at a sanitized boundary
 // can say which step failed.
@@ -98,15 +98,15 @@ func chainLink(err error) string {
 	switch link := err.(type) { //nolint:errorlint // Rendering one layer is the whole contract; errors.As would search past it and repeat an inner Op's name on every layer above it.
 	case *opError:
 		// The common ASCII name costs no allocation. A longer byte string may
-		// still contain fewer than opNameLimit runes, so count before slicing.
-		if len(link.op) <= opNameLimit {
+		// still contain fewer than maxOpNameRunes runes, so count before slicing.
+		if len(link.op) <= maxOpNameRunes {
 			return link.op
 		}
 		runes := []rune(link.op)
-		if len(runes) <= opNameLimit {
+		if len(runes) <= maxOpNameRunes {
 			return link.op
 		}
-		return string(runes[:opNameLimit]) + "…"
+		return string(runes[:maxOpNameRunes]) + "…"
 	default:
 		return fmt.Sprintf("%T", err)
 	}
