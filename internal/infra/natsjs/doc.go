@@ -3,7 +3,7 @@
 //
 // Business composition declares [Route] values, builds a [Registry], registers
 // typed handlers through [Registry.Handle], and publishes domain events
-// values through [Publisher]. Subjects, headers, publication attempts, delivery
+// through [Publisher]. Subjects, headers, publication attempts, delivery
 // metadata, acknowledgements, retries, and dead letters do not enter feature
 // handlers.
 //
@@ -26,7 +26,10 @@
 // stream/consumer metrics belong to deployment monitoring; this adapter emits
 // only publish, handler, and dead-letter operation telemetry.
 //
-// [ErrRejected] is a definite refusal, [ErrAmbiguous] an unknown publish
-// outcome, [ErrDraining] a lifecycle refusal, and [ErrTerminal] a fault that
-// stops the worker process.
+// # Errors
+//
+// A refusal or fault this package decides wraps one of four sentinels; see
+// errors.go for what else can be returned. [ErrRejected] is a definite
+// refusal, [ErrAmbiguous] an unknown publish outcome, [ErrDraining] a
+// lifecycle refusal, and [ErrTerminal] a fault that stops the worker process.
 package natsjs

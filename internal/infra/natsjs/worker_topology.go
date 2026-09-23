@@ -36,7 +36,7 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 		}
 	}()
 
-	probeCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
+	probeCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	dlqStream, err := c.js.StreamNameBySubject(probeCtx, cfg.DeadLetterSubject)
 	if err != nil {
@@ -63,10 +63,19 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 	accepted = true
 	return &Worker{
 		client: c, cfg: cfg, consumer: consumer, dlqStream: dlqStream, handler: handler,
-		fatal: make(chan error, 1), runDone: make(chan struct{}), drain: make(chan struct{}),
+		terminal: make(chan error, 1), runDone: make(chan struct{}), drain: make(chan struct{}),
 	}, nil
 }
 
+// desiredConsumerConfig is the durable consumer settlement depends on.
+//
+// AckWait covers one handler run, the up to two broker operations that settle
+// it — each bounded by operationTimeout — and scheduling slack, so the broker
+// does not redeliver a message whose settlement is still in flight. MaxDeliver
+// is unlimited because the worker counts attempts itself and dead-letters at
+// its attempt limit; a broker-side cap would instead stop redelivering and
+// leave the message unsettled. MaxAckPending is MaxConcurrency: one in-flight
+// message per serial consume context.
 func desiredConsumerConfig(cfg WorkerConfig) jetstream.ConsumerConfig {
 	return jetstream.ConsumerConfig{
 		Name:          cfg.Consumer,

@@ -21,9 +21,22 @@ type routeKey struct {
 	version  uint16
 }
 
+// routeTable maps each routed event kind to the subject it is published on.
+type routeTable map[routeKey]string
+
+// subject reports where eventType at version is published. An unrouted kind is
+// an [ErrRejected] refusal.
+func (t routeTable) subject(eventType string, version uint16) (string, error) {
+	subject, ok := t[routeKey{typeName: eventType, version: version}]
+	if !ok {
+		return "", fmt.Errorf("%w: no route for %s v%d", ErrRejected, eventType, version)
+	}
+	return subject, nil
+}
+
 type Registry struct {
-	routes   map[routeKey]string
-	handlers map[routeKey]func(context.Context, domainevent.Event) error
+	subjects      routeTable
+	eventHandlers map[routeKey]func(context.Context, domainevent.Event) error
 }
 
 func NewRegistry(routes ...Route) (*Registry, error) {
@@ -31,7 +44,7 @@ func NewRegistry(routes ...Route) (*Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Registry{routes: subjects, handlers: make(map[routeKey]func(context.Context, domainevent.Event) error)}, nil
+	return &Registry{subjects: subjects, eventHandlers: make(map[routeKey]func(context.Context, domainevent.Event) error)}, nil
 }
 
 // Handle registers a typed handler without exposing subjects, headers,
@@ -40,7 +53,7 @@ func (r *Registry) Handle[T any](kind domainevent.Kind[T], handler func(context.
 	if handler == nil {
 		return fmt.Errorf("%w: event handler is required", ErrRejected)
 	}
-	err := r.Register(kind.Type, kind.Version, func(ctx context.Context, event domainevent.Event) error {
+	err := r.register(kind.Type, kind.Version, func(ctx context.Context, event domainevent.Event) error {
 		var payload T
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			return Permanent(fmt.Errorf("decode %s v%d: %w", event.Type, event.Version, err))
@@ -53,28 +66,30 @@ func (r *Registry) Handle[T any](kind domainevent.Kind[T], handler func(context.
 	return nil
 }
 
-func (r *Registry) Register(eventType string, version uint16, handler func(context.Context, domainevent.Event) error) error {
-	if r == nil || r.routes == nil {
+// register admits one decoded-event handler for a routed kind; [Registry.Handle]
+// is the entry point that builds it from a typed handler.
+func (r *Registry) register(eventType string, version uint16, handler func(context.Context, domainevent.Event) error) error {
+	if r == nil || r.subjects == nil {
 		return fmt.Errorf("%w: event registry is required", ErrRejected)
 	}
-	key := routeKey{typeName: eventType, version: version}
-	if _, ok := r.routes[key]; !ok {
-		return fmt.Errorf("%w: no route for %s v%d", ErrRejected, eventType, version)
+	if _, err := r.subjects.subject(eventType, version); err != nil {
+		return err
 	}
+	key := routeKey{typeName: eventType, version: version}
 	if handler == nil {
 		return fmt.Errorf("%w: handler is required for %s v%d", ErrRejected, eventType, version)
 	}
-	if _, exists := r.handlers[key]; exists {
+	if _, exists := r.eventHandlers[key]; exists {
 		return fmt.Errorf("%w: duplicate handler for %s v%d", ErrRejected, eventType, version)
 	}
-	r.handlers[key] = handler
+	r.eventHandlers[key] = handler
 	return nil
 }
 
 // Handler reads the live registry. Complete registration before using the
 // returned handler for concurrent deliveries.
 func (r *Registry) Handler() (Handler, error) {
-	if r == nil || len(r.handlers) == 0 {
+	if r == nil || len(r.eventHandlers) == 0 {
 		return nil, fmt.Errorf("%w: no typed event handlers are registered", ErrRejected)
 	}
 	return func(ctx context.Context, message Message) error {
@@ -83,11 +98,11 @@ func (r *Registry) Handler() (Handler, error) {
 			return Permanent(err)
 		}
 		key := routeKey{typeName: message.Type(), version: version}
-		handler, ok := r.handlers[key]
+		handler, ok := r.eventHandlers[key]
 		if !ok {
 			return Permanent(fmt.Errorf("no handler for %s v%d", message.Type(), version))
 		}
-		if subject := r.routes[key]; message.Subject() != subject {
+		if subject := r.subjects[key]; message.Subject() != subject {
 			return Permanent(fmt.Errorf(
 				"unexpected subject %q for %s v%d, want %q",
 				message.Subject(), message.Type(), version, subject,
@@ -106,12 +121,12 @@ func (r *Registry) Publisher(producer *Producer) (*Publisher, error) {
 	if producer == nil {
 		return nil, fmt.Errorf("%w: producer is required", ErrRejected)
 	}
-	return &Publisher{producer: producer, routes: r.routes}, nil
+	return &Publisher{producer: producer, subjects: r.subjects}, nil
 }
 
 type Publisher struct {
 	producer *Producer
-	routes   map[routeKey]string
+	subjects routeTable
 }
 
 // SchemaForVersion returns the NATS event-schema spelling for version. It
@@ -125,11 +140,11 @@ func (p *Publisher) Publish(ctx context.Context, event domainevent.Event) error 
 	if err := event.Validate(); err != nil {
 		return fmt.Errorf("validate domain event: %w", err)
 	}
-	subject, ok := p.routes[routeKey{typeName: event.Type, version: event.Version}]
-	if !ok {
-		return fmt.Errorf("%w: no route for %s v%d", ErrRejected, event.Type, event.Version)
+	subject, err := p.subjects.subject(event.Type, event.Version)
+	if err != nil {
+		return err
 	}
-	_, err := p.producer.Publish(ctx, EventFromDomain(subject, event))
+	_, err = p.producer.Publish(ctx, EventFromDomain(subject, event))
 	return err
 }
 
@@ -143,11 +158,11 @@ func EventFromDomain(subject string, event domainevent.Event) Event {
 	}
 }
 
-func buildRoutes(routes []Route) (map[routeKey]string, error) {
+func buildRoutes(routes []Route) (routeTable, error) {
 	if len(routes) == 0 {
 		return nil, fmt.Errorf("%w: at least one event route is required", ErrRejected)
 	}
-	subjects := make(map[routeKey]string, len(routes))
+	subjects := make(routeTable, len(routes))
 	for _, route := range routes {
 		if err := validateRequiredValue("event type", route.Type); err != nil {
 			return nil, err
@@ -155,7 +170,7 @@ func buildRoutes(routes []Route) (map[routeKey]string, error) {
 		if route.Version == 0 {
 			return nil, fmt.Errorf("%w: event version must be positive", ErrRejected)
 		}
-		if !validSubject(route.Subject, false) {
+		if !validPublishSubject(route.Subject) {
 			return nil, fmt.Errorf("%w: invalid event subject", ErrRejected)
 		}
 		key := routeKey{typeName: route.Type, version: route.Version}

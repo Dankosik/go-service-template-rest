@@ -102,16 +102,9 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (Met
 		sdkmetric.WithResource(res),
 	}
 
-	endpoint, exportErr := resolveMetricExporterEndpoint(cfg.Exporter)
-	if exportErr == nil && endpoint.Configured() {
-		var reader sdkmetric.Reader
-		if reader, exportErr = newOTLPMetricReader(ctx, endpoint, cfg.Exporter); exportErr == nil {
-			// The export interval comes from OTEL_METRIC_EXPORT_INTERVAL or the
-			// SDK's 60s default. This service adds no setting of its own for it:
-			// whoever runs the collector owns that cadence, and the standard
-			// variable is already how they express it.
-			options = append(options, sdkmetric.WithReader(reader))
-		}
+	endpoint, reader, exportErr := otlpMetricReader(ctx, cfg.Exporter)
+	if reader != nil {
+		options = append(options, sdkmetric.WithReader(reader))
 	}
 
 	otelSetupMu.Lock()
@@ -146,33 +139,41 @@ func startMeterProvider(
 	return provider, nil
 }
 
+// otlpMetricReader resolves the OTLP metrics endpoint and builds the push
+// reader for it. The endpoint is returned even when the reader cannot be built;
+// the reader is nil when nothing is configured or on error.
+func otlpMetricReader(ctx context.Context, cfg MetricExporterConfig) (ExporterEndpoint, sdkmetric.Reader, error) {
+	endpoint, err := resolveMetricExporterEndpoint(cfg)
+	if err != nil || !endpoint.Configured() {
+		return endpoint, nil, err
+	}
+	reader, err := newOTLPMetricReader(ctx, endpoint, cfg)
+	return endpoint, reader, err
+}
+
 func newOTLPMetricReader(
 	ctx context.Context,
 	endpoint ExporterEndpoint,
 	cfg MetricExporterConfig,
 ) (sdkmetric.Reader, error) {
-	// Only when this service named the destination. When the platform's own
-	// variables named it, the platform owns the whole exporter configuration and
-	// its credentials belong to the collector it also named.
-	if endpoint.fromConfig() {
-		if err := rejectConflictingAmbientEnv(metricExporterEnvConflicts); err != nil {
-			return nil, err
-		}
+	headers, err := otlpExporterHeaders(endpoint, metricExporterEnvConflicts, cfg.OTLPHeaders)
+	if err != nil {
+		return nil, err
 	}
 
 	exporterOptions := []otlpmetrichttp.Option{otlpmetrichttp.WithEndpointURL(endpoint.URL)}
-	if headers := strings.TrimSpace(cfg.OTLPHeaders); headers != "" {
-		parsedHeaders, err := parseOTLPHeaders(headers)
-		if err != nil {
-			return nil, err
-		}
-		exporterOptions = append(exporterOptions, otlpmetrichttp.WithHeaders(parsedHeaders))
+	if len(headers) != 0 {
+		exporterOptions = append(exporterOptions, otlpmetrichttp.WithHeaders(headers))
 	}
 
 	exporter, err := otlpmetrichttp.New(ctx, exporterOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("create otlp metric exporter: %w", err)
 	}
+	// The export interval comes from OTEL_METRIC_EXPORT_INTERVAL or the SDK's
+	// 60s default. This service adds no setting of its own for it: whoever runs
+	// the collector owns that cadence, and the standard variable is already how
+	// they express it.
 	return sdkmetric.NewPeriodicReader(exporter), nil
 }
 

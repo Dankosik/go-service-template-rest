@@ -16,10 +16,11 @@ type Event struct {
 	MessageID     string
 	PublicationID string
 	Type          string
-	// Schema versions Payload's shape for consumers. Nothing here parses it, and
-	// no repository gate checks it the way OpenAPI and Buf check this service's
-	// other published contracts — the emitting feature owns event compatibility
-	// on its own. A stream retains what it was given and a dead-letter record can
+	// Schema versions Payload's shape for consumers, spelled as
+	// [SchemaForVersion] writes it; [Registry.Handler] routes a delivery by it
+	// together with Type. No repository gate checks it the way OpenAPI and Buf
+	// check this service's other published contracts — the emitting feature
+	// owns event compatibility on its own. A stream retains what it was given and a dead-letter record can
 	// be redriven long after, so a consumer must keep reading every version still
 	// present, not only the one being published today.
 	Schema    string
