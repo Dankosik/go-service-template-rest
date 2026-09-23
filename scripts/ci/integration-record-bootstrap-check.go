@@ -74,7 +74,7 @@ func checkStartupMapping(startup *ast.File, startupFile, alias, initFunction str
 		// refactoring to non-adjacent statements will not match.
 		for index := 0; index+2 < len(function.Body.List); index++ {
 			literal, ok := startupConstruction(function.Body.List[index], alias)
-			if !ok || !errorReturn(function.Body.List[index+1], true) || !clientReturn(function.Body.List[index+2]) {
+			if !ok || !returnsNilAndError(function.Body.List[index+1]) || !clientReturn(function.Body.List[index+2]) {
 				continue
 			}
 			startupFlows++
@@ -109,7 +109,7 @@ func checkRunLifecycle(run *ast.File, runFile, initFunction, clientVariable, con
 			if !constructionOK {
 				continue
 			}
-			errorOK := errorReturn(function.Body.List[index+1], false)
+			errorOK := returnsErr(function.Body.List[index+1])
 			closedOK := false
 			for later := index + 2; later < len(function.Body.List); later++ {
 				if falseAssignment(function.Body.List[later], closedVariable) {
@@ -149,19 +149,28 @@ func startupConstruction(statement ast.Stmt, alias string) (*ast.CompositeLit, b
 	return literal, ok && selectorNamed(literal.Type, alias, "Config")
 }
 
-func errorReturn(statement ast.Stmt, twoResults bool) bool {
+// returnsNilAndError matches `if err != nil { return nil, <non-nil> }`.
+func returnsNilAndError(statement ast.Stmt) bool {
+	returned := errGuardReturn(statement)
+	return returned != nil && len(returned.Results) == 2 &&
+		identifierIs(returned.Results[0], "nil") && !identifierIs(returned.Results[1], "nil")
+}
+
+// returnsErr matches `if err != nil { return err }`.
+func returnsErr(statement ast.Stmt) bool {
+	returned := errGuardReturn(statement)
+	return returned != nil && len(returned.Results) == 1 && identifierIs(returned.Results[0], "err")
+}
+
+// errGuardReturn returns the sole return statement of an `if err != nil`
+// guard, or nil when statement is not one.
+func errGuardReturn(statement ast.Stmt) *ast.ReturnStmt {
 	branch, ok := statement.(*ast.IfStmt)
 	if !ok || !errNotNil(branch.Cond) || len(branch.Body.List) != 1 {
-		return false
+		return nil
 	}
-	returned, ok := branch.Body.List[0].(*ast.ReturnStmt)
-	if !ok {
-		return false
-	}
-	if twoResults {
-		return len(returned.Results) == 2 && identifierIs(returned.Results[0], "nil") && !identifierIs(returned.Results[1], "nil")
-	}
-	return len(returned.Results) == 1 && identifierIs(returned.Results[0], "err")
+	returned, _ := branch.Body.List[0].(*ast.ReturnStmt)
+	return returned
 }
 
 func errNotNil(expression ast.Expr) bool {

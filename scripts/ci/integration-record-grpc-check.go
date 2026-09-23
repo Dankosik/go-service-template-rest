@@ -19,21 +19,42 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: integration-record-grpc-check FILE AUTH")
 		os.Exit(2)
 	}
-	filename, authMode := arguments[0], arguments[1]
+	filename := arguments[0]
+	auth, ok := grpcAuthModes[arguments[1]]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown AUTH %q\n", arguments[1])
+		os.Exit(2)
+	}
 	parsed, err := parseFile(filename)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := checkGRPCClient(parsed, authMode); err != nil {
+	if err := checkGRPCClient(parsed, auth); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %v\n", filename, err)
 		os.Exit(1)
 	}
 }
 
+// grpcAuth is what one AUTH mode requires of the adapter: whether the
+// connection is opened through an OAuth client, and how many of each
+// mode-specific binding must be present.
+type grpcAuth struct {
+	oauth           bool
+	connections     int
+	authConfig      int
+	authConnections int
+	authClose       int
+}
+
+var grpcAuthModes = map[string]grpcAuth{
+	"none":                      {connections: 1},
+	"oauth2-client-credentials": {oauth: true, authConfig: 1, authConnections: 1, authClose: 1},
+}
+
 // checkGRPCClient matches the expected constructor shape, not equivalent data
 // flow in every form. Refactoring the adapter may require updating this check.
-func checkGRPCClient(file *ast.File, authMode string) error {
+func checkGRPCClient(file *ast.File, auth grpcAuth) error {
 	grpcAlias := usableImportAlias(file, "/internal/infra/grpcclient")
 	oauthAlias := usableImportAlias(file, "/internal/infra/oauth2clientcredentials")
 	credentialsAlias := usableImportAlias(file, "google.golang.org/grpc/credentials")
@@ -70,14 +91,14 @@ func checkGRPCClient(file *ast.File, authMode string) error {
 					tlsBindings++
 				}
 			case "conn":
-				if authMode == "none" && grpcConnectionCall(call, grpcAlias) {
+				if !auth.oauth && grpcConnectionCall(call, grpcAlias) {
 					connectionBindings++
 				}
-				if authMode == "oauth2-client-credentials" && authConnectionCall(call) {
+				if auth.oauth && authConnectionCall(call) {
 					authConnectionBindings++
 				}
 			case "auth":
-				if authMode == "oauth2-client-credentials" && oauthConfigMapping(call, oauthAlias) {
+				if auth.oauth && oauthConfigMapping(call, oauthAlias) {
 					authConfigBindings++
 				}
 			}
@@ -91,25 +112,17 @@ func checkGRPCClient(file *ast.File, authMode string) error {
 			if fields["conn"] != "conn" {
 				continue
 			}
-			if authMode == "oauth2-client-credentials" && fields["auth"] != "auth" {
+			if auth.oauth && fields["auth"] != "auth" {
 				continue
 			}
 			returnedClients++
 		}
 	}
 
-	wantConnections, wantAuthConfig, wantAuthConnections := 1, 0, 0
-	if authMode == "oauth2-client-credentials" {
-		wantConnections, wantAuthConfig, wantAuthConnections = 0, 1, 1
-	}
-	closeOnce, authClose, connectionClose := closeFlow(file, authMode)
-	wantAuthClose := 0
-	if authMode == "oauth2-client-credentials" {
-		wantAuthClose = 1
-	}
-	if targetBindings != 1 || tlsBindings != 1 || connectionBindings != wantConnections ||
-		authConfigBindings != wantAuthConfig || authConnectionBindings != wantAuthConnections ||
-		returnedClients != 1 || closeOnce != 1 || authClose != wantAuthClose || connectionClose != 1 {
+	closeOnce, authClose, connectionClose := closeFlow(file, auth.oauth)
+	if targetBindings != 1 || tlsBindings != 1 || connectionBindings != auth.connections ||
+		authConfigBindings != auth.authConfig || authConnectionBindings != auth.authConnections ||
+		returnedClients != 1 || closeOnce != 1 || authClose != auth.authClose || connectionClose != 1 {
 		return fmt.Errorf("target=%d tls=%d conn=%d authConfig=%d authConn=%d returned=%d once=%d authClose=%d connClose=%d",
 			targetBindings, tlsBindings, connectionBindings, authConfigBindings, authConnectionBindings,
 			returnedClients, closeOnce, authClose, connectionClose)
@@ -153,8 +166,9 @@ func connectionArguments(arguments []ast.Expr) bool {
 	return ok && identifierIs(keyedFields(literal)["TransportCredentials"], "creds")
 }
 
-func closeFlow(file *ast.File, authMode string) (int, int, int) {
-	once, auth, connection := 0, 0, 0
+// closeFlow counts closeOnce.Do callbacks in Close methods, and within them the
+// guarded auth and connection closes the mode requires.
+func closeFlow(file *ast.File, oauth bool) (once, authClose, connectionClose int) {
 	for _, declaration := range file.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok || function.Recv == nil || function.Name.Name != "Close" || function.Body == nil {
@@ -176,19 +190,19 @@ func closeFlow(file *ast.File, authMode string) (int, int, int) {
 			}
 			once++
 			statements := callback.Body.List
-			if authMode == "oauth2-client-credentials" {
+			if oauth {
 				if len(statements) == 2 && guardedAuthClose(statements[0]) {
-					auth++
+					authClose++
 				}
 				if len(statements) == 2 && guardedConnectionClose(statements[1]) {
-					connection++
+					connectionClose++
 				}
 			} else if len(statements) == 1 && guardedConnectionClose(statements[0]) {
-				connection++
+				connectionClose++
 			}
 		}
 	}
-	return once, auth, connection
+	return once, authClose, connectionClose
 }
 
 func guardedAuthClose(statement ast.Stmt) bool {
