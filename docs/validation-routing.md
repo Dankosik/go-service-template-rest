@@ -45,14 +45,19 @@ still requires that result; local completion alone does not complete it.
 
 `make verify` is an explicitly selected expanded, surface-aware verification
 route, not the ordinary local completion command. Its plan may include Docker,
-integration, migration, and image checks. `make plan` diagnoses that selection;
-it is not a gate and does not authorize the plan. Prefer a matching canonical
+integration, migration, and image checks. Heavy steps are CI-owned: CI runs them
+on every surface that selects them, so the plan lists them under `ci-owned` and
+a local run leaves them to CI; `ALLOW_HEAVY=1` keeps them local. `make plan`
+diagnoses that selection; it is not a gate and does not authorize the plan. Prefer a matching canonical
 leaf when an aggregate would add irrelevant work.
 
 For an expanded run, `make verify` reuses an exact Git-common passing receipt
 while resolved base, merge base, candidate, plan, execution inputs, and
-environment remain unchanged. Heavy authorization, Docker, and binary checks
+environment remain unchanged. Docker and binary checks for the local steps
 happen before execution; selected integration leaves force `REQUIRE_DOCKER=1`.
+While CI-owned steps remain the receipt records `status: partially_verified`,
+lists them under `ci_owned`, and names CI as the next owner; a route with only
+CI-owned steps runs nothing locally.
 A changed candidate cannot produce a receipt. `ALLOW_FULL=1 make check` remains
 the explicit deterministic full-repository gate, never a default follow-up.
 

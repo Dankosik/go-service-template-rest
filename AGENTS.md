@@ -109,8 +109,11 @@ boundary. Return Implemented and immediately start newly ready work; parallelize
 independent writers. Task boundaries do not create proof or review gates.
 Domain skills and old packets do not expand that execution boundary or the
 required proof scope. Full or heavy gates need an applicable explicit requirement
-and authority; availability is not a trigger. Never run CPU-heavy validation
-concurrently or clear shared caches. Existing CI and release gates remain intact.
+and authority; availability is not a trigger. CI owns the steps `make verify`
+marks CI-owned: when pushing is authorized, push the working branch, open or
+update its pull request, and take their result from that run; otherwise report
+them as pending CI. Never run CPU-heavy validation concurrently or clear shared
+caches. Existing CI and release gates remain intact.
 
 ## Work Selection And Loading
 
