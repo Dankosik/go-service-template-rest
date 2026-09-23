@@ -87,11 +87,11 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (endpoint TraceExporte
 }
 
 func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
-	if err := otelconfig.ValidateTraceSampler(name, arg); err != nil {
+	if err := otelconfig.ValidateTracesSampler(name, arg); err != nil {
 		return nil, fmt.Errorf("build trace sampler: %w", err)
 	}
 
-	switch otelconfig.TraceSamplerOrDefault(name) {
+	switch otelconfig.TracesSamplerOrDefault(name) {
 	case otelconfig.SamplerAlwaysOn:
 		return sdktrace.AlwaysSample(), nil
 	case otelconfig.SamplerAlwaysOff:
