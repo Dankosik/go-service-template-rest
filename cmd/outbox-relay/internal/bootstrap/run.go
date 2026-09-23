@@ -82,7 +82,7 @@ func run(signalCtx context.Context, args []string) error {
 			pool.Close()
 		}
 	}()
-	client, err := natsjs.Connect(
+	messaging, err := natsjs.Connect(
 		startupCtx,
 		runtimeopts.Messaging(cfg.Messaging),
 		natsjs.Observability{Logger: log},
@@ -92,12 +92,12 @@ func run(signalCtx context.Context, args []string) error {
 	}
 	defer func() {
 		if cleanupSafe {
-			client.Close()
+			messaging.Close()
 		}
 	}()
 
 	workers := river.NewWorkers()
-	outboxWorker, err := outboxworker.New(client.Producer())
+	outboxWorker, err := outboxworker.New(messaging.Producer())
 	if err != nil {
 		return fmt.Errorf("initialize NATS outbox worker: %w", err)
 	}
@@ -112,7 +112,7 @@ func run(signalCtx context.Context, args []string) error {
 		return fmt.Errorf("initialize River outbox worker: %w", err)
 	}
 	cleanupSafe, cleanupWindow, err = runLifecycle(
-		signalCtx, startupCtx, cfg, log, metrics, pool, client, riverClient,
+		signalCtx, startupCtx, cfg, log, metrics, pool, messaging, riverClient,
 	)
 	return err
 }
@@ -165,12 +165,12 @@ func runLifecycle(
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
 	pool postgresPinger,
-	client messagingRuntime,
+	messaging messagingRuntime,
 	riverClient riverRuntime,
 ) (bool, context.Context, error) {
 	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
-	var ready atomic.Bool
-	readiness := health.New(postgresReadinessProbe{pool: pool}, client)
+	var admitted atomic.Bool
+	readiness := health.New(postgresReadinessProbe{pool: pool}, messaging)
 	if err := readiness.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
 		return true, unarmed, fmt.Errorf("admit outbox readiness: %w", err)
 	}
@@ -178,7 +178,7 @@ func runLifecycle(
 		startupCtx,
 		cfg.Observability.Metrics.Addr,
 		"outbox",
-		func() bool { return relayReady(ready.Load(), client.Ready(), readiness.Cached()) },
+		func() bool { return relayReady(admitted.Load(), messaging.Ready(), readiness.Cached()) },
 		metrics,
 		cfg.Observability.Pprof.Enabled,
 	)
@@ -188,7 +188,7 @@ func runLifecycle(
 	runtimeCtx, cancelRuntime := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer cancelRuntime()
 	supervisor := background.New(runtimeCtx, log)
-	supervisor.Go(background.Task{Name: "messaging_connection", Run: client.Run})
+	supervisor.Go(background.Task{Name: "messaging_connection", Run: messaging.Run})
 	supervisor.Go(background.Task{
 		Name: "dependency_readiness",
 		Run: func(ctx context.Context) error {
@@ -210,7 +210,7 @@ func runLifecycle(
 		defer cancelBackground()
 		backgroundErr = supervisor.Shutdown(backgroundCtx)
 		if shutdownMessaging {
-			messagingErr = client.Shutdown(backgroundCtx)
+			messagingErr = messaging.Shutdown(backgroundCtx)
 		}
 		return diagnosticsErr, backgroundErr, messagingErr
 	}
@@ -233,7 +233,7 @@ func runLifecycle(
 			backgroundErr,
 		)
 	}
-	ready.Store(true)
+	admitted.Store(true)
 
 	var trigger error
 	select {
@@ -244,7 +244,7 @@ func runLifecycle(
 	case <-diagnostics.Stopped():
 		trigger = errors.New("outbox diagnostics stopped unexpectedly")
 	}
-	ready.Store(false)
+	admitted.Store(false)
 	readiness.StartDrain()
 	window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
@@ -253,7 +253,7 @@ func runLifecycle(
 	cancelRiver()
 	riverStopped := riverErr == nil
 	if riverStopped {
-		client.StopPublish()
+		messaging.StopPublish()
 	}
 	diagnosticsErr, backgroundErr, messagingErr := stopTail(window, riverStopped)
 	return relayCleanupSafe(riverStopped, backgroundErr), window,
@@ -283,8 +283,8 @@ type messagingRuntime interface {
 	Shutdown(ctx context.Context) error
 }
 
-func relayReady(started, messagingReady bool, dependencyErr error) bool {
-	return started && messagingReady && dependencyErr == nil
+func relayReady(admitted, messagingReady bool, dependencyErr error) bool {
+	return admitted && messagingReady && dependencyErr == nil
 }
 
 type riverRuntime interface {
