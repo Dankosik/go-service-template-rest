@@ -50,7 +50,6 @@ func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error
 	c.telemetry = telemetry
 	nc, err := nats.Connect(strings.Join(cfg.URLs, ","), c.connectOptions(ctx, cfg)...)
 	if err != nil {
-		c.Close()
 		return nil, fmt.Errorf("%w: messaging connection failed", ErrRejected)
 	}
 	c.nc = nc
@@ -59,7 +58,7 @@ func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error
 		c.Close()
 		return nil, fmt.Errorf("%w: messaging protocol initialization failed", ErrRejected)
 	}
-	c.producer = newProducer(c, cfg.MaxPayloadBytes)
+	c.producer = newProducer(c)
 	if err := c.Check(ctx); err != nil {
 		c.Close()
 		return nil, err

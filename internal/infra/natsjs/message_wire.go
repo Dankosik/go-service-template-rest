@@ -34,7 +34,7 @@ const (
 )
 
 func validateEvent(event Event, maxPayloadBytes int) error {
-	if !validSubject(event.Subject, false) {
+	if !validPublishSubject(event.Subject) {
 		return fmt.Errorf("%w: invalid event subject", ErrRejected)
 	}
 	if err := validateRequiredValue("message ID", event.MessageID); err != nil {

@@ -14,17 +14,16 @@ import (
 // Connection drain, request cancellation, and broker flow control are owned by
 // the NATS client; callers bound concurrency at their existing HTTP or River owner.
 type Producer struct {
-	client          *Client
-	maxPayloadBytes int
+	client *Client
 }
 
-func newProducer(client *Client, maxPayloadBytes int) *Producer {
-	return &Producer{client: client, maxPayloadBytes: maxPayloadBytes}
+func newProducer(client *Client) *Producer {
+	return &Producer{client: client}
 }
 
 func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, error) {
 	started := time.Now()
-	if err := validateEvent(event, p.maxPayloadBytes); err != nil {
+	if err := validateEvent(event, p.client.cfg.MaxPayloadBytes); err != nil {
 		p.client.telemetry.recordPublish(ctx, event, outcomeRejected, reasonInvalidMessage, started)
 		return PublishResult{}, err
 	}
@@ -39,7 +38,7 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 
 	ctx, span := p.client.telemetry.tracer.Start(ctx, publishSpanName(event.Subject), publishSpanOptions(event)...)
 	defer span.End()
-	msg, err := buildNATSMessage(ctx, event, p.maxPayloadBytes)
+	msg, err := buildNATSMessage(ctx, event, p.client.cfg.MaxPayloadBytes)
 	if err != nil {
 		setSpanOutcome(span, outcomeRejected)
 		p.client.telemetry.recordPublish(ctx, event, outcomeRejected, reasonInvalidMessage, started)

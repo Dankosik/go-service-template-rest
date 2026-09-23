@@ -137,10 +137,7 @@ func (w *Worker) Shutdown(ctx context.Context) error {
 	w.StartDrain()
 	select {
 	case <-w.runDone:
-		if err := w.client.Shutdown(ctx); err != nil {
-			return err
-		}
-		return nil
+		return w.client.Shutdown(ctx)
 	case <-ctx.Done():
 		w.forceClose()
 		return fmt.Errorf("forced messaging shutdown: %w", ctx.Err())

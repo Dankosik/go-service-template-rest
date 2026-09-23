@@ -155,7 +155,7 @@ func buildRoutes(routes []Route) (map[routeKey]string, error) {
 		if route.Version == 0 {
 			return nil, fmt.Errorf("%w: event version must be positive", ErrRejected)
 		}
-		if !validSubject(route.Subject, false) {
+		if !validPublishSubject(route.Subject) {
 			return nil, fmt.Errorf("%w: invalid event subject", ErrRejected)
 		}
 		key := routeKey{typeName: route.Type, version: route.Version}

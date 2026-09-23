@@ -123,15 +123,20 @@ func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, resu
 // not a failure of the handler's work: it already succeeded, and the redelivery
 // that follows is the duplicate every handler here must already tolerate.
 func (w *Worker) acknowledge(ctx, handlerRoot context.Context, current delivery, started time.Time) error {
-	ackCtx, cancel := context.WithTimeout(handlerRoot, operationTimeout)
-	err := current.source.DoubleAck(ackCtx)
-	cancel()
 	reason := reasonNone
-	if err != nil {
+	if !confirmAck(handlerRoot, current.source) {
 		reason = reasonAckAmbiguous
 	}
 	w.client.telemetry.recordHandler(ctx, current.message, outcomeSuccess, reason, started)
 	return nil
+}
+
+// confirmAck acknowledges msg and waits for the broker to confirm it, reporting
+// whether it did within operationTimeout.
+func confirmAck(ctx context.Context, msg jetstream.Msg) bool {
+	ackCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+	return msg.DoubleAck(ackCtx) == nil
 }
 
 // handlerOutcome labels one failed invocation for telemetry. A handler that
@@ -220,10 +225,7 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 		return fmt.Errorf("%w: dead-letter publish rejected", ErrTerminal)
 	}
 	w.client.telemetry.recordDeadLetterTransfer(ctx, outcomeAccepted)
-	ackCtx, ackCancel := context.WithTimeout(ctx, operationTimeout)
-	err = source.DoubleAck(ackCtx)
-	ackCancel()
-	if err != nil {
+	if !confirmAck(ctx, source) {
 		return w.requestRedelivery(ctx, source, metadata, w.cfg.DeadLetterRetryDelay, redeliverySourceAck)
 	}
 	return nil
