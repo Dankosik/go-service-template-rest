@@ -113,7 +113,7 @@ func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, resu
 		return w.deadLetter(handlerRoot, current, deadLetterExhausted)
 	}
 	telemetry.recordHandler(ctx, current.message, outcome, reasonHandlerRetry, result.started)
-	return w.requestRedelivery(ctx, current, w.retryDelayFor(current.metadata.NumDelivered), redeliveryHandler)
+	return w.requestRedelivery(ctx, current, w.retryDelayFor(current.metadata.NumDelivered), reasonHandlerRedeliveryRejected)
 }
 
 // acknowledge confirms the delivery with the broker. A lost acknowledgement is
@@ -206,21 +206,23 @@ func (w *Worker) deadLetter(ctx context.Context, current delivery, reason string
 		outcome, _, _ := classifyPublishError(err)
 		w.client.telemetry.recordDeadLetterTransfer(ctx, outcome)
 		if outcome == outcomeAmbiguous {
-			return w.requestRedelivery(ctx, current, w.cfg.DeadLetterRetryDelay, redeliveryDeadLetter)
+			return w.requestRedelivery(ctx, current, w.cfg.DeadLetterRetryDelay, reasonDeadLetterRedeliveryRejected)
 		}
 		w.client.telemetry.logTerminalDelivery(ctx, current.source.Subject(), current.metadata, reasonDeadLetterRejected, nil)
 		return fmt.Errorf("%w: dead-letter publish rejected", ErrTerminal)
 	}
 	w.client.telemetry.recordDeadLetterTransfer(ctx, outcomeAccepted)
 	if !confirmAck(ctx, current.source) {
-		return w.requestRedelivery(ctx, current, w.cfg.DeadLetterRetryDelay, redeliverySourceAck)
+		return w.requestRedelivery(ctx, current, w.cfg.DeadLetterRetryDelay, reasonSourceAckRedeliveryRejected)
 	}
 	return nil
 }
 
-func (w *Worker) requestRedelivery(ctx context.Context, current delivery, delay time.Duration, reason string) error {
+// requestRedelivery asks the broker to redeliver the source after delay.
+// rejectedReason names the settlement path in the log if the broker refuses.
+func (w *Worker) requestRedelivery(ctx context.Context, current delivery, delay time.Duration, rejectedReason string) error {
 	if err := current.source.NakWithDelay(delay); err != nil {
-		w.client.telemetry.logTerminalDelivery(ctx, current.source.Subject(), current.metadata, reason+"_rejected", nil)
+		w.client.telemetry.logTerminalDelivery(ctx, current.source.Subject(), current.metadata, rejectedReason, nil)
 		return fmt.Errorf("%w: request delayed source redelivery", ErrTerminal)
 	}
 	return nil
