@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
@@ -16,6 +17,9 @@ const (
 	ingressInstrument    = "inbound_webhooks.ingress_outcomes"
 	processingInstrument = "inbound_webhooks.processing_outcomes"
 	outcomeAttr          = "outcome"
+
+	// processingRetrying labels a processing attempt that River will retry.
+	processingRetrying = "retrying"
 )
 
 type telemetry struct {
@@ -48,11 +52,11 @@ func newTelemetry(meter metric.MeterProvider, log *slog.Logger) telemetry {
 // reports that case only as an error, so it has no inboundwebhook.Outcome.
 const ingressUnavailable = "unavailable"
 
-func (t telemetry) recordIngress(ctx context.Context, outcome string) {
+func (t telemetry) recordIngress(ctx context.Context, outcome inboundwebhook.Outcome) {
 	if t.ingress == nil {
 		return
 	}
-	t.ingress.Add(ctx, 1, metric.WithAttributes(attribute.String(outcomeAttr, outcome)))
+	t.ingress.Add(ctx, 1, metric.WithAttributes(attribute.String(outcomeAttr, string(outcome))))
 }
 
 func (t telemetry) recordProcessing(ctx context.Context, outcome string) {
@@ -64,7 +68,7 @@ func (t telemetry) recordProcessing(ctx context.Context, outcome string) {
 
 func (t telemetry) recordRetryingFailure(ctx context.Context, receiptID, class string) {
 	t.logFailure(ctx, receiptID, class)
-	t.recordProcessing(ctx, "retrying")
+	t.recordProcessing(ctx, processingRetrying)
 }
 
 func (t telemetry) logFailure(ctx context.Context, receiptID, class string) {

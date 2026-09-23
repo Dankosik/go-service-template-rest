@@ -62,7 +62,7 @@ func (s *spyStore) Accept(context.Context, receiptRecord) (inboundwebhook.Outcom
 func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 	now := time.Unix(1700000000, 0).UTC()
 	store := &spyStore{}
-	receiver, err := NewReceiver(nil, testTrust(t, "orders", reviewedVectorKey(), nil),
+	receiver, err := NewReceiver(nil, testTrust(t, "orders", reviewedVectorKey(), nil), nil,
 		withStore(store),
 		WithClock(func() time.Time { return now }),
 	)
@@ -141,7 +141,7 @@ func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		rotated, err := NewReceiver(nil, testTrust(t, "orders", reviewedVectorKey(), pred),
+		rotated, err := NewReceiver(nil, testTrust(t, "orders", reviewedVectorKey(), pred), nil,
 			withStore(&spyStore{}),
 			WithClock(func() time.Time { return now }),
 		)

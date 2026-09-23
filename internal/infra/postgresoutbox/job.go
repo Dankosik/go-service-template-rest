@@ -1,6 +1,7 @@
 package postgresoutbox
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/riverqueue/river"
@@ -31,4 +32,14 @@ func (PublishJob) InsertOpts() river.InsertOpts {
 			ByState: rivertype.JobStates(),
 		},
 	}
+}
+
+// samePublication reports whether two jobs carry the same publication data.
+func (j PublishJob) samePublication(other PublishJob) bool {
+	return j.ID == other.ID &&
+		j.Type == other.Type &&
+		j.Version == other.Version &&
+		j.OccurredAt.Equal(other.OccurredAt) &&
+		j.Subject == other.Subject &&
+		bytes.Equal(j.Payload, other.Payload)
 }

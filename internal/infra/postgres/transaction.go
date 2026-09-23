@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// rollbackTimeout bounds the detached rollback after fn or commit returns.
+const rollbackTimeout = 3 * time.Second
 
 // InTx runs fn inside one transaction, committing when it returns nil and
 // rolling back otherwise.
@@ -56,7 +60,7 @@ func runInTx(
 	marker *contextWatcherMark,
 ) (err error) {
 	defer func() {
-		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), postgresConnectTimeout)
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
 		defer cancel()
 		rollbackErr := tx.Rollback(rollbackCtx)
 		if rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
@@ -97,10 +101,16 @@ func classifyCommitError(err error) error {
 	return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
 }
 
+// commitDefinitelyFailed reports errors that prove the transaction did not
+// commit: an integrity violation from a deferred constraint and a class 40
+// rollback (other than statement_completion_unknown) are the server rejecting
+// COMMIT; ErrTxCommitRollback means the server answered COMMIT with ROLLBACK for
+// an already aborted transaction; and SafeToRetry means COMMIT never reached
+// the server.
 func commitDefinitelyFailed(err error) bool {
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		return pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) ||
-			pgerrcode.IsTransactionRollback(pgErr.Code) && pgErr.Code != pgerrcode.StatementCompletionUnknown
+			(pgerrcode.IsTransactionRollback(pgErr.Code) && pgErr.Code != pgerrcode.StatementCompletionUnknown)
 	}
 	return errors.Is(err, pgx.ErrTxCommitRollback) || pgconn.SafeToRetry(err)
 }
