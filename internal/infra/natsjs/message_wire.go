@@ -92,10 +92,9 @@ func validateHeaderValue(name, value string) error {
 	return nil
 }
 
+// buildNATSMessage encodes an event that has already passed validateEvent, and
+// rejects it only when the encoded envelope exceeds the configured bound.
 func buildNATSMessage(ctx context.Context, event Event, maxPayloadBytes int) (*nats.Msg, error) {
-	if err := validateEvent(event, maxPayloadBytes); err != nil {
-		return nil, err
-	}
 	header := make(nats.Header)
 	header.Set(headerMessageID, event.MessageID)
 	header.Set(jetstream.MsgIDHeader, event.PublicationID)

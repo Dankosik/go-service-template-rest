@@ -38,6 +38,7 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 
 	ctx, span := p.client.telemetry.tracer.Start(ctx, publishSpanName(event.Subject), publishSpanOptions(event)...)
 	defer span.End()
+	// The event was validated above; what remains is the encoded envelope bound.
 	msg, err := buildNATSMessage(ctx, event, p.client.cfg.MaxPayloadBytes)
 	if err != nil {
 		setSpanOutcome(span, outcomeRejected)
