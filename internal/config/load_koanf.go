@@ -36,16 +36,12 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		metadata.failedStage = StageLoadFile
 		return nil, metadata, err
 	}
+	paths := opts.ConfigOverlays
 	if opts.ConfigPath != "" {
-		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, opts.ConfigPath)
-		if err != nil {
-			metadata.failedStage = StageLoadFile
-			return nil, metadata, err
-		}
-		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
+		paths = append([]string{opts.ConfigPath}, opts.ConfigOverlays...)
 	}
-	for _, overlayPath := range opts.ConfigOverlays {
-		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, overlayPath)
+	for _, path := range paths {
+		sectionScalarOverrideKeys, err := mergeConfigFile(ctx, k, path)
 		if err != nil {
 			metadata.failedStage = StageLoadFile
 			return nil, metadata, err
@@ -59,10 +55,7 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 
 	namespaceValues, malformedEnvironmentKeys := collectNamespaceValues(os.Environ())
 	metadata.malformedEnvironmentKeys = malformedEnvironmentKeys
-	if len(namespaceValues) > 0 {
-		sectionScalarOverrideKeys := removeSectionScalarOverridesInPlace(namespaceValues)
-		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
-	}
+	metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, removeSectionScalarOverridesInPlace(namespaceValues)...)
 	if len(namespaceValues) > 0 {
 		if err := k.Load(confmap.Provider(namespaceValues, keyDelimiter), nil); err != nil {
 			metadata.failedStage = StageLoadEnv
