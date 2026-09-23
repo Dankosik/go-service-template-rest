@@ -135,10 +135,6 @@ func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*pgxpool.Pool
 }
 
 func validateStartupBudgetCompatibility(cfg config.Config) error {
-	return validateStartupReadinessHeadroom(cfg)
-}
-
-func validateStartupReadinessHeadroom(cfg config.Config) error {
 	if !cfg.Postgres.Enabled {
 		return nil
 	}
