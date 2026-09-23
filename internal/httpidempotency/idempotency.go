@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"slices"
@@ -121,10 +122,14 @@ func NewRequest(scope Scope, key string, fingerprintVersion int16, semanticInput
 		return Request{}, fmt.Errorf("%w: encode semantic input: %w", ErrInvalidFingerprint, err)
 	}
 
+	identity := digest(
+		"http-idempotency.identity.v2",
+		[]byte(scope.Caller), []byte(scope.Operation), []byte(scope.Resource), []byte(key),
+	)
 	return Request{
-		identity:           digest("http-idempotency.identity.v2", scope.Caller, scope.Operation, scope.Resource, key),
+		identity:           identity,
 		fingerprintVersion: fingerprintVersion,
-		fingerprint:        digestBytes("http-idempotency.fingerprint.v2", canonical),
+		fingerprint:        digest("http-idempotency.fingerprint.v2", canonical),
 	}, nil
 }
 
@@ -152,31 +157,22 @@ func validKeyByte(value byte) bool {
 		strings.ContainsRune("!#$%&'*+-.^_`|~", rune(value))
 }
 
-func digest(domain string, values ...string) [sha256.Size]byte {
+// digest hashes domain and parts as length-prefixed fields: an 8-byte
+// big-endian length before each value, so no two part lists share a stream.
+func digest(domain string, parts ...[]byte) [sha256.Size]byte {
 	hash := sha256.New()
-	writePart(hash.Write, []byte(domain))
-	for _, value := range values {
-		writePart(hash.Write, []byte(value))
+	writePart(hash, []byte(domain))
+	for _, part := range parts {
+		writePart(hash, part)
 	}
-	var result [sha256.Size]byte
-	copy(result[:], hash.Sum(nil))
-	return result
+	return [sha256.Size]byte(hash.Sum(nil))
 }
 
-func digestBytes(domain string, value []byte) [sha256.Size]byte {
-	hash := sha256.New()
-	writePart(hash.Write, []byte(domain))
-	writePart(hash.Write, value)
-	var result [sha256.Size]byte
-	copy(result[:], hash.Sum(nil))
-	return result
-}
-
-func writePart(write func([]byte) (int, error), value []byte) {
+func writePart(w io.Writer, value []byte) {
 	var length [8]byte
 	binary.BigEndian.PutUint64(length[:], uint64(len(value)))
-	_, _ = write(length[:])
-	_, _ = write(value)
+	_, _ = w.Write(length[:])
+	_, _ = w.Write(value)
 }
 
 func (r Request) Valid() bool {
