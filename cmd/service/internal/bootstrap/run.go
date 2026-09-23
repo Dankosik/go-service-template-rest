@@ -270,7 +270,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	domainErrors = append(domainErrors, httpidempotency.ClassifyError)
 	// profile:http-idempotency-postgres:end
 	// profile:inbound-webhooks-standard:start
-	inboundReceiver, err := initInboundWebhookReceiver(bootstrap.cfg, dependencies.postgres, metrics, bootstrap.log)
+	inboundReceiver, err := initInboundWebhookReceiver(bootstrap.cfg, dependencies.postgres, metrics)
 	if err != nil {
 		return err
 	}
@@ -367,7 +367,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 				// profile:grpc:end
 			)
 		},
-		shutdownDelay: bootstrap.cfg.HTTP.ReadinessPropagationDelay,
+		readinessPropagationDelay: bootstrap.cfg.HTTP.ReadinessPropagationDelay,
 		// profile:messaging-nats-jetstream:start
 		preDrain: messaging.StartDrain,
 		// profile:messaging-nats-jetstream:end

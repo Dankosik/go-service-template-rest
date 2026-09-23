@@ -92,7 +92,7 @@ func (v *Verifier) Close() {
 func (v *Verifier) Verify(ctx context.Context, token string) (bearerauthn.Result, error) {
 	request, err := v.newIntrospectionRequest(ctx, token)
 	if err != nil {
-		return bearerauthn.Result{}, classifyProviderError(ctx, err)
+		return bearerauthn.Result{}, classifyContextOrUnavailable(ctx)
 	}
 	attemptCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
 	defer cancel()
@@ -100,14 +100,14 @@ func (v *Verifier) Verify(ctx context.Context, token string) (bearerauthn.Result
 
 	response, err := v.client.Do(request)
 	if err != nil {
-		return bearerauthn.Result{}, classifyProviderError(ctx, err)
+		return bearerauthn.Result{}, classifyContextOrUnavailable(ctx)
 	}
 	if response != nil && response.Body != nil {
 		defer func() { _ = response.Body.Close() }()
 	}
 	body, err := readBoundedBody(response)
 	if err != nil {
-		return bearerauthn.Result{}, classifyProviderError(ctx, err)
+		return bearerauthn.Result{}, classifyContextOrUnavailable(ctx)
 	}
 	if response.StatusCode != http.StatusOK || !jsonMediaType(response.Header.Get("Content-Type")) {
 		return bearerauthn.Result{}, failure(bearerauthn.KindUnavailable)
@@ -154,7 +154,7 @@ func jsonMediaType(value string) bool {
 	return err == nil && strings.EqualFold(media, "application/json")
 }
 
-func classifyProviderError(ctx context.Context, _ error) error {
+func classifyContextOrUnavailable(ctx context.Context) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("verify access token: %w", ctxErr)
 	}

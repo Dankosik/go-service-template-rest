@@ -214,7 +214,8 @@ func runLifecycle(
 		)
 		backgroundErr := supervisor.Shutdown(backgroundCtx)
 		cancelBackground()
-		cleanupSafe := riverErr == nil && !errors.Is(backgroundErr, context.DeadlineExceeded)
+		riverStopped := riverErr == nil
+		cleanupSafe := riverStopped && !errors.Is(backgroundErr, context.DeadlineExceeded)
 		return cleanupSafe, shutdownDeadline, errors.Join(
 			fmt.Errorf("start River outbox worker: %w", err),
 			riverErr,
@@ -242,8 +243,8 @@ func runLifecycle(
 	)
 	riverErr := riverClient.Stop(riverCtx)
 	cancelRiver()
-	cleanupSafe = riverErr == nil
-	if cleanupSafe {
+	riverStopped := riverErr == nil
+	if riverStopped {
 		client.StopPublish()
 	}
 	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
@@ -252,11 +253,11 @@ func runLifecycle(
 	)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	var messagingErr error
-	if cleanupSafe {
+	if riverStopped {
 		messagingErr = client.Shutdown(backgroundCtx)
 	}
 	cancelBackground()
-	cleanupSafe = cleanupSafe && !errors.Is(backgroundErr, context.DeadlineExceeded)
+	cleanupSafe = riverStopped && !errors.Is(backgroundErr, context.DeadlineExceeded)
 	return cleanupSafe, shutdownDeadline, errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
 }
 

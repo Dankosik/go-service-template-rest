@@ -48,14 +48,13 @@ func NewPolicy(input PolicyInput) (Policy, error) {
 	if !authntrust.ValidIntrospectionEndpoint(input.Endpoint) {
 		return Policy{}, errors.New("authn introspection endpoint must be an absolute HTTPS URL without user info, query, or fragment")
 	}
-	if !authntrust.ValidIntrospectionTargetClass(input.TargetClass) {
+	switch authntrust.IntrospectionTargetPolicyIssue(input.TargetClass, input.PrivateSuffix) {
+	case authntrust.IntrospectionTargetValid:
+	case authntrust.IntrospectionTargetClassInvalid:
 		return Policy{}, errors.New("authn introspection target class must be one of external-https or private-https")
-	}
-	if input.TargetClass == authntrust.TargetClassPrivateHTTPS {
-		if strings.TrimSpace(input.PrivateSuffix) == "" {
-			return Policy{}, errors.New("authn introspection private host suffix is required for private-https")
-		}
-	} else if input.PrivateSuffix != "" {
+	case authntrust.IntrospectionPrivateSuffixRequired:
+		return Policy{}, errors.New("authn introspection private host suffix is required for private-https")
+	case authntrust.IntrospectionPrivateSuffixForbidden:
 		return Policy{}, errors.New("authn introspection private host suffix is forbidden for external-https")
 	}
 	if input.ClientID == "" {

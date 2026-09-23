@@ -46,17 +46,21 @@ func (e ExporterEndpoint) Configured() bool {
 	return e.URL != ""
 }
 
-type otlpEndpoint struct {
-	endpointURL string
+// fromConfig reports whether this service, rather than the platform, named the
+// destination. It decides whether ambient credential and trust material is a
+// conflict: material this service cannot verify must not travel to an endpoint
+// this service chose.
+func (e ExporterEndpoint) fromConfig() bool {
+	return e.ConfiguredByService
 }
 
 // parseSignalOTLPEndpoint validates a complete endpoint for one signal. A missing
 // path defaults to that signal's OTLP HTTP path; any other path is used exactly
 // as given, because a signal-specific endpoint names its own route.
-func parseSignalOTLPEndpoint(raw, signalPath string) (otlpEndpoint, error) {
+func parseSignalOTLPEndpoint(raw, signalPath string) (string, error) {
 	parsedURL, err := parseOTLPURL(raw)
 	if err != nil {
-		return otlpEndpoint{}, err
+		return "", err
 	}
 
 	if path := strings.TrimSpace(parsedURL.EscapedPath()); path == "" || path == "/" {
@@ -64,23 +68,23 @@ func parseSignalOTLPEndpoint(raw, signalPath string) (otlpEndpoint, error) {
 		parsedURL.RawPath = ""
 	}
 
-	return otlpEndpoint{endpointURL: parsedURL.String()}, nil
+	return parsedURL.String(), nil
 }
 
 // parseBaseOTLPEndpoint validates a signal-agnostic root and appends the signal's
 // path, which is what OTLP defines OTEL_EXPORTER_OTLP_ENDPOINT to mean. A root
 // carrying a path prefix keeps it, so a collector mounted under a sub-path still
 // resolves.
-func parseBaseOTLPEndpoint(raw, signalPath string) (otlpEndpoint, error) {
+func parseBaseOTLPEndpoint(raw, signalPath string) (string, error) {
 	parsedURL, err := parseOTLPURL(raw)
 	if err != nil {
-		return otlpEndpoint{}, err
+		return "", err
 	}
 
 	parsedURL.Path = pathpkg.Join("/", parsedURL.Path, signalPath)
 	parsedURL.RawPath = ""
 
-	return otlpEndpoint{endpointURL: parsedURL.String()}, nil
+	return parsedURL.String(), nil
 }
 
 // otlpCandidate is one step of the ordered search for a signal's exporter
@@ -152,12 +156,12 @@ func (c otlpCandidate) resolve(signalPath string) (ExporterEndpoint, bool, error
 	if c.base {
 		parse = parseBaseOTLPEndpoint
 	}
-	endpoint, err := parse(raw, signalPath)
+	endpointURL, err := parse(raw, signalPath)
 	if err != nil {
 		return ExporterEndpoint{}, false, err
 	}
 	return ExporterEndpoint{
-		URL: endpoint.endpointURL, Source: c.source,
+		URL: endpointURL, Source: c.source,
 		ConfiguredByService: c.configuredByService,
 	}, true, nil
 }

@@ -361,9 +361,9 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 		readinessCheck: func(context.Context) error {
 			return errors.New("readiness failed")
 		},
-		admission:     new(startupAdmissionController),
-		shutdown:      testShutdownBudget(),
-		shutdownDelay: time.Hour,
+		admission:                 new(startupAdmissionController),
+		shutdown:                  testShutdownBudget(),
+		readinessPropagationDelay: time.Hour,
 	})
 
 	if err == nil {

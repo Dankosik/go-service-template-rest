@@ -186,7 +186,12 @@ func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (bool, error) {
 }
 
 // ResolveCurrent reconciles an immediate unknown commit against current River
-// rows. The caller's business transaction owns replay after River retention.
+// rows. It returns true when the complete prepared fan-out is present and
+// matches, false when none of its deliveries are currently present, and an
+// error for a read failure or partial/mismatched fan-out. River retention
+// bounds this readback: false does not prove the transaction never committed
+// after its jobs have been deleted. The caller's business transaction owns
+// replay after River retention.
 func (p Prepared) ResolveCurrent(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
 	if pool == nil || len(p.deliveries) == 0 {
 		return false, fmt.Errorf("%w: prepared deliveries and pool are required", ErrConfig)

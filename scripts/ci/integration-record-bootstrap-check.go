@@ -70,6 +70,9 @@ func checkStartupMapping(startup *ast.File, startupFile, alias, initFunction str
 		if !ok || function.Recv != nil || function.Name.Name != initFunction || function.Body == nil {
 			continue
 		}
+		// This is an AST shape check: construction, its error guard, and the
+		// successful client return must be adjacent statements. An equivalent
+		// refactoring to non-adjacent statements will not match.
 		for index := 0; index+2 < len(function.Body.List); index++ {
 			literal, ok := startupConstruction(function.Body.List[index], alias)
 			if !ok || !errorReturn(function.Body.List[index+1], true) || !clientReturn(function.Body.List[index+2]) {
@@ -100,6 +103,8 @@ func checkRunLifecycle(run *ast.File, runFile, initFunction, clientVariable, con
 		if !ok || function.Body == nil {
 			continue
 		}
+		// This run-site AST shape requires construction followed immediately by
+		// its error guard; the closed flag must appear later in the same body.
 		for index := 0; index+2 < len(function.Body.List); index++ {
 			constructionOK := runConstruction(function.Body.List[index], initFunction, clientVariable, configPath)
 			if !constructionOK {

@@ -169,6 +169,8 @@ func (v *Verifier) Verify(ctx context.Context, compact string) (bearerauthn.Resu
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return bearerauthn.Result{}, fmt.Errorf("verify access token: %w", ctxErr)
 		}
+		// A failed JWKS refresh makes verification unavailable even when the
+		// token could otherwise be rejected as invalid.
 		if refresh.failed.Load() {
 			return bearerauthn.Result{}, failure(bearerauthn.KindUnavailable)
 		}

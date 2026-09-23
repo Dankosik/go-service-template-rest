@@ -32,8 +32,7 @@ func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter,
 	return handleGeneratedRequestError(log, challenge)
 }
 
-func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r *http.Request, err error) {
-	logStrictRequestError(log, r, err)
+func handleMalformedGeneratedRequest(w http.ResponseWriter, r *http.Request, err error) {
 	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		writeProblem(w, r, requestEntityTooLargeProblem())
 		return
@@ -51,15 +50,14 @@ func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r 
 // a 400.
 func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
+		logStrictRequestError(log, r, err)
 		// profile:authn-bearer:start
 		if kind, ok := bearerauthn.KindOf(err); ok {
-			logStrictRequestError(log, r, err)
 			writeBearerRejection(w, r, kind, challenge)
 			return
 		}
 		// profile:authn-bearer:end
 		if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
-			logStrictRequestError(log, r, err)
 			// SecurityRequirementsError wraps resolver failures. Preserve a
 			// canceled trust check as a transport failure instead of misreporting
 			// it as a bad credential. HTTP has no portable client-canceled status,
@@ -80,7 +78,7 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 			writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing or invalid"})
 			return
 		}
-		handleMalformedGeneratedRequest(log, w, r, err)
+		handleMalformedGeneratedRequest(w, r, err)
 	}
 }
 

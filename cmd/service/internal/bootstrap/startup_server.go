@@ -45,12 +45,12 @@ type serveRuntimeArgs struct {
 	// profile:grpc:start
 	grpcSrv grpcRuntimeServer
 	// profile:grpc:end
-	diagnosticsSrv     runtimeServer
-	readinessCheck     func(context.Context) error
-	backgroundFailures <-chan error
-	admission          *startupAdmissionController
-	onReady            func()
-	shutdownDelay      time.Duration
+	diagnosticsSrv            runtimeServer
+	readinessCheck            func(context.Context) error
+	backgroundFailures        <-chan error
+	admission                 *startupAdmissionController
+	onReady                   func()
+	readinessPropagationDelay time.Duration
 	// profile:messaging-nats-jetstream:start
 	preDrain func()
 	// profile:messaging-nats-jetstream:end
@@ -205,9 +205,9 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	}
 	// profile:messaging-nats-jetstream:end
 
-	effectiveShutdownDelay := args.shutdownDelay
+	effectiveReadinessPropagationDelay := args.readinessPropagationDelay
 	if !ready {
-		effectiveShutdownDelay = 0
+		effectiveReadinessPropagationDelay = 0
 	}
 	// The diagnostics listener is deliberately not in this drain. Everything worth
 	// measuring happens during the window it occupies: the readiness propagation
@@ -228,7 +228,7 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	drainErr := drainAndShutdown(
 		signalCtx,
 		args.log,
-		effectiveShutdownDelay,
+		effectiveReadinessPropagationDelay,
 		// Clamped, so a drain cannot spend budget the stages after it need. The
 		// configured value normally wins; validateShutdownGraceBudget is what
 		// keeps that true rather than leaving it to chance here.

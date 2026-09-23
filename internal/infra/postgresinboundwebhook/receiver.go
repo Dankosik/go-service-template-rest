@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -82,9 +81,9 @@ func withStore(store receiptAcceptor) ReceiverOption {
 }
 
 // WithMeter installs capability telemetry.
-func WithMeter(meter metric.MeterProvider, log *slog.Logger) ReceiverOption {
+func WithMeter(meter metric.MeterProvider) ReceiverOption {
 	return func(r *Receiver) {
-		r.telem = newTelemetry(meter, log)
+		r.telem = newTelemetry(meter, nil)
 	}
 }
 

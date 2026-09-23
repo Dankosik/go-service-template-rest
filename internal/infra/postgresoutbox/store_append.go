@@ -53,7 +53,9 @@ func NewAppender(maxPayloadBytes int, route Router) (*Appender, error) {
 }
 
 // Append stores one immutable publication job in the transaction owned by the
-// caller. It never begins or commits a transaction.
+// caller. It never begins or commits a transaction. Re-appending an event ID
+// with matching publication data is a successful replay and returns nil; using
+// that ID for different publication data returns ErrEventIDConflict.
 func (a *Appender) Append(ctx context.Context, tx pgx.Tx, event domainevent.Event) error {
 	if a == nil || a.client == nil || a.route == nil {
 		return fmt.Errorf("%w: appender is required", ErrConfig)

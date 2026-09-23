@@ -76,7 +76,7 @@ func checkGRPCClient(file *ast.File, authMode string) error {
 					authConnectionBindings++
 				}
 			case "auth":
-				if authMode == "oauth2-client-credentials" && oauthConfigCall(call, oauthAlias) {
+				if authMode == "oauth2-client-credentials" && oauthConfigMapping(call, oauthAlias) {
 					authConfigBindings++
 				}
 			}
@@ -86,7 +86,7 @@ func checkGRPCClient(file *ast.File, authMode string) error {
 			if !ok || len(returned.Results) != 2 || !identifierIs(returned.Results[1], "nil") {
 				continue
 			}
-			fields := returnedClientFields(returned.Results[0])
+			fields := clientLiteralFields(returned.Results[0])
 			if fields["conn"] != "conn" {
 				continue
 			}
@@ -184,14 +184,6 @@ func connectionArguments(arguments []ast.Expr) bool {
 		}
 	}
 	return false
-}
-
-func oauthConfigCall(call *ast.CallExpr, alias string) bool {
-	return oauthConfigMapping(call, alias)
-}
-
-func returnedClientFields(expression ast.Expr) map[string]string {
-	return clientLiteralFields(expression)
 }
 
 func closeFlow(file *ast.File, authMode string) (int, int, int) {
