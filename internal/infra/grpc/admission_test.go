@@ -47,7 +47,7 @@ func TestAdmissionPolicyPublishesAdmissionMetrics(t *testing.T) {
 	t.Parallel()
 
 	reader, provider := telemetrytest.NewManualMeterProvider(t)
-	policy := newAdmissionPolicy(1, 1, newServerLoad(provider))
+	policy := newAdmissionPolicy(1, 1, newServerLoad(provider), newRPCDrain())
 	noop := func(context.Context) error { return nil }
 
 	err := policy.business.around(t.Context(), func(ctx context.Context) error {
@@ -88,7 +88,7 @@ func TestAdmissionPolicyReportsInstrumentFailures(t *testing.T) {
 	var reported atomic.Int32
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(error) { reported.Add(1) }))
 
-	policy := newAdmissionPolicy(1, 0, newServerLoad(failingMeterProvider{}))
+	policy := newAdmissionPolicy(1, 0, newServerLoad(failingMeterProvider{}), newRPCDrain())
 	if got := reported.Load(); got != 3 {
 		t.Fatalf("reported instrument failures = %d, want 3", got)
 	}

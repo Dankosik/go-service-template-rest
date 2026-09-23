@@ -37,15 +37,15 @@ const (
 type admissionPolicy struct {
 	business *admissionLimiter
 	health   *admissionLimiter
-	drain    *rpcDrain
 }
 
 // newAdmissionPolicy builds both budgets. Only business admissions contribute
 // to active load: a standing health watch per connected peer would turn active
 // into a peer count. Health refusals still use their dedicated signal because a
 // failed watch makes a health-aware client stop selecting the backend.
-func newAdmissionPolicy(businessLimit, healthLimit int, load serverLoad) admissionPolicy {
-	drain := newRPCDrain()
+//
+// drain refuses business RPCs once Shutdown starts; health never consults it.
+func newAdmissionPolicy(businessLimit, healthLimit int, load serverLoad, drain *rpcDrain) admissionPolicy {
 	return admissionPolicy{
 		business: &admissionLimiter{
 			sem:    semaphore.NewWeighted(int64(businessLimit)),
@@ -57,11 +57,8 @@ func newAdmissionPolicy(businessLimit, healthLimit int, load serverLoad) admissi
 			sem:  semaphore.NewWeighted(int64(healthLimit)),
 			shed: load.healthShed,
 		},
-		drain: drain,
 	}
 }
-
-func (p admissionPolicy) statsHandler() drainStatsHandler { return drainStatsHandler{drain: p.drain} }
 
 // serverLoad holds the admission instruments. An instrument that failed to
 // build is nil and simply goes unrecorded.
