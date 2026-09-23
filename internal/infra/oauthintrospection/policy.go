@@ -49,6 +49,7 @@ func NewPolicy(input PolicyInput) (Policy, error) {
 		return Policy{}, errors.New("authn introspection endpoint must be an absolute HTTPS URL without user info, query, or fragment")
 	}
 	switch authntrust.IntrospectionTargetPolicyIssue(input.TargetClass, input.PrivateSuffix) {
+	case authntrust.IntrospectionTargetValid:
 	case authntrust.IntrospectionTargetClassInvalid:
 		return Policy{}, errors.New("authn introspection target class must be one of external-https or private-https")
 	case authntrust.IntrospectionPrivateSuffixRequired:

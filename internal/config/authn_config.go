@@ -131,6 +131,7 @@ func validateIntrospectionConfig(cfg *AuthnConfig) error {
 		)
 	}
 	switch authntrust.IntrospectionTargetPolicyIssue(cfg.IntrospectionTargetClass, cfg.IntrospectionPrivateHostSuffix) {
+	case authntrust.IntrospectionTargetValid:
 	case authntrust.IntrospectionTargetClassInvalid:
 		return fmt.Errorf(
 			"%w: authn.introspection_target_class must be one of external-https or private-https",
