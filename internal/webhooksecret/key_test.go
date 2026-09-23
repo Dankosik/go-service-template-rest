@@ -31,3 +31,19 @@ func TestDecodeAndValidKeyBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestBindingsRejectCrossBoundSecret(t *testing.T) {
+	t.Parallel()
+
+	var bindings Bindings[string]
+	secret := bytes.Repeat([]byte{'k'}, 32)
+	if !bindings.Bind(secret, "a") || !bindings.Bind(secret, "a") {
+		t.Fatal("Bind() rejected the same principal")
+	}
+	if !bindings.Bind(bytes.Repeat([]byte{'m'}, 32), "b") {
+		t.Fatal("Bind() rejected a distinct secret")
+	}
+	if bindings.Bind(secret, "b") {
+		t.Fatal("Bind() accepted a secret bound to another principal")
+	}
+}
