@@ -2,6 +2,7 @@ package oidcjwt
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -85,7 +86,7 @@ func New(
 	if err != nil {
 		cancel()
 		closeIdle()
-		return nil, failure(bearerauthn.KindUnavailable)
+		return nil, errors.New("OIDC startup failed at JWKS load")
 	}
 	signingKeys, err := keyfunc.New(keyfunc.Options{
 		Ctx:          processCtx,
@@ -95,7 +96,7 @@ func New(
 	if err != nil {
 		cancel()
 		closeIdle()
-		return nil, failure(bearerauthn.KindUnavailable)
+		return nil, errors.New("OIDC startup failed at JWKS key selection")
 	}
 	return newVerifier(policy, signingKeys.KeyfuncCtx, time.Now, cancel, closeIdle), nil
 }
@@ -153,17 +154,17 @@ func (v *Verifier) Close() {
 // Verify implements bearerauthn.Verifier for one already-parsed compact JWT.
 func (v *Verifier) Verify(ctx context.Context, compact string) (bearerauthn.Result, error) {
 	if len(compact) > bearerauthn.MaxTokenBytes {
-		return bearerauthn.Result{}, failure(bearerauthn.KindOversize)
+		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindOversize)
 	}
 	refresh := new(refreshFailure)
 	verifyCtx := context.WithValue(ctx, refreshFailureKey, refresh)
 	claims := new(accessTokenClaims)
 	token, err := v.parser.ParseWithClaims(compact, claims, func(token *jwt.Token) (any, error) {
 		if v.policy.strictRFC9068() && !validAccessTokenType(token.Header["typ"]) {
-			return nil, failure(bearerauthn.KindInvalid)
+			return nil, bearerauthn.VerificationFailure(bearerauthn.KindInvalid)
 		}
 		if v.keyFunc == nil {
-			return nil, failure(bearerauthn.KindUnavailable)
+			return nil, bearerauthn.VerificationFailure(bearerauthn.KindUnavailable)
 		}
 		return v.keyFunc(verifyCtx)(token)
 	})
@@ -174,13 +175,13 @@ func (v *Verifier) Verify(ctx context.Context, compact string) (bearerauthn.Resu
 		// A failed JWKS refresh makes verification unavailable even when the
 		// token could otherwise be rejected as invalid.
 		if refresh.failed.Load() {
-			return bearerauthn.Result{}, failure(bearerauthn.KindUnavailable)
+			return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindUnavailable)
 		}
-		return bearerauthn.Result{}, failure(bearerauthn.KindInvalid)
+		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindInvalid)
 	}
-	principal, err := principalFromClaims(claims, v.policy.strictRFC9068())
-	if err != nil || claims.ExpiresAt == nil {
-		return bearerauthn.Result{}, failure(bearerauthn.KindInvalid)
+	principal, ok := principalFromClaims(claims, v.policy.strictRFC9068())
+	if !ok || claims.ExpiresAt == nil {
+		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindInvalid)
 	}
 	return bearerauthn.Result{Principal: principal, ExpiresAt: claims.ExpiresAt.Time}, nil
 }

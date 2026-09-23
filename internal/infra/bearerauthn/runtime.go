@@ -3,7 +3,6 @@ package bearerauthn
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -96,5 +95,5 @@ func sanitizeVerifierError(err error) error {
 	if _, ok := KindOf(err); ok {
 		return err
 	}
-	return fmt.Errorf("verify access token: %w", failure(KindInvalid))
+	return VerificationFailure(KindInvalid)
 }

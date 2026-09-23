@@ -1,6 +1,9 @@
 package bearerauthn
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Kind is the finite, sanitized authentication failure taxonomy shared by the
 // HTTP and gRPC adapters.
@@ -56,6 +59,12 @@ func failure(kind Kind) error {
 // [Runtime].
 func NewError(kind Kind) error {
 	return failure(kind)
+}
+
+// VerificationFailure is the error a trust engine returns from Verify for one
+// sanitized category. It is the single place that path's errors are wrapped.
+func VerificationFailure(kind Kind) error {
+	return fmt.Errorf("verify access token: %w", failure(kind))
 }
 
 // KindOf reports the sanitized category carried by err.

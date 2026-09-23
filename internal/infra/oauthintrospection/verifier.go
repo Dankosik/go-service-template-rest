@@ -62,22 +62,22 @@ func newProviderClient(policy Policy) (*httpclient.Client, error) {
 		MaxInFlight:            MaxProviderInFlight,
 		AbsoluteBodyBytes:      MaxProviderBody,
 	}
-	var (
-		client *httpclient.Client
-		err    error
-	)
 	switch policy.targetClass {
 	case authntrust.TargetClassExternalHTTPS:
-		client, err = httpclient.NewExternalHTTPS(policy.endpoint, limits)
+		client, err := httpclient.NewExternalHTTPS(policy.endpoint, limits)
+		if err != nil {
+			return nil, fmt.Errorf("build introspection client: %w", bearerauthn.NewError(bearerauthn.KindUnavailable))
+		}
+		return client, nil
 	case authntrust.TargetClassPrivateHTTPS:
-		client, err = httpclient.NewPrivateHTTPS(policy.endpoint, policy.privateSuffix, limits)
+		client, err := httpclient.NewPrivateHTTPS(policy.endpoint, policy.privateSuffix, limits)
+		if err != nil {
+			return nil, fmt.Errorf("build introspection client: %w", bearerauthn.NewError(bearerauthn.KindUnavailable))
+		}
+		return client, nil
 	default:
-		return nil, fmt.Errorf("build introspection client: %w", failure(bearerauthn.KindUnavailable))
+		return nil, fmt.Errorf("build introspection client: %w", bearerauthn.NewError(bearerauthn.KindUnavailable))
 	}
-	if err != nil {
-		return nil, fmt.Errorf("build introspection client: %w", failure(bearerauthn.KindUnavailable))
-	}
-	return client, nil
 }
 
 // Close releases idle provider connections. It is idempotent.
@@ -105,12 +105,12 @@ func (v *Verifier) Verify(ctx context.Context, token string) (bearerauthn.Result
 	if response != nil && response.Body != nil {
 		defer func() { _ = response.Body.Close() }()
 	}
-	body, err := readBoundedBody(response)
-	if err != nil {
+	body, ok := readBoundedBody(response)
+	if !ok {
 		return bearerauthn.Result{}, classifyContextOrUnavailable(ctx)
 	}
 	if response.StatusCode != http.StatusOK || !jsonMediaType(response.Header.Get("Content-Type")) {
-		return bearerauthn.Result{}, failure(bearerauthn.KindUnavailable)
+		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindUnavailable)
 	}
 	return admitResponse(body, v.policy, v.now())
 }
@@ -121,7 +121,7 @@ func (v *Verifier) newIntrospectionRequest(ctx context.Context, token string) (*
 	form.Set("token_type_hint", "access_token")
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, v.policy.endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("build introspection request: %w", failure(bearerauthn.KindUnavailable))
+		return nil, fmt.Errorf("build introspection request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept", "application/json")
@@ -135,18 +135,16 @@ func oauthBasicHeader(clientID, clientSecret string) string {
 	return "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
 }
 
-func readBoundedBody(response *http.Response) ([]byte, error) {
+// readBoundedBody reports false for a missing, unreadable, or oversized body.
+func readBoundedBody(response *http.Response) ([]byte, bool) {
 	if response == nil || response.Body == nil {
-		return nil, failure(bearerauthn.KindUnavailable)
+		return nil, false
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, MaxProviderBody+1))
-	if err != nil {
-		return nil, fmt.Errorf("read introspection response: %w", failure(bearerauthn.KindUnavailable))
+	if err != nil || len(body) > MaxProviderBody {
+		return nil, false
 	}
-	if len(body) > MaxProviderBody {
-		return nil, failure(bearerauthn.KindUnavailable)
-	}
-	return body, nil
+	return body, true
 }
 
 func jsonMediaType(value string) bool {
@@ -158,5 +156,5 @@ func classifyContextOrUnavailable(ctx context.Context) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("verify access token: %w", ctxErr)
 	}
-	return failure(bearerauthn.KindUnavailable)
+	return bearerauthn.VerificationFailure(bearerauthn.KindUnavailable)
 }
