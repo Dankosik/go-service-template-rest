@@ -152,14 +152,14 @@ for record in "${records[@]}"; do
 		if [[ "${target}" == "private-https" ]]; then
 			require_regex "${record}" "${config}" "^[[:space:]]+PrivateDNSSuffix[[:space:]]+string[[:space:]]+\`koanf:\"private_dns_suffix\"\`" "private DNS suffix field"
 			bootstrap_mappings+=("PrivateDNSSuffix=cfg.PrivateDNSSuffix")
-			if ! go run ./scripts/ci/integration-record-constructor-check.go -- "${adapter}" /internal/infra/httpclient NewPrivateHTTPS NewExternalHTTPS "${auth}"; then
+			if ! go run ./scripts/ci/integration-record-constructor-check.go ./scripts/ci/integration-record-ast-common.go -- "${adapter}" /internal/infra/httpclient NewPrivateHTTPS NewExternalHTTPS "${auth}"; then
 				echo "${record}: private HTTP constructor ownership is invalid" >&2
 				status=1
 			fi
 			require_literal "${record}" env/.env.example "APP__INTEGRATIONS__${env_name}__PRIVATE_DNS_SUFFIX=" "private DNS suffix environment key"
 		else
 			forbid_literal "${record}" "${config}" 'PrivateDNSSuffix' "private DNS suffix field"
-			if ! go run ./scripts/ci/integration-record-constructor-check.go -- "${adapter}" /internal/infra/httpclient NewExternalHTTPS NewPrivateHTTPS "${auth}"; then
+			if ! go run ./scripts/ci/integration-record-constructor-check.go ./scripts/ci/integration-record-ast-common.go -- "${adapter}" /internal/infra/httpclient NewExternalHTTPS NewPrivateHTTPS "${auth}"; then
 				echo "${record}: external HTTP constructor ownership is invalid" >&2
 				status=1
 			fi
@@ -196,7 +196,7 @@ for record in "${records[@]}"; do
 		require_literal "${record}" .golangci.yml "${name}_grpc_generated_adapter_only:" "gRPC generated import rule"
 		require_literal "${record}" .golangci.yml "internal/gen/proto/external/${name}" "gRPC generated import path"
 		require_literal "${record}" env/.env.example "APP__INTEGRATIONS__${env_name}__TARGET=" "gRPC target environment key"
-		if ! go run ./scripts/ci/integration-record-grpc-check.go -- "${adapter}" "${auth}"; then
+		if ! go run ./scripts/ci/integration-record-grpc-check.go ./scripts/ci/integration-record-ast-common.go -- "${adapter}" "${auth}"; then
 			echo "${record}: gRPC transport/auth/lifecycle ownership is invalid" >&2
 			status=1
 		fi

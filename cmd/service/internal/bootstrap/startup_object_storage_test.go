@@ -3,14 +3,12 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"io"
 
 	// profile:authn-bearer:start
 	"log/slog"
 	// profile:authn-bearer:end
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/s3"
@@ -102,8 +100,6 @@ func objectStorageTestWiring(runtime objectStorageRuntime) runtimeWiring {
 }
 
 type countingObjectStorageRuntime struct {
-	noOpObjectStorageStore
-
 	calls   int
 	onClose func()
 }
@@ -128,24 +124,6 @@ func (r *scriptedObjectStorageRuntime) Metadata(context.Context, string) (object
 	err := r.outcomes[0]
 	r.outcomes = r.outcomes[1:]
 	return objectstorage.Metadata{}, err
-}
-
-type noOpObjectStorageStore struct{}
-
-func (noOpObjectStorageStore) Upload(context.Context, string, io.Reader, objectstorage.UploadOptions) error {
-	return nil
-}
-
-func (noOpObjectStorageStore) Download(context.Context, string) (objectstorage.Object, error) {
-	return objectstorage.Object{}, nil
-}
-
-func (noOpObjectStorageStore) Metadata(context.Context, string) (objectstorage.Metadata, error) {
-	return objectstorage.Metadata{}, nil
-}
-func (noOpObjectStorageStore) Delete(context.Context, string) error { return nil }
-func (noOpObjectStorageStore) PresignGet(context.Context, string, time.Duration) (string, error) {
-	return "", nil
 }
 
 func validObjectStorageConfig() config.ObjectStorageConfig {

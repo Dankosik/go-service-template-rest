@@ -115,7 +115,7 @@ func TestWebhookComposedTransportContract(t *testing.T) {
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	prepared := preparedSend{
-		Attempt: deliveryAttempt{ID: "whd_test", Body: body, AttemptedAt: attemptedAt, Deadline: deadline},
+		Attempt: deliveryAttempt{DeliveryID: "whd_test", Body: body, AttemptedAt: attemptedAt, Deadline: deadline},
 		URL:     parsed, SelectedAddress: netip.MustParseAddr("8.8.8.8"), Signature: signature,
 	}
 	ctx, cancel := context.WithDeadline(t.Context(), deadline)
@@ -134,7 +134,7 @@ func TestWebhookComposedTransportContract(t *testing.T) {
 func webhookNetworkAttempt() deliveryAttempt {
 	attemptedAt := time.Now()
 	return deliveryAttempt{
-		ID: "whd_delivery-01", OwnerScope: "owner-a", ReceiverID: "receiver-a",
+		DeliveryID: "whd_delivery-01", OwnerScope: "owner-a", ReceiverID: "receiver-a",
 		URL: "https://hooks.test/deliver", Body: []byte(`{"id":"evt-01"}`),
 		AttemptedAt: attemptedAt, Deadline: attemptedAt.Add(time.Second), KeyReference: "key-a",
 	}

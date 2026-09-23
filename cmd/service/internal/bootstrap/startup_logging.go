@@ -60,8 +60,8 @@ func bootstrapReportStage(
 	cfg config.Config,
 	loadOptions config.LoadOptions,
 	configReport config.LoadReport,
-	traceEndpoint telemetry.TraceExporterEndpoint,
-	telemetryInitErr error,
+	tracingEndpoint telemetry.TraceExporterEndpoint,
+	tracingInitErr error,
 ) {
 	log.InfoContext(
 		bootstrapCtx,
@@ -75,7 +75,7 @@ func bootstrapReportStage(
 		)...,
 	)
 
-	if telemetryInitErr != nil {
+	if tracingInitErr != nil {
 		// The cause belongs in the record: telemetry setup errors name
 		// configuration keys and environment variables, never secret values,
 		// and an operator cannot act on a bare reason class.
@@ -88,8 +88,8 @@ func bootstrapReportStage(
 				"degraded",
 				"dependency", startupDependencyTelemetry,
 				"mode", startupDependencyModeFeatureOff,
-				"reason", telemetry.FailureReason(telemetryInitErr),
-				"err", telemetryInitErr,
+				"reason", telemetry.FailureReason(tracingInitErr),
+				"err", tracingInitErr,
 			)...,
 		)
 	}
@@ -111,11 +111,11 @@ func bootstrapReportStage(
 			"grpc.transport_security", cfg.GRPC.Server.TransportSecurity,
 			// profile:grpc:end
 			"metrics.addr", cfg.Observability.Metrics.Addr,
-			"tracing.exporter", traceExporterState(traceEndpoint, telemetryInitErr),
+			"tracing.exporter", traceExporterState(tracingEndpoint, tracingInitErr),
 			// The endpoint can come from this service's own configuration or
 			// from a platform-injected variable, and an operator debugging where
 			// traces went needs to know which without reading another line.
-			"tracing.endpoint_source", traceEndpoint.Source,
+			"tracing.endpoint_source", tracingEndpoint.Source,
 			// profile:database-postgres:start
 			"postgres.enabled", cfg.Postgres.Enabled,
 			// profile:database-postgres:end

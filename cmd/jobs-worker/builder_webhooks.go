@@ -52,7 +52,7 @@ func buildWebhookWorkers(
 	// profile:webhooks-durable:end
 	runtime := bootstrap.WorkersRuntime{Workers: workers}
 	// profile:inbound-webhooks-standard:start
-	runtime.Bind = func(_ context.Context, pool *pgxpool.Pool, meter metric.MeterProvider) error {
+	runtime.Bind = func(_ context.Context, workers *river.Workers, pool *pgxpool.Pool, meter metric.MeterProvider) error {
 		return bindInboundWebhookWorkers(cfg, workers, pool, meter, log)
 	}
 	registered = true

@@ -28,7 +28,7 @@ const (
 )
 
 type deliveryAttempt struct {
-	ID                   string
+	DeliveryID           string
 	OwnerScope           string
 	ReceiverID           string
 	URL                  string
@@ -82,7 +82,7 @@ func prepareSend(ctx context.Context, resolver *net.Resolver, attempt deliveryAt
 		}
 		keys = append(keys, predecessor)
 	}
-	signature, err := signV1(attempt.ID, attempt.AttemptedAt, attempt.Body, keys)
+	signature, err := signV1(attempt.DeliveryID, attempt.AttemptedAt, attempt.Body, keys)
 	if err != nil {
 		return preparedSend{}, err
 	}
@@ -193,7 +193,7 @@ func webhookRequest(ctx context.Context, prepared preparedSend) (*http.Request, 
 		"Content-Type":      []string{"application/json"},
 		"Accept-Encoding":   []string{"identity"},
 		"User-Agent":        []string{webhookUserAgent},
-		"Webhook-Id":        []string{prepared.Attempt.ID},
+		"Webhook-Id":        []string{prepared.Attempt.DeliveryID},
 		"Webhook-Timestamp": []string{strconv.FormatInt(prepared.Attempt.AttemptedAt.Unix(), 10)},
 		"Webhook-Signature": []string{prepared.Signature},
 	}

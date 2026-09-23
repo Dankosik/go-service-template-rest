@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+
+	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
 )
 
 func TestEndpointManifestSecurityBoundary(t *testing.T) {
@@ -19,7 +21,7 @@ func TestEndpointManifestSecurityBoundary(t *testing.T) {
 		`{"endpoint_id":"orders","key_reference":"key-v0","secret":"whsec_` + base64.StdEncoding.EncodeToString(pred) + `"},` +
 		`{"endpoint_id":"Orders","key_reference":"key-v2","secret":"whsec_` + base64.StdEncoding.EncodeToString(keyB) + `"}` +
 		`]}`
-	parsedEndpoints, err := ParseEndpointManifest(endpoints)
+	parsedEndpoints, err := inboundmanifest.ParseEndpoints(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +46,7 @@ func TestEndpointManifestSecurityBoundary(t *testing.T) {
 	if _, err := ParseSecretManifest(`{"entries":[{"endpoint_id":"orders","key_reference":"a","secret":"whsec_` + base64.StdEncoding.EncodeToString(keyA) + `"},{"endpoint_id":"other","key_reference":"b","secret":"whsec_` + base64.StdEncoding.EncodeToString(keyA) + `"}]}`); err == nil {
 		t.Fatal("cross-endpoint secret reuse accepted")
 	}
-	if _, err := ParseEndpointManifest(`{"endpoints":[{"endpoint_id":"orders","active_key_reference":"same","predecessor_key_reference":"same"}]}`); err == nil {
+	if _, err := inboundmanifest.ParseEndpoints(`{"endpoints":[{"endpoint_id":"orders","active_key_reference":"same","predecessor_key_reference":"same"}]}`); err == nil {
 		t.Fatal("equal rotation keys accepted")
 	}
 }

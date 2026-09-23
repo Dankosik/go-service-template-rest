@@ -99,7 +99,10 @@ func (s *Store) execute(
 		result, replayed, transactionErr = s.executeTransaction(ctx, tx, request, work)
 		return transactionErr
 	})
-	if err == nil || replayed {
+	if err == nil {
+		return result, replayed, nil
+	}
+	if replayed {
 		return result, replayed, nil
 	}
 	if !errors.Is(err, postgres.ErrCommitUnknown) {

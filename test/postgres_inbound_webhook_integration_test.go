@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresinboundwebhook"
@@ -35,7 +36,7 @@ func inboundTrust(t *testing.T, endpoint string) *postgresinboundwebhook.TrustMa
 	secret := base64.StdEncoding.EncodeToString(inboundKey())
 	other := base64.StdEncoding.EncodeToString([]byte("fedcba9876543210fedcba9876543210"))
 	secrets := `{"entries":[{"endpoint_id":"` + endpoint + `","key_reference":"active","secret":"whsec_` + secret + `"},{"endpoint_id":"other","key_reference":"other","secret":"whsec_` + other + `"}]}`
-	parsedEndpoints, err := postgresinboundwebhook.ParseEndpointManifest(endpoints)
+	parsedEndpoints, err := inboundmanifest.ParseEndpoints(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -55,9 +55,11 @@ func TestSupervisedWorkOutlivesTheHTTPDrain(t *testing.T) {
 		}
 
 		// Only now is nothing left that could depend on it.
-		if err := supervisor.Shutdown(testShutdownBudget().stage(signalCtx, backgroundShutdownTimeout)); err != nil {
+		shutdownCtx, cancelShutdown := testShutdownBudget().stage(signalCtx, backgroundShutdownTimeout)
+		if err := supervisor.Shutdown(shutdownCtx); err != nil {
 			t.Fatalf("Shutdown() error = %v", err)
 		}
+		cancelShutdown()
 		if taskCtx.Err() == nil {
 			t.Fatal("supervised work outlived the ordered teardown that owns stopping it")
 		}
@@ -72,7 +74,8 @@ func TestSupervisedBackgroundShutdownIsBoundedByItsOwnBudget(t *testing.T) {
 		signalCtx, signal := context.WithCancel(context.Background())
 		signal()
 
-		ctx := testShutdownBudget().stage(signalCtx, backgroundShutdownTimeout)
+		ctx, cancel := testShutdownBudget().stage(signalCtx, backgroundShutdownTimeout)
+		defer cancel()
 
 		if err := ctx.Err(); err != nil {
 			t.Fatalf("background shutdown context is already done: %v", err)

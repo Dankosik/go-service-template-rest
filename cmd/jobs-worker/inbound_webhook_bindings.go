@@ -9,6 +9,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresinboundwebhook"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -22,7 +23,7 @@ func bindInboundWebhookWorkers(
 	meter metric.MeterProvider,
 	log *slog.Logger,
 ) error {
-	endpoints, err := postgresinboundwebhook.ParseEndpointManifest(cfg.InboundWebhooks.Endpoints)
+	endpoints, err := inboundmanifest.ParseEndpoints(cfg.InboundWebhooks.Endpoints)
 	if err != nil {
 		return fmt.Errorf("parse inbound webhook endpoints: %w", err)
 	}

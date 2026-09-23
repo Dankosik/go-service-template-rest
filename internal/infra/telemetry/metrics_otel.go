@@ -17,10 +17,6 @@ import (
 
 const (
 	metricCardinalityLimit = 2000
-
-	// MetricExporterConfigKey is this service's own metrics exporter endpoint
-	// setting.
-	MetricExporterConfigKey = "observability.otel.exporter.otlp_metrics_endpoint"
 )
 
 // MetricsConfig defines the service resource attached to metric instruments and
@@ -38,7 +34,7 @@ type MetricExporterConfig struct {
 	// OTLPEndpoint is observability.otel.exporter.otlp_metrics_endpoint: a full
 	// OTLP HTTP metrics endpoint. A missing path defaults to /v1/metrics.
 	OTLPEndpoint string
-	// SharedOTLPEndpoint is observability.otel.exporter.otlp_endpoint, and is
+	// SharedOTLPEndpoint is [SharedOTLPExporterConfigKey], and is
 	// used only when it names a bare collector root — in which case metrics
 	// resolve to <root>/v1/metrics. A value that already carries a path is an
 	// endpoint for one signal and says nothing about where the other one goes.
@@ -188,12 +184,16 @@ func newOTLPMetricReader(
 // observability.otel.exporter.otlp_endpoint serves both signals, because naming a
 // collector root is what an operator means by it.
 func resolveMetricExporterEndpoint(cfg MetricExporterConfig) (ExporterEndpoint, error) {
-	owned := []otlpCandidate{{source: MetricExporterConfigKey, raw: cfg.OTLPEndpoint}}
+	owned := []otlpCandidate{{
+		source: MetricExporterConfigKey, raw: cfg.OTLPEndpoint, configuredByService: true,
+	}}
 	// A root only. Once the shared value carries a path it is an endpoint for one
 	// signal and says nothing about where the other one goes, so metrics fall
 	// through to their own settings instead of borrowing the traces route.
 	if shared := strings.TrimSpace(cfg.SharedOTLPEndpoint); namesOTLPRoot(shared) {
-		owned = append(owned, otlpCandidate{source: TraceExporterConfigKey, raw: shared, base: true})
+		owned = append(owned, otlpCandidate{
+			source: SharedOTLPExporterConfigKey, raw: shared, base: true, configuredByService: true,
+		})
 	}
 
 	return resolveOTLPEndpoint(

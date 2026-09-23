@@ -291,7 +291,7 @@ func TestSetAfterFromApplied(t *testing.T) {
 		After:  1,
 	}
 	setAfterFromApplied(&up, directionUp, sources, []*goose.MigrationResult{{Source: sources[1]}})
-	if up.After != 2 || up.AppliedCount != 1 {
+	if up.After != 2 || !up.AfterKnown || up.AppliedCount != 1 {
 		t.Fatalf("up = %+v, want after 2 and applied count 1", up)
 	}
 
@@ -303,7 +303,7 @@ func TestSetAfterFromApplied(t *testing.T) {
 		{Source: sources[2]},
 		{Source: sources[1]},
 	})
-	if down.After != 1 || down.AppliedCount != 2 {
+	if down.After != 1 || !down.AfterKnown || down.AppliedCount != 2 {
 		t.Fatalf("down = %+v, want after 1 and applied count 2", down)
 	}
 }

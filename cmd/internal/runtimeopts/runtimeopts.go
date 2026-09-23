@@ -1,21 +1,20 @@
 // Package runtimeopts is what more than one composition root would otherwise
 // answer separately: the adapter options a loaded configuration maps onto, the
-// startup steps two of them install identically, and the teardown arithmetic all
-// three of them charge their grace period for.
+// shared telemetry setup used by background binaries, and the teardown
+// arithmetic every binary charges to its grace period.
 //
 // Only what a second binary already needs lives here. Each binary owns its own
 // startup flow, its own readiness and drain, and every option only they build;
 // what they cannot own separately is the meaning of a configured value, because
-// a field added to an adapter and to only two of three call sites is a binary
-// that quietly runs without it. Keeping the mapping here is why there is one
+// a field added to an adapter and omitted at a call site is a binary that
+// quietly runs without it. Keeping the mapping here is why there is one
 // place to add it.
 //
 // [InstallTelemetry], [DiagnosticsServer], [ListenDiagnostics], and the teardown
 // primitives are here on the same reasoning rather than as exceptions to it. Each
 // replaced copies that had already drifted: a degraded exporter logged with
 // different fields, a diagnostics join spelled once as a type and once inline,
-// and a teardown stage that on two of three binaries handed its cleanup an
-// already-expired context.
+// and teardown stages that handed cleanup an already-expired context.
 //
 // It sits under cmd/ rather than internal/ because mapping configuration onto
 // concrete adapters, and bounding a process teardown, are composition — which
@@ -83,10 +82,9 @@ func LoggerFields(cfg config.Config) []any {
 // Logger builds the process logger every binary writes through, carrying
 // [LoggerFields] and whatever extra attributes the binary adds to them.
 //
-// All three composition roots spelled this line, two of them identically and the
-// third differing only by the component field [LoggerFields] already documents a
-// binary as appending. Appending it is the variation, so it is a parameter here
-// rather than a reason to write the construction again.
+// Composition roots use this construction with binary-specific fields supplied
+// through extra. Appending those fields is the variation, so it is a parameter
+// here rather than a reason to write the construction again.
 func Logger(out io.Writer, cfg config.Config, extra ...any) *slog.Logger {
 	return logctx.NewProcessLogger(out, cfg.Log.Level).With(append(LoggerFields(cfg), extra...)...)
 }

@@ -13,11 +13,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-const (
-	// TraceExporterConfigKey is this service's own exporter endpoint setting.
-	TraceExporterConfigKey = "observability.otel.exporter.otlp_endpoint"
-)
-
 type TracingConfig struct {
 	// Resource is the identity every exported span is attributed to, and must be
 	// the same value SetupMetrics was given; see ResourceConfig.
@@ -42,14 +37,17 @@ type TraceExporterEndpoint = ExporterEndpoint
 // conflict: material this service cannot verify must not travel to an endpoint
 // this service chose.
 func (e TraceExporterEndpoint) fromConfig() bool {
-	return e.Source == TraceExporterConfigKey || e.Source == MetricExporterConfigKey
+	return e.ConfiguredByService
 }
 
 var otelSetupMu sync.Mutex
 
 // SetupTracing installs the tracer provider and reports which OTLP endpoint the
-// exporter resolved to, so the caller can record and log that decision.
-func SetupTracing(ctx context.Context, cfg TracingConfig) (TraceExporterEndpoint, func(context.Context) error, error) {
+// exporter resolved to, so the caller can record and log that decision. The
+// shutdown function is non-nil only when a provider was installed. If setup
+// fails after endpoint resolution, the endpoint is still returned with the
+// error, and shutdown is nil.
+func SetupTracing(ctx context.Context, cfg TracingConfig) (endpoint TraceExporterEndpoint, shutdown func(context.Context) error, err error) {
 	sampler, err := buildTraceSampler(cfg.TracesSampler, cfg.TracesSamplerArg)
 	if err != nil {
 		return TraceExporterEndpoint{}, nil, err
@@ -147,7 +145,7 @@ func resolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoin
 	return resolveOTLPEndpoint(
 		otlpTracesPath,
 		cfg.OTLPHeaders,
-		[]otlpCandidate{{source: TraceExporterConfigKey, raw: cfg.OTLPEndpoint}},
+		[]otlpCandidate{{source: SharedOTLPExporterConfigKey, raw: cfg.OTLPEndpoint, configuredByService: true}},
 		ambientOTLPCandidates(otelExporterTracesEndpointEnv),
 	)
 }

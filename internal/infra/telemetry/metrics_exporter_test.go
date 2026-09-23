@@ -14,34 +14,38 @@ import (
 
 func TestResolveMetricExporterEndpoint(t *testing.T) {
 	for _, tc := range []struct {
-		name       string
-		cfg        MetricExporterConfig
-		env        map[string]string
-		wantURL    string
-		wantSource string
+		name                  string
+		cfg                   MetricExporterConfig
+		env                   map[string]string
+		wantURL               string
+		wantSource            string
+		wantServiceConfigured bool
 	}{
 		{
 			name: "nothing configured exports nowhere",
 		},
 		{
-			name:       "own metrics endpoint wins",
-			cfg:        MetricExporterConfig{OTLPEndpoint: "https://collector.example/otlp/v1/metrics"},
-			wantURL:    "https://collector.example/otlp/v1/metrics",
-			wantSource: MetricExporterConfigKey,
+			name:                  "own metrics endpoint wins",
+			cfg:                   MetricExporterConfig{OTLPEndpoint: "https://collector.example/otlp/v1/metrics"},
+			wantURL:               "https://collector.example/otlp/v1/metrics",
+			wantSource:            MetricExporterConfigKey,
+			wantServiceConfigured: true,
 		},
 		{
-			name:       "own metrics endpoint defaults the signal path",
-			cfg:        MetricExporterConfig{OTLPEndpoint: "https://collector.example"},
-			wantURL:    "https://collector.example/v1/metrics",
-			wantSource: MetricExporterConfigKey,
+			name:                  "own metrics endpoint defaults the signal path",
+			cfg:                   MetricExporterConfig{OTLPEndpoint: "https://collector.example"},
+			wantURL:               "https://collector.example/v1/metrics",
+			wantSource:            MetricExporterConfigKey,
+			wantServiceConfigured: true,
 		},
 		{
 			// The point of the shared setting: naming a collector root once is
 			// what an operator means, and it must not silently serve one signal.
-			name:       "shared root serves both signals",
-			cfg:        MetricExporterConfig{SharedOTLPEndpoint: "https://collector.example:4318"},
-			wantURL:    "https://collector.example:4318/v1/metrics",
-			wantSource: TraceExporterConfigKey,
+			name:                  "shared root serves both signals",
+			cfg:                   MetricExporterConfig{SharedOTLPEndpoint: "https://collector.example:4318"},
+			wantURL:               "https://collector.example:4318/v1/metrics",
+			wantSource:            SharedOTLPExporterConfigKey,
+			wantServiceConfigured: true,
 		},
 		{
 			// And once it names a path it is a traces endpoint, which says
@@ -95,6 +99,9 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 			}
 			if endpoint.Configured() != (tc.wantURL != "") {
 				t.Fatalf("Configured() = %v for URL %q", endpoint.Configured(), endpoint.URL)
+			}
+			if endpoint.ConfiguredByService != tc.wantServiceConfigured {
+				t.Fatalf("ConfiguredByService = %v, want %v", endpoint.ConfiguredByService, tc.wantServiceConfigured)
 			}
 		})
 	}
@@ -216,8 +223,8 @@ func TestSetupMetricsSharedRootRejectsAmbientCredentials(t *testing.T) {
 			t.Errorf("shutdown metrics: %v", shutdownErr)
 		}
 	})
-	if result.Endpoint.Source != TraceExporterConfigKey {
-		t.Fatalf("endpoint source = %q, want shared config key %q", result.Endpoint.Source, TraceExporterConfigKey)
+	if result.Endpoint.Source != SharedOTLPExporterConfigKey {
+		t.Fatalf("endpoint source = %q, want shared config key %q", result.Endpoint.Source, SharedOTLPExporterConfigKey)
 	}
 	if result.ExportErr == nil || result.PushInitialized() {
 		t.Fatalf("metrics result = %+v, want ambient credential rejection and scrape-only provider", result)

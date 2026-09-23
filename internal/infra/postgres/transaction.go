@@ -15,7 +15,10 @@ import (
 // rolling back otherwise.
 //
 // This is the single transaction seam for generated sqlc queries. The caller
-// chooses the atomic boundary and binds its generated Queries with WithTx.
+// chooses the atomic boundary and binds its generated Queries with WithTx. A
+// commit error may match ErrCommitUnknown, meaning the transaction may have
+// committed; callers must reconcile it or preserve the operation identity
+// instead of blindly retrying.
 func InTx(ctx context.Context, pool *pgxpool.Pool, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
 	if pool == nil {
 		return fmt.Errorf("%w: postgres pool is nil", ErrConfig)

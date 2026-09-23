@@ -148,7 +148,9 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// its arguments at registration, so building the context here rather than
 	// inside would start its clock at startup and hand the flush a spent budget.
 	defer func() {
-		bootstrap.telemetryCleanup(shutdown.stage(signalCtx, telemetryShutdownTimeout))
+		telemetryCtx, cancelTelemetry := shutdown.stage(signalCtx, telemetryShutdownTimeout)
+		defer cancelTelemetry()
+		bootstrap.telemetryCleanup(telemetryCtx)
 	}()
 
 	// The GC limit is published before any dependency allocates, so the first
@@ -186,7 +188,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			return
 		}
 
-		runtimeCloseCtx := shutdown.stage(signalCtx, dependencyCloseTimeout)
+		runtimeCloseCtx, cancelRuntimeClose := shutdown.stage(signalCtx, dependencyCloseTimeout)
 		// profile:object-storage:start
 		if !objectStorageClosed {
 			objectStorage.Close()
@@ -194,6 +196,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		}
 		// profile:object-storage:end
 		dependencies.Close(runtimeCloseCtx)
+		cancelRuntimeClose()
 		dependenciesClosed = true
 	}
 	defer closeOwners()
@@ -219,7 +222,8 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// the signal, a return that skipped Shutdown would leave supervised
 	// goroutines running past Run.
 	defer func() {
-		backgroundCtx := shutdown.stage(signalCtx, backgroundShutdownTimeout)
+		backgroundCtx, cancelBackground := shutdown.stage(signalCtx, backgroundShutdownTimeout)
+		defer cancelBackground()
 		_ = supervisor.Shutdown(backgroundCtx)
 	}()
 
@@ -374,11 +378,12 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// nothing can still depend on background work: cancel and join it, then
 	// release the dependencies it used, both before the deferred telemetry flush
 	// so the flush can record how they went.
-	backgroundCtx := shutdown.stage(signalCtx, backgroundShutdownTimeout)
+	backgroundCtx, cancelBackground := shutdown.stage(signalCtx, backgroundShutdownTimeout)
 	// profile:messaging-nats-jetstream:start
 	messagingErr := messaging.Shutdown(backgroundCtx)
 	// profile:messaging-nats-jetstream:end
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
+	cancelBackground()
 	// profile:authn-bearer:start
 	authnVerifier.Close()
 	authnClosed = true

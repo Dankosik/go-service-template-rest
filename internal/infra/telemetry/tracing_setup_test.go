@@ -544,8 +544,8 @@ func TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", ambientCollector.URL)
 
 	endpoint, shutdown := setupRecordingTracing(t, TraceExporterConfig{OTLPEndpoint: configuredCollector.URL})
-	if endpoint.Source != TraceExporterConfigKey {
-		t.Fatalf("endpoint source = %q, want %q", endpoint.Source, TraceExporterConfigKey)
+	if endpoint.Source != SharedOTLPExporterConfigKey {
+		t.Fatalf("endpoint source = %q, want %q", endpoint.Source, SharedOTLPExporterConfigKey)
 	}
 
 	exportOneGlobalSpan(t, "configured-endpoint-wins")

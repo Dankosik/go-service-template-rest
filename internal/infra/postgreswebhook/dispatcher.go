@@ -152,9 +152,10 @@ func (p Prepared) DeliveryIDs() []string {
 	return ids
 }
 
-// Stage must be the final operation in the caller-owned transaction. The
-// caller rolls the transaction back when Stage returns an error. The boolean
-// reports whether this call inserted the fan-out rather than finding it.
+// Stage inserts the prepared fan-out in the caller-owned transaction, atomically
+// with the caller's other writes. The caller must roll back the transaction if
+// Stage returns an error, including ErrConflict. The boolean reports whether
+// this call inserted the fan-out rather than finding it.
 func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (bool, error) {
 	if p.client == nil || tx == nil || len(p.deliveries) == 0 {
 		return false, fmt.Errorf("%w: prepared deliveries and transaction are required", ErrConfig)

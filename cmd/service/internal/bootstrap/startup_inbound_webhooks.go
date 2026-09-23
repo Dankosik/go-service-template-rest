@@ -8,6 +8,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresinboundwebhook"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -25,7 +26,7 @@ func initInboundWebhookReceiver(
 	if pool == nil {
 		return nil, errors.New("initialize inbound webhooks: postgres is required")
 	}
-	endpoints, err := postgresinboundwebhook.ParseEndpointManifest(cfg.InboundWebhooks.Endpoints)
+	endpoints, err := inboundmanifest.ParseEndpoints(cfg.InboundWebhooks.Endpoints)
 	if err != nil {
 		return nil, fmt.Errorf("initialize inbound webhooks: %w", err)
 	}

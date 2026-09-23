@@ -11,8 +11,9 @@ shutdown. There is no webhook-specific worker or active delivery schema.
 
 Construct a `postgreswebhook.Dispatcher` from the immutable endpoint manifest.
 Before opening the feature transaction, call `Prepare` with one semantic JSON
-event and its receiver IDs. Inside the transaction, call `Prepared.Stage` as
-the final operation and return its error so the transaction rolls back on a
+event and its receiver IDs. Call `Prepared.Stage` inside the feature transaction
+so the business writes and delivery jobs commit or roll back together. Return
+its error and roll back the transaction on any staging failure, including a
 conflict. Its boolean reports whether the fan-out was inserted or already
 existed.
 

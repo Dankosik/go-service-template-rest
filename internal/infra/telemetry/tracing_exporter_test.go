@@ -59,8 +59,11 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
 		}
-		if endpoint.Source != TraceExporterConfigKey {
-			t.Fatalf("endpoint source = %q, want %q", endpoint.Source, TraceExporterConfigKey)
+		if endpoint.Source != SharedOTLPExporterConfigKey {
+			t.Fatalf("endpoint source = %q, want %q", endpoint.Source, SharedOTLPExporterConfigKey)
+		}
+		if !endpoint.ConfiguredByService {
+			t.Fatal("ConfiguredByService = false, want true")
 		}
 		if len(options) == 0 {
 			t.Fatal("options len = 0, want > 0")

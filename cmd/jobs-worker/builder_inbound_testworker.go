@@ -12,6 +12,7 @@ import (
 	"github.com/example/go-service-template-rest/cmd/jobs-worker/internal/bootstrap"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresinboundwebhook"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
@@ -23,8 +24,8 @@ func init() {
 		workers := river.NewWorkers()
 		return bootstrap.WorkersRuntime{
 			Workers: workers,
-			Bind: func(_ context.Context, pool *pgxpool.Pool, meter metric.MeterProvider) error {
-				endpoints, err := postgresinboundwebhook.ParseEndpointManifest(cfg.InboundWebhooks.Endpoints)
+			Bind: func(_ context.Context, workers *river.Workers, pool *pgxpool.Pool, meter metric.MeterProvider) error {
+				endpoints, err := inboundmanifest.ParseEndpoints(cfg.InboundWebhooks.Endpoints)
 				if err != nil {
 					return err
 				}

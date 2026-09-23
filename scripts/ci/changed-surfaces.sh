@@ -119,7 +119,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			README.md|.agents/skills/go-reliability/references/request-budget.md|.agents/skills/go-security/references/outbound-egress.md|docs/architecture/boundaries.md|docs/architecture/http.md|docs/benchmarking.md|docs/configuration-source-policy.md|docs/external-integration-initializer.md|docs/first-production-feature.md|docs/production-contract.md|docs/railway-deployment-profile.md|internal/config/observability_config.go|internal/infra/httpclient/*|scripts/init-module.sh|scripts/integration-init.sh|scripts/ci/docs-contract-check.sh|scripts/ci/integration-record-constructor-check.go)
+			README.md|.agents/skills/go-reliability/references/request-budget.md|.agents/skills/go-security/references/outbound-egress.md|docs/architecture/boundaries.md|docs/architecture/http.md|docs/benchmarking.md|docs/configuration-source-policy.md|docs/external-integration-initializer.md|docs/first-production-feature.md|docs/production-contract.md|docs/railway-deployment-profile.md|internal/config/observability_config.go|internal/infra/httpclient/*|scripts/init-module.sh|scripts/integration-init.sh|scripts/ci/docs-contract-check.sh|scripts/ci/integration-record-ast-common.go|scripts/ci/integration-record-constructor-check.go)
 				mark docs_contract
 				;;
 		esac
@@ -153,7 +153,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			integrations/*.toml|scripts/ci/integration-record-check.sh|scripts/ci/integration-record-constructor-check.go|scripts/ci/integration-record-bootstrap-check.go|scripts/ci/integration-record-grpc-check.go)
+			integrations/*.toml|scripts/ci/integration-record-check.sh|scripts/ci/integration-record-ast-common.go|scripts/ci/integration-record-constructor-check.go|scripts/ci/integration-record-bootstrap-check.go|scripts/ci/integration-record-grpc-check.go)
 				mark integration_records
 				;;
 		esac
@@ -303,6 +303,9 @@ self_test() {
 	assert_case scripts/openapi-ref-check.go \
 		"go_handwritten" \
 		"go_source go_generated go_testdata go_root_dependencies db_integration messaging_integration process_integration integration_race runtime_image image_security"
+	assert_case scripts/ci/integration-record-ast-common.go \
+		"go_handwritten docs_contract integration_records" \
+		"go_source go_generated db_integration messaging_integration process_integration runtime_image image_security"
 	assert_case .github/dependabot.yml \
 		"dependency_automation" \
 		"github_workflows go_source go_root_dependencies go_tool_dependencies runtime_image image_security"
