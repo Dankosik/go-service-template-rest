@@ -63,6 +63,7 @@ jobs:
       integration_records: ${{ steps.surfaces.outputs.integration_records }}
       validation_system: ${{ steps.surfaces.outputs.validation_system }}
       integration_suites: ${{ steps.integration.outputs.suites }}
+      initializer_parts: ${{ steps.initializer.outputs.parts }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -111,6 +112,35 @@ jobs:
             if [[ ${pair#*:} == true ]]; then suites+="${suites:+,}\"${pair%%:*}\""; fi
           done
           printf 'suites=[%s]\n' "${suites}" | tee -a "${GITHUB_OUTPUT}"
+      - name: Select initializer parts
+        # The shared part runs the profile-independent checks and the minimal
+        # profile, which alone resolves tools outside pull requests; the other
+        # selected profiles run as parallel parts of up to four.
+        id: initializer
+        env:
+          MODULE_INITIALIZER: ${{ steps.surfaces.outputs.module_initializer }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "${MODULE_INITIALIZER}" != true ]]; then
+            printf 'parts=[]\n' | tee -a "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [[ "${EVENT_NAME}" == pull_request || "${EVENT_NAME}" == merge_group ]]; then
+            selected=$(bash ./scripts/ci/git-changed-paths.sh --diff "${BASE_SHA}" HEAD | bash ./scripts/ci/init-module-contract-check.sh --select-from-files)
+          else
+            selected=$(bash ./scripts/ci/init-module-contract-check.sh --list-profiles)
+          fi
+          rest=()
+          while IFS= read -r profile; do
+            if [[ -n "${profile}" && "${profile}" != minimal ]]; then rest+=("${profile}"); fi
+          done <<<"${selected}"
+          parts='{"part":"shared","profiles":"minimal"}'
+          for ((i = 0; i < ${#rest[@]}; i += 4)); do
+            parts+=",{\"part\":\"$((i / 4 + 1))\",\"profiles\":\"${rest[*]:i:4}\"}"
+          done
+          printf 'parts=[%s]\n' "${parts}" | tee -a "${GITHUB_OUTPUT}"
 
   quality:
     needs: changes
@@ -123,7 +153,6 @@ jobs:
       needs.changes.outputs.openapi == 'true' ||
       needs.changes.outputs.protobuf == 'true' ||
       needs.changes.outputs.sqlc == 'true' ||
-      needs.changes.outputs.module_initializer == 'true' ||
       needs.changes.outputs.integration_initializer == 'true' ||
       needs.changes.outputs.integration_records == 'true' ||
       needs.changes.outputs.agent_instructions == 'true' ||
@@ -146,7 +175,6 @@ jobs:
           needs.changes.outputs.openapi == 'true' ||
           needs.changes.outputs.protobuf == 'true' ||
           needs.changes.outputs.sqlc == 'true' ||
-          needs.changes.outputs.module_initializer == 'true' ||
           needs.changes.outputs.integration_initializer == 'true' ||
           needs.changes.outputs.integration_records == 'true' ||
           needs.changes.outputs.validation_system == 'true'
@@ -174,7 +202,6 @@ jobs:
            needs.changes.outputs.openapi == 'true' ||
            needs.changes.outputs.protobuf == 'true' ||
            needs.changes.outputs.sqlc == 'true' ||
-           needs.changes.outputs.module_initializer == 'true' ||
            needs.changes.outputs.integration_initializer == 'true')
         id: tool-module-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -190,7 +217,6 @@ jobs:
           needs.changes.outputs.openapi == 'true' ||
           needs.changes.outputs.protobuf == 'true' ||
           needs.changes.outputs.sqlc == 'true' ||
-          needs.changes.outputs.module_initializer == 'true' ||
           needs.changes.outputs.integration_initializer == 'true' ||
           needs.changes.outputs.integration_records == 'true'
         id: quality-build-cache
@@ -222,7 +248,7 @@ jobs:
       - name: Fetch Go comparison base
         if: >-
           (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
-          (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_testdata == 'true' || needs.changes.outputs.go_root_dependencies == 'true' || needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.module_initializer == 'true' || needs.changes.outputs.integration_initializer == 'true')
+          (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_testdata == 'true' || needs.changes.outputs.go_root_dependencies == 'true' || needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.integration_initializer == 'true')
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
         run: |
@@ -362,18 +388,6 @@ jobs:
       - name: SQLC
         if: needs.changes.outputs.sqlc == 'true'
         run: bash ./scripts/ci/measure.sh quality-sqlc -- make check-sqlc
-      - name: Module initializer contract
-        if: needs.changes.outputs.module_initializer == 'true'
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
-        run: |
-          set -euo pipefail
-          if [[ "${{ github.event_name }}" == pull_request || "${{ github.event_name }}" == merge_group ]]; then
-            profiles=$(bash ./scripts/ci/git-changed-paths.sh --diff "${BASE_SHA}" HEAD | bash ./scripts/ci/init-module-contract-check.sh --select-from-files | tr '\n' ' ')
-            bash ./scripts/ci/measure.sh quality-module-initializer -- env INIT_MODULE_PROFILES="${profiles}" make template-init-check
-          else
-            bash ./scripts/ci/measure.sh quality-module-initializer -- env INIT_MODULE_RESOLVE_TOOLS=1 make template-init-check
-          fi
       - name: Integration initializer contract
         if: needs.changes.outputs.integration_initializer == 'true'
         env:
@@ -446,6 +460,74 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: make proto-breaking BASE_REF="${BASE_SHA}"
+
+  initializer:
+    needs: changes
+    if: needs.changes.outputs.initializer_parts != '[]'
+    name: initializer (${{ matrix.part == 'shared' && 'shared checks + ' || '' }}${{ matrix.profiles }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      # Every part reports its own result; `required` reads the aggregate,
+      # which is success only when every part passed.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.initializer_parts) }}
+    env:
+      GOMODCACHE: ${{ github.workspace }}/.cache/gomod/root
+      TOOL_GOMODCACHE: ${{ github.workspace }}/.cache/gomod/tools
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        id: setup-go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Restore root module cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.GOMODCACHE }}
+          key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
+          restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
+      - name: Restore tool module cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TOOL_GOMODCACHE }}
+          key: go-mod-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-tools-${{ runner.os }}-${{ runner.arch }}-
+      - name: Restore initializer build cache
+        # Only the shared part saves, on main: tool resolution builds every
+        # pinned tool there, and the cached binaries keep that step short.
+        # A part without that cache starts from the quality build instead.
+        id: build-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: go-build-initializer-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-build-initializer-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
+            go-build-initializer-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
+            go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
+      - name: Module initializer contract
+        env:
+          INIT_MODULE_PROFILES: ${{ matrix.profiles }}
+          INIT_MODULE_SHARED_CHECKS: ${{ matrix.part == 'shared' && '1' || '0' }}
+          INIT_MODULE_RESOLVE_TOOLS: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' && '1' || '' }}
+          ROUTE: initializer-${{ matrix.part }}
+        run: bash ./scripts/ci/measure.sh "${ROUTE}" -- make template-init-check
+      - name: Save initializer build cache
+        if: >-
+          matrix.part == 'shared' &&
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
 
   security:
     needs: changes
@@ -676,7 +758,7 @@ jobs:
 
   required:
     if: always()
-    needs: [changes, quality, security, secrets, delivery, integration]
+    needs: [changes, quality, security, secrets, delivery, integration, initializer]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
