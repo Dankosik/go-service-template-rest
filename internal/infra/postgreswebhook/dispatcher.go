@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"slices"
 	"strconv"
 	"strings"
@@ -157,9 +158,9 @@ func (p Prepared) DeliveryIDs() []string {
 
 // Stage inserts the prepared fan-out in the caller-owned transaction, atomically
 // with the caller's other writes. The caller must roll back the transaction if
-// Stage returns an error, including ErrConflict. The boolean reports whether
-// this call inserted the fan-out rather than finding it.
-func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (bool, error) {
+// Stage returns an error, including ErrConflict. inserted reports whether this
+// call inserted the fan-out rather than finding it.
+func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (inserted bool, err error) {
 	if p.client == nil || tx == nil || len(p.deliveries) == 0 {
 		return false, fmt.Errorf("%w: prepared deliveries and transaction are required", ErrConfig)
 	}
@@ -174,7 +175,7 @@ func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (bool, error) {
 			newCount++
 			continue
 		}
-		if result.Job == nil || !sameDelivery(result.Job.EncodedArgs, delivery) {
+		if result.Job == nil || !encodedMatchesFanout(result.Job.EncodedArgs, delivery) {
 			return false, ErrConflict
 		}
 		existingCount++
@@ -186,13 +187,13 @@ func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (bool, error) {
 }
 
 // ResolveCurrent reconciles an immediate unknown commit against current River
-// rows. It returns true when the complete prepared fan-out is present and
+// rows. present is true when the complete prepared fan-out is present and
 // matches, false when none of its deliveries are currently present, and an
 // error for a read failure or partial/mismatched fan-out. River retention
 // bounds this readback: false does not prove the transaction never committed
 // after its jobs have been deleted. The caller's business transaction owns
 // replay after River retention.
-func (p Prepared) ResolveCurrent(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
+func (p Prepared) ResolveCurrent(ctx context.Context, pool *pgxpool.Pool) (present bool, err error) {
 	if pool == nil || len(p.deliveries) == 0 {
 		return false, fmt.Errorf("%w: prepared deliveries and pool are required", ErrConfig)
 	}
@@ -224,27 +225,29 @@ func (p Prepared) ResolveCurrent(ctx context.Context, pool *pgxpool.Pool) (bool,
 	}
 	for _, delivery := range p.deliveries {
 		stored, ok := found[delivery.DeliveryID]
-		if !ok || !equalDelivery(stored, delivery) {
+		if !ok || !matchesFanout(stored, delivery) {
 			return false, ErrConflict
 		}
 	}
 	return true, nil
 }
 
+// deliveryInsertOpts deduplicates across every job state, including terminal
+// ones, so a replayed fan-out never re-sends a finished delivery while River
+// retains its row.
 func deliveryInsertOpts() *river.InsertOpts {
-	states := append(rivertype.UniqueOptsByStateDefault(), rivertype.JobStateCancelled, rivertype.JobStateDiscarded)
 	return &river.InsertOpts{
 		MaxAttempts: maxAttempts,
-		UniqueOpts:  river.UniqueOpts{ByArgs: true, ByState: states},
+		UniqueOpts:  river.UniqueOpts{ByArgs: true, ByState: rivertype.JobStates()},
 	}
 }
 
-func sameDelivery(encoded []byte, want deliveryArgs) bool {
+func encodedMatchesFanout(encoded []byte, want deliveryArgs) bool {
 	var got deliveryArgs
-	return json.Unmarshal(encoded, &got) == nil && equalDelivery(got, want)
+	return json.Unmarshal(encoded, &got) == nil && matchesFanout(got, want)
 }
 
-func equalDelivery(got, want deliveryArgs) bool {
+func matchesFanout(got, want deliveryArgs) bool {
 	return got.DeliveryID == want.DeliveryID &&
 		got.FanoutFingerprint == want.FanoutFingerprint
 }
@@ -291,32 +294,30 @@ func deriveDeliveryID(owner, eventID, receiver string, generation int64) string 
 }
 
 func deriveStableID(prefix string, values ...string) string {
-	hash := sha256.New()
+	h := sha256.New()
+	writeFields(h, values...)
+	return prefix + hex.EncodeToString(h.Sum(nil))
+}
+
+// writeFields writes each value followed by a NUL so adjacent fields cannot
+// shift into one another.
+func writeFields(h hash.Hash, values ...string) {
 	for _, value := range values {
-		_, _ = hash.Write([]byte(value))
-		_, _ = hash.Write([]byte{0})
+		_, _ = h.Write([]byte(value))
+		_, _ = h.Write([]byte{0})
 	}
-	return prefix + hex.EncodeToString(hash.Sum(nil))
 }
 
 func fingerprintFanout(owner, eventID string, body []byte, endpoints []endpoint) string {
-	hash := sha256.New()
-	for _, value := range []string{owner, eventID} {
-		_, _ = hash.Write([]byte(value))
-		_, _ = hash.Write([]byte{0})
-	}
-	_, _ = hash.Write(body)
-	_, _ = hash.Write([]byte{0})
+	h := sha256.New()
+	writeFields(h, owner, eventID, string(body))
 	for _, endpoint := range endpoints {
-		for _, value := range []string{
+		writeFields(h,
 			endpoint.ReceiverID, strconv.FormatInt(endpoint.Generation, 10), endpoint.URL,
 			endpoint.ActiveKeyReference, endpoint.PredecessorKeyReference,
-		} {
-			_, _ = hash.Write([]byte(value))
-			_, _ = hash.Write([]byte{0})
-		}
+		)
 	}
-	return hex.EncodeToString(hash.Sum(nil))
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func validateToken(name, value string) error {

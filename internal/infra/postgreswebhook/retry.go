@@ -31,9 +31,11 @@ const (
 )
 
 type transportEvidence struct {
-	StatusCode  int
-	Certainty   sendCertainty
-	LocalDenial bool
+	StatusCode int
+	Certainty  sendCertainty
+	// LocalPermanent marks a request that was not sent and cannot be sent by
+	// retrying, such as an invalid prepared send or a failed TLS validation.
+	LocalPermanent bool
 }
 
 func parseRetryAfter(raw, date string, attemptedAt time.Time, maxDelay time.Duration) (time.Duration, bool) {

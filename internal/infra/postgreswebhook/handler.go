@@ -90,8 +90,8 @@ func prepareFailure(ctx context.Context, err error) error {
 func classifyDelivery(result sendResult, err error) error {
 	evidence := result.Evidence
 	switch {
-	case evidence.LocalDenial:
-		return cancelJob("webhook destination denied")
+	case evidence.LocalPermanent:
+		return cancelJob("webhook delivery cannot be sent")
 	case evidence.StatusCode >= http.StatusOK && evidence.StatusCode <= 299:
 		return nil
 	case retryableWebhookStatus(evidence.StatusCode):

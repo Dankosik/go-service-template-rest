@@ -21,7 +21,7 @@ func TestWebhookDeliveryClassification(t *testing.T) {
 		{name: "rate limited", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusTooManyRequests, Certainty: sendCertaintyMayHaveSent}}, retry: true},
 		{name: "rejected", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusBadRequest, Certainty: sendCertaintyMayHaveSent}}, cancelled: true},
 		{name: "ambiguous", result: sendResult{Evidence: transportEvidence{Certainty: sendCertaintyMayHaveSent}}, retry: true},
-		{name: "local denial", result: sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, cancelled: true},
+		{name: "local denial", result: sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalPermanent: true}}, cancelled: true},
 		{name: "deadline", result: sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent}}, err: context.DeadlineExceeded, retry: true},
 		{name: "unspecified", result: sendResult{}, err: errors.New("transport unavailable"), retry: true},
 	}

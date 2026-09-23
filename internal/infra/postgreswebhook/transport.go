@@ -25,6 +25,7 @@ const (
 	webhookUserAgent       = "go-service-template-webhook/1"
 	maxDNSAddresses        = 64
 	responseHeaderTimeout  = 15 * time.Second
+	tlsHandshakeTimeout    = 15 * time.Second
 	maxResponseHeaderBytes = 32 << 10
 )
 
@@ -113,7 +114,7 @@ func tryPreparedAddresses(
 	send func(context.Context, preparedSend, netip.Addr) (sendResult, error),
 ) (sendResult, error) {
 	if len(prepared.Addresses) == 0 || send == nil {
-		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, ErrConfig
+		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalPermanent: true}}, ErrConfig
 	}
 	var result sendResult
 	var err error
@@ -128,7 +129,7 @@ func tryPreparedAddresses(
 
 func send(ctx context.Context, prepared preparedSend, address netip.Addr) (sendResult, error) {
 	if prepared.URL == nil || !address.IsValid() || !attemptContextBounded(ctx, prepared.Attempt.Deadline) {
-		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, fmt.Errorf("%w: prepared send is invalid", ErrConfig)
+		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalPermanent: true}}, fmt.Errorf("%w: prepared send is invalid", ErrConfig)
 	}
 	transport := newAttemptTransport(prepared.URL.Hostname(), address)
 	defer transport.CloseIdleConnections()
@@ -145,7 +146,7 @@ func sendWithTransport(ctx context.Context, prepared preparedSend, transport *ht
 	trace := &httptrace.ClientTrace{WroteRequest: func(httptrace.WroteRequestInfo) { wroteRequest = true }}
 	request, err := webhookRequest(httptrace.WithClientTrace(ctx, trace), prepared)
 	if err != nil {
-		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalDenial: true}}, err
+		return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent, LocalPermanent: true}}, err
 	}
 	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(request)
@@ -155,8 +156,8 @@ func sendWithTransport(ctx context.Context, prepared preparedSend, transport *ht
 			err = errResponseLimit
 		}
 		return sendResult{Evidence: transportEvidence{
-			Certainty:   certaintyForWrite(wrote),
-			LocalDenial: !wrote && permanentTLSValidationError(err),
+			Certainty:      certaintyForWrite(wrote),
+			LocalPermanent: !wrote && permanentTLSValidationError(err),
 		}}, fmt.Errorf("send webhook request: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
@@ -202,7 +203,7 @@ func newAttemptTransport(serverName string, address netip.Addr) *http.Transport 
 		Proxy: nil, DisableKeepAlives: true, DisableCompression: true, ForceAttemptHTTP2: false,
 		MaxConnsPerHost: 1, MaxIdleConns: 0, ResponseHeaderTimeout: responseHeaderTimeout,
 		MaxResponseHeaderBytes: maxResponseHeaderBytes,
-		TLSHandshakeTimeout:    responseHeaderTimeout,
+		TLSHandshakeTimeout:    tlsHandshakeTimeout,
 		TLSClientConfig:        &tls.Config{ServerName: serverName, MinVersion: tls.VersionTLS13},
 		TLSNextProto:           map[string]func(string, *tls.Conn) http.RoundTripper{},
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
