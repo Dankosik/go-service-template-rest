@@ -90,13 +90,12 @@ func (v *Verifier) Close() {
 
 // Verify implements bearerauthn.Verifier for one already-parsed opaque bearer.
 func (v *Verifier) Verify(ctx context.Context, token string) (bearerauthn.Result, error) {
-	request, err := v.newIntrospectionRequest(ctx, token)
+	attemptCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
+	defer cancel()
+	request, err := v.newIntrospectionRequest(attemptCtx, token)
 	if err != nil {
 		return bearerauthn.Result{}, classifyContextOrUnavailable(ctx)
 	}
-	attemptCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
-	defer cancel()
-	request = request.WithContext(attemptCtx)
 
 	response, err := v.client.Do(request)
 	if err != nil {
