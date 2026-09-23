@@ -105,6 +105,9 @@ func migrate(
 		}
 	}()
 
+	// WithLockTimeout(period, attempts): retry every second for the whole budget.
+	// CleanupTimeout serves twice: it bounds the unlock retries here and is the
+	// reserve kept back from the execution deadline for cleanup.
 	locker, err := gooselock.NewPostgresSessionLocker(
 		gooselock.WithLockTimeout(1, secondsCeiling(opts.LockTimeout)),
 		gooselock.WithUnlockTimeout(1, secondsCeiling(opts.CleanupTimeout)),
@@ -177,6 +180,9 @@ func migrate(
 		logMigrationResults(executionCtx, opts.Logger, applied, nil)
 		return result, stageError(FailureState, fmt.Errorf("read goose migration versions: %w", stateErr))
 	}
+	// goose GetVersions does not take the session lock, so the first read can
+	// predate a concurrent runner that finished while this one waited. A run that
+	// applied nothing reports the later read as Before.
 	if len(applied) == 0 {
 		result.Before = after
 	}

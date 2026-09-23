@@ -20,6 +20,8 @@ var requiredPostgresDSNSettings = []string{
 	"sslmode",
 }
 
+// allowedPostgresSSLModes omits prefer and allow because pgconn implements them
+// as a second, differently encrypted fallback target.
 var allowedPostgresSSLModes = map[string]struct{}{
 	"disable":     {},
 	"require":     {},
@@ -206,6 +208,8 @@ func validatePostgresDSNSettings(settings map[string]string) error {
 }
 
 // normalizePostgresURLDSN rewrites parsedURL in place and returns its string form.
+// An explicitly empty file key stops pgconn from substituting its $HOME default
+// (~/.pgpass, ~/.postgresql/*), so no ambient file can supply credentials.
 func normalizePostgresURLDSN(parsedURL *url.URL) string {
 	query := parsedURL.Query()
 	for _, key := range postgresFileDefaultDSNKeys {

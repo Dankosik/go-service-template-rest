@@ -101,6 +101,12 @@ func classifyCommitError(err error) error {
 	return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
 }
 
+// commitDefinitelyFailed reports errors that prove the transaction did not
+// commit: an integrity violation from a deferred constraint and a class 40
+// rollback (other than statement_completion_unknown) are the server rejecting
+// COMMIT; ErrTxCommitRollback means the server answered COMMIT with ROLLBACK for
+// an already aborted transaction; and SafeToRetry means COMMIT never reached
+// the server.
 func commitDefinitelyFailed(err error) bool {
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		return pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) ||

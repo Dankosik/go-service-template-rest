@@ -43,6 +43,9 @@ func rootMigrationSource(source fs.FS, sourcePath string) (fs.FS, error) {
 	return rooted, nil
 }
 
+// validateMigrationSource enforces the migration invariant documented in
+// docs/first-production-feature.md: flat canonical SQL files, each transactional
+// and without environment substitution, checked before any connection opens.
 func validateMigrationSource(source fs.FS) error {
 	entries, err := fs.ReadDir(source, ".")
 	if err != nil {

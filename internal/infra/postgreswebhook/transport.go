@@ -152,6 +152,7 @@ func sendWithTransport(ctx context.Context, prepared preparedSend, transport *ht
 	response, err := client.Do(request)
 	if err != nil {
 		wrote := wroteRequest
+		// net/http exports no sentinel for MaxResponseHeaderBytes, so its text is matched.
 		if errors.Is(err, http.ErrLineTooLong) || strings.Contains(err.Error(), "server response headers exceeded") {
 			err = errResponseLimit
 		}
@@ -206,6 +207,8 @@ func newAttemptTransport(serverName string, address netip.Addr) *http.Transport 
 		TLSHandshakeTimeout:    tlsHandshakeTimeout,
 		TLSClientConfig:        &tls.Config{ServerName: serverName, MinVersion: tls.VersionTLS13},
 		TLSNextProto:           map[string]func(string, *tls.Conn) http.RoundTripper{},
+		// Dial only the admitted public address; the request host is never
+		// resolved again, so DNS cannot redirect the connection.
 		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
 			if !outboundtrust.PublicAddress(address) {
 				return nil, errDestinationDenied

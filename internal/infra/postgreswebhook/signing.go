@@ -12,6 +12,8 @@ import (
 // signV1 signs with the active key and, when present, the predecessor key, in
 // that order.
 func signV1(deliveryID string, attemptedAt time.Time, body []byte, active, predecessor []byte) (string, error) {
+	// The signed content is id.timestamp.body, so a '.' in the ID would make
+	// it ambiguous.
 	if err := validateToken("delivery_id", deliveryID); err != nil || strings.Contains(deliveryID, ".") {
 		return "", ErrConfig
 	}

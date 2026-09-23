@@ -118,6 +118,7 @@ func webhookNextRetry(job *river.Job[deliveryArgs], now time.Time) time.Time {
 	if !job.CreatedAt.IsZero() {
 		deadline := job.CreatedAt.Add(webhookMaxElapsed)
 		if !deadline.After(now) {
+			// The next attempt only runs webhookDeliveryExpired and cancels.
 			return now.Add(time.Second)
 		}
 		if deadline.Before(due) {
