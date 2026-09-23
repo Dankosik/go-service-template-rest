@@ -18,7 +18,6 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
-	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -159,7 +158,6 @@ func configureTransfer(options *transfermanager.Options) {
 	options.Concurrency = 1
 	options.FailTimeout = multipartFailureTimeout
 	options.MaxUploadParts = maximumUploadParts
-	options.ChecksumAlgorithm = tmtypes.ChecksumAlgorithm("CRC64NVME")
 	options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 }
 
