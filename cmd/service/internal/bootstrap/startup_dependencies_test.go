@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -28,28 +27,6 @@ func TestPostgresDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	}
 	if !errors.Is(err, rootCause) {
 		t.Fatalf("error = %v, want wrapped root cause", err)
-	}
-}
-
-func TestPostgresDependencyInitFailureDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
-	t.Parallel()
-
-	cause := fmt.Errorf("%w: dial failed", errDependencyInit)
-	err := postgresDependencyInitFailure(cause)
-	if err == nil {
-		t.Fatal("postgresDependencyInitFailure() error = nil, want non-nil")
-	}
-	if !errors.Is(err, errDependencyInit) {
-		t.Fatalf("postgresDependencyInitFailure() error = %v, want wrapped %v", err, errDependencyInit)
-	}
-	if !errors.Is(err, cause) {
-		t.Fatalf("postgresDependencyInitFailure() error = %v, want wrapped cause", err)
-	}
-	if count := strings.Count(err.Error(), errDependencyInit.Error()); count != 1 {
-		t.Fatalf("postgresDependencyInitFailure() error = %v, dependency init count = %d, want 1", err, count)
-	}
-	if !strings.Contains(err.Error(), "postgres init failed") {
-		t.Fatalf("postgresDependencyInitFailure() error = %v, want dependency context", err)
 	}
 }
 

@@ -129,7 +129,7 @@ func initRuntimeDependencies(
 func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*pgxpool.Pool, error) {
 	pg, err := postgres.Open(ctx, runtimeopts.Postgres(cfg))
 	if err != nil {
-		return nil, fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, err)
+		return nil, fmt.Errorf("open postgres pool: %w", err)
 	}
 	return pg, nil
 }
@@ -234,12 +234,6 @@ func initPostgresDependency(
 }
 
 func postgresDependencyInitFailure(err error) error {
-	if err == nil {
-		return fmt.Errorf("%w: %s init failed", errDependencyInit, startupDependencyPostgres)
-	}
-	if errors.Is(err, errDependencyInit) {
-		return fmt.Errorf("%s init failed: %w", startupDependencyPostgres, err)
-	}
 	return fmt.Errorf("%w: %s init failed: %w", errDependencyInit, startupDependencyPostgres, err)
 }
 
