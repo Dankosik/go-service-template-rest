@@ -94,8 +94,8 @@ func TestValidateRuntimeConfig(t *testing.T) {
 
 			invalid := valid
 			mutate(&invalid)
-			if err := validateRuntimeConfig(invalid); err == nil {
-				t.Fatal("validateRuntimeConfig() error = nil")
+			if err := validateRuntimeConfig(invalid); !errors.Is(err, config.ErrValidate) {
+				t.Fatalf("validateRuntimeConfig() error = %v, want ErrValidate", err)
 			}
 		})
 	}

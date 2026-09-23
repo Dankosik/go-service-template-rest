@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -45,18 +44,12 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	if err != nil {
 		return fmt.Errorf("load worker config: %w", err)
 	}
-	if err := validateShutdownBudget(cfg); err != nil {
+	if err := validateRuntimeConfig(cfg); err != nil {
 		return err
-	}
-	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
-		return fmt.Errorf("%w: messaging must be enabled for worker", natsjs.ErrRejected)
 	}
 	workerCfg, err := messagingWorkerConfig(cfg.Messaging)
 	if err != nil {
 		return err
-	}
-	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
-		return fmt.Errorf("%w: worker diagnostics address is required", natsjs.ErrRejected)
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg)
 	metrics := telemetry.New()

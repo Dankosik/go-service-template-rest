@@ -9,13 +9,19 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
 
-func validateShutdownBudget(cfg config.Config) error {
-	return runtimeopts.ValidateGracePeriod(
+func validateRuntimeConfig(cfg config.Config) error {
+	if err := runtimeopts.ValidateGracePeriod(
 		cfg.HTTP.GracePeriod,
 		"http.shutdown_timeout",
 		cfg.HTTP.ShutdownTimeout,
 		workerTailBudget,
-	)
+	); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
+		return fmt.Errorf("%w: messaging must be enabled for worker", config.ErrValidate)
+	}
+	return runtimeopts.RequireDiagnosticsAddr(cfg.Observability.Metrics.Addr, "worker")
 }
 
 func messagingWorkerConfig(cfg config.MessagingConfig) (natsjs.WorkerConfig, error) {

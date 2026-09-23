@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
@@ -24,8 +23,8 @@ func validateRuntimeConfig(cfg config.Config) error {
 	if cfg.Jobs.MaxWorkers < 1 {
 		return fmt.Errorf("%w: jobs.max_workers must be positive for jobs-worker", config.ErrValidate)
 	}
-	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
-		return fmt.Errorf("%w: jobs worker diagnostics address is required", config.ErrValidate)
+	if err := runtimeopts.RequireDiagnosticsAddr(cfg.Observability.Metrics.Addr, "jobs worker"); err != nil {
+		return err
 	}
 	return runtimeopts.ValidateGracePeriod(
 		cfg.HTTP.GracePeriod,

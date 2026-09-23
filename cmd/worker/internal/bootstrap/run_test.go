@@ -37,8 +37,8 @@ func TestMessagingCompositionRejectsDisabledTransportWithRegisteredHandler(t *te
 		built = true
 		return nil, nil, nil
 	})
-	if !errors.Is(err, natsjs.ErrRejected) || !strings.Contains(err.Error(), "messaging must be enabled for worker") {
-		t.Fatalf("run(disabled messaging) error = %v, want disabled ErrRejected", err)
+	if !errors.Is(err, config.ErrValidate) || !strings.Contains(err.Error(), "messaging must be enabled for worker") {
+		t.Fatalf("run(disabled messaging) error = %v, want disabled ErrValidate", err)
 	}
 	if built {
 		t.Fatal("worker built the feature handler while messaging was disabled")
@@ -236,8 +236,8 @@ func TestMessagingCompositionRejectsMissingDiagnosticsBeforeConnection(t *testin
 	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
 		return testRegistry(t, "test", func(context.Context, string) error { return nil }), nil, nil
 	})
-	if !errors.Is(err, natsjs.ErrRejected) {
-		t.Fatalf("run(missing diagnostics) error = %v, want ErrRejected", err)
+	if !errors.Is(err, config.ErrValidate) {
+		t.Fatalf("run(missing diagnostics) error = %v, want ErrValidate", err)
 	}
 	if err := listener.Close(); err != nil {
 		t.Fatalf("close worker connection sentinel: %v", err)

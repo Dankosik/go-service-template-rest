@@ -119,13 +119,13 @@ func run(signalCtx context.Context, args []string) error {
 
 func validateRuntimeConfig(cfg config.Config) error {
 	if !cfg.Postgres.Enabled {
-		return fmt.Errorf("%w: postgres must be enabled for outbox relay", postgresoutbox.ErrConfig)
+		return fmt.Errorf("%w: postgres must be enabled for outbox relay", config.ErrValidate)
 	}
 	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
-		return fmt.Errorf("%w: messaging must be enabled for outbox relay", postgresoutbox.ErrConfig)
+		return fmt.Errorf("%w: messaging must be enabled for outbox relay", config.ErrValidate)
 	}
-	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
-		return fmt.Errorf("%w: outbox diagnostics address is required", postgresoutbox.ErrConfig)
+	if err := runtimeopts.RequireDiagnosticsAddr(cfg.Observability.Metrics.Addr, "outbox"); err != nil {
+		return err
 	}
 	return runtimeopts.ValidateGracePeriod(
 		cfg.HTTP.GracePeriod,

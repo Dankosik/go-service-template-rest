@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"strings"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
@@ -79,6 +81,16 @@ type DiagnosticsListener struct {
 	// needs no lock: the close is the only publication of it.
 	done     chan struct{}
 	serveErr error
+}
+
+// RequireDiagnosticsAddr rejects a background binary configured without a
+// diagnostics address before any I/O: its liveness, readiness, and metrics have
+// no other listener.
+func RequireDiagnosticsAddr(addr, component string) error {
+	if strings.TrimSpace(addr) == "" {
+		return fmt.Errorf("%w: %s diagnostics address is required", config.ErrValidate, component)
+	}
+	return nil
 }
 
 // ListenDiagnostics binds the address and begins serving. Binding happens before
