@@ -18,6 +18,7 @@ import (
 // behaviors off. Memory is the half the toolchain still does not cover: the GC's
 // soft limit defaults to math.MaxInt64, so a container is OOM-killed by the
 // kernel rather than collected harder by its own runtime.
+
 const memoryLimitEnv = "GOMEMLIMIT"
 
 // applyMemoryLimit publishes a fraction of the container memory limit to the

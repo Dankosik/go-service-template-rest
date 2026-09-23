@@ -35,12 +35,12 @@ type telemetryStage struct {
 
 // bootstrapTelemetryStage installs both signals, independently.
 //
-// Independence is the point. The version this replaced returned on the first
-// metrics failure, so one unusable OTLP metrics endpoint left the tracer provider
-// unset — costing traces, the meter provider that reports whether traces are
-// exported at all, and every log record's trace_id and span_id, which logctx
-// reads off the span context that provider produces. The service started anyway
-// and reported healthy, so the only artifact was one warning at boot.
+// Independence is the point. Returning on the first metrics failure would let one
+// unusable OTLP metrics endpoint leave the tracer provider unset — costing
+// traces, the meter provider that reports whether traces are exported at all,
+// and every log record's trace_id and span_id, which logctx reads off the span
+// context that provider produces. The service would still start and report
+// healthy, leaving one warning at boot as the only artifact.
 //
 // Neither failure is fatal. A service that cannot export telemetry still serves
 // its contract, and taking it down for that would trade an observability outage
@@ -134,9 +134,9 @@ func recordTraceExporterInitialization(
 //
 // It deliberately derives no deadline of its own. The flush is the last teardown
 // stage, so what it may spend is whatever the process grace period has left —
-// a number only the caller holding the shutdown budget knows. Re-deriving a fixed
-// five seconds here is how the total teardown grew past the platform's grace
-// period and got this stage killed for it.
+// a number only the caller holding the shutdown budget knows. A fixed deadline
+// here would let the total teardown grow past the platform's grace period and
+// get this stage killed for it.
 func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) error) func(context.Context) {
 	return func(shutdownCtx context.Context) {
 		log.InfoContext(

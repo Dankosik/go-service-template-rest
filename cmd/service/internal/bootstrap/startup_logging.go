@@ -29,9 +29,9 @@ func startupLogArgs(component, operation, outcome string, extra ...any) []any {
 	return append(args, extra...)
 }
 
-// logProcessExit writes the last record of the process, through the default
-// logger rather than a captured one: it runs after the deferred teardown that
-// may have replaced what the bootstrap logger wrote to.
+// logProcessExit writes the last record of the process through the default
+// logger rather than a captured one. Run defers it before the configured logger
+// exists, so only the default read at call time reaches that logger.
 func logProcessExit(ctx context.Context, runErr error) {
 	if runErr != nil {
 		slog.ErrorContext(

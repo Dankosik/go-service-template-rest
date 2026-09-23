@@ -40,6 +40,8 @@ func (b *shutdownBudget) start() {
 func (b *shutdownBudget) stage(base context.Context, want time.Duration) (context.Context, context.CancelFunc) {
 	b.start()
 	window, cancelWindow := context.WithDeadline(context.WithoutCancel(base), b.deadline)
+	// TeardownStage copies window's deadline onto a detached context, so the
+	// window can be released at once.
 	stage, cancelStage := runtimeopts.TeardownStage(window, want)
 	cancelWindow()
 	return stage, cancelStage

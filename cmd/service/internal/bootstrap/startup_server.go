@@ -190,11 +190,10 @@ func serveRuntime(signalCtx context.Context, startupCtx context.Context, args se
 	// The diagnostics listener is deliberately not in this drain. Everything worth
 	// measuring happens during the window it occupies: the readiness propagation
 	// delay, up to the whole remaining shutdown budget of in-flight requests, and
-	// the shed and timed-out responses they produce. The version this replaced closed
-	// /metrics at the same instant as the API, so with the shipped scrape-only
-	// configuration none of that window was ever collected — the Prometheus target
-	// simply went down for the last fifteen seconds of every pod's life, which is
-	// exactly the fifteen seconds a rolling deploy is judged on.
+	// the shed and timed-out responses they produce. Closing /metrics with the API
+	// would leave that window uncollected under the shipped scrape-only
+	// configuration: the Prometheus target would go down for the end of every
+	// pod's life, which is the part a rolling deploy is judged on.
 	drainer := shutdownDrainer(args.healthSvc)
 	applicationServers := []shutdownServer{args.httpSrv}
 	// profile:grpc:start

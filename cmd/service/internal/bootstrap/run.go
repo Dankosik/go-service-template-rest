@@ -24,18 +24,20 @@ import (
 
 // Budgets owned by every profile. How they nest, outermost first:
 //
-//	startupBudget             30s   flag parsing through readiness admission
-//	 ├─ startupTelemetryBudget 2s   metrics setup, then tracing setup
-//	 ├─ dependency stage            connect budget and first-contact probe, only
-//	 │                              in a profile that has a dependency
-//	 └─ http.readiness_timeout      startup admission (typed config)
+//	startupBudget              config load through readiness admission; starts
+//	 │                         after flag parsing
+//	 ├─ startupTelemetryBudget metrics setup, then tracing setup, each with its
+//	 │                         own budget
+//	 ├─ dependency stage       connect budget and first-contact probe, only in a
+//	 │                         profile that has a dependency
+//	 └─ http.readiness_timeout startup admission (typed config)
 //
 // Shutdown budgets, in the order they are spent after the HTTP drain:
 //
-//	diagnosticsShutdownTimeout 2s   close /metrics, after the drain it measures
-//	backgroundShutdownTimeout  5s   cancel and join supervised background tasks
-//	dependencyCloseTimeout     5s   release pooled dependencies
-//	telemetryShutdownTimeout   5s   span and metric flush, last so it records the above
+//	diagnosticsShutdownTimeout close /metrics, after the drain it measures
+//	backgroundShutdownTimeout  cancel and join supervised background tasks
+//	dependencyCloseTimeout     release pooled dependencies
+//	telemetryShutdownTimeout   span and metric flush, last so it records the above
 //
 // Every one is a ceiling, not a reservation, and all draw from one process-wide
 // deadline; see shutdownBudget. Dependency-specific budgets live with their
@@ -73,8 +75,8 @@ const (
 		telemetryShutdownTimeout
 )
 
-// runtimeWiring carries the one process edge that tests must stop without
-// binding sockets.
+// runtimeWiring carries the process edges tests replace, so Run can be driven
+// without binding sockets or reaching real dependencies.
 type runtimeWiring struct {
 	dependencies func(context.Context, startupBootstrap) (runtimeDependencies, error)
 	serve        func(signalCtx, startupCtx context.Context, args serveRuntimeArgs) error
@@ -127,7 +129,9 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	slog.SetDefault(bootstrapLog)
 
 	metrics := telemetry.New()
-	// NotifyContext already unregisters on signal delivery, and stop is idempotent.
+	// A delivered signal only cancels signalCtx; the handler stays registered
+	// until stop runs when Run returns, so a repeated signal during teardown is
+	// absorbed rather than killing the process.
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	defer func() { logProcessExit(signalCtx, runErr) }()
@@ -175,6 +179,9 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	}()
 	// profile:object-storage:end
 
+	// scripts/integration-init.sh (wire_run_go) inserts integration clients
+	// before the dependencies construction below and closes them after the
+	// supervisor.Shutdown call; both lines are its literal anchors.
 	dependencies, err := wiring.dependencies(startupCtx, bootstrap)
 	if err != nil {
 		return err
@@ -397,8 +404,9 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 // thing that stops it.
 //
 // Deriving it from signalCtx would cancel every task the instant SIGTERM arrives,
-// while the HTTP drain keeps serving for up to 30s with the shipped defaults —
-// every request admitted in that window would run without the work it depends on.
+// while the HTTP drain keeps serving for up to http.shutdown_timeout (25s by
+// default) — every request admitted in that window would run without the work it
+// depends on.
 func newSupervisedBackground(signalCtx context.Context, log *slog.Logger) *background.Supervisor {
 	return background.New(context.WithoutCancel(signalCtx), log)
 }
