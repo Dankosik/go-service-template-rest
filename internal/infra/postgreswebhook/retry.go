@@ -109,11 +109,11 @@ func webhookNextRetry(job *river.Job[deliveryArgs], now time.Time) time.Time {
 	}
 	now = now.UTC()
 	due := now.Add(webhookBackoff(job.Args.DeliveryID, job.Attempt))
-	var metadata struct {
-		RetryAfterAt time.Time `json:"webhook_retry_after_at"`
-	}
-	if json.Unmarshal(job.Metadata, &metadata) == nil && metadata.RetryAfterAt.After(due) {
-		due = metadata.RetryAfterAt
+	var metadata map[string]json.RawMessage
+	var retryAfterAt time.Time
+	if json.Unmarshal(job.Metadata, &metadata) == nil &&
+		json.Unmarshal(metadata[retryAfterMetadataKey], &retryAfterAt) == nil && retryAfterAt.After(due) {
+		due = retryAfterAt
 	}
 	if !job.CreatedAt.IsZero() {
 		deadline := job.CreatedAt.Add(webhookMaxElapsed)

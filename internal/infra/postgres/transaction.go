@@ -100,7 +100,7 @@ func classifyCommitError(err error) error {
 func commitDefinitelyFailed(err error) bool {
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		return pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) ||
-			pgerrcode.IsTransactionRollback(pgErr.Code) && pgErr.Code != pgerrcode.StatementCompletionUnknown
+			(pgerrcode.IsTransactionRollback(pgErr.Code) && pgErr.Code != pgerrcode.StatementCompletionUnknown)
 	}
 	return errors.Is(err, pgx.ErrTxCommitRollback) || pgconn.SafeToRetry(err)
 }

@@ -215,14 +215,29 @@ func newAttemptTransport(serverName string, address netip.Addr) *http.Transport 
 	}
 }
 
+var errDestinationURLDenied = fmt.Errorf("%w: destination URL must be absolute HTTPS on port 443", errDestinationDenied)
+
 func parseWebhookURL(raw string) (*url.URL, error) {
+	if len(raw) > 2048 {
+		return nil, errDestinationURLDenied
+	}
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil ||
-		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.Port() != "" && parsed.Port() != "443" || len(raw) > 2048 {
-		return nil, fmt.Errorf("%w: destination URL must be absolute HTTPS on port 443", errDestinationDenied)
+	if err != nil {
+		return nil, errDestinationURLDenied
+	}
+	if !acceptableWebhookURL(parsed) {
+		return nil, errDestinationURLDenied
 	}
 	if parsed.Port() == "" {
 		parsed.Host = net.JoinHostPort(parsed.Hostname(), "443")
 	}
 	return parsed, nil
+}
+
+// acceptableWebhookURL admits only an absolute HTTPS URL on port 443 with no
+// credentials, query, or fragment.
+func acceptableWebhookURL(u *url.URL) bool {
+	return u.Scheme == "https" && u.Hostname() != "" && u.User == nil &&
+		u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" &&
+		(u.Port() == "" || u.Port() == "443")
 }
