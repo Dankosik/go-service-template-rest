@@ -24,12 +24,12 @@ func TestAuthnConfigRequiresCompleteSafePolicy(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv(testCase.key, testCase.value)
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if !errors.Is(err, ErrValidate) {
-				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+				t.Fatalf("Load() error = %v, want ErrValidate", err)
 			}
 			if !strings.Contains(err.Error(), testCase.want) {
-				t.Fatalf("LoadDetailed() error = %v, want %q", err, testCase.want)
+				t.Fatalf("Load() error = %v, want %q", err, testCase.want)
 			}
 		})
 	}
@@ -40,9 +40,9 @@ func TestAuthnConfigRequiresCompleteSafePolicy(t *testing.T) {
 func TestAuthnConfigRejectsUnknownTokenProfile(t *testing.T) {
 	resetConfigEnv(t)
 	t.Setenv("APP__AUTHN__TOKEN_PROFILE", "strict")
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "authn.token_profile") {
-		t.Fatalf("LoadDetailed() error = %v, want token profile", err)
+		t.Fatalf("Load() error = %v, want token profile", err)
 	}
 }
 
@@ -50,9 +50,9 @@ func TestAuthnConfigDefaultsAndCanonicalizesTokenProfile(t *testing.T) {
 	resetConfigEnv(t)
 	t.Setenv("APP__AUTHN__TOKEN_PROFILE", " RFC9068 ")
 
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	if cfg.Authn.TokenProfile != "rfc9068" {
 		t.Fatalf("TokenProfile = %q, want rfc9068", cfg.Authn.TokenProfile)
@@ -78,9 +78,9 @@ func TestIntrospectionConfigRequiresCompleteTuple(t *testing.T) {
 			resetConfigEnv(t)
 			setIntrospectionTestEnv(t)
 			t.Setenv(testCase.key, "")
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), testCase.want) {
-				t.Fatalf("LoadDetailed() error = %v, want %q", err, testCase.want)
+				t.Fatalf("Load() error = %v, want %q", err, testCase.want)
 			}
 		})
 	}
@@ -89,9 +89,9 @@ func TestIntrospectionConfigRequiresCompleteTuple(t *testing.T) {
 func TestIntrospectionConfigAdmitsCompleteEnvironmentTuple(t *testing.T) {
 	resetConfigEnv(t)
 	setIntrospectionTestEnv(t)
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	if cfg.Authn.IntrospectionEndpoint != "https://idp.example.com/oauth/introspect" ||
 		cfg.Authn.IntrospectionTargetClass != "external-https" ||
@@ -104,7 +104,7 @@ func TestIntrospectionConfigAdmitsCompleteEnvironmentTuple(t *testing.T) {
 func TestIntrospectionConfigRejectsUnknownKeyAndSecretFile(t *testing.T) {
 	resetConfigEnv(t)
 	setIntrospectionTestEnv(t)
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
 		t.Fatalf("complete tuple error = %v", err)
 	}
@@ -112,7 +112,7 @@ func TestIntrospectionConfigRejectsUnknownKeyAndSecretFile(t *testing.T) {
 	resetConfigEnv(t)
 	setIntrospectionTestEnv(t)
 	t.Setenv("APP__AUTHN__UNKNOWN", "x")
-	_, _, err = LoadDetailed(LoadOptions{})
+	_, _, err = Load(t.Context(), LoadOptions{})
 	if err == nil || !strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("unknown key error = %v", err)
 	}
@@ -120,7 +120,7 @@ func TestIntrospectionConfigRejectsUnknownKeyAndSecretFile(t *testing.T) {
 	resetConfigEnv(t)
 	setIntrospectionTestEnv(t)
 	path := writeTempConfig(t, "authn:\n  introspection_client_secret: file-secret-canary\n")
-	_, _, err = LoadDetailed(LoadOptions{ConfigPath: path})
+	_, _, err = Load(t.Context(), LoadOptions{ConfigPath: path})
 	if !errors.Is(err, ErrSecretPolicy) {
 		t.Fatalf("YAML secret error = %v", err)
 	}
@@ -135,7 +135,7 @@ func TestIntrospectionConfigPrivateSuffix(t *testing.T) {
 	t.Setenv("APP__AUTHN__INTROSPECTION_TARGET_CLASS", "private-https")
 	t.Setenv("APP__AUTHN__INTROSPECTION_ENDPOINT", "https://idp.service.internal/introspect")
 	t.Setenv("APP__AUTHN__INTROSPECTION_PRIVATE_HOST_SUFFIX", "")
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if err == nil || !strings.Contains(err.Error(), "introspection_private_host_suffix") {
 		t.Fatalf("missing suffix error = %v", err)
 	}
@@ -143,7 +143,7 @@ func TestIntrospectionConfigPrivateSuffix(t *testing.T) {
 	resetConfigEnv(t)
 	setIntrospectionTestEnv(t)
 	t.Setenv("APP__AUTHN__INTROSPECTION_PRIVATE_HOST_SUFFIX", "service.internal")
-	_, _, err = LoadDetailed(LoadOptions{})
+	_, _, err = Load(t.Context(), LoadOptions{})
 	if err == nil || !strings.Contains(err.Error(), "introspection_private_host_suffix") {
 		t.Fatalf("forbidden suffix error = %v", err)
 	}
@@ -157,7 +157,7 @@ func TestIntrospectionDisclosureBoundary(t *testing.T) {
 	t.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_ID", "rs-client")
 	t.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_SECRET", canary)
 	t.Setenv("APP__AUTHN__INTROSPECTION_ENDPOINT", "http://idp.example.com/oauth/introspect")
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -188,12 +188,12 @@ func TestAuthnRequiresHTTPAdmission(t *testing.T) {
 	resetConfigEnv(t)
 	t.Setenv("APP__HTTP__MAX_IN_FLIGHT", "0")
 
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+		t.Fatalf("Load() error = %v, want ErrValidate", err)
 	}
 	if !strings.Contains(err.Error(), "authn OIDC profile requires http.max_in_flight > 0") {
-		t.Fatalf("LoadDetailed() error = %v, want OIDC HTTP admission requirement", err)
+		t.Fatalf("Load() error = %v, want OIDC HTTP admission requirement", err)
 	}
 }
 
@@ -210,12 +210,12 @@ func TestAuthnRequiresGRPCTLS(t *testing.T) {
 		t.Setenv(name, value)
 	}
 
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+		t.Fatalf("Load() error = %v, want ErrValidate", err)
 	}
 	if !strings.Contains(err.Error(), "authn OIDC profile requires grpc.server.transport_security=tls") {
-		t.Fatalf("LoadDetailed() error = %v, want OIDC gRPC TLS requirement", err)
+		t.Fatalf("Load() error = %v, want OIDC gRPC TLS requirement", err)
 	}
 }
 

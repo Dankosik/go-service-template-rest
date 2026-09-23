@@ -1,7 +1,6 @@
 package config
 
 import (
-	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -15,9 +14,9 @@ func TestJobsConfigWorkerLoaderIgnoresForeignProfiles(t *testing.T) {
 	t.Setenv("APP__OUTBOUND_AUTH__ACQUISITION_TIMEOUT", "not a duration")
 	t.Setenv("APP__OBJECT_STORAGE__PROVIDER", "not a provider")
 
-	_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
+	_, _, err := LoadJobsWorker(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v", err)
+		t.Fatalf("LoadJobsWorker() error = %v", err)
 	}
 }
 
@@ -26,9 +25,9 @@ func TestJobsConfigWorkerLoaderRejectsUnknownRetainedKey(t *testing.T) {
 	setJobsWorkerConfigEnv(t)
 	t.Setenv("APP__POSTGRES__UNKNOWN", "value")
 
-	_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
+	_, _, err := LoadJobsWorker(t.Context(), LoadOptions{})
 	if !errors.Is(err, ErrUnknownKey) || !strings.Contains(err.Error(), "postgres.unknown") {
-		t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v, want retained-section unknown key", err)
+		t.Fatalf("LoadJobsWorker() error = %v, want retained-section unknown key", err)
 	}
 }
 
@@ -48,12 +47,12 @@ func TestJobsConfigWorkerLoaderRejectsInvalidJobsAndPostgres(t *testing.T) {
 			setJobsWorkerConfigEnv(t)
 			t.Setenv(test.key, test.value)
 
-			_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
+			_, _, err := LoadJobsWorker(t.Context(), LoadOptions{})
 			if !errors.Is(err, ErrValidate) && !errors.Is(err, ErrSecretPolicy) {
-				t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v, want config validation error", err)
+				t.Fatalf("LoadJobsWorker() error = %v, want config validation error", err)
 			}
 			if !strings.Contains(err.Error(), test.contains) {
-				t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v, want %q", err, test.contains)
+				t.Fatalf("LoadJobsWorker() error = %v, want %q", err, test.contains)
 			}
 		})
 	}
@@ -66,9 +65,9 @@ func TestJobsWorkerRequiresWebhookSecretsWhenEnabled(t *testing.T) {
 	setJobsWorkerConfigEnv(t)
 	t.Setenv("APP__WEBHOOKS__ENABLED", "true")
 	t.Setenv("APP__WEBHOOKS__ENDPOINTS", `{"endpoints":[]}`)
-	_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
+	_, _, err := LoadJobsWorker(t.Context(), LoadOptions{})
 	if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "webhooks.static_secrets") {
-		t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v", err)
+		t.Fatalf("LoadJobsWorker() error = %v", err)
 	}
 }
 

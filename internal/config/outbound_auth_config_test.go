@@ -42,11 +42,11 @@ func TestRetiredOutboundAuthEnvironmentKeyIsUnknown(t *testing.T) {
 	resetConfigEnv(t)
 	const canary = "retired-outbound-auth-canary"
 	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_SECRET", canary)
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if !errors.Is(err, ErrUnknownKey) {
-		t.Fatalf("LoadDetailed() error = %v, want ErrUnknownKey", err)
+		t.Fatalf("Load() error = %v, want ErrUnknownKey", err)
 	}
 	if strings.Contains(err.Error(), canary) {
-		t.Fatalf("LoadDetailed() disclosed retired secret: %v", err)
+		t.Fatalf("Load() disclosed retired secret: %v", err)
 	}
 }

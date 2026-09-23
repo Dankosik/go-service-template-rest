@@ -49,7 +49,7 @@ func run(signalCtx context.Context, args []string) error {
 	}
 	startupCtx, cancelStartup := context.WithTimeout(signalCtx, startupTimeout)
 	defer cancelStartup()
-	cfg, _, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
+	cfg, _, err := config.Load(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load outbox relay config: %w", err)
 	}

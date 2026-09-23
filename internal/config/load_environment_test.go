@@ -13,9 +13,9 @@ import (
 func TestLoadDefaults(t *testing.T) {
 	resetConfigEnv(t)
 
-	cfg, report, err := LoadDetailed(LoadOptions{})
+	cfg, report, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 
 	if cfg.App.Env != "local" {
@@ -83,24 +83,24 @@ http:
   addr: ":8083"
 `)
 
-	cfg, _, err := LoadDetailed(LoadOptions{
+	cfg, _, err := Load(t.Context(), LoadOptions{
 		ConfigPath:     basePath,
 		ConfigOverlays: []string{overlayPath, lastOverlayPath},
 	})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	if cfg.HTTP.Addr != ":8083" {
 		t.Fatalf("HTTP.Addr = %q, want last overlay :8083", cfg.HTTP.Addr)
 	}
 
 	t.Setenv("APP__HTTP__ADDR", ":8084")
-	cfg, _, err = LoadDetailed(LoadOptions{
+	cfg, _, err = Load(t.Context(), LoadOptions{
 		ConfigPath:     basePath,
 		ConfigOverlays: []string{overlayPath, lastOverlayPath},
 	})
 	if err != nil {
-		t.Fatalf("LoadDetailed() with namespace override error = %v", err)
+		t.Fatalf("Load() with namespace override error = %v", err)
 	}
 	if cfg.HTTP.Addr != ":8084" {
 		t.Fatalf("HTTP.Addr = %q, want namespace override :8084", cfg.HTTP.Addr)
@@ -114,12 +114,12 @@ func TestMalformedNamespaceEnvRejectsWithoutDisclosingValue(t *testing.T) {
 			const canary = "malformed-env-secret-canary"
 			t.Setenv(envKey, canary)
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if !errors.Is(err, ErrUnknownKey) || !strings.Contains(err.Error(), envKey) {
-				t.Fatalf("LoadDetailed() error = %v, want malformed environment key rejection", err)
+				t.Fatalf("Load() error = %v, want malformed environment key rejection", err)
 			}
 			if strings.Contains(err.Error(), canary) {
-				t.Fatalf("LoadDetailed() error disclosed raw environment value: %v", err)
+				t.Fatalf("Load() error disclosed raw environment value: %v", err)
 			}
 		})
 	}
@@ -130,9 +130,9 @@ func TestEmptyNamespaceEnvOverridesRequiredDefault(t *testing.T) {
 
 	t.Setenv("APP__HTTP__ADDR", "")
 
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if err == nil {
-		t.Fatal("LoadDetailed() expected validation error for empty env override")
+		t.Fatal("Load() expected validation error for empty env override")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
@@ -160,9 +160,9 @@ func TestResourceIdentityFieldsCannotBeEmpty(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv(tc.envKey, "")
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if err == nil {
-				t.Fatal("LoadDetailed() error = nil, want validation error")
+				t.Fatal("Load() error = nil, want validation error")
 			}
 			if !errors.Is(err, ErrValidate) {
 				t.Fatalf("error = %v, want ErrValidate", err)
@@ -185,9 +185,9 @@ observability:
 `)
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", "")
 
-	cfg, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	cfg, _, err := Load(t.Context(), LoadOptions{ConfigPath: configPath})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	if cfg.Observability.OTel.Exporter.OTLPEndpoint != "" {
 		t.Fatalf("OTLPEndpoint = %q, want empty env override", cfg.Observability.OTel.Exporter.OTLPEndpoint)
@@ -205,9 +205,9 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
 	// profile:database-postgres:end
 
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	// profile:database-postgres:start
 	if cfg.Postgres.DSN != postgresDSN {
@@ -224,9 +224,9 @@ func TestFlatEnvKeysAreIgnored(t *testing.T) {
 
 	t.Setenv("HTTP_ADDR", ":9090")
 
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 
 	if cfg.HTTP.Addr != ":8080" {
@@ -244,12 +244,12 @@ func TestEnvExampleIsFailClosedUntilObjectStorageIsConfigured(t *testing.T) {
 		t.Setenv(key, value)
 	}
 
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("LoadDetailed() error = %v, want incomplete object-storage validation", err)
+		t.Fatalf("Load() error = %v, want incomplete object-storage validation", err)
 	}
 	if !strings.Contains(err.Error(), "object_storage.provider") {
-		t.Fatalf("LoadDetailed() error = %v, want object storage placeholder rejection", err)
+		t.Fatalf("Load() error = %v, want object storage placeholder rejection", err)
 	}
 }
 
@@ -274,13 +274,13 @@ http:
 		ConfigOverlays: []string{overlayPath},
 	}
 
-	cfg1, _, err := LoadDetailed(opts)
+	cfg1, _, err := Load(t.Context(), opts)
 	if err != nil {
-		t.Fatalf("first LoadDetailed() error = %v", err)
+		t.Fatalf("first Load() error = %v", err)
 	}
-	cfg2, _, err := LoadDetailed(opts)
+	cfg2, _, err := Load(t.Context(), opts)
 	if err != nil {
-		t.Fatalf("second LoadDetailed() error = %v", err)
+		t.Fatalf("second Load() error = %v", err)
 	}
 
 	if cfg1 != cfg2 {

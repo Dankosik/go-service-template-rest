@@ -10,9 +10,9 @@ import (
 func TestReadDurationParsesDefaultDurations(t *testing.T) {
 	resetConfigEnv(t)
 
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	if cfg.HTTP.ReadTimeout != 5*time.Second {
 		t.Fatalf("HTTP.ReadTimeout = %s, want 5s", cfg.HTTP.ReadTimeout)
@@ -42,12 +42,12 @@ func TestHealthRefreshBounds(t *testing.T) {
 				t.Setenv("APP__HEALTH__FAILURE_THRESHOLD", tc.threshold)
 			}
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if tc.wantErr && !errors.Is(err, ErrValidate) {
-				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+				t.Fatalf("Load() error = %v, want ErrValidate", err)
 			}
 			if !tc.wantErr && err != nil {
-				t.Fatalf("LoadDetailed() error = %v", err)
+				t.Fatalf("Load() error = %v", err)
 			}
 		})
 	}
@@ -72,12 +72,12 @@ func TestRuntimeMemoryLimitRatioBounds(t *testing.T) {
 				t.Setenv("APP__RUNTIME__MEMORY_LIMIT_RATIO", tc.ratio)
 			}
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if tc.wantErr && err == nil {
-				t.Fatal("LoadDetailed() error = nil, want non-nil")
+				t.Fatal("Load() error = nil, want non-nil")
 			}
 			if !tc.wantErr && err != nil {
-				t.Fatalf("LoadDetailed() error = %v", err)
+				t.Fatalf("Load() error = %v", err)
 			}
 		})
 	}

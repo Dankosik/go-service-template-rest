@@ -40,7 +40,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	}
 	startupCtx, startupCancel := context.WithTimeout(signalCtx, startupTimeout)
 	defer startupCancel()
-	cfg, _, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
+	cfg, _, err := config.Load(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load worker config: %w", err)
 	}

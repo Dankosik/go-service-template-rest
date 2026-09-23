@@ -59,7 +59,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	}
 	startupCtx, cancelStartup := context.WithTimeout(signalCtx, startupTimeout)
 	defer cancelStartup()
-	cfg, _, err := config.LoadJobsWorkerDetailedWithContext(startupCtx, loadOptions)
+	cfg, _, err := config.LoadJobsWorker(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load jobs worker config: %w", err)
 	}

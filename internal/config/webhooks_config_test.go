@@ -38,7 +38,7 @@ func TestWebhooksConfigContract(t *testing.T) {
 
 func TestWebhooksConfigDefaultsDisabled(t *testing.T) {
 	resetConfigEnv(t)
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

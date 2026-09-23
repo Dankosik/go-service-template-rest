@@ -30,7 +30,7 @@ func bootstrapConfigStage(
 		)...,
 	)
 
-	cfg, configReport, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
+	cfg, configReport, err := config.Load(startupCtx, loadOptions)
 	if err != nil {
 		errorType := config.ErrorType(err)
 		slog.ErrorContext(

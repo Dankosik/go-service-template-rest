@@ -1403,9 +1403,9 @@ import (
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestHarnessNamedIntegrationEnvironment(t *testing.T) {
 	resetConfigEnv(t)
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	if cfg.Integrations.Billing.BaseURL != "https://billing.example.com" ||
 		cfg.Integrations.Billing.OAuth.ClientID != "test-client" ||
@@ -1414,7 +1414,7 @@ func TestHarnessNamedIntegrationEnvironment(t *testing.T) {
 	}
 
 	t.Setenv("APP__INTEGRATIONS__BILLING__OAUTH__CLIENT_SECRET", "")
-	if _, _, err := LoadDetailed(LoadOptions{}); !errors.Is(err, ErrValidate) {
+	if _, _, err := Load(t.Context(), LoadOptions{}); !errors.Is(err, ErrValidate) {
 		t.Fatalf("missing secret error = %v, want ErrValidate", err)
 	}
 
@@ -1423,7 +1423,7 @@ func TestHarnessNamedIntegrationEnvironment(t *testing.T) {
   billing:
     oauth:
       client_secret: "`+canary+`"`)
-	if _, _, err := LoadDetailed(LoadOptions{ConfigPath: path}); err == nil {
+	if _, _, err := Load(t.Context(), LoadOptions{ConfigPath: path}); err == nil {
 		t.Fatal("file-sourced named secret was accepted")
 	} else if strings.Contains(err.Error(), canary) {
 		t.Fatal("file-secret error disclosed canary")

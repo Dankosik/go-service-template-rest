@@ -16,9 +16,9 @@ postgres:
   dsn: "postgres://app:secret@localhost:5432/app?sslmode=disable"
 `)
 
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	_, _, err := Load(t.Context(), LoadOptions{ConfigPath: path})
 	if err == nil {
-		t.Fatal("LoadDetailed() expected secret source policy rejection")
+		t.Fatal("Load() expected secret source policy rejection")
 	}
 	if !errors.Is(err, ErrSecretPolicy) {
 		t.Fatalf("error = %v, want ErrSecretPolicy", err)
@@ -44,8 +44,8 @@ observability:
       otlp_headers: ""
 `)
 
-	if _, _, err := LoadDetailed(LoadOptions{ConfigPath: path}); err != nil {
-		t.Fatalf("LoadDetailed() error = %v, want nil for empty secret-like placeholders", err)
+	if _, _, err := Load(t.Context(), LoadOptions{ConfigPath: path}); err != nil {
+		t.Fatalf("Load() error = %v, want nil for empty secret-like placeholders", err)
 	}
 }
 
@@ -68,9 +68,9 @@ func TestConfigFileRejectsCommonFutureSecretLikeKeys(t *testing.T) {
 			resetConfigEnv(t)
 
 			path := writeTempConfig(t, tt.content)
-			_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+			_, _, err := Load(t.Context(), LoadOptions{ConfigPath: path})
 			if err == nil {
-				t.Fatalf("LoadDetailed() expected secret policy rejection for %s", tt.wantKey)
+				t.Fatalf("Load() expected secret policy rejection for %s", tt.wantKey)
 			}
 			if !errors.Is(err, ErrSecretPolicy) {
 				t.Fatalf("error = %v, want ErrSecretPolicy", err)
@@ -112,19 +112,19 @@ func TestNamedOAuthSecretSourcePolicy(t *testing.T) {
 	resetConfigEnv(t)
 	const canary = "outbound-client-secret-canary"
 	path := writeTempConfig(t, "integrations:\n  billing:\n    oauth:\n      client_secret: "+canary+"\n")
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	_, _, err := Load(t.Context(), LoadOptions{ConfigPath: path})
 	if !errors.Is(err, ErrSecretPolicy) {
-		t.Fatalf("LoadDetailed() error = %v, want ErrSecretPolicy", err)
+		t.Fatalf("Load() error = %v, want ErrSecretPolicy", err)
 	}
 	if strings.Contains(err.Error(), canary) {
-		t.Fatalf("LoadDetailed() error disclosed client secret: %v", err)
+		t.Fatalf("Load() error disclosed client secret: %v", err)
 	}
 
 	resetConfigEnv(t)
 	t.Setenv("OAUTH_CLIENT_SECRET", canary)
-	_, _, err = LoadDetailed(LoadOptions{})
+	_, _, err = Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() with hostile ambient variable error = %v", err)
+		t.Fatalf("Load() with hostile ambient variable error = %v", err)
 	}
 }
 
@@ -137,28 +137,28 @@ func TestWebhookSecretSourcePolicy(t *testing.T) {
 	resetConfigEnv(t)
 	const canary = "webhook-secret-canary"
 	path := writeTempConfig(t, "webhooks:\n  static_secrets: "+canary+"\n")
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	_, _, err := Load(t.Context(), LoadOptions{ConfigPath: path})
 	if !errors.Is(err, ErrSecretPolicy) {
-		t.Fatalf("LoadDetailed() error = %v, want ErrSecretPolicy", err)
+		t.Fatalf("Load() error = %v, want ErrSecretPolicy", err)
 	}
 	if strings.Contains(err.Error(), canary) {
-		t.Fatalf("LoadDetailed() error disclosed webhook secret: %v", err)
+		t.Fatalf("Load() error disclosed webhook secret: %v", err)
 	}
 
 	resetConfigEnv(t)
 	path = writeTempConfig(t, "webhooks:\n  static_secrets: \"\"\n")
-	if _, _, err := LoadDetailed(LoadOptions{ConfigPath: path}); err != nil {
-		t.Fatalf("LoadDetailed() with empty placeholder error = %v", err)
+	if _, _, err := Load(t.Context(), LoadOptions{ConfigPath: path}); err != nil {
+		t.Fatalf("Load() with empty placeholder error = %v", err)
 	}
 
 	resetConfigEnv(t)
 	t.Setenv("APP__WEBHOOKS__STATIC_SECRETS", canary)
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() with environment webhook secret error = %v", err)
+		t.Fatalf("Load() with environment webhook secret error = %v", err)
 	}
 	if cfg.OutboundWebhooks.StaticSecrets != canary {
-		t.Fatal("LoadDetailed() did not accept environment webhook secret")
+		t.Fatal("Load() did not accept environment webhook secret")
 	}
 }
 
@@ -171,12 +171,12 @@ func TestInboundWebhookSecretSourcePolicy(t *testing.T) {
 	resetConfigEnv(t)
 	const canary = "inbound-secret-canary"
 	path := writeTempConfig(t, "inbound_webhooks:\n  static_secrets: "+canary+"\n")
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	_, _, err := Load(t.Context(), LoadOptions{ConfigPath: path})
 	if !errors.Is(err, ErrSecretPolicy) {
-		t.Fatalf("LoadDetailed() error = %v, want ErrSecretPolicy", err)
+		t.Fatalf("Load() error = %v, want ErrSecretPolicy", err)
 	}
 	if strings.Contains(err.Error(), canary) {
-		t.Fatalf("LoadDetailed() error disclosed inbound secret: %v", err)
+		t.Fatalf("Load() error disclosed inbound secret: %v", err)
 	}
 }
 
