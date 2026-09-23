@@ -31,17 +31,24 @@ type storedReceipt struct {
 	Outcome    string
 }
 
+type receiptProcessor interface {
+	loadByID(ctx context.Context, receiptID string) (storedReceipt, error)
+	MarkHandled(ctx context.Context, receiptID string) (bool, error)
+	MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error)
+	MarkFailed(ctx context.Context, receiptID string) (bool, error)
+}
+
 // Worker processes one inbound receipt job.
 type Worker struct {
 	river.WorkerDefaults[receiptJobArgs]
 
-	store    receiptStore
+	store    receiptProcessor
 	registry *inboundwebhook.Registry
 	telem    telemetry
 }
 
 // NewWorker builds the River worker.
-func newWorker(store receiptStore, registry *inboundwebhook.Registry, telem telemetry) (*Worker, error) {
+func newWorker(store receiptProcessor, registry *inboundwebhook.Registry, telem telemetry) (*Worker, error) {
 	if store == nil || registry == nil {
 		return nil, errors.New("inbound webhook store and registry are required")
 	}

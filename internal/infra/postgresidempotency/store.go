@@ -42,28 +42,31 @@ func NewExecutor[Repository, Response any](
 		ctx context.Context,
 		request httpidempotency.Request,
 		work httpidempotency.Work[Repository, Response],
-	) (response Response, replayed bool, err error) {
+	) (Response, bool, error) {
 		if work == nil {
-			return response, false, fmt.Errorf("%w: executor and work are required", ErrConfig)
+			var zero Response
+			return zero, false, fmt.Errorf("%w: executor and work are required", ErrConfig)
 		}
+		var workResponse Response
 		result, replayed, err := store.execute(ctx, request, func(ctx context.Context, tx pgx.Tx) ([]byte, error) {
-			response, err = work(ctx, bind(tx))
+			var err error
+			workResponse, err = work(ctx, bind(tx))
 			if err != nil {
 				return nil, err
 			}
-			return codec.Encode(response)
+			return codec.Encode(workResponse)
 		})
 		if err != nil {
-			return response, false, fmt.Errorf("execute idempotent operation: %w", err)
+			return workResponse, false, fmt.Errorf("execute idempotent operation: %w", err)
 		}
-		response, err = codec.Decode(result)
+		decodedResponse, err := codec.Decode(result)
 		if err != nil {
 			if replayed {
-				return response, true, fmt.Errorf("%w: decode stored response", httpidempotency.ErrIntegrity)
+				return decodedResponse, true, fmt.Errorf("%w: decode stored response", httpidempotency.ErrIntegrity)
 			}
-			return response, replayed, fmt.Errorf("decode idempotency response: %w", err)
+			return decodedResponse, replayed, fmt.Errorf("decode idempotency response: %w", err)
 		}
-		return response, replayed, nil
+		return decodedResponse, replayed, nil
 	}, nil
 }
 

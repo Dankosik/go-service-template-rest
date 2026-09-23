@@ -2,6 +2,7 @@
 package postgresinboundwebhook
 
 import (
+	"bytes"
 	"encoding/base64"
 	"strings"
 	"testing"
@@ -33,7 +34,8 @@ func TestEndpointManifestSecurityBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := trust.Lookup("orders"); !ok {
+	endpoint, ok := trust.Lookup("orders")
+	if !ok || endpoint.ActiveKeyReference != "key-v1" || endpoint.PredecessorKeyReference != "key-v0" {
 		t.Fatal("exact orders lookup failed")
 	}
 	if _, ok := trust.Lookup("ORDERS"); ok {
@@ -41,6 +43,12 @@ func TestEndpointManifestSecurityBoundary(t *testing.T) {
 	}
 	if formatted := parsedEndpoints.IDs(); strings.Contains(strings.Join(formatted, ","), string(keyA)) {
 		t.Fatal("endpoint IDs leaked key bytes")
+	}
+	parsedSecrets.secrets["orders"]["key-v1"][0] ^= 0xff
+	parsedSecrets.secrets["orders"]["key-v0"][0] ^= 0xff
+	bound, ok := trust.secretsFor("orders")
+	if !ok || !bytes.Equal(bound.active, keyA) || !bytes.Equal(bound.predecessor, pred) {
+		t.Fatal("bound secrets changed with source manifest")
 	}
 
 	if _, err := ParseSecretManifest(`{"entries":[{"endpoint_id":"orders","key_reference":"a","secret":"whsec_` + base64.StdEncoding.EncodeToString(keyA) + `"},{"endpoint_id":"other","key_reference":"b","secret":"whsec_` + base64.StdEncoding.EncodeToString(keyA) + `"}]}`); err == nil {

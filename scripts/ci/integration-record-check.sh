@@ -246,7 +246,7 @@ for record in "${records[@]}"; do
 		forbid_literal "${record}" "${bootstrap}" 'cfg.OAuth' "OAuth bootstrap mapping"
 		forbid_literal "${record}" "${documentation}" '.oauth.' "OAuth documentation"
 	fi
-	if ! go run ./scripts/ci/integration-record-bootstrap-check.go -- \
+	if ! go run ./scripts/ci/integration-record-bootstrap-check.go ./scripts/ci/integration-record-ast-common.go -- \
 		"${bootstrap}" cmd/service/internal/bootstrap/run.go "/internal/infra/${name}" \
 		"init${field}" "${name}Client" "bootstrap.cfg.Integrations.${field}" "${bootstrap_mappings[@]}"; then
 		echo "${record}: bootstrap mapping or run wiring is invalid" >&2

@@ -85,6 +85,11 @@ func ownedBy(selector *ast.SelectorExpr, ownerName string) bool {
 	return ok && owner.Name == ownerName
 }
 
+func selectorTypeIs(expression ast.Expr, ownerName, typeName string) bool {
+	selector, ok := expression.(*ast.SelectorExpr)
+	return ok && selector.Sel.Name == typeName && ownedBy(selector, ownerName)
+}
+
 func identifierIs(expression ast.Expr, name string) bool {
 	identifier, ok := expression.(*ast.Ident)
 	return ok && identifier.Name == name

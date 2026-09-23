@@ -190,11 +190,10 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		riverStopped = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 		if !riverStopped {
 			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", hardStopCtx.Err()))
-		} else if errors.Is(stopErr, context.DeadlineExceeded) {
-			stopErr = nil
 		}
 		cancelHardStop()
-	} else if errors.Is(stopErr, context.DeadlineExceeded) {
+	}
+	if riverStopped && errors.Is(stopErr, context.DeadlineExceeded) {
 		stopErr = nil
 	}
 	cleanupSafe = riverStopped

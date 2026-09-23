@@ -200,11 +200,6 @@ func returnedClientFields(expression ast.Expr) map[string]string {
 	return clientLiteralFields(expression)
 }
 
-func selectorTypeIs(expression ast.Expr, ownerName, typeName string) bool {
-	selector, ok := expression.(*ast.SelectorExpr)
-	return ok && selector.Sel.Name == typeName && ownedBy(selector, ownerName)
-}
-
 func validArguments(constructor string, arguments []ast.Expr) bool {
 	if constructor == "NewExternalHTTPS" {
 		return len(arguments) == 2 && selectorIs(arguments[0], "cfg", "BaseURL") &&

@@ -14,6 +14,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/reqctx"
 )
 
+// admitResponse treats a complete negative response or claims that fail policy
+// as KindInvalid. A missing or unusable provider response is KindUnavailable
+// because it cannot establish whether the credential is valid.
 func admitResponse(body []byte, policy Policy, now time.Time) (bearerauthn.Result, error) {
 	members, err := decodeObjectMembers(body)
 	if err != nil {

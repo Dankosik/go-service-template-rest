@@ -33,7 +33,7 @@ var (
 type Client struct {
 	baseURL           string
 	httpClient        *http.Client
-	requests          chan struct{}
+	inFlight          chan struct{}
 	absoluteBodyBytes int64
 }
 
@@ -109,7 +109,7 @@ func newClient(rawBaseURL string, policy targetPolicy, limits TransportLimits) (
 	}}
 	return &Client{
 		baseURL:           baseURL.String(),
-		requests:          make(chan struct{}, limits.MaxInFlight),
+		inFlight:          make(chan struct{}, limits.MaxInFlight),
 		absoluteBodyBytes: limits.AbsoluteBodyBytes,
 		httpClient: &http.Client{
 			Transport: roundTripper,
@@ -156,24 +156,24 @@ func (c *Client) DoWithPolicy(request *http.Request, policy OperationPolicy) (*h
 	})
 }
 
-func (c *Client) do(request *http.Request, maxBodyBytes int64, done func(), contextError func() error) (*http.Response, error) {
+func (c *Client) do(request *http.Request, maxBodyBytes int64, cancelOperation func(), contextError func() error) (*http.Response, error) {
 	if request == nil || request.URL == nil {
-		if done != nil {
-			done()
+		if cancelOperation != nil {
+			cancelOperation()
 		}
 		return nil, errors.New("send outbound HTTP request: request URL is required")
 	}
 	if err := request.Context().Err(); err != nil {
-		if done != nil {
-			done()
+		if cancelOperation != nil {
+			cancelOperation()
 		}
 		return nil, fmt.Errorf("send outbound HTTP request: %w", err)
 	}
 	select {
-	case c.requests <- struct{}{}:
+	case c.inFlight <- struct{}{}:
 	default:
-		if done != nil {
-			done()
+		if cancelOperation != nil {
+			cancelOperation()
 		}
 		if err := request.Context().Err(); err != nil {
 			return nil, fmt.Errorf("send outbound HTTP request: %w", err)
@@ -182,11 +182,11 @@ func (c *Client) do(request *http.Request, maxBodyBytes int64, done func(), cont
 	}
 
 	var once sync.Once
-	finish := func() {
+	releaseAdmissionAndCancelOperation := func() {
 		once.Do(func() {
-			<-c.requests
-			if done != nil {
-				done()
+			<-c.inFlight
+			if cancelOperation != nil {
+				cancelOperation()
 			}
 		})
 	}
@@ -194,7 +194,7 @@ func (c *Client) do(request *http.Request, maxBodyBytes int64, done func(), cont
 	// #nosec G704 -- authorityTransport pins scheme/authority and the dialer checks the resolved address.
 	response, err := c.httpClient.Do(request)
 	if err != nil {
-		finish()
+		releaseAdmissionAndCancelOperation()
 		if contextErr := contextError(); contextErr != nil {
 			err = contextErr
 		}
@@ -202,13 +202,13 @@ func (c *Client) do(request *http.Request, maxBodyBytes int64, done func(), cont
 	}
 	if response.ContentLength > maxBodyBytes {
 		_ = response.Body.Close()
-		finish()
+		releaseAdmissionAndCancelOperation()
 		return nil, fmt.Errorf("send outbound HTTP request: %w", ErrResponseTooLarge)
 	}
 	response.Body = &boundedBody{
 		body:         response.Body,
 		remaining:    maxBodyBytes,
-		complete:     finish,
+		complete:     releaseAdmissionAndCancelOperation,
 		contextError: contextError,
 	}
 	return response, nil

@@ -83,7 +83,8 @@ type HealthConfig struct {
 type RuntimeConfig struct {
 	// MemoryLimitRatio is the fraction of the detected container memory limit
 	// published to the garbage collector through debug.SetMemoryLimit. Zero
-	// disables detection and leaves the limit at its default of math.MaxInt64.
+	// disables detection without changing an existing GOMEMLIMIT. A platform-set
+	// GOMEMLIMIT also skips detection and the request buffer budget report.
 	MemoryLimitRatio float64 `koanf:"memory_limit_ratio"`
 }
 

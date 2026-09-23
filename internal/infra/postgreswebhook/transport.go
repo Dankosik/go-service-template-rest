@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/outboundtrust"
+	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 )
 
 const (
@@ -189,14 +190,12 @@ func webhookRequest(ctx context.Context, prepared preparedSend) (*http.Request, 
 	if err != nil {
 		return nil, fmt.Errorf("build webhook request: %w", err)
 	}
-	request.Header = http.Header{
-		"Content-Type":      []string{"application/json"},
-		"Accept-Encoding":   []string{"identity"},
-		"User-Agent":        []string{webhookUserAgent},
-		"Webhook-Id":        []string{prepared.Attempt.DeliveryID},
-		"Webhook-Timestamp": []string{strconv.FormatInt(prepared.Attempt.AttemptedAt.Unix(), 10)},
-		"Webhook-Signature": []string{prepared.Signature},
-	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept-Encoding", "identity")
+	request.Header.Set("User-Agent", webhookUserAgent)
+	request.Header.Set(standardwebhooks.HeaderWebhookID, prepared.Attempt.DeliveryID)
+	request.Header.Set(standardwebhooks.HeaderWebhookTimestamp, strconv.FormatInt(prepared.Attempt.AttemptedAt.Unix(), 10))
+	request.Header.Set(standardwebhooks.HeaderWebhookSignature, prepared.Signature)
 	return request, nil
 }
 

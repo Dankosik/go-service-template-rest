@@ -78,6 +78,9 @@ func NewDispatcher(endpoints *EndpointManifest) (*Dispatcher, error) {
 	return &Dispatcher{client: client, endpoints: endpoints}, nil
 }
 
+// Prepare fixes the complete receiver fan-out and endpoint snapshot before the
+// caller starts its transaction. Reuse the same Prepared value on transaction
+// retries so a changed manifest cannot alter the event's accepted fan-out.
 func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, error) {
 	if d == nil || d.client == nil || d.endpoints == nil {
 		return Prepared{}, fmt.Errorf("%w: dispatcher is required", ErrConfig)
