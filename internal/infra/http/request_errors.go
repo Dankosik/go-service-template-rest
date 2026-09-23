@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
 	// profile:authn-bearer:start
 	"time"
 	// profile:authn-bearer:end
