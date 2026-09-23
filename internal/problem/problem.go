@@ -23,14 +23,24 @@ import (
 // Code is the stable machine-readable error code a client matches on.
 type Code string
 
-const conflictTypeURI = "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10"
+// Title and type URI pairs that more than one code publishes.
+const (
+	conflictTitle               = "conflict"
+	conflictTypeURI             = "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10"
+	unprocessableContentTitle   = "unprocessable content"
+	unprocessableContentTypeURI = "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.21"
+	serviceUnavailableTitle     = "service unavailable"
+	serviceUnavailableTypeURI   = "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4"
+)
 
 const (
-	CodeBadRequest            Code = Code(failure.CodeBadRequest)
-	CodeUnauthorized          Code = Code(failure.CodeUnauthorized)
-	CodeForbidden             Code = Code(failure.CodeForbidden)
-	CodeNotFound              Code = Code(failure.CodeNotFound)
-	CodeMethodNotAllowed      Code = Code(failure.CodeMethodNotAllowed)
+	CodeBadRequest       Code = Code(failure.CodeBadRequest)
+	CodeUnauthorized     Code = Code(failure.CodeUnauthorized)
+	CodeForbidden        Code = Code(failure.CodeForbidden)
+	CodeNotFound         Code = Code(failure.CodeNotFound)
+	CodeMethodNotAllowed Code = Code(failure.CodeMethodNotAllowed)
+	// CodeConflict is the HTTP-only 409 an inbound webhook delivery answers when
+	// it conflicts with a stored one. internal/failure does not publish it.
 	CodeConflict              Code = "conflict"
 	CodeAlreadyExists         Code = Code(failure.CodeAlreadyExists)
 	CodeRequestEntityTooLarge Code = Code(failure.CodeRequestEntityTooLarge)
@@ -59,9 +69,10 @@ type Definition struct {
 
 // catalog is the single source of the envelope.
 //
-// 409, 422, and 429 are here because a domain layer produces them and no fallback
-// path in internal/infra/http does. A code with no matching
-// `components/responses` entry in a service's contract is unreachable, not wrong.
+// already_exists and unprocessable_content are here because a domain layer
+// produces them, even though no path in internal/infra/http does. A code with no
+// matching `components/responses` entry in a service's contract is unreachable,
+// not wrong.
 var catalog = []Definition{
 	{
 		Code:    CodeBadRequest,
@@ -96,13 +107,13 @@ var catalog = []Definition{
 	{
 		Code:    CodeConflict,
 		Status:  http.StatusConflict,
-		Title:   string(CodeConflict),
+		Title:   conflictTitle,
 		TypeURI: conflictTypeURI,
 	},
 	{
 		Code:    CodeAlreadyExists,
 		Status:  http.StatusConflict,
-		Title:   string(CodeConflict),
+		Title:   conflictTitle,
 		TypeURI: conflictTypeURI,
 	},
 	{
@@ -122,8 +133,8 @@ var catalog = []Definition{
 	{
 		Code:    CodeUnprocessableContent,
 		Status:  http.StatusUnprocessableEntity,
-		Title:   "unprocessable content",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.21",
+		Title:   unprocessableContentTitle,
+		TypeURI: unprocessableContentTypeURI,
 	},
 	{
 		Code:   CodeTooManyRequests,
@@ -136,20 +147,20 @@ var catalog = []Definition{
 	{
 		Code:    CodeIdempotencyKeyMismatch,
 		Status:  http.StatusUnprocessableEntity,
-		Title:   "unprocessable content",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.21",
+		Title:   unprocessableContentTitle,
+		TypeURI: unprocessableContentTypeURI,
 	},
 	{
 		Code:    CodeIdempotencyUnavailable,
 		Status:  http.StatusServiceUnavailable,
-		Title:   "service unavailable",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4",
+		Title:   serviceUnavailableTitle,
+		TypeURI: serviceUnavailableTypeURI,
 	},
 	{
 		Code:    CodeIdempotencyOutcomeUnknown,
 		Status:  http.StatusServiceUnavailable,
-		Title:   "service unavailable",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4",
+		Title:   serviceUnavailableTitle,
+		TypeURI: serviceUnavailableTypeURI,
 	},
 	// profile:http-idempotency-postgres:end
 	{
@@ -161,8 +172,8 @@ var catalog = []Definition{
 	{
 		Code:    CodeServiceUnavailable,
 		Status:  http.StatusServiceUnavailable,
-		Title:   "service unavailable",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4",
+		Title:   serviceUnavailableTitle,
+		TypeURI: serviceUnavailableTypeURI,
 	},
 	{
 		Code:    CodeGatewayTimeout,
