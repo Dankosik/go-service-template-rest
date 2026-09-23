@@ -92,8 +92,10 @@ func decodeConfigValue(_ reflect.Type, targetType reflect.Type, value any) (any,
 		return level, nil
 	}
 
-	kind := targetType.Kind()
-	if kind >= reflect.Int && kind <= reflect.Int64 {
+	// Only kinds with a scalar parser convert; every other kind passes through.
+	//exhaustive:ignore
+	switch targetType.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		integer, err := parseSignedInteger(value, targetType.Bits())
 		if err != nil {
 			return nil, newConfigValueDecodeError(err.Error())
@@ -101,22 +103,21 @@ func decodeConfigValue(_ reflect.Type, targetType reflect.Type, value any) (any,
 		converted := reflect.New(targetType).Elem()
 		converted.SetInt(integer)
 		return converted.Interface(), nil
-	}
-	if kind == reflect.Float64 {
+	case reflect.Float64:
 		number, err := parseFloat64(value)
 		if err != nil {
 			return nil, newConfigValueDecodeError(err.Error())
 		}
 		return number, nil
-	}
-	if kind == reflect.Bool {
+	case reflect.Bool:
 		boolean, err := parseBool(value)
 		if err != nil {
 			return nil, newConfigValueDecodeError(err.Error())
 		}
 		return boolean, nil
+	default:
+		return value, nil
 	}
-	return value, nil
 }
 
 func newConfigValueDecodeError(detail string) error {
