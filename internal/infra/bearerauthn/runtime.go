@@ -68,12 +68,14 @@ func (r *Runtime) verifyCredential(ctx context.Context, values []string, carrier
 		return Result{}, r.recordVerificationOutcome(ctx, carrier, err)
 	}
 	verified, err := r.verifier.Verify(ctx, token)
-	if err == nil && !validResult(verified) {
-		verified = Result{}
-		// A success without a complete identity and expiry is an engine failure.
-		err = failure(KindUnavailable)
+	if err != nil {
+		return Result{}, r.recordVerificationOutcome(ctx, carrier, sanitizeVerifierError(err))
 	}
-	return verified, r.recordVerificationOutcome(ctx, carrier, sanitizeVerifierError(err))
+	if !validResult(verified) {
+		// A success without a complete identity and expiry is an engine failure.
+		return Result{}, r.recordVerificationOutcome(ctx, carrier, failure(KindUnavailable))
+	}
+	return verified, r.recordVerificationOutcome(ctx, carrier, nil)
 }
 
 func validResult(result Result) bool {
