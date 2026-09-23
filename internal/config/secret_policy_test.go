@@ -157,7 +157,7 @@ func TestWebhookSecretSourcePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDetailed() with environment webhook secret error = %v", err)
 	}
-	if cfg.Webhooks.StaticSecrets != canary {
+	if cfg.OutboundWebhooks.StaticSecrets != canary {
 		t.Fatal("LoadDetailed() did not accept environment webhook secret")
 	}
 }

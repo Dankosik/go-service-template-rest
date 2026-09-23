@@ -134,7 +134,10 @@ func (c *Client) Do(request *http.Request) (*http.Response, error) {
 }
 
 // DoWithPolicy sends one non-streaming request under a smaller operation budget.
-// Its timeout covers reading response.Body as well as the request.
+// Its timeout covers reading response.Body as well as the request. The caller
+// must read and close response.Body: the size limit can fail during Read, and
+// admission remains held until terminal Read or Close. A terminal read releases
+// admission but does not remove the obligation to close the underlying body.
 func (c *Client) DoWithPolicy(request *http.Request, policy OperationPolicy) (*http.Response, error) {
 	if request == nil || request.URL == nil {
 		return nil, errors.New("send outbound HTTP request: request URL is required")

@@ -71,6 +71,8 @@ func (r *Registry) Register(eventType string, version uint16, handler func(conte
 	return nil
 }
 
+// Handler reads the live registry. Complete registration before using the
+// returned handler for concurrent deliveries.
 func (r *Registry) Handler() (Handler, error) {
 	if r == nil || len(r.handlers) == 0 {
 		return nil, fmt.Errorf("%w: no typed event handlers are registered", ErrRejected)

@@ -32,7 +32,7 @@ func (r *Runtime) ResolveHTTP(
 	if !bearerSecurityScheme(input) {
 		return reqctx.Principal{}, errUnsupportedSecurityScheme
 	}
-	request := authenticatedRequest(input)
+	request := requestFromAuthenticationInput(input)
 	if request == nil {
 		return reqctx.Principal{}, r.recordVerificationOutcome(ctx, transportHTTP, failure(KindMalformed))
 	}
@@ -61,7 +61,7 @@ func bearerSecurityScheme(input *openapi3filter.AuthenticationInput) bool {
 		strings.EqualFold(input.SecurityScheme.Scheme, "bearer")
 }
 
-func authenticatedRequest(input *openapi3filter.AuthenticationInput) *http.Request {
+func requestFromAuthenticationInput(input *openapi3filter.AuthenticationInput) *http.Request {
 	if input == nil || input.RequestValidationInput == nil {
 		return nil
 	}

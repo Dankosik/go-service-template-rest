@@ -36,8 +36,10 @@ type Verifier struct {
 	closeOnce sync.Once
 }
 
-// New discovers the issuer's JWKS, installs the first key set synchronously,
-// and starts the library-owned refresh loop.
+// New uses ctx for issuer discovery, then loads the first key set synchronously
+// with a process-owned context and starts the library-owned refresh loop. The
+// key fetch uses the provider HTTP timeout; canceling ctx does not stop key
+// loading or refresh. Close stops refresh after construction.
 func New(
 	ctx context.Context,
 	policy Policy,

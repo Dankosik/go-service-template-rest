@@ -97,6 +97,9 @@ func Open(ctx context.Context, opts Options) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// applyContextWatcher requests server cancellation without delay and sets a
+// fallback connection deadline one statement_timeout budget later. Its marker
+// lets InTx retain context cancellation in the returned transaction error.
 func applyContextWatcher(connConfig *pgx.ConnConfig, statementTimeout time.Duration) {
 	if connConfig == nil {
 		return

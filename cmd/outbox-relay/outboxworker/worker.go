@@ -40,7 +40,7 @@ func (w *Worker) Work(
 	if job == nil {
 		return fmt.Errorf("%w: outbox job is required", natsjs.ErrRejected)
 	}
-	ctx = creationContext(ctx, job.Metadata)
+	ctx = extractCreationTraceContext(ctx, job.Metadata)
 	args := job.Args
 	_, err := w.publish(ctx, natsjs.EventFromDomain(args.Subject, domainevent.Event{
 		ID: args.ID, Type: args.Type, Version: args.Version,
@@ -52,9 +52,9 @@ func (w *Worker) Work(
 	return nil
 }
 
-// creationContext restores the request context stored by otelriver. Malformed
-// or absent telemetry metadata never blocks publication.
-func creationContext(ctx context.Context, metadata []byte) context.Context {
+// extractCreationTraceContext extracts the creation trace from metadata onto
+// ctx. Malformed or absent metadata leaves ctx unchanged.
+func extractCreationTraceContext(ctx context.Context, metadata []byte) context.Context {
 	var carrier propagation.MapCarrier
 	if len(metadata) == 0 || json.Unmarshal(metadata, &carrier) != nil {
 		return ctx

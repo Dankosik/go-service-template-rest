@@ -32,6 +32,8 @@ func main() {
 	}
 }
 
+// checkGRPCClient matches the expected constructor shape, not equivalent data
+// flow in every form. Refactoring the adapter may require updating this check.
 func checkGRPCClient(file *ast.File, authMode string) error {
 	grpcAlias := importAlias(file, "/internal/infra/grpcclient")
 	oauthAlias := importAlias(file, "/internal/infra/oauth2clientcredentials")

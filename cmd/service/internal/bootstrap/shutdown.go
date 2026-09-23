@@ -66,14 +66,14 @@ func validateShutdownGraceBudget(cfg config.Config) error {
 	)
 }
 
-type startupDrainer interface {
+type shutdownDrainer interface {
 	StartDrain()
 }
 
 // profile:grpc:start
-type startupDrainSet []startupDrainer
+type shutdownDrainSet []shutdownDrainer
 
-func (set startupDrainSet) StartDrain() {
+func (set shutdownDrainSet) StartDrain() {
 	for _, drainer := range set {
 		drainer.StartDrain()
 	}
@@ -98,7 +98,7 @@ func sleepWithContext(ctx context.Context, wait time.Duration) error {
 	}
 }
 
-func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay time.Duration, timeout time.Duration, drainer startupDrainer, servers ...shutdownServer) error {
+func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay time.Duration, timeout time.Duration, drainer shutdownDrainer, servers ...shutdownServer) error {
 	log.InfoContext(
 		ctx,
 		"shutdown_started",

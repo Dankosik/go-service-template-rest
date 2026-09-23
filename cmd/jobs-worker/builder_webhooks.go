@@ -39,8 +39,8 @@ func buildWebhookWorkers(
 	workers := river.NewWorkers()
 	var registered bool
 	// profile:webhooks-durable:start
-	if cfg.Webhooks.Enabled {
-		secrets, err := postgreswebhook.ParseSecretManifest(cfg.Webhooks.StaticSecrets)
+	if cfg.OutboundWebhooks.Enabled {
+		secrets, err := postgreswebhook.ParseSecretManifest(cfg.OutboundWebhooks.StaticSecrets)
 		if err != nil {
 			return bootstrap.WorkersRuntime{}, fmt.Errorf("parse webhook worker secrets: %w", err)
 		}
