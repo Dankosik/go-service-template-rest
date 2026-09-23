@@ -2,6 +2,8 @@ package config
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/knadh/koanf/v2"
@@ -51,7 +53,7 @@ func loadDetailedWithContext(
 	ctx context.Context,
 	opts LoadOptions,
 	build func(*koanf.Koanf) (Config, []string, error),
-	validate func(*Config, []string) error,
+	validate func(*Config) error,
 ) (Config, LoadReport, error) {
 	if err := checkContext(ctx); err != nil {
 		return Config{}, LoadReport{FailedStage: StageLoadDefaults}, err
@@ -82,9 +84,14 @@ func loadDetailedWithContext(
 		return Config{}, report, err
 	}
 
+	// Unknown keys are rejected before any section rule runs.
 	unknownKeys = append(unknownKeys, metadata.sectionScalarOverrideKeys...)
 	unknownKeys = append(unknownKeys, metadata.malformedEnvironmentKeys...)
-	err = validate(&cfg, unknownKeys)
+	if unknown := normalizeUnknownKeys(unknownKeys); len(unknown) > 0 {
+		err = fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
+	} else {
+		err = validate(&cfg)
+	}
 	report.ValidateDuration = time.Since(validateStarted)
 	if err != nil {
 		report.FailedStage = StageValidate

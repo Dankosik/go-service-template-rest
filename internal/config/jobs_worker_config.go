@@ -44,10 +44,7 @@ func jobsWorkerConfigKey(key string) bool {
 	return false
 }
 
-func validateJobsWorkerConfig(cfg *Config, unknownKeys []string) error {
-	if unknown := normalizeUnknownKeys(unknownKeys); len(unknown) > 0 {
-		return fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
-	}
+func validateJobsWorkerConfig(cfg *Config) error {
 	if err := validateAppConfig(&cfg.App); err != nil {
 		return err
 	}

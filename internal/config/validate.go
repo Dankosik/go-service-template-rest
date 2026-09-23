@@ -27,11 +27,7 @@ import (
 // performs no I/O, so its budget bounds nothing the refresher does; the interval
 // only has to be small relative to the orchestrator's own probe period, which
 // this service cannot see.
-func validateConfig(cfg *Config, unknownKeys []string) error {
-	if unknown := normalizeUnknownKeys(unknownKeys); len(unknown) > 0 {
-		return fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
-	}
-
+func validateConfig(cfg *Config) error {
 	if err := validateAppConfig(&cfg.App); err != nil {
 		return err
 	}
