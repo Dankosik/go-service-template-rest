@@ -25,8 +25,8 @@ func TestExecuteReadsBackCommittedResultAfterLostCommitResponse(t *testing.T) {
 	fixture := newCommitUnknownFixture(t)
 	store := fixture.store
 	commit := store.inTx
-	store.inTx = func(ctx context.Context, opts pgx.TxOptions, work func(pgx.Tx) error) error {
-		if err := commit(ctx, opts, work); err != nil {
+	store.inTx = func(ctx context.Context, pool *pgxpool.Pool, opts pgx.TxOptions, work func(pgx.Tx) error) error {
+		if err := commit(ctx, pool, opts, work); err != nil {
 			return err
 		}
 		return fmt.Errorf("commit response lost: %w", postgres.ErrCommitUnknown)
@@ -64,8 +64,8 @@ func TestExecuteReadsBackCommittedResultAfterLostCommitResponse(t *testing.T) {
 
 func TestExecuteReturnsUnknownWithoutRetryWhenCommitDidNotPersist(t *testing.T) {
 	fixture := newCommitUnknownFixture(t)
-	fixture.store.inTx = func(ctx context.Context, opts pgx.TxOptions, work func(pgx.Tx) error) error {
-		return postgres.InTx(ctx, fixture.pool, opts, func(tx pgx.Tx) error {
+	fixture.store.inTx = func(ctx context.Context, pool *pgxpool.Pool, opts pgx.TxOptions, work func(pgx.Tx) error) error {
+		return postgres.InTx(ctx, pool, opts, func(tx pgx.Tx) error {
 			if err := work(tx); err != nil {
 				return err
 			}
