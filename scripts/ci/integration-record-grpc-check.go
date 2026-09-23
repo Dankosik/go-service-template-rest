@@ -136,12 +136,8 @@ func tlsCredentialCall(call *ast.CallExpr, alias string) bool {
 	if !ok || selector.Sel.Name != "NewTLS" || !ownedBy(selector, alias) || len(call.Args) != 1 {
 		return false
 	}
-	pointer, ok := call.Args[0].(*ast.UnaryExpr)
-	if !ok || pointer.Op != token.AND {
-		return false
-	}
-	literal, ok := pointer.X.(*ast.CompositeLit)
-	if !ok {
+	literal := pointerCompositeLiteral(call.Args[0])
+	if literal == nil {
 		return false
 	}
 	for _, element := range literal.Elts {

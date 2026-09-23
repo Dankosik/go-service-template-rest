@@ -26,7 +26,9 @@ func (c *Client) HTTP(base *httpclient.Client) (*HTTPClient, error) {
 	})}, nil
 }
 
-// Do authenticates one request copy with the current valid token.
+// Do authenticates one request copy with the current valid token. Token
+// acquisition uses the Client's process context and a five-second timeout;
+// canceling this request does not cancel an in-flight token acquisition.
 func (c *HTTPClient) Do(request *http.Request) (*http.Response, error) {
 	if c == nil || c.client == nil || request == nil || request.URL == nil || hasAuthorization(request.Header) {
 		return nil, ErrInvalidConfiguration

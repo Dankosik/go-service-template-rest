@@ -8,6 +8,15 @@ shopt -s nullglob
 records=(integrations/*.toml)
 status=0
 
+if ! go test ./scripts/ci/integration-record-constructor-check.go ./scripts/ci/integration-record-ast-common.go ./scripts/ci/integration-record-constructor-check_test.go; then
+	echo "integration record constructor AST tests failed" >&2
+	status=1
+fi
+if ! go test ./scripts/ci/integration-record-grpc-check.go ./scripts/ci/integration-record-ast-common.go ./scripts/ci/integration-record-grpc-check_test.go; then
+	echo "integration record gRPC AST tests failed" >&2
+	status=1
+fi
+
 require_literal() {
 	local record="$1" file="$2" literal="$3" description="$4"
 	if [[ ! -f "${file}" ]] || ! grep -Fq -- "${literal}" "${file}"; then

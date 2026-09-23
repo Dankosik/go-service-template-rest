@@ -1020,6 +1020,9 @@ else
 	else
 		strip_profile inbound-webhooks-standard keep
 	fi
+	if [[ "${webhooks}" == "none" && "${inbound_webhooks}" == "none" ]]; then
+		rm -rf -- internal/webhooksecret
+	fi
 
 if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" && "${inbound_webhooks}" == "none" ]]; then
 	rm -f -- migrations/000008_river.sql

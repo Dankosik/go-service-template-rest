@@ -39,10 +39,11 @@ func runWorkerLifecycle(
 	metrics *telemetry.Metrics,
 	client *natsjs.Client,
 	worker *natsjs.Worker,
-) (bool, time.Time, error) {
+) (bool, context.Context, error) {
+	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
 	healthSvc := health.New(client)
 	if err := healthSvc.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
-		return true, time.Time{}, fmt.Errorf("admit worker readiness: %w", err)
+		return true, unarmed, fmt.Errorf("admit worker readiness: %w", err)
 	}
 	diagnostics, err := runtimeopts.ListenDiagnostics(
 		startupCtx,
@@ -53,7 +54,7 @@ func runWorkerLifecycle(
 		cfg.Observability.Pprof.Enabled,
 	)
 	if err != nil {
-		return true, time.Time{}, err
+		return true, unarmed, err
 	}
 
 	runtimeCtx := context.WithoutCancel(signalCtx)
@@ -84,15 +85,13 @@ func runWorkerLifecycle(
 	}
 	healthSvc.StartDrain()
 	worker.StartDrain()
-	processCtx, processCancel, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+	window, processCancel := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer processCancel()
-	workerCtx, workerCancel := runtimeopts.TeardownStage(
-		processCtx, shutdownDeadline, cfg.HTTP.ShutdownTimeout,
-	)
+	workerCtx, workerCancel := runtimeopts.TeardownStage(window, cfg.HTTP.ShutdownTimeout)
 	workerErr := worker.Shutdown(workerCtx)
 	workerCancel()
-	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
-	backgroundCtx, backgroundCancel := context.WithTimeout(processCtx, backgroundClose)
+	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
+	backgroundCtx, backgroundCancel := runtimeopts.TeardownStage(window, backgroundClose)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	backgroundCancel()
 	cleanupSafe := runtimeopts.StoppedBeforeReturn(workerErr, workerDone)
@@ -103,7 +102,7 @@ func runWorkerLifecycle(
 		}
 	default:
 	}
-	return cleanupSafe, shutdownDeadline, errors.Join(
+	return cleanupSafe, window, errors.Join(
 		triggerErr,
 		workerLifecycleError("worker shutdown", workerErr),
 		workerLifecycleError("diagnostics shutdown", diagnosticsErr),

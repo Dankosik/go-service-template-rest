@@ -9,58 +9,46 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 )
 
-// TeardownBudget reports how long a stage asking for want may actually take.
-//
-// deadline is the one process-wide teardown deadline every stage draws from.
-// Without it the stages are independent ceilings running in sequence, so the
-// worst case is their sum — and the loser is always the last stage, which is
-// normally the telemetry flush that runs last precisely so it can record what
-// the others did. A zero deadline means no process bound has been armed yet,
-// which is the startup-failure path: the stage gets what it asked for.
-func TeardownBudget(want time.Duration, deadline time.Time) time.Duration {
-	if deadline.IsZero() {
+// UnarmedTeardown leaves startup-failure cleanup its full stage budget. The
+// signal's cancellation and any startup deadline do not enter that cleanup.
+func UnarmedTeardown(base context.Context) context.Context {
+	return context.WithoutCancel(base)
+}
+
+// ArmTeardown starts the one process-wide grace period when serving ends.
+// Cancel releases the process timer after ordered teardown. Stage retains the
+// deadline for deferred cleanup even if that process context is canceled first.
+func ArmTeardown(base context.Context, grace time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(base), grace)
+}
+
+// TeardownStage gives one teardown operation its ceiling within the process
+// window. The window context carries its process deadline to every stage.
+// It detaches cancellation so a deferred cleanup can still run after the
+// process context has been canceled, while retaining the original deadline.
+func TeardownStage(window context.Context, want time.Duration) (context.Context, context.CancelFunc) {
+	base := context.WithoutCancel(window)
+	if deadline, armed := window.Deadline(); armed {
+		stageDeadline := time.Now().Add(want)
+		if deadline.Before(stageDeadline) {
+			stageDeadline = deadline
+		}
+		return context.WithDeadline(base, stageDeadline)
+	}
+	return context.WithTimeout(base, want)
+}
+
+// TeardownBudget reports the time a stage may still spend within the process window.
+// An unarmed startup-cleanup window grants the whole requested stage budget.
+func TeardownBudget(window context.Context, want time.Duration) time.Duration {
+	deadline, armed := window.Deadline()
+	if !armed {
 		return want
 	}
 	if remaining := time.Until(deadline); remaining < want {
 		return max(remaining, 0)
 	}
 	return want
-}
-
-// ArmTeardown opens the one process-wide teardown window and reports the
-// deadline every stage then draws from through [TeardownBudget].
-//
-// [TeardownBudget] already documents that deadline as shared, but arming it was
-// still spelled per binary. Both spellings were this arithmetic, so the two ways
-// to get it wrong — deriving the window from a context already canceled, and
-// reading a deadline the window never carried — are answered once here.
-func ArmTeardown(base context.Context, grace time.Duration) (context.Context, context.CancelFunc, time.Time) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), grace)
-	// Present by construction: WithTimeout always carries one.
-	deadline, _ := ctx.Deadline()
-	return ctx, cancel, deadline
-}
-
-// TeardownStage builds the context one teardown stage runs under, bounded by
-// [TeardownBudget].
-//
-// It is detached from base, which is normally the signal context and therefore
-// already canceled by the time any stage runs, so the stage gets the bound
-// rather than an instant expiry.
-func TeardownStage(
-	base context.Context,
-	deadline time.Time,
-	want time.Duration,
-) (context.Context, context.CancelFunc) {
-	base = context.WithoutCancel(base)
-	if deadline.IsZero() {
-		return context.WithTimeout(base, want)
-	}
-	stageDeadline := time.Now().Add(want)
-	if deadline.Before(stageDeadline) {
-		stageDeadline = deadline
-	}
-	return context.WithDeadline(base, stageDeadline)
 }
 
 // ValidateGracePeriod rejects a drain budget that cannot fit inside the

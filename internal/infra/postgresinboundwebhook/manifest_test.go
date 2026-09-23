@@ -59,4 +59,32 @@ func TestEndpointManifestSecurityBoundary(t *testing.T) {
 	}
 }
 
+func TestSecretManifestKeepsInboundPolicyErrors(t *testing.T) {
+	t.Parallel()
+
+	empty, err := ParseSecretManifest("")
+	if err != nil || len(empty.secrets) != 0 {
+		t.Fatalf("ParseSecretManifest(empty) = %v, %v, want empty manifest", empty, err)
+	}
+	secret := "whsec_" + base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+	entry := `{"endpoint_id":"orders","key_reference":"key-v1","secret":"` + secret + `"}`
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "invalid encoding", raw: `{"entries":[{"endpoint_id":"orders","key_reference":"key-v1","secret":"whsec_***"}]}`, want: "parse inbound webhook secrets: secret encoding is invalid"},
+		{name: "duplicate binding", raw: `{"entries":[` + entry + `,` + entry + `]}`, want: "parse inbound webhook secrets: duplicate binding"},
+		{name: "cross-bound key", raw: `{"entries":[` + entry + `,{"endpoint_id":"other","key_reference":"key-v1","secret":"` + secret + `"}]}`, want: "parse inbound webhook secrets: key is cross-bound"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := ParseSecretManifest(tc.raw)
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("ParseSecretManifest() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 // profile:inbound-webhooks-standard:end

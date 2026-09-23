@@ -3,18 +3,17 @@ package postgreswebhook
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/example/go-service-template-rest/internal/webhooksecret"
 )
 
 const (
-	maxSecretManifestBytes    = 1 << 20
-	maxSecretManifestEntries  = 4096
-	minWebhookSigningKeyBytes = 32
-	maxWebhookSigningKeyBytes = 64
+	maxSecretManifestBytes   = 1 << 20
+	maxSecretManifestEntries = 4096
 )
 
 type secretTuple struct {
@@ -59,12 +58,8 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 				return nil, errors.New("parse webhook secret manifest: invalid identifier")
 			}
 		}
-		encoded, ok := strings.CutPrefix(entry.Secret, "whsec_")
+		secret, ok := webhooksecret.Decode(entry.Secret)
 		if !ok {
-			return nil, errors.New("parse webhook secret manifest: secret encoding is invalid")
-		}
-		secret, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil || len(secret) < minWebhookSigningKeyBytes || len(secret) > maxWebhookSigningKeyBytes {
 			return nil, errors.New("parse webhook secret manifest: secret encoding is invalid")
 		}
 		tuple := secretTuple{owner: entry.OwnerScope, receiver: entry.ReceiverID, reference: entry.KeyReference}

@@ -60,6 +60,10 @@ authority, or operator flow; line count alone is not an owner.
 
 ## Removable Profile Packs
 
+`internal/webhooksecret/` owns the pure `whsec_` decoding and 32..64-byte key
+rule shared by inbound and outbound webhooks. The initializer retains it when
+either webhook profile is selected and removes it when both are disabled.
+
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
 `internal/infra/oauth2clientcredentials` owns the fixed token endpoint,
 safe token projection, and authenticated HTTP/gRPC client factories; `x/oauth2`

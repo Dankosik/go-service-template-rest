@@ -46,3 +46,28 @@ func TestWebhookManifests(t *testing.T) {
 		t.Fatal("cross-bound secret reuse succeeded")
 	}
 }
+
+func TestSecretManifestKeepsOutboundPolicyErrors(t *testing.T) {
+	t.Parallel()
+
+	secret := "whsec_" + base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+	entry := `{"owner_scope":"orders","receiver_id":"alpha","key_reference":"key-v1","secret":"` + secret + `"}`
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "empty", raw: "", want: "parse webhook secret manifest: document size is invalid"},
+		{name: "invalid encoding", raw: `{"entries":[{"owner_scope":"orders","receiver_id":"alpha","key_reference":"key-v1","secret":"whsec_***"}]}`, want: "parse webhook secret manifest: secret encoding is invalid"},
+		{name: "duplicate binding", raw: `{"entries":[` + entry + `,` + entry + `]}`, want: "parse webhook secret manifest: duplicate binding"},
+		{name: "cross-bound key", raw: `{"entries":[` + entry + `,{"owner_scope":"other","receiver_id":"alpha","key_reference":"key-v1","secret":"` + secret + `"}]}`, want: "parse webhook secret manifest: key is cross-bound"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := ParseSecretManifest(tc.raw)
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("ParseSecretManifest() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}

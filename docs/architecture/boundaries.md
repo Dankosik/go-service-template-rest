@@ -75,6 +75,11 @@ business job kinds, effect idempotency, operator exposure, and capacity remain
 feature/deployment decisions.
 <!-- profile:jobs-postgres:end -->
 
+`internal/webhooksecret/` owns only the shared Standard Webhooks secret format
+and raw signing-key length rule. Inbound and outbound adapters own their own
+manifest binding and error policies; the shared leaf exists only while at least
+one webhook profile is selected.
+
 <!-- profile:webhooks-durable:start -->
 `internal/outboundtrust/` and `internal/infra/postgreswebhook/` own the public
 address predicate and Standard Webhooks job adapter, not generic job state,

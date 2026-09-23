@@ -30,6 +30,10 @@ if [[ ${1:-} == --select-from-files ]]; then
 		scripts/profiles/jobs-* | */postgresjobs/*)
 			add_selected jobs
 			;;
+		*/webhooksecret/*)
+			add_selected webhooks
+			add_selected inbound-webhooks
+			;;
 		scripts/profiles/webhooks-* | */postgreswebhook/*)
 			add_selected webhooks
 			;;
@@ -234,6 +238,7 @@ assert_profile() {
 	case "${name}" in
 	minimal)
 		test ! -d "${root}/internal/infra/postgres"
+		test ! -d "${root}/internal/webhooksecret"
 		test ! -d "${root}/internal/infra/bearerauthn"
 		test ! -d "${root}/internal/infra/natsjs"
 		test ! -d "${root}/internal/messagingconfig"
@@ -271,6 +276,8 @@ assert_profile() {
 		;;
 	webhooks)
 		test -d "${root}/internal/infra/postgreswebhook"
+		test -d "${root}/internal/webhooksecret"
+		test ! -d "${root}/internal/infra/postgresinboundwebhook"
 		test -d "${root}/cmd/jobs-worker"
 		test ! -e "${root}/migrations/000004_postgres_jobs.sql"
 		test ! -e "${root}/migrations/000005_postgres_webhooks.sql"
@@ -281,6 +288,8 @@ assert_profile() {
 	inbound-webhooks)
 		test -d "${root}/internal/inboundwebhook/manifest"
 		test -d "${root}/internal/infra/postgresinboundwebhook"
+		test -d "${root}/internal/webhooksecret"
+		test ! -d "${root}/internal/infra/postgreswebhook"
 		test -e "${root}/migrations/000010_postgres_inbound_webhooks.sql"
 		;;
 	outbox)

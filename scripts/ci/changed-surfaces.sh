@@ -124,7 +124,7 @@ classify() {
 				;;
 		esac
 		case "${file}" in
-			cmd/jobs-worker/*|cmd/migrate/*|examples/reference-service/*|internal/infra/postgres/*|internal/infra/postgresidempotency/*|internal/infra/postgresjobs/*|internal/infra/postgresmigrate/*|internal/infra/postgreswebhook/*|internal/inboundwebhook/*|migrations/*|test/postgres*|test/inbound_webhook*|test/webhook*)
+			cmd/jobs-worker/*|cmd/migrate/*|examples/reference-service/*|internal/infra/postgres/*|internal/infra/postgresidempotency/*|internal/infra/postgresjobs/*|internal/infra/postgresmigrate/*|internal/infra/postgreswebhook/*|internal/inboundwebhook/*|internal/webhooksecret/*|migrations/*|test/postgres*|test/inbound_webhook*|test/webhook*)
 				mark db_integration
 				;;
 		esac

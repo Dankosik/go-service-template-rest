@@ -39,16 +39,20 @@ func (b *shutdownBudget) start() {
 
 func (b *shutdownBudget) stage(base context.Context, want time.Duration) (context.Context, context.CancelFunc) {
 	b.start()
-	ctx, cancel := runtimeopts.TeardownStage(base, b.deadline, want)
-	return ctx, cancel
+	window, cancelWindow := context.WithDeadline(context.WithoutCancel(base), b.deadline)
+	stage, cancelStage := runtimeopts.TeardownStage(window, want)
+	cancelWindow()
+	return stage, cancelStage
 }
 
 // clamp reports how long a stage asking for want may actually take, for the one
 // stage that needs the number rather than a context: the drain hands its bound
 // to drainAndShutdown.
-func (b *shutdownBudget) clamp(want time.Duration) time.Duration {
+func (b *shutdownBudget) clamp(base context.Context, want time.Duration) time.Duration {
 	b.start()
-	return runtimeopts.TeardownBudget(want, b.deadline)
+	window, cancel := context.WithDeadline(context.WithoutCancel(base), b.deadline)
+	defer cancel()
+	return runtimeopts.TeardownBudget(window, want)
 }
 
 // validateShutdownGraceBudget rejects a drain budget that cannot fit inside the

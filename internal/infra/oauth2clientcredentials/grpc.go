@@ -59,6 +59,9 @@ func (c *Client) GRPC(target string, options grpcclient.Options) (*GRPCClient, e
 	return &GRPCClient{connection: connection}, nil
 }
 
+// Invoke authenticates one RPC. Token acquisition uses the Client's process
+// context and a five-second timeout; canceling ctx does not cancel an
+// in-flight token acquisition.
 func (c *GRPCClient) Invoke(
 	ctx context.Context,
 	method string,
@@ -72,6 +75,9 @@ func (c *GRPCClient) Invoke(
 	return c.connection.Invoke(ctx, method, args, reply, options...) //nolint:wrapcheck // Preserve downstream gRPC status.
 }
 
+// NewStream authenticates one stream. Token acquisition uses the Client's
+// process context and a five-second timeout; canceling ctx does not cancel an
+// in-flight token acquisition.
 func (c *GRPCClient) NewStream( //nolint:ireturn // grpc.ClientConnInterface requires grpc.ClientStream.
 	ctx context.Context,
 	description *grpc.StreamDesc,
