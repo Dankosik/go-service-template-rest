@@ -112,38 +112,40 @@ func (c *Client) Ready() bool {
 }
 
 func (c *Client) Check(ctx context.Context) error {
-	if c == nil || c.nc == nil || !c.nc.IsConnected() || c.draining.Load() {
-		if c != nil {
-			c.ready.Store(false)
-		}
+	if c == nil {
+		return fmt.Errorf("%w: connection is not ready", ErrRejected)
+	}
+	err := c.probe(ctx)
+	c.ready.Store(err == nil)
+	return err
+}
+
+// probe confirms the connection, the source stream, and — once a worker owns
+// one — the durable consumer. Check records its result as readiness.
+func (c *Client) probe(ctx context.Context) error {
+	if c.nc == nil || !c.nc.IsConnected() || c.draining.Load() {
 		return fmt.Errorf("%w: connection is not ready", ErrRejected)
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	stream, err := c.js.Stream(probeCtx, c.cfg.Stream)
 	if err != nil {
-		c.ready.Store(false)
 		return fmt.Errorf("%w: source stream is unavailable", ErrRejected)
 	}
 	if _, err := stream.Info(probeCtx); err != nil {
-		c.ready.Store(false)
 		return fmt.Errorf("%w: source stream information is unavailable", ErrRejected)
 	}
 	c.probeMu.RLock()
 	consumer := c.consumer
 	c.probeMu.RUnlock()
 	if consumer != nil {
-		_, err = consumer.Info(probeCtx)
-		if err != nil {
-			c.ready.Store(false)
+		if _, err := consumer.Info(probeCtx); err != nil {
 			return fmt.Errorf("%w: durable consumer is unavailable", ErrRejected)
 		}
 	}
 	if !c.nc.IsConnected() {
-		c.ready.Store(false)
 		return fmt.Errorf("%w: connection changed during readiness probe", ErrRejected)
 	}
-	c.ready.Store(true)
 	return nil
 }
 
