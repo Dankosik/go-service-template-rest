@@ -100,7 +100,6 @@ func BindSecrets(endpoints *EndpointManifest, secrets *SecretManifest) (*TrustMa
 	trust := &TrustManifest{
 		bindings: make(map[string]endpointBinding, len(endpointIDs)),
 	}
-	referenced := make(map[string]map[string]struct{})
 	for _, id := range endpointIDs {
 		endpoint, _ := endpoints.Lookup(id)
 		keys, ok := secrets.secrets[id]
@@ -112,27 +111,23 @@ func BindSecrets(endpoints *EndpointManifest, secrets *SecretManifest) (*TrustMa
 			return nil, errors.New("parse inbound webhook secrets: missing referenced key")
 		}
 		bound := endpointSecrets{active: bytes.Clone(active)}
-		if referenced[id] == nil {
-			referenced[id] = make(map[string]struct{})
-		}
-		referenced[id][endpoint.ActiveKeyReference] = struct{}{}
 		if endpoint.PredecessorKeyReference != "" {
 			predecessor, ok := keys[endpoint.PredecessorKeyReference]
 			if !ok {
 				return nil, errors.New("parse inbound webhook secrets: missing referenced key")
 			}
 			bound.predecessor = bytes.Clone(predecessor)
-			referenced[id][endpoint.PredecessorKeyReference] = struct{}{}
 		}
 		trust.bindings[id] = endpointBinding{endpoint: endpoint, secrets: bound}
 	}
+	// Parsed key references are never empty, so an absent predecessor matches nothing.
 	for endpointID, keys := range secrets.secrets {
-		used := referenced[endpointID]
-		if used == nil {
+		binding, ok := trust.bindings[endpointID]
+		if !ok {
 			return nil, errors.New("parse inbound webhook secrets: unused key")
 		}
 		for reference := range keys {
-			if _, ok := used[reference]; !ok {
+			if reference != binding.endpoint.ActiveKeyReference && reference != binding.endpoint.PredecessorKeyReference {
 				return nil, errors.New("parse inbound webhook secrets: unused key")
 			}
 		}
