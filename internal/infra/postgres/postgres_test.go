@@ -61,7 +61,7 @@ func TestOpenRejectsInvalidPoolSize(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := Open(context.Background(), Options{
+			_, err := Open(context.Background(), Options{ //nolint:gosec // Synthetic DSN fixture; no live credential.
 				DSN:          "postgres://user:pass@localhost:5432/db?sslmode=disable",
 				MaxOpenConns: tc.maxOpenConns,
 			})
@@ -75,7 +75,7 @@ func TestOpenRejectsInvalidPoolSize(t *testing.T) {
 func TestOpenInvalidDSNIsRedacted(t *testing.T) {
 	t.Parallel()
 
-	rawDSN := "postgres://user:top-secret%@localhost:5432/app"
+	rawDSN := "postgres://user:top-secret%@localhost:5432/app" //nolint:gosec // Synthetic DSN fixture; no live credential.
 	_, err := Open(context.Background(), Options{DSN: rawDSN, MaxOpenConns: 10})
 	if !errors.Is(err, ErrConfig) {
 		t.Fatalf("Open() error = %v, want ErrConfig", err)
@@ -89,7 +89,7 @@ func TestOpenInvalidDSNIsRedacted(t *testing.T) {
 func TestOpenReportsUnavailablePostgresHealthcheck(t *testing.T) {
 	t.Parallel()
 
-	pool, err := Open(t.Context(), Options{
+	pool, err := Open(t.Context(), Options{ //nolint:gosec // Synthetic DSN fixture; no live credential.
 		DSN:          "postgres://app:app@127.0.0.1:1/app?sslmode=disable",
 		MaxOpenConns: 1,
 	})

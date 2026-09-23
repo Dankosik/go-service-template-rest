@@ -14,8 +14,8 @@ func TestParsePoolConfigAcceptsStrictSingleTargetDSNs(t *testing.T) {
 		name string
 		dsn  string
 	}{
-		{name: "postgres scheme", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable"},
-		{name: "postgresql scheme", dsn: "postgresql://user:pass@localhost:5432/app?sslmode=disable"},
+		{name: "postgres scheme", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable"},     //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "postgresql scheme", dsn: "postgresql://user:pass@localhost:5432/app?sslmode=disable"}, //nolint:gosec // Synthetic DSN fixture; no live credential.
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -56,7 +56,7 @@ func TestParsePoolConfigRejectsKeywordValueDSN(t *testing.T) {
 }
 
 func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
-	validDSN := "postgres://user:pass@localhost:5432/app?sslmode=disable"
+	validDSN := "postgres://user:pass@localhost:5432/app?sslmode=disable" //nolint:gosec // Synthetic DSN fixture; no live credential.
 
 	for _, envName := range []string{
 		"PGHOST",
@@ -87,7 +87,7 @@ func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
 func TestParsePoolConfigAllowsUnrelatedPGPrefixedEnv(t *testing.T) {
 	t.Setenv("PGO_ENABLED", "1")
 
-	const dsn = "postgres://user:pass@localhost:5432/app?sslmode=disable"
+	const dsn = "postgres://user:pass@localhost:5432/app?sslmode=disable" //nolint:gosec // Synthetic DSN fixture; no live credential.
 	if _, err := parsePoolConfig(dsn); err != nil {
 		t.Fatalf("parsePoolConfig() error = %v, want nil", err)
 	}
@@ -102,19 +102,19 @@ func TestParsePoolConfigRejectsDisallowedSourcesAndMissingRequiredFields(t *test
 		want             string
 		forbiddenDetails []string
 	}{
-		{name: "service", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable&service=prodservice", want: "postgres dsn uses unsupported service/passfile source", forbiddenDetails: []string{"prodservice"}},
-		{name: "servicefile", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable&servicefile=/tmp/pg_service.conf", want: "postgres dsn uses unsupported service/passfile source", forbiddenDetails: []string{"/tmp/pg_service.conf"}},
-		{name: "passfile", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable&passfile=/tmp/.pgpass", want: "postgres dsn uses unsupported service/passfile source", forbiddenDetails: []string{"/tmp/.pgpass"}},
-		{name: "sslcert", dsn: "postgres://user:pass@localhost:5432/app?sslmode=require&sslcert=/tmp/client.crt", want: "postgres dsn uses unsupported TLS file source", forbiddenDetails: []string{"/tmp/client.crt"}},
-		{name: "sslkey", dsn: "postgres://user:pass@localhost:5432/app?sslmode=require&sslkey=/tmp/client.key", want: "postgres dsn uses unsupported TLS file source", forbiddenDetails: []string{"/tmp/client.key"}},
-		{name: "sslpassword", dsn: "postgres://user:pass@localhost:5432/app?sslmode=require&sslpassword=client-secret", want: "postgres dsn uses unsupported TLS file source", forbiddenDetails: []string{"client-secret"}},
-		{name: "sslrootcert", dsn: "postgres://user:pass@localhost:5432/app?sslmode=require&sslrootcert=/tmp/root.crt", want: "postgres dsn uses unsupported TLS file source", forbiddenDetails: []string{"/tmp/root.crt"}},
+		{name: "service", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable&service=prodservice", want: "postgres dsn uses unsupported service/passfile source", forbiddenDetails: []string{"prodservice"}},                           //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "servicefile", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable&servicefile=/tmp/pg_service.conf", want: "postgres dsn uses unsupported service/passfile source", forbiddenDetails: []string{"/tmp/pg_service.conf"}}, //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "passfile", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable&passfile=/tmp/.pgpass", want: "postgres dsn uses unsupported service/passfile source", forbiddenDetails: []string{"/tmp/.pgpass"}},                       //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "sslcert", dsn: "postgres://user:pass@localhost:5432/app?sslmode=require&sslcert=/tmp/client.crt", want: "postgres dsn uses unsupported TLS file source", forbiddenDetails: []string{"/tmp/client.crt"}},                           //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "sslkey", dsn: "postgres://user:pass@localhost:5432/app?sslmode=require&sslkey=/tmp/client.key", want: "postgres dsn uses unsupported TLS file source", forbiddenDetails: []string{"/tmp/client.key"}},                             //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "sslpassword", dsn: "postgres://user:pass@localhost:5432/app?sslmode=require&sslpassword=client-secret", want: "postgres dsn uses unsupported TLS file source", forbiddenDetails: []string{"client-secret"}},                       //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "sslrootcert", dsn: "postgres://user:pass@localhost:5432/app?sslmode=require&sslrootcert=/tmp/root.crt", want: "postgres dsn uses unsupported TLS file source", forbiddenDetails: []string{"/tmp/root.crt"}},                       //nolint:gosec // Synthetic DSN fixture; no live credential.
 		{name: "missing password", dsn: "postgres://user@localhost:5432/app?sslmode=disable", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode", forbiddenDetails: []string{"user@localhost"}},
 		{name: "missing host", dsn: "postgres://user:pass@:5432/app?sslmode=disable", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"},
-		{name: "missing port", dsn: "postgres://user:pass@localhost/app?sslmode=disable", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"},
+		{name: "missing port", dsn: "postgres://user:pass@localhost/app?sslmode=disable", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"}, //nolint:gosec // Synthetic DSN fixture; no live credential.
 		{name: "missing user", dsn: "postgres://:pass@localhost:5432/app?sslmode=disable", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"},
-		{name: "missing database", dsn: "postgres://user:pass@localhost:5432/?sslmode=disable", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"},
-		{name: "missing sslmode", dsn: "postgres://user:pass@localhost:5432/app", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"},
+		{name: "missing database", dsn: "postgres://user:pass@localhost:5432/?sslmode=disable", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"}, //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "missing sslmode", dsn: "postgres://user:pass@localhost:5432/app", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"},               //nolint:gosec // Synthetic DSN fixture; no live credential.
 	}
 
 	for _, tc := range testCases {
@@ -184,9 +184,9 @@ func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
 		want string
 	}{
 		{name: "multi-host url", dsn: "postgres://user:pass@first:5432,second:5432/app?sslmode=disable", want: "postgres dsn fallback targets are not supported"},
-		{name: "omitted sslmode", dsn: "postgres://user:pass@localhost:5432/app", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"},
-		{name: "sslmode prefer", dsn: "postgres://user:pass@localhost:5432/app?sslmode=prefer", want: "postgres dsn fallback targets are not supported"},
-		{name: "sslmode allow", dsn: "postgres://user:pass@localhost:5432/app?sslmode=allow", want: "postgres dsn fallback targets are not supported"},
+		{name: "omitted sslmode", dsn: "postgres://user:pass@localhost:5432/app", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"}, //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "sslmode prefer", dsn: "postgres://user:pass@localhost:5432/app?sslmode=prefer", want: "postgres dsn fallback targets are not supported"},                    //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "sslmode allow", dsn: "postgres://user:pass@localhost:5432/app?sslmode=allow", want: "postgres dsn fallback targets are not supported"},                      //nolint:gosec // Synthetic DSN fixture; no live credential.
 	}
 
 	for _, tc := range testCases {
