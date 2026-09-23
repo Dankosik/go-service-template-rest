@@ -6,7 +6,6 @@ package postgresinboundwebhook
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json/v2"
 	"errors"
 	"strings"
@@ -14,13 +13,12 @@ import (
 	"unicode/utf8"
 
 	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
+	"github.com/example/go-service-template-rest/internal/webhooksecret"
 )
 
 const (
 	maxSecretManifestBytes   = 1 << 20
 	maxSecretManifestEntries = 4096
-	minSecretBytes           = 32
-	maxSecretBytes           = 64
 )
 
 // Endpoint is the non-secret trust identity for one inbound endpoint.
@@ -73,12 +71,8 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 		if !inboundmanifest.ValidKeyReference(entry.KeyReference) {
 			return nil, errors.New("parse inbound webhook secrets: invalid identifier")
 		}
-		encoded, ok := strings.CutPrefix(entry.Secret, "whsec_")
+		secret, ok := webhooksecret.Decode(entry.Secret)
 		if !ok {
-			return nil, errors.New("parse inbound webhook secrets: secret encoding is invalid")
-		}
-		secret, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil || len(secret) < minSecretBytes || len(secret) > maxSecretBytes {
 			return nil, errors.New("parse inbound webhook secrets: secret encoding is invalid")
 		}
 		if _, exists := manifest.secrets[entry.EndpointID][entry.KeyReference]; exists {

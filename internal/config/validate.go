@@ -28,7 +28,7 @@ import (
 // only has to be small relative to the orchestrator's own probe period, which
 // this service cannot see.
 func validateConfig(cfg *Config, unknownKeys []string) error {
-	if unknown := findUnknownKeys(unknownKeys); len(unknown) > 0 {
+	if unknown := normalizeUnknownKeys(unknownKeys); len(unknown) > 0 {
 		return fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
 	}
 
@@ -135,7 +135,7 @@ func validateRuntimeConfig(cfg RuntimeConfig) error {
 	return nil
 }
 
-func findUnknownKeys(keys []string) []string {
+func normalizeUnknownKeys(keys []string) []string {
 	unknownSet := make(map[string]struct{})
 	for _, key := range keys {
 		key = strings.TrimSpace(key)

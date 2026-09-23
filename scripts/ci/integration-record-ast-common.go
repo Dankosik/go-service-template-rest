@@ -11,13 +11,12 @@ import (
 )
 
 func clientLiteralFields(expression ast.Expr) map[string]string {
+	return literalIdentFields(pointerCompositeLiteral(expression))
+}
+
+func literalIdentFields(literal *ast.CompositeLit) map[string]string {
 	fields := map[string]string{}
-	pointer, ok := expression.(*ast.UnaryExpr)
-	if !ok || pointer.Op != token.AND {
-		return fields
-	}
-	literal, ok := pointer.X.(*ast.CompositeLit)
-	if !ok {
+	if literal == nil {
 		return fields
 	}
 	for _, element := range literal.Elts {
@@ -32,6 +31,15 @@ func clientLiteralFields(expression ast.Expr) map[string]string {
 		}
 	}
 	return fields
+}
+
+func pointerCompositeLiteral(expression ast.Expr) *ast.CompositeLit {
+	pointer, ok := expression.(*ast.UnaryExpr)
+	if !ok || pointer.Op != token.AND {
+		return nil
+	}
+	literal, _ := pointer.X.(*ast.CompositeLit)
+	return literal
 }
 
 func importAlias(file *ast.File, suffix string) string {

@@ -73,10 +73,10 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	// False means bounded shutdown returned without joining River. Its pool and
 	// telemetry stay alive until process exit instead of being closed under it.
 	cleanupSafe := true
-	var cleanupDeadline time.Time
+	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	defer func() {
 		if cleanupSafe {
-			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
+			cleanupCtx, cleanupCancel := cleanupWindow.Stage(telemetryClose)
 			defer cleanupCancel()
 			_ = telemetryCleanup(cleanupCtx)
 		}
@@ -129,10 +129,10 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		return fmt.Errorf("initialize River client: %w", err)
 	}
 	stopStartedRiver := func(trigger error) error {
-		processCtx, cancelProcess, deadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+		window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 		defer cancelProcess()
-		cleanupDeadline = deadline
-		stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
+		cleanupWindow = window
+		stopCtx, cancelStop := window.Stage(riverHardStopClose)
 		defer cancelStop()
 		stopErr := client.StopAndCancel(stopCtx)
 		cleanupSafe = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
@@ -177,15 +177,15 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	}
 	ready.Store(false)
 
-	processCtx, cancelProcess, deadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+	window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
-	cleanupDeadline = deadline
-	stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, cfg.HTTP.ShutdownTimeout)
+	cleanupWindow = window
+	stopCtx, cancelStop := window.Stage(cfg.HTTP.ShutdownTimeout)
 	stopErr := client.Stop(stopCtx)
 	cancelStop()
 	riverStopped := runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 	if !riverStopped {
-		hardStopCtx, cancelHardStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
+		hardStopCtx, cancelHardStop := window.Stage(riverHardStopClose)
 		stopErr = client.StopAndCancel(hardStopCtx)
 		riverStopped = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 		if !riverStopped {
@@ -200,6 +200,6 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if cleanupSafe {
 		cancelRun()
 	}
-	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
+	diagnosticsErr := diagnostics.Stop(window.Context(), diagnosticsClose)
 	return errors.Join(trigger, stopErr, diagnosticsErr)
 }

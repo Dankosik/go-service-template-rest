@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/webhooksecret"
 	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 )
 
@@ -17,7 +18,7 @@ func signV1(deliveryID string, attemptedAt time.Time, body []byte, keys [][]byte
 	}
 	entries := make([]string, 0, len(keys))
 	for _, key := range keys {
-		if len(key) < minWebhookSigningKeyBytes || len(key) > maxWebhookSigningKeyBytes {
+		if !webhooksecret.ValidKey(key) {
 			return "", errors.New("sign webhook: key must contain 32..64 bytes")
 		}
 		webhook, err := standardwebhooks.NewWebhookRaw(key)

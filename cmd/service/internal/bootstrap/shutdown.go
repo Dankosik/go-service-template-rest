@@ -22,9 +22,10 @@ import (
 // Run, in sequence; the Once is for the several callers that may each be the
 // first to observe that serving has ended.
 type shutdownBudget struct {
-	grace    time.Duration
-	started  sync.Once
-	deadline time.Time
+	grace   time.Duration
+	started sync.Once
+	window  runtimeopts.TeardownWindow
+	cancel  context.CancelFunc
 }
 
 func newShutdownBudget(grace time.Duration) *shutdownBudget {
@@ -33,22 +34,27 @@ func newShutdownBudget(grace time.Duration) *shutdownBudget {
 
 // start fixes the deadline, and is safe to call from every point that can begin
 // a teardown: a signal, a server that stopped on its own, or a failed startup.
-func (b *shutdownBudget) start() {
-	b.started.Do(func() { b.deadline = time.Now().Add(b.grace) })
+func (b *shutdownBudget) start(base context.Context) {
+	b.started.Do(func() { b.window, b.cancel = runtimeopts.ArmTeardown(base, b.grace) })
+}
+
+func (b *shutdownBudget) close() {
+	if b.cancel != nil {
+		b.cancel()
+	}
 }
 
 func (b *shutdownBudget) stage(base context.Context, want time.Duration) (context.Context, context.CancelFunc) {
-	b.start()
-	ctx, cancel := runtimeopts.TeardownStage(base, b.deadline, want)
-	return ctx, cancel
+	b.start(base)
+	return b.window.Stage(want)
 }
 
 // clamp reports how long a stage asking for want may actually take, for the one
 // stage that needs the number rather than a context: the drain hands its bound
 // to drainAndShutdown.
 func (b *shutdownBudget) clamp(want time.Duration) time.Duration {
-	b.start()
-	return runtimeopts.TeardownBudget(want, b.deadline)
+	b.start(context.Background())
+	return b.window.Budget(want)
 }
 
 // validateShutdownGraceBudget rejects a drain budget that cannot fit inside the

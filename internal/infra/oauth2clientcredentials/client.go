@@ -80,7 +80,8 @@ func (s clientTokenSource) Token() (*oauth2.Token, error) {
 	return token, nil
 }
 
-// Close retires authentication and releases the token transport's idle connections.
+// Close retires authentication, cancels any in-flight process-owned token
+// acquisition, and releases the token transport's idle connections.
 func (c *Client) Close() {
 	if c == nil || c.closed.Swap(true) {
 		return

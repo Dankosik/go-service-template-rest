@@ -46,7 +46,7 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 	}
 
 	expectedAssignments := 0
-	forbiddenCalls := 0
+	forbiddenCalls := countForbiddenCalls(parsed, alias, forbidden)
 	generatedBindings := 0
 	authBindings := 0
 	doerBindings := 0
@@ -54,21 +54,6 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 	returnedClients := 0
 	openapiAlias := importAlias(parsed, "/internal/openapi")
 	oauthAlias := importAlias(parsed, "/internal/infra/oauth2clientcredentials")
-	ast.Inspect(parsed, func(node ast.Node) bool {
-		call, ok := node.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || selector.Sel.Name != forbidden {
-			return true
-		}
-		owner, ok := selector.X.(*ast.Ident)
-		if ok && owner.Name == alias {
-			forbiddenCalls++
-		}
-		return true
-	})
 	for _, declaration := range parsed.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok || function.Recv != nil || function.Name.Name != "New" || function.Body == nil {
@@ -142,6 +127,22 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 	return nil
 }
 
+func countForbiddenCalls(file *ast.File, alias, forbidden string) int {
+	count := 0
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if ok && selector.Sel.Name == forbidden && ownedBy(selector, alias) {
+			count++
+		}
+		return true
+	})
+	return count
+}
+
 func generatedClientCall(call *ast.CallExpr, openapiAlias, authMode string) bool {
 	selector, ok := call.Fun.(*ast.SelectorExpr)
 	if !ok || selector.Sel.Name != "NewClient" || !ownedBy(selector, openapiAlias) || len(call.Args) != 2 {
@@ -187,19 +188,15 @@ func oauthConfigCall(call *ast.CallExpr, alias string) bool {
 
 func returnedClientFields(expression ast.Expr) map[string]string {
 	fields := map[string]string{}
-	pointer, ok := expression.(*ast.UnaryExpr)
-	if !ok || pointer.Op != token.AND {
-		return fields
-	}
-	literal, ok := pointer.X.(*ast.CompositeLit)
-	if !ok {
+	literal := pointerCompositeLiteral(expression)
+	if literal == nil {
 		return fields
 	}
 	typeName, ok := literal.Type.(*ast.Ident)
 	if !ok || typeName.Name != "Client" {
 		return fields
 	}
-	return clientLiteralFields(expression)
+	return literalIdentFields(literal)
 }
 
 func validArguments(constructor string, arguments []ast.Expr) bool {

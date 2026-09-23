@@ -77,13 +77,15 @@ func TestArmTeardownIgnoresCanceledParentAndSetsDeadline(t *testing.T) {
 
 	parent, cancelParent := context.WithCancel(context.Background())
 	cancelParent()
-	ctx, cancel, deadline := ArmTeardown(parent, time.Second)
+	window, cancel := ArmTeardown(parent, time.Second)
 	defer cancel()
+	ctx := window.Context()
 	if ctx.Err() != nil {
 		t.Fatalf("ArmTeardown context is canceled: %v", ctx.Err())
 	}
-	if got, ok := ctx.Deadline(); !ok || !got.Equal(deadline) {
-		t.Fatalf("context deadline = %v, %t, want %v", got, ok, deadline)
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("ArmTeardown context has no deadline")
 	}
 	if remaining := time.Until(deadline); remaining <= 0 || remaining > time.Second {
 		t.Fatalf("deadline remaining = %s, want (0, 1s]", remaining)

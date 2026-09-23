@@ -96,7 +96,7 @@ func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (runtimeLi
 		diagnosticsListener, diagnosticsListenErr := listenConfig.Listen(ctx, "tcp", args.cfg.Observability.Metrics.Addr)
 		if diagnosticsListenErr != nil {
 			listeners.close()
-			return runtimeListeners{}, "startup.metrics_listen", fmt.Errorf("listen metrics server: %w", diagnosticsListenErr)
+			return runtimeListeners{}, "startup.metrics_listen", fmt.Errorf("listen diagnostics server: %w", diagnosticsListenErr)
 		}
 		listeners.diagnostics = diagnosticsListener
 	}
@@ -171,8 +171,8 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	// profile:grpc:end
 	if diagnosticsListener != nil {
 		go func() {
-			args.log.InfoContext(bootstrapCtx, "metrics server started", "addr", diagnosticsListener.Addr().String(), "env", args.cfg.App.Env)
-			runErrCh <- serverResult{name: "metrics", err: normalizeServeError(args.diagnosticsSrv.Serve(diagnosticsListener))}
+			args.log.InfoContext(bootstrapCtx, "diagnostics server started", "addr", diagnosticsListener.Addr().String(), "env", args.cfg.App.Env)
+			runErrCh <- serverResult{name: "diagnostics", err: normalizeServeError(args.diagnosticsSrv.Serve(diagnosticsListener))}
 		}()
 	}
 
@@ -187,16 +187,14 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 		admissionErrCh,
 		runErrCh,
 	)
-	var serverErr error
-
 	if ready {
-		serverErr, terminalErr = waitForRuntimeStop(signalCtx, args, runErrCh)
+		terminalErr = waitForRuntimeStop(signalCtx, args, runErrCh)
 	}
 	cancelAdmission()
 
 	// The grace period starts now, not at process start: this is the moment the
 	// platform began counting.
-	args.shutdown.start()
+	args.shutdown.start(signalCtx)
 	// profile:messaging-nats-jetstream:start
 	if args.preDrain != nil {
 		args.preDrain()
@@ -239,8 +237,8 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	// started its goroutine, and split ownership is what lets one escape.
 	diagnosticsErr := shutdownDiagnostics(signalCtx, args.log, args.shutdown, args.diagnosticsSrv)
 
-	if terminalErr != nil || serverErr != nil || drainErr != nil {
-		return errors.Join(terminalErr, serverErr, drainErr, diagnosticsErr)
+	if terminalErr != nil || drainErr != nil {
+		return errors.Join(terminalErr, drainErr, diagnosticsErr)
 	}
 	if diagnosticsErr != nil {
 		return diagnosticsErr
@@ -254,16 +252,16 @@ func waitForRuntimeStop(
 	signalCtx context.Context,
 	args serveRuntimeArgs,
 	runErrCh <-chan serverResult,
-) (serverErr error, terminalErr error) {
+) error {
 	select {
 	case <-signalCtx.Done():
 		args.log.InfoContext(signalCtx, "shutdown signal received")
+		return nil
 	case result := <-runErrCh:
-		serverErr = serverStoppedAfterReadiness(args.log, result)
+		return serverStoppedAfterReadiness(args.log, result)
 	case err := <-args.backgroundFailures:
-		terminalErr = fmt.Errorf("background task failed after readiness: %w", err)
+		return fmt.Errorf("background task failed after readiness: %w", err)
 	}
-	return serverErr, terminalErr
 }
 
 // boundedAPIListener caps how many connections the API accepts at once.

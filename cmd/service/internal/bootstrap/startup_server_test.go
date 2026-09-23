@@ -17,6 +17,29 @@ import (
 	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
+func TestWaitForRuntimeStopReturnsOneStopError(t *testing.T) {
+	t.Parallel()
+	log := slog.New(slog.DiscardHandler)
+	cause := errors.New("serve failed")
+	serverResults := make(chan serverResult, 1)
+	serverResults <- serverResult{name: "diagnostics", err: cause}
+	if err := waitForRuntimeStop(context.Background(), serveRuntimeArgs{log: log}, serverResults); err == nil || !errors.Is(err, cause) || !strings.Contains(err.Error(), "diagnostics server stopped with error") {
+		t.Fatalf("server stop error = %v, want diagnostics context and cause", err)
+	}
+
+	backgroundFailures := make(chan error, 1)
+	backgroundFailures <- cause
+	if err := waitForRuntimeStop(context.Background(), serveRuntimeArgs{log: log, backgroundFailures: backgroundFailures}, nil); err == nil || !errors.Is(err, cause) || !strings.Contains(err.Error(), "background task failed after readiness") {
+		t.Fatalf("background stop error = %v, want background context and cause", err)
+	}
+
+	signalCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := waitForRuntimeStop(signalCtx, serveRuntimeArgs{log: log}, nil); err != nil {
+		t.Fatalf("signal stop error = %v, want nil", err)
+	}
+}
+
 type fakeRuntimeServer struct {
 	serveStarted  chan struct{}
 	stopServe     chan struct{}
@@ -157,8 +180,8 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 	if err == nil {
 		t.Fatal("serveRuntime() error = nil, want metrics listen failure")
 	}
-	if !strings.Contains(err.Error(), "listen metrics server") {
-		t.Fatalf("serveRuntime() err = %v, want metrics listen context", err)
+	if !strings.Contains(err.Error(), "listen diagnostics server") {
+		t.Fatalf("serveRuntime() err = %v, want diagnostics listen context", err)
 	}
 }
 

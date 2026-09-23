@@ -27,7 +27,9 @@ type HardenConfig struct {
 	MaxInFlight    int
 	OTelServerName string
 	// TraceRequest decides which requests OpenTelemetry records. Nil keeps the
-	// active profile's default; return false to omit a request from tracing.
+	// active profile's default. With inbound webhooks enabled, that default
+	// excludes their paths. A custom filter replaces the default; retain that
+	// exclusion if required. Return false to omit a request from tracing.
 	TraceRequest func(*http.Request) bool
 	// LogHealthProbes re-enables access logging for platform probe routes,
 	// which are excluded by default.

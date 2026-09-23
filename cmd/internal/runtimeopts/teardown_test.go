@@ -18,17 +18,24 @@ import (
 func TestTeardownBudgetDrawsFromTheProcessDeadline(t *testing.T) {
 	t.Parallel()
 
-	if got := runtimeopts.TeardownBudget(time.Second, time.Time{}); got != time.Second {
-		t.Fatalf("TeardownBudget(1s, unarmed) = %s, want the full stage budget", got)
+	unarmed := runtimeopts.UnarmedTeardown(context.Background())
+	if got := unarmed.Budget(time.Second); got != time.Second {
+		t.Fatalf("Budget(1s, unarmed) = %s, want the full stage budget", got)
 	}
-	if got := runtimeopts.TeardownBudget(time.Second, time.Now().Add(time.Hour)); got != time.Second {
-		t.Fatalf("TeardownBudget(1s, an hour left) = %s, want the full stage budget", got)
+	window, cancel := runtimeopts.ArmTeardown(context.Background(), time.Hour)
+	defer cancel()
+	if got := window.Budget(time.Second); got != time.Second {
+		t.Fatalf("Budget(1s, an hour left) = %s, want the full stage budget", got)
 	}
-	if got := runtimeopts.TeardownBudget(time.Hour, time.Now().Add(2*time.Second)); got > 2*time.Second {
-		t.Fatalf("TeardownBudget(1h, 2s left) = %s, want at most what is left", got)
+	short, cancelShort := runtimeopts.ArmTeardown(context.Background(), 2*time.Second)
+	defer cancelShort()
+	if got := short.Budget(time.Hour); got > 2*time.Second {
+		t.Fatalf("Budget(1h, 2s left) = %s, want at most what is left", got)
 	}
-	if got := runtimeopts.TeardownBudget(time.Hour, time.Now().Add(-time.Second)); got != 0 {
-		t.Fatalf("TeardownBudget(1h, spent) = %s, want zero", got)
+	spent, cancelSpent := runtimeopts.ArmTeardown(context.Background(), -time.Second)
+	defer cancelSpent()
+	if got := spent.Budget(time.Hour); got != 0 {
+		t.Fatalf("Budget(1h, spent) = %s, want zero", got)
 	}
 }
 
@@ -42,7 +49,8 @@ func TestTeardownStageOutlivesACanceledSignalContext(t *testing.T) {
 	signalCtx, stop := context.WithCancel(context.Background())
 	stop()
 
-	ctx, cancel := runtimeopts.TeardownStage(signalCtx, time.Time{}, time.Hour)
+	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
+	ctx, cancel := unarmed.Stage(time.Hour)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		t.Fatalf("teardown stage inherited signal cancellation: %v", err)
@@ -50,8 +58,20 @@ func TestTeardownStageOutlivesACanceledSignalContext(t *testing.T) {
 	if _, ok := ctx.Deadline(); !ok {
 		t.Fatal("teardown stage has no deadline")
 	}
+	armed, cancelArmed := runtimeopts.ArmTeardown(signalCtx, time.Hour)
+	cancelArmed()
+	afterCancel, cancelAfter := armed.Stage(time.Minute)
+	defer cancelAfter()
+	if err := afterCancel.Err(); err != nil {
+		t.Fatalf("deferred teardown stage inherited process cancellation: %v", err)
+	}
+	if remaining, ok := afterCancel.Deadline(); !ok || time.Until(remaining) > time.Minute {
+		t.Fatalf("deferred teardown deadline = %v, %t, want at most one minute", remaining, ok)
+	}
 
-	spent, spentCancel := runtimeopts.TeardownStage(signalCtx, time.Now().Add(-time.Second), time.Hour)
+	window, cancelWindow := runtimeopts.ArmTeardown(signalCtx, -time.Second)
+	defer cancelWindow()
+	spent, spentCancel := window.Stage(time.Hour)
 	defer spentCancel()
 	if !errors.Is(spent.Err(), context.DeadlineExceeded) {
 		t.Fatalf("spent-grace teardown stage error = %v, want context deadline", spent.Err())

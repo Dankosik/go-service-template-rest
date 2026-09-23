@@ -1,6 +1,7 @@
 package postgreswebhook
 
 import (
+	"bytes"
 	"net/http"
 	"testing"
 	"time"
@@ -38,5 +39,16 @@ func TestWebhookSigningUsesStandardWebhooks(t *testing.T) {
 	headers.Set("Webhook-Signature", next)
 	if header == next || webhook.VerifyIgnoringTimestamp(body, headers) != nil {
 		t.Fatal("retry changed identity or body instead of only timestamp and signature")
+	}
+}
+
+func TestWebhookSigningRejectsKeysOutsideSharedBounds(t *testing.T) {
+	t.Parallel()
+
+	for _, size := range []int{31, 65} {
+		_, err := signV1("whd_test", time.Unix(1_700_000_000, 0), nil, [][]byte{bytes.Repeat([]byte{'k'}, size)})
+		if err == nil || err.Error() != "sign webhook: key must contain 32..64 bytes" {
+			t.Fatalf("signV1(%d byte key) error = %v", size, err)
+		}
 	}
 }
