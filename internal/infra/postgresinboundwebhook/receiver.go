@@ -80,22 +80,16 @@ func withStore(store receiptAcceptor) ReceiverOption {
 	}
 }
 
-// WithMeter installs capability telemetry.
-func WithMeter(meter metric.MeterProvider) ReceiverOption {
-	return func(r *Receiver) {
-		r.telem = newTelemetry(meter, nil)
-	}
-}
-
-// NewReceiver builds the concrete acceptance adapter.
-func NewReceiver(pool *pgxpool.Pool, trust *TrustManifest, opts ...ReceiverOption) (*Receiver, error) {
+// NewReceiver builds the concrete acceptance adapter. A nil meter disables
+// ingress metrics.
+func NewReceiver(pool *pgxpool.Pool, trust *TrustManifest, meter metric.MeterProvider, opts ...ReceiverOption) (*Receiver, error) {
 	if trust == nil {
 		return nil, errors.New("inbound webhook trust manifest is required")
 	}
 	receiver := &Receiver{
 		trust: trust,
 		now:   func() time.Time { return time.Now().UTC() },
-		telem: newTelemetry(nil, nil),
+		telem: newTelemetry(meter, nil),
 	}
 	for _, opt := range opts {
 		opt(receiver)

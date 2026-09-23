@@ -62,6 +62,7 @@ func inboundReceiver(t *testing.T, dsn string) *postgresinboundwebhook.Receiver 
 	receiver, err := postgresinboundwebhook.NewReceiver(
 		pool,
 		inboundTrust(t, "orders"),
+		nil,
 		postgresinboundwebhook.WithClock(func() time.Time { return time.Unix(1700000000, 0).UTC() }),
 	)
 	if err != nil {

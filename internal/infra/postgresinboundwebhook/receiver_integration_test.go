@@ -37,7 +37,7 @@ func TestPostgresInboundWebhookCommitUnknownRetry(t *testing.T) {
 		}
 		return postgres.ErrCommitUnknown
 	}
-	receiver, err := NewReceiver(nil, testTrust(t, "orders", reviewedVectorKey(), nil),
+	receiver, err := NewReceiver(nil, testTrust(t, "orders", reviewedVectorKey(), nil), nil,
 		withStore(store),
 		WithClock(func() time.Time { return time.Unix(1700000000, 0).UTC() }),
 	)
@@ -56,7 +56,7 @@ func TestPostgresInboundWebhookCommitUnknownRetry(t *testing.T) {
 		t.Fatalf("commit-unknown result=%+v err=%v", result, err)
 	}
 
-	plain, err := NewReceiver(pool, testTrust(t, "orders", reviewedVectorKey(), nil),
+	plain, err := NewReceiver(pool, testTrust(t, "orders", reviewedVectorKey(), nil), nil,
 		WithClock(func() time.Time { return time.Unix(1700000000, 0).UTC() }),
 	)
 	if err != nil {
