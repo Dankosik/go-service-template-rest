@@ -40,7 +40,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	}
 	startupCtx, startupCancel := context.WithTimeout(signalCtx, startupTimeout)
 	defer startupCancel()
-	cfg, _, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
+	cfg, _, err := config.Load(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load worker config: %w", err)
 	}
@@ -52,13 +52,13 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 		return err
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg)
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	// A metrics provider that could not be built stops this binary, which is this
 	// composition root's own answer rather than InstallTelemetry's: a worker with
 	// no meter cannot report what it consumed, so nothing would notice it stopped
 	// consuming, while a worker with no exporter for spans still records every
 	// count an alert is built on.
-	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "worker")
+	flushTelemetry, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "worker")
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	// False means the handler did not join within the shutdown budget. Its
 	// dependencies stay intact and process exit owns them.
@@ -69,7 +69,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	defer func() {
 		cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 		defer cleanupCancel()
-		_ = telemetryCleanup(cleanupCtx)
+		_ = flushTelemetry(cleanupCtx)
 	}()
 	if err != nil {
 		return err

@@ -64,18 +64,25 @@ var metricExporterEnvConflicts = append(slices.Clone(sharedExporterEnvConflicts)
 	"OTEL_EXPORTER_OTLP_METRICS_HEADERS",
 )
 
-// ConflictingTraceExporterEnv returns the non-empty ambient exporter variables
-// that a configured exporter cannot safely ignore. See
+// RejectedAmbientEnv returns the non-empty ambient exporter variables that
+// exporter setup refuses for this endpoint rather than ignores, sorted. See
 // sharedExporterEnvConflicts for why the endpoint and transport-tuning variables
 // are deliberately absent.
-func ConflictingTraceExporterEnv() []string {
-	return conflictingEnv(traceExporterEnvConflicts)
-}
-
-// ConflictingMetricExporterEnv returns the non-empty ambient exporter variables a
-// configured metrics exporter cannot safely ignore.
-func ConflictingMetricExporterEnv() []string {
-	return conflictingEnv(metricExporterEnvConflicts)
+//
+// Only an endpoint this service configured rejects any: when the platform named
+// the destination, the platform owns the credentials that come with it.
+func (e ExporterEndpoint) RejectedAmbientEnv() []string {
+	if !e.ConfiguredByService {
+		return nil
+	}
+	switch e.signalPath {
+	case otlpTracesPath:
+		return conflictingEnv(traceExporterEnvConflicts)
+	case otlpMetricsPath:
+		return conflictingEnv(metricExporterEnvConflicts)
+	default:
+		return nil
+	}
 }
 
 // conflictingEnv returns the non-empty variables among names, sorted so reported
@@ -92,9 +99,9 @@ func conflictingEnv(names []string) []string {
 // Both signals reject on the same terms, and the wording is the part worth
 // owning here: an operator matching on this message should not have to discover
 // that traces and metrics phrase the same refusal differently. Which variables
-// count is still each signal's own list.
-func rejectConflictingAmbientEnv(names []string) error {
-	conflicting := conflictingEnv(names)
+// count is the endpoint's own list.
+func rejectConflictingAmbientEnv(endpoint ExporterEndpoint) error {
+	conflicting := endpoint.RejectedAmbientEnv()
 	if len(conflicting) == 0 {
 		return nil
 	}

@@ -35,7 +35,7 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig("http://127.0.0.1:4318"),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
 	if stage.tracingErr != nil {
@@ -44,7 +44,7 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	if stage.tracingEndpoint.Source != telemetry.SharedOTLPExporterConfigKey {
 		t.Fatalf("endpoint source = %q, want %q", stage.tracingEndpoint.Source, telemetry.SharedOTLPExporterConfigKey)
 	}
-	t.Cleanup(func() { stage.cleanup(context.Background()) })
+	t.Cleanup(func() { stage.flush(context.Background()) })
 }
 
 // A platform that injects only the standard endpoint variable must still get
@@ -59,7 +59,7 @@ func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig(""),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
 	if stage.tracingErr != nil {
@@ -68,7 +68,7 @@ func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	if stage.tracingEndpoint.Source != "OTEL_EXPORTER_OTLP_ENDPOINT" {
 		t.Fatalf("endpoint source = %q, want the ambient endpoint variable", stage.tracingEndpoint.Source)
 	}
-	t.Cleanup(func() { stage.cleanup(context.Background()) })
+	t.Cleanup(func() { stage.flush(context.Background()) })
 }
 
 //nolint:paralleltest // Mutates process-wide environment and telemetry providers.
@@ -80,10 +80,10 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig("http://127.0.0.1:4318"),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
-	stage.cleanup(context.Background())
+	stage.flush(context.Background())
 	err := stage.tracingErr
 	if err == nil {
 		t.Fatal("bootstrapTelemetryStage() tracing error = nil, want ambient env rejection")
@@ -111,7 +111,7 @@ func TestReportAdditionalAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.
 	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 		telemetry.ExporterEndpoint{},
 	)
 
@@ -177,7 +177,7 @@ func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testin
 	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{
+		telemetry.ExporterEndpoint{
 			URL:    "http://injected-collector.example:4318/v1/traces",
 			Source: "OTEL_EXPORTER_OTLP_ENDPOINT",
 		},
@@ -205,7 +205,7 @@ func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t 
 	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 		telemetry.ExporterEndpoint{
 			URL:    "http://injected-collector.example:4318/v1/metrics",
 			Source: "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
@@ -224,26 +224,25 @@ func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t 
 // A rejected metrics credential is already reported as degraded setup, not as
 // an ignored variable.
 //
-//nolint:paralleltest // Mutates process-wide exporter environment.
+//nolint:paralleltest // Mutates process-wide exporter environment and telemetry providers.
 func TestReportAdditionalAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer secret-value")
 
-	for _, source := range []string{telemetry.MetricExporterConfigKey, telemetry.SharedOTLPExporterConfigKey} {
-		var buf bytes.Buffer
-		reportAdditionalAmbientOTLPEnv(
-			context.Background(),
-			slog.New(slog.NewJSONHandler(&buf, nil)),
-			telemetry.TraceExporterEndpoint{},
-			telemetry.ExporterEndpoint{
-				URL:                 "https://collector.example/v1/metrics",
-				Source:              source,
-				ConfiguredByService: true,
-			},
-		)
+	for name, exporter := range map[string]config.OTelExporterConfig{
+		telemetry.MetricExporterConfigKey:     {OTLPMetricsEndpoint: "http://127.0.0.1:4318/v1/metrics"},
+		telemetry.SharedOTLPExporterConfigKey: {OTLPEndpoint: "http://127.0.0.1:4318"},
+	} {
+		cfg := telemetryStageTestConfig("")
+		cfg.Observability.OTel.Exporter = exporter
+		logged := bootstrapTelemetryStageLog(t, cfg)
 
-		if buf.Len() != 0 {
-			t.Fatalf("source %q log = %q, want no warning for a variable that fails metrics exporter setup", source, buf.String())
+		if !strings.Contains(logged, "metrics_exporter_degraded") {
+			t.Fatalf("source %q log = %q, want the rejected metrics exporter reported as degraded", name, logged)
+		}
+		if strings.Contains(logged, "telemetry_ambient_env_present") {
+			t.Fatalf("source %q log = %q, want no warning for a variable that fails metrics exporter setup", name, logged)
 		}
 	}
 }
@@ -251,22 +250,33 @@ func TestReportAdditionalAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *
 // A rejected trace credential is already reported as degraded setup, not as an
 // ignored variable.
 //
-//nolint:paralleltest // Mutates process-wide exporter environment.
+//nolint:paralleltest // Mutates process-wide exporter environment and telemetry providers.
 func TestReportAdditionalAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 
-	var buf bytes.Buffer
-	reportAdditionalAmbientOTLPEnv(
-		context.Background(),
-		slog.New(slog.NewJSONHandler(&buf, nil)),
-		configuredTestTraceEndpoint(),
-		telemetry.ExporterEndpoint{},
-	)
+	logged := bootstrapTelemetryStageLog(t, telemetryStageTestConfig("http://127.0.0.1:4318"))
 
-	if buf.Len() != 0 {
-		t.Fatalf("log = %q, want no warning for a variable that fails exporter setup", buf.String())
+	if strings.Contains(logged, "telemetry_ambient_env_present") {
+		t.Fatalf("log = %q, want no warning for a variable that fails exporter setup", logged)
 	}
+}
+
+// bootstrapTelemetryStageLog runs the telemetry stage and returns what it logged.
+// A rejected variable is only known to setup, so these cases run the stage
+// rather than hand-built endpoints.
+func bootstrapTelemetryStageLog(t *testing.T, cfg config.Config) string {
+	t.Helper()
+	var buf bytes.Buffer
+	stage := bootstrapTelemetryStage(
+		context.Background(),
+		cfg,
+		telemetry.NewMetrics(),
+		slog.New(slog.NewJSONHandler(&buf, nil)),
+	)
+	stage.flush(context.Background())
+	return buf.String()
 }
 
 //nolint:paralleltest // Clears process-wide exporter environment.
@@ -277,7 +287,7 @@ func TestReportAdditionalAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 		telemetry.ExporterEndpoint{},
 	)
 
@@ -286,8 +296,8 @@ func TestReportAdditionalAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 	}
 }
 
-func configuredTestTraceEndpoint() telemetry.TraceExporterEndpoint {
-	return telemetry.TraceExporterEndpoint{
+func configuredTestTraceEndpoint() telemetry.ExporterEndpoint {
+	return telemetry.ExporterEndpoint{
 		URL:                 "http://127.0.0.1:4318/v1/traces",
 		Source:              telemetry.SharedOTLPExporterConfigKey,
 		ConfiguredByService: true,
@@ -302,7 +312,7 @@ func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
 
 	for _, tt := range []struct {
 		name     string
-		endpoint telemetry.TraceExporterEndpoint
+		endpoint telemetry.ExporterEndpoint
 		initErr  error
 		want     []string
 	}{
@@ -318,7 +328,7 @@ func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
 			// An operator debugging where traces went needs to see that the
 			// destination came from the platform, not from this service.
 			name: "initialized from the ambient endpoint variable",
-			endpoint: telemetry.TraceExporterEndpoint{
+			endpoint: telemetry.ExporterEndpoint{
 				URL:    "http://collector.example:4318/v1/traces",
 				Source: "OTEL_EXPORTER_OTLP_ENDPOINT",
 			},
@@ -329,7 +339,7 @@ func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
 		},
 		{
 			name:     "disabled",
-			endpoint: telemetry.TraceExporterEndpoint{},
+			endpoint: telemetry.ExporterEndpoint{},
 			want:     []string{`"tracing.exporter":"disabled"`},
 		},
 		{
@@ -372,7 +382,7 @@ func TestBootstrapReportStageLogsTelemetryFailureCause(t *testing.T) {
 		telemetryStageTestConfig(""),
 		config.LoadOptions{},
 		config.LoadReport{},
-		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 		errors.New("unsupported ambient otel exporter environment (OTEL_EXPORTER_OTLP_ENDPOINT)"),
 	)
 
@@ -406,14 +416,14 @@ func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing
 	cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint = "collector:4318"
 	cfg.Observability.OTel.TracesSampler = "always_on"
 
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		cfg,
 		metrics,
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
-	t.Cleanup(func() { stage.cleanup(context.Background()) })
+	t.Cleanup(func() { stage.flush(context.Background()) })
 
 	if stage.tracingErr != nil {
 		t.Fatalf("tracing error = %v, want tracing to survive an unusable metrics endpoint", stage.tracingErr)

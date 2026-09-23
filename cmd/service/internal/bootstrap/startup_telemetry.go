@@ -28,8 +28,8 @@ const (
 // mistyped metrics endpoint report the trace exporter as degraded. Metrics
 // degradation is reported where it happens, by reportMetricExporterState.
 type telemetryStage struct {
-	cleanup         func(context.Context)
-	tracingEndpoint telemetry.TraceExporterEndpoint
+	flush           func(context.Context)
+	tracingEndpoint telemetry.ExporterEndpoint
 	tracingErr      error
 }
 
@@ -72,7 +72,7 @@ func bootstrapTelemetryStage(
 	recordTraceExporterInitialization(startupCtx, log, metrics, tracingEndpoint, tracingErr)
 
 	return telemetryStage{
-		cleanup:         newTelemetryCleanup(log, tracingShutdown, metricsResult.Shutdown),
+		flush:           newTelemetryFlush(log, tracingShutdown, metricsResult.Shutdown),
 		tracingEndpoint: tracingEndpoint,
 		tracingErr:      tracingErr,
 	}
@@ -88,7 +88,7 @@ const (
 // traceExporterState names the trace-export outcome in the one line an operator
 // already reads at startup. Without it, "this service exports no traces" is
 // only recoverable by correlating a separate warning that a log filter may drop.
-func traceExporterState(tracingEndpoint telemetry.TraceExporterEndpoint, tracingInitErr error) string {
+func traceExporterState(tracingEndpoint telemetry.ExporterEndpoint, tracingInitErr error) string {
 	switch {
 	case tracingInitErr != nil:
 		return traceExporterDegraded
@@ -110,7 +110,7 @@ func recordTraceExporterInitialization(
 	ctx context.Context,
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
-	tracingEndpoint telemetry.TraceExporterEndpoint,
+	tracingEndpoint telemetry.ExporterEndpoint,
 	tracingInitErr error,
 ) {
 	initialized := traceExporterState(tracingEndpoint, tracingInitErr) == traceExporterInitialized
@@ -129,7 +129,7 @@ func recordTraceExporterInitialization(
 	}
 }
 
-// newTelemetryCleanup builds the flush, which takes its bound from the context
+// newTelemetryFlush builds the flush, which takes its bound from the context
 // it is called with.
 //
 // It deliberately derives no deadline of its own. The flush is the last teardown
@@ -137,7 +137,7 @@ func recordTraceExporterInitialization(
 // a number only the caller holding the shutdown budget knows. A fixed deadline
 // here would let the total teardown grow past the platform's grace period and
 // get this stage killed for it.
-func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) error) func(context.Context) {
+func newTelemetryFlush(log *slog.Logger, shutdowns ...func(context.Context) error) func(context.Context) {
 	return func(shutdownCtx context.Context) {
 		log.InfoContext(
 			shutdownCtx,
@@ -185,13 +185,10 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 }
 
 // reportAdditionalAmbientOTLPEnv names standard OTEL_EXPORTER_OTLP_* variables
-// present in addition to the endpoint source. Credential and trust conflicts
-// rejected during setup are excluded; the remaining tuning variables stay under
-// the official SDK's documented environment behavior.
-//
-// Conflicting credential and trust variables are excluded when this service
-// named the endpoint: that case fails exporter setup and is already reported as
-// degraded telemetry.
+// present in addition to the endpoint source. Variables an endpoint rejects are
+// excluded: that fails exporter setup and is already reported as degraded
+// telemetry. The remaining tuning variables stay under the official SDK's
+// documented environment behavior.
 //
 // Both signals are taken because the claim is about the process rather than
 // about traces. A variable that supplied the metrics endpoint changed something,
@@ -202,17 +199,14 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 func reportAdditionalAmbientOTLPEnv(
 	ctx context.Context,
 	log *slog.Logger,
-	tracingEndpoint telemetry.TraceExporterEndpoint,
+	tracingEndpoint telemetry.ExporterEndpoint,
 	metricsEndpoint telemetry.ExporterEndpoint,
 ) {
 	honored := []string{tracingEndpoint.Source, metricsEndpoint.Source}
+	rejected := slices.Concat(tracingEndpoint.RejectedAmbientEnv(), metricsEndpoint.RejectedAmbientEnv())
 	additional := slices.DeleteFunc(telemetry.AmbientOTLPExporterEnv(), func(name string) bool {
-		return slices.Contains(honored, name)
+		return slices.Contains(honored, name) || slices.Contains(rejected, name)
 	})
-	additional = withoutConflicting(additional, tracingEndpoint.ConfiguredByService, telemetry.ConflictingTraceExporterEnv)
-	additional = withoutConflicting(
-		additional, metricsEndpoint.ConfiguredByService, telemetry.ConflictingMetricExporterEnv,
-	)
 	if len(additional) == 0 {
 		return
 	}
@@ -238,25 +232,6 @@ func reportAdditionalAmbientOTLPEnv(
 			"config.key", telemetry.SharedOTLPExporterConfigKey,
 		)...,
 	)
-}
-
-// withoutConflicting drops the variables a signal rejects rather than ignores.
-//
-// A conflict only exists when this service named that signal's endpoint itself;
-// when the platform named it, the platform owns the credentials with it and
-// nothing was refused.
-func withoutConflicting(
-	additional []string,
-	configuredByService bool,
-	conflicting func() []string,
-) []string {
-	if !configuredByService {
-		return additional
-	}
-	rejected := conflicting()
-	return slices.DeleteFunc(additional, func(name string) bool {
-		return slices.Contains(rejected, name)
-	})
 }
 
 // reportMetricExporterState names the metric-export destination in the startup

@@ -14,9 +14,9 @@ func TestShutdownTimeoutCanBeTunedWhenDrainBudgetIsValid(t *testing.T) {
 	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "20s")
 	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "10s")
 
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v, want nil for tuned shutdown timeout", err)
+		t.Fatalf("Load() error = %v, want nil for tuned shutdown timeout", err)
 	}
 	if cfg.HTTP.ShutdownTimeout != 45*time.Second {
 		t.Fatalf("HTTP.ShutdownTimeout = %s, want 45s", cfg.HTTP.ShutdownTimeout)
@@ -30,9 +30,9 @@ func TestShutdownTimeoutMustStayWithinRange(t *testing.T) {
 	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "0s")
 	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "100ms")
 
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if err == nil {
-		t.Fatal("LoadDetailed() expected validation error for shutdown timeout range")
+		t.Fatal("Load() expected validation error for shutdown timeout range")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
@@ -48,9 +48,9 @@ func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
 	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "20s")
 	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "10s")
 
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if err == nil {
-		t.Fatal("LoadDetailed() expected validation error for write timeout beyond drain budget")
+		t.Fatal("Load() expected validation error for write timeout beyond drain budget")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
@@ -67,9 +67,9 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "4s")
 		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
 
-		_, _, err := LoadDetailed(LoadOptions{})
+		_, _, err := Load(t.Context(), LoadOptions{})
 		if err == nil {
-			t.Fatal("LoadDetailed() expected validation error for readiness timeout beyond write timeout")
+			t.Fatal("Load() expected validation error for readiness timeout beyond write timeout")
 		}
 		if !errors.Is(err, ErrValidate) {
 			t.Fatalf("error = %v, want ErrValidate", err)
@@ -93,9 +93,9 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "4s")
 			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if err != nil {
-				t.Fatalf("LoadDetailed() error = %v", err)
+				t.Fatalf("Load() error = %v", err)
 			}
 		})
 	}
@@ -124,9 +124,9 @@ func TestRequestTimeoutLeavesTerminalResponseReserve(t *testing.T) {
 			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.requestTimeout)
 			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if err == nil {
-				t.Fatal("LoadDetailed() expected terminal response reserve validation error")
+				t.Fatal("Load() expected terminal response reserve validation error")
 			}
 			if !errors.Is(err, ErrValidate) {
 				t.Fatalf("error = %v, want ErrValidate", err)
@@ -151,9 +151,9 @@ func TestRequestTimeoutLeavesTerminalResponseReserve(t *testing.T) {
 			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.requestTimeout)
 			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if err != nil {
-				t.Fatalf("LoadDetailed() error = %v", err)
+				t.Fatalf("Load() error = %v", err)
 			}
 		})
 	}
@@ -171,9 +171,9 @@ func TestRequestTimeoutRejectsOutOfRangeValues(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.value)
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if err == nil {
-				t.Fatalf("LoadDetailed() expected validation error for http.request_timeout = %q", tc.value)
+				t.Fatalf("Load() expected validation error for http.request_timeout = %q", tc.value)
 			}
 			if !errors.Is(err, ErrValidate) {
 				t.Fatalf("error = %v, want ErrValidate", err)
@@ -201,12 +201,12 @@ func TestMaxInFlightBounds(t *testing.T) {
 				t.Setenv("APP__HTTP__MAX_IN_FLIGHT", tc.value)
 			}
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if tc.wantErr && !errors.Is(err, ErrValidate) {
-				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+				t.Fatalf("Load() error = %v, want ErrValidate", err)
 			}
 			if !tc.wantErr && err != nil {
-				t.Fatalf("LoadDetailed() error = %v", err)
+				t.Fatalf("Load() error = %v", err)
 			}
 		})
 	}
@@ -215,9 +215,9 @@ func TestMaxInFlightBounds(t *testing.T) {
 func TestHTTPMaxInFlightMayDisableShedding(t *testing.T) {
 	resetConfigEnv(t)
 
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	cfg.HTTP.MaxInFlight = 0
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
@@ -251,12 +251,12 @@ func TestMaxConnectionsBounds(t *testing.T) {
 				t.Setenv("APP__HTTP__MAX_IN_FLIGHT", tc.inFlight)
 			}
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if tc.wantErr && !errors.Is(err, ErrValidate) {
-				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+				t.Fatalf("Load() error = %v, want ErrValidate", err)
 			}
 			if !tc.wantErr && err != nil {
-				t.Fatalf("LoadDetailed() error = %v", err)
+				t.Fatalf("Load() error = %v", err)
 			}
 		})
 	}

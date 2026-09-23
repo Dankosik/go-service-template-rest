@@ -75,7 +75,7 @@ func TestDiagnosticsServerGatesPprof(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			server := diagnosticsServer(func() bool { return true }, telemetry.New(), test.pprofEnabled)
+			server := diagnosticsServer(func() bool { return true }, telemetry.NewMetrics(), test.pprofEnabled)
 			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/debug/pprof/", nil)
 			response := httptest.NewRecorder()
 			server.Handler.ServeHTTP(response, request)

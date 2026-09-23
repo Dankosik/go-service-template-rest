@@ -30,26 +30,22 @@ type LoadReport struct {
 	FailedStage      string
 }
 
-// LoadDetailed loads without a caller context. Binaries use
-// LoadDetailedWithContext so a startup budget can cancel the load.
-func LoadDetailed(opts LoadOptions) (Config, LoadReport, error) {
-	return LoadDetailedWithContext(context.Background(), opts)
-}
-
-func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
-	return loadDetailedWithContext(ctx, opts, buildSnapshot, validateConfig)
+// Load loads and validates the immutable service snapshot. ctx is the startup
+// budget, so it can cancel the load between stages.
+func Load(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
+	return load(ctx, opts, buildSnapshot, validateConfig)
 }
 
 // profile:jobs-postgres:start
-// LoadJobsWorkerDetailedWithContext loads the immutable snapshot required by
-// the jobs-worker binary. It validates only the sections that binary consumes.
-func LoadJobsWorkerDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
-	return loadDetailedWithContext(ctx, opts, buildJobsWorkerSnapshot, validateJobsWorkerConfig)
+// LoadJobsWorker loads the immutable snapshot required by the jobs-worker
+// binary. It validates only the sections that binary consumes.
+func LoadJobsWorker(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
+	return load(ctx, opts, buildJobsWorkerSnapshot, validateJobsWorkerConfig)
 }
 
 // profile:jobs-postgres:end
 
-func loadDetailedWithContext(
+func load(
 	ctx context.Context,
 	opts LoadOptions,
 	build func(*koanf.Koanf) (Config, []string, error),

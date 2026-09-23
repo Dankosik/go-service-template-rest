@@ -21,15 +21,19 @@ func TestReadinessTransitionsUpdateGRPCHealth(t *testing.T) {
 		probe := &switchingProbe{}
 		log := slog.New(slog.DiscardHandler)
 		supervisor := newSupervisedBackground(t.Context(), log)
-		service := newReadinessService([]health.Probe{probe}, supervisor)
-		grpcServer := newFakeGRPCRuntimeServer()
-		superviseReadiness(config.Config{
+		cfg := config.Config{
 			HTTP: config.HTTPConfig{ReadinessTimeout: 100 * time.Millisecond},
 			Health: config.HealthConfig{
 				RefreshInterval:  refreshInterval,
 				FailureThreshold: 1,
 			},
-		}, log, service, supervisor, grpcServer)
+		}
+		service, err := newReadinessService(cfg, []health.Probe{probe}, supervisor)
+		if err != nil {
+			t.Fatalf("newReadinessService() error = %v", err)
+		}
+		grpcServer := newFakeGRPCRuntimeServer()
+		superviseReadiness(cfg, log, service, supervisor, grpcServer)
 		synctest.Wait()
 		if err := service.Cached(); err != nil {
 			t.Fatalf("initial readiness error = %v", err)

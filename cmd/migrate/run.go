@@ -39,7 +39,7 @@ func run(args []string, stdout io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg, _, err := config.LoadDetailedWithContext(ctx, loadOptions)
+	cfg, _, err := config.Load(ctx, loadOptions)
 	if err != nil {
 		wrapped := fmt.Errorf("load config: %w", err)
 		logMigrationTerminal(logger, postgresmigrate.RunResult{}, wrapped, postgresmigrate.FailureConfig)

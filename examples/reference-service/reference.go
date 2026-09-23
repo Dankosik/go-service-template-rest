@@ -92,7 +92,7 @@ func NewHandler(log *slog.Logger, writeToken string) (http.Handler, error) {
 
 	// The chain instruments every request, so it needs a registry to record into.
 	// This example exposes no scrape endpoint of its own.
-	handler, err := httpx.Harden(log, telemetry.New(), httpx.HardenConfig{
+	handler, err := httpx.Harden(log, telemetry.NewMetrics(), httpx.HardenConfig{
 		MaxBodyBytes:   maxBodyBytes,
 		RequestTimeout: requestTimeout,
 		MaxInFlight:    maxInFlight,

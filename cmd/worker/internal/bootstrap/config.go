@@ -18,7 +18,7 @@ func validateRuntimeConfig(cfg config.Config) error {
 	); err != nil {
 		return err
 	}
-	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
+	if !cfg.Messaging.Enabled() {
 		return fmt.Errorf("%w: messaging must be enabled for worker", config.ErrValidate)
 	}
 	return runtimeopts.RequireDiagnosticsAddr(cfg.Observability.Metrics.Addr, "worker")

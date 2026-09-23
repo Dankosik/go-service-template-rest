@@ -44,9 +44,9 @@ func testShutdownBudget() *shutdownBudget {
 func TestShippedDefaultsFitTheGracePeriod(t *testing.T) {
 	resetShutdownConfigEnv(t)
 
-	cfg, _, err := config.LoadDetailed(config.LoadOptions{})
+	cfg, _, err := config.Load(t.Context(), config.LoadOptions{})
 	if err != nil {
-		t.Fatalf("config.LoadDetailed() error = %v", err)
+		t.Fatalf("config.Load() error = %v", err)
 	}
 	if err := validateShutdownGraceBudget(cfg); err != nil {
 		t.Fatalf("shipped defaults do not fit their own grace period: %v", err)

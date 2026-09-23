@@ -61,19 +61,6 @@ func (d runtimeDependencies) ReadinessProbes() []health.Probe {
 	return []health.Probe{d.readiness}
 }
 
-// readinessProbeBudget is how long one steady-state readiness evaluation may
-// take. It covers the complete serial probe set, so the configured aggregate
-// budget remains the owner when optional probes are added.
-//
-// It is passed to health.Watch separately from the refresh interval. The two used
-// to be one argument, which clamped this budget to the interval: with the shipped
-// defaults a 3s PostgreSQL probe became 2s in steady state while startup
-// admission still granted the full budget, so a database answering in between
-// passed admission and then flapped out of rotation.
-func readinessProbeBudget(cfg config.Config) time.Duration {
-	return cfg.HTTP.ReadinessTimeout
-}
-
 // Close releases pooled dependencies, bounded by ctx, and is safe to call twice.
 //
 // The bound is the point. pgxpool.Close blocks until every acquired connection is

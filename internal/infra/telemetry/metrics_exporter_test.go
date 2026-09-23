@@ -26,14 +26,14 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 		},
 		{
 			name:                  "own metrics endpoint wins",
-			cfg:                   MetricExporterConfig{OTLPEndpoint: "https://collector.example/otlp/v1/metrics"},
+			cfg:                   MetricExporterConfig{OTLPMetricsEndpoint: "https://collector.example/otlp/v1/metrics"},
 			wantURL:               "https://collector.example/otlp/v1/metrics",
 			wantSource:            MetricExporterConfigKey,
 			wantServiceConfigured: true,
 		},
 		{
 			name:                  "own metrics endpoint defaults the signal path",
-			cfg:                   MetricExporterConfig{OTLPEndpoint: "https://collector.example"},
+			cfg:                   MetricExporterConfig{OTLPMetricsEndpoint: "https://collector.example"},
 			wantURL:               "https://collector.example/v1/metrics",
 			wantSource:            MetricExporterConfigKey,
 			wantServiceConfigured: true,
@@ -42,7 +42,7 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 			// The point of the shared setting: naming a collector root once is
 			// what an operator means, and it must not silently serve one signal.
 			name:                  "shared root serves both signals",
-			cfg:                   MetricExporterConfig{SharedOTLPEndpoint: "https://collector.example:4318"},
+			cfg:                   MetricExporterConfig{OTLPEndpoint: "https://collector.example:4318"},
 			wantURL:               "https://collector.example:4318/v1/metrics",
 			wantSource:            SharedOTLPExporterConfigKey,
 			wantServiceConfigured: true,
@@ -51,7 +51,7 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 			// And once it names a path it is a traces endpoint, which says
 			// nothing about where metrics go.
 			name: "shared traces endpoint does not name a metrics endpoint",
-			cfg:  MetricExporterConfig{SharedOTLPEndpoint: "https://collector.example/v1/traces"},
+			cfg:  MetricExporterConfig{OTLPEndpoint: "https://collector.example/v1/traces"},
 		},
 		{
 			name:       "platform metrics variable is honored",
@@ -113,10 +113,10 @@ func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
 		cfg  MetricExporterConfig
 		env  map[string]string
 	}{
-		{name: "unsupported scheme", cfg: MetricExporterConfig{OTLPEndpoint: "ftp://collector.example"}},
+		{name: "unsupported scheme", cfg: MetricExporterConfig{OTLPMetricsEndpoint: "ftp://collector.example"}},
 		// #nosec G101 -- Synthetic credentials verify rejection of userinfo before exporter construction.
-		{name: "userinfo", cfg: MetricExporterConfig{OTLPEndpoint: "https://user:secret@collector.example"}},
-		{name: "query", cfg: MetricExporterConfig{OTLPEndpoint: "https://collector.example/v1/metrics?token=secret"}},
+		{name: "userinfo", cfg: MetricExporterConfig{OTLPMetricsEndpoint: "https://user:secret@collector.example"}},
+		{name: "query", cfg: MetricExporterConfig{OTLPMetricsEndpoint: "https://collector.example/v1/metrics?token=secret"}},
 		// #nosec G101 -- Synthetic credentials verify the same rejection for ambient endpoints.
 		{name: "ambient endpoint", env: map[string]string{otelExporterMetricsEndpointEnv: "https://user:secret@platform.example"}},
 	} {
@@ -160,7 +160,7 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 	}))
 	t.Cleanup(collector.Close)
 
-	metrics := New()
+	metrics := NewMetrics()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		Resource: ResourceConfig{
 			ServiceName:    "push-service",
@@ -169,8 +169,8 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 		},
 		Exporter: MetricExporterConfig{
 			// A bare root, so this also proves the shared setting reaches metrics.
-			SharedOTLPEndpoint: collector.URL,
-			OTLPHeaders:        "x-collector-token=shared-secret",
+			OTLPEndpoint: collector.URL,
+			OTLPHeaders:  "x-collector-token=shared-secret",
 		},
 	})
 	if err != nil {
@@ -211,9 +211,9 @@ func TestSetupMetricsSharedRootRejectsAmbientCredentials(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")
 
-	result, err := SetupMetrics(t.Context(), New(), MetricsConfig{
+	result, err := SetupMetrics(t.Context(), NewMetrics(), MetricsConfig{
 		Resource: ResourceConfig{ServiceName: "metrics-shared-root-test"},
-		Exporter: MetricExporterConfig{SharedOTLPEndpoint: "https://collector.example"},
+		Exporter: MetricExporterConfig{OTLPEndpoint: "https://collector.example"},
 	})
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v, want scrape-only degradation", err)
@@ -239,7 +239,7 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
-	metrics := New()
+	metrics := NewMetrics()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		Resource: ResourceConfig{
 			ServiceName:    "scrape-service",
@@ -271,15 +271,20 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	}
 }
 
-// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
+// TestMetricEndpointRejectedAmbientEnvNamesUnverifiableMaterial keeps injected
 // credentials from travelling to a collector this service named.
-func TestConflictingMetricExporterEnvNamesUnverifiableMaterial(t *testing.T) {
+func TestMetricEndpointRejectedAmbientEnvNamesUnverifiableMaterial(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "authorization=Bearer traces-only")
 
-	names := ConflictingMetricExporterEnv()
+	endpoint, err := resolveMetricExporterEndpoint(MetricExporterConfig{OTLPEndpoint: "https://collector.example"})
+	if err != nil {
+		t.Fatalf("resolveMetricExporterEndpoint() error = %v", err)
+	}
+	names := endpoint.RejectedAmbientEnv()
 
 	if len(names) != 1 || names[0] != "OTEL_EXPORTER_OTLP_METRICS_HEADERS" {
-		t.Fatalf("ConflictingMetricExporterEnv() = %v, want the injected headers variable", names)
+		t.Fatalf("RejectedAmbientEnv() = %v, want the injected headers variable", names)
 	}
 }

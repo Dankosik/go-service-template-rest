@@ -254,15 +254,12 @@ func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *tes
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
 
-	cfg, _, err := config.LoadDetailed(config.LoadOptions{})
+	cfg, _, err := config.Load(t.Context(), config.LoadOptions{})
 	if err != nil {
-		t.Fatalf("config.LoadDetailed() error = %v", err)
+		t.Fatalf("config.Load() error = %v", err)
 	}
 	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
 		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s default", cfg.HTTP.ReadinessTimeout)
-	}
-	if got := readinessProbeBudget(cfg); got != cfg.HTTP.ReadinessTimeout {
-		t.Fatalf("readinessProbeBudget() = %s, want aggregate budget %s", got, cfg.HTTP.ReadinessTimeout)
 	}
 	if err := validateStartupBudgetCompatibility(cfg); err != nil {
 		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for default Postgres readiness headroom", err)

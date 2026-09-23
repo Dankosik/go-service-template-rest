@@ -4,9 +4,8 @@
 //
 // # Loading
 //
-// [LoadDetailedWithContext] is the entry point, and [LoadDetailed] is the same
-// load without a caller context. The Stage constants in config.go name the steps
-// a failure is reported against, in the order they run:
+// [Load] is the entry point. The Stage constants in config.go name the steps a
+// failure is reported against, in the order they run:
 //
 //   - StageLoadDefaults — defaults.go merges each section's own defaults over the
 //     handful it declares inline.

@@ -38,22 +38,19 @@ type ExporterEndpoint struct {
 	// an operator can tell a platform-injected endpoint from this service's own.
 	// Empty when URL is empty.
 	Source string
-	// ConfiguredByService distinguishes this service's configuration from an
-	// endpoint supplied by the platform environment.
+	// ConfiguredByService reports that this service's configuration, rather than
+	// the platform environment, named the destination. It decides whether
+	// ambient credential and trust material is a conflict: material this service
+	// cannot verify must not travel to an endpoint this service chose.
 	ConfiguredByService bool
+	// signalPath is the OTLP path of the signal this endpoint was resolved for,
+	// which selects that signal's rejected ambient variables.
+	signalPath string
 }
 
 // Configured reports whether an exporter should be built.
 func (e ExporterEndpoint) Configured() bool {
 	return e.URL != ""
-}
-
-// fromConfig reports whether this service, rather than the platform, named the
-// destination. It decides whether ambient credential and trust material is a
-// conflict: material this service cannot verify must not travel to an endpoint
-// this service chose.
-func (e ExporterEndpoint) fromConfig() bool {
-	return e.ConfiguredByService
 }
 
 // parseSignalOTLPEndpoint validates a complete endpoint for one signal. A missing
@@ -100,13 +97,12 @@ type otlpCandidate struct {
 	// base marks a signal-agnostic collector root, which gets the signal's OTLP
 	// path appended. The zero value is a complete endpoint for one signal.
 	base bool
-	// configuredByService marks values from the service's typed configuration.
-	configuredByService bool
 }
 
 // resolveOTLPEndpoint walks the settings this service owns and then the ambient
 // ones, returning the first that names an endpoint. Both signals resolve through
-// it, so neither can answer this differently from the other.
+// it, so neither can answer this differently from the other. Which list supplied
+// the endpoint is what sets ConfiguredByService.
 //
 // The two lists are separate rather than one because headers are a collector
 // credential, and a configured one pins the destination to a setting this
@@ -128,6 +124,7 @@ func resolveOTLPEndpoint(signalPath, headers string, owned, ambient []otlpCandid
 			return ExporterEndpoint{}, err
 		}
 		if ok {
+			endpoint.ConfiguredByService = true
 			return endpoint, nil
 		}
 	}
@@ -163,10 +160,7 @@ func (c otlpCandidate) resolve(signalPath string) (ExporterEndpoint, bool, error
 	if err != nil {
 		return ExporterEndpoint{}, false, err
 	}
-	return ExporterEndpoint{
-		URL: endpointURL, Source: c.source,
-		ConfiguredByService: c.configuredByService,
-	}, true, nil
+	return ExporterEndpoint{URL: endpointURL, Source: c.source, signalPath: signalPath}, true, nil
 }
 
 // ambientOTLPCandidates are the standard OpenTelemetry endpoint variables in the

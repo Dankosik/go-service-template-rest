@@ -10,9 +10,9 @@ import (
 
 func TestJobsConfigDefaultsDisabled(t *testing.T) {
 	resetConfigEnv(t)
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 	if cfg.Jobs != (JobsConfig{}) {
 		t.Fatalf("default jobs config = %+v, want zero workers", cfg.Jobs)

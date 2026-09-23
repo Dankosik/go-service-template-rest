@@ -26,11 +26,20 @@ const (
 	testRouterRequestTimeout       = 5 * time.Second
 )
 
+func newTestHealth(tb testing.TB, probes ...health.Probe) *health.Service {
+	tb.Helper()
+	svc, err := health.New(health.Policy{ProbeBudget: time.Second, FailureThreshold: 1}, probes...)
+	if err != nil {
+		tb.Fatalf("newTestHealth(t) error = %v", err)
+	}
+	return svc
+}
+
 func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) http.Handler {
 	tb.Helper()
 
 	if h.Health == nil {
-		h.Health = health.New()
+		h.Health = newTestHealth(tb)
 	}
 	if h.ReadinessGate == nil {
 		h.ReadinessGate = func(context.Context) error { return nil }
@@ -38,9 +47,9 @@ func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemet
 	// Readiness is served from cached state, and an unevaluated cache fails
 	// closed. Seeding it here mirrors what bootstrap does before it admits
 	// traffic; a test that wants "not ready" supplies a failing probe.
-	_ = h.Health.Refresh(context.Background(), time.Second, 1)
+	_ = h.Health.Refresh(context.Background())
 	if metrics == nil {
-		metrics = telemetry.New()
+		metrics = telemetry.NewMetrics()
 	}
 	if cfg.MaxBodyBytes <= 0 {
 		cfg.MaxBodyBytes = testRouterMaxBodyBytes

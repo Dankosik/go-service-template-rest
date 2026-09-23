@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/failure"
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	serviceopenapi "github.com/example/go-service-template-rest/internal/openapi"
@@ -363,8 +362,8 @@ func TestOpenAPIRuntimeContract(t *testing.T) {
 		router := mustNewRouter(
 			t,
 			slog.New(slog.DiscardHandler),
-			Handlers{Health: health.New()},
-			telemetry.New(),
+			Handlers{Health: newTestHealth(t)},
+			telemetry.NewMetrics(),
 			RouterConfig{},
 		)
 		for _, path := range []string{"/health/live", "/health/ready"} {

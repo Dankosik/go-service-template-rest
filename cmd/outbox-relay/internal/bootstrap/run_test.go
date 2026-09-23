@@ -134,7 +134,7 @@ func TestRunLifecycleDoesNotCloseMessagingBeforeRiverStops(t *testing.T) {
 	result := make(chan outcome, 1)
 	go func() {
 		cleanupSafe, _, err := runLifecycle(
-			signalCtx, t.Context(), cfg, slog.New(slog.DiscardHandler), telemetry.New(),
+			signalCtx, t.Context(), cfg, slog.New(slog.DiscardHandler), telemetry.NewMetrics(),
 			healthyPostgres{}, messaging, riverClient,
 		)
 		result <- outcome{cleanupSafe: cleanupSafe, err: err}

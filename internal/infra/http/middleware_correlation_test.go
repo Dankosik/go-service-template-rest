@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
@@ -19,8 +18,8 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
-	}, telemetry.New(), RouterConfig{})
+		Health: newTestHealth(t),
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	t.Run("generates request id when header is absent", func(t *testing.T) {
 		t.Parallel()
@@ -54,8 +53,8 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 		var out bytes.Buffer
 		log := newTestServiceLogger(&out)
 		h := mustNewRouter(t, log, Handlers{
-			Health: health.New(),
-		}, telemetry.New(), RouterConfig{})
+			Health: newTestHealth(t),
+		}, telemetry.NewMetrics(), RouterConfig{})
 		const invalidRequestID = "user@example.com"
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/does-not-exist", nil)

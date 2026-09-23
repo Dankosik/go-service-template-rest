@@ -141,7 +141,7 @@ func requireErrorDoesNotContain(t *testing.T, err error, forbidden string) {
 	}
 }
 
-func exportOneTestSpan(t *testing.T, endpoint TraceExporterEndpoint, cfg TraceExporterConfig) {
+func exportOneTestSpan(t *testing.T, endpoint ExporterEndpoint, cfg TraceExporterConfig) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

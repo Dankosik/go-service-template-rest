@@ -57,7 +57,7 @@ func newGRPCRuntime(
 	// in startup_logging.go all belong to that owner, and this switch only turns
 	// an already-proven value into credentials.
 	var transportCredentials credentials.TransportCredentials
-	if cfg.GRPC.Server.TransportSecurity == "tls" {
+	if cfg.GRPC.Server.TransportSecurity == config.GRPCTransportSecurityTLS {
 		settings, err := grpcServerTLS(cfg.GRPC.Server.TLS)
 		if err != nil {
 			return nil, fmt.Errorf("load gRPC server TLS credentials: %w", err)

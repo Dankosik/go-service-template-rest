@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -50,7 +49,7 @@ func run(signalCtx context.Context, args []string) error {
 	}
 	startupCtx, cancelStartup := context.WithTimeout(signalCtx, startupTimeout)
 	defer cancelStartup()
-	cfg, _, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
+	cfg, _, err := config.Load(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load outbox relay config: %w", err)
 	}
@@ -58,8 +57,8 @@ func run(signalCtx context.Context, args []string) error {
 		return err
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "outbox_relay")
-	metrics := telemetry.New()
-	telemetryCleanup, metricsErr := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "outbox")
+	metrics := telemetry.NewMetrics()
+	flushTelemetry, metricsErr := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "outbox")
 	if metricsErr != nil {
 		log.WarnContext(startupCtx, "outbox_metrics_degraded", "reason", telemetry.FailureReason(metricsErr))
 	}
@@ -67,7 +66,7 @@ func run(signalCtx context.Context, args []string) error {
 	defer func() {
 		cleanupCtx, cancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 		defer cancel()
-		_ = telemetryCleanup(cleanupCtx)
+		_ = flushTelemetry(cleanupCtx)
 	}()
 
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
@@ -121,7 +120,7 @@ func validateRuntimeConfig(cfg config.Config) error {
 	if !cfg.Postgres.Enabled {
 		return fmt.Errorf("%w: postgres must be enabled for outbox relay", config.ErrValidate)
 	}
-	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
+	if !cfg.Messaging.Enabled() {
 		return fmt.Errorf("%w: messaging must be enabled for outbox relay", config.ErrValidate)
 	}
 	if err := runtimeopts.RequireDiagnosticsAddr(cfg.Observability.Metrics.Addr, "outbox"); err != nil {
@@ -173,8 +172,14 @@ func runLifecycle(
 ) (bool, context.Context, error) {
 	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
 	var admitted atomic.Bool
-	readiness := health.New(postgresReadinessProbe{pool: pool}, messaging)
-	if err := readiness.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
+	readiness, err := health.New(health.Policy{
+		ProbeBudget:      cfg.HTTP.ReadinessTimeout,
+		FailureThreshold: cfg.Health.FailureThreshold,
+	}, postgresReadinessProbe{pool: pool}, messaging)
+	if err != nil {
+		return true, unarmed, fmt.Errorf("build outbox readiness: %w", err)
+	}
+	if err := readiness.Refresh(startupCtx); err != nil {
 		return true, unarmed, fmt.Errorf("admit outbox readiness: %w", err)
 	}
 	diagnostics, err := runtimeopts.ListenDiagnostics(
@@ -195,13 +200,7 @@ func runLifecycle(
 	supervisor.Go(background.Task{
 		Name: "dependency_readiness",
 		Run: func(ctx context.Context) error {
-			return readiness.Watch(
-				ctx,
-				cfg.Health.RefreshInterval,
-				cfg.HTTP.ReadinessTimeout,
-				cfg.Health.FailureThreshold,
-				nil,
-			)
+			return readiness.Watch(ctx, cfg.Health.RefreshInterval, nil)
 		},
 	})
 	// stopTail stops diagnostics, then the background tasks. Messaging drains

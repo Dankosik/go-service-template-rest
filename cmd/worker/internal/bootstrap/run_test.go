@@ -116,20 +116,20 @@ func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 	telemetrytest.ClearAmbientExporterEnv(t)
 
-	cleanup, err := runtimeopts.InstallTelemetry(t.Context(), config.Config{
+	flush, err := runtimeopts.InstallTelemetry(t.Context(), config.Config{
 		App: config.AppConfig{
 			Env: "test", Version: "v1", Commit: "test-commit", InstanceID: "worker-test",
 		},
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{
 			ServiceName: "worker", TracesSampler: "always_off",
 		}},
-	}, telemetry.New(), slog.New(slog.DiscardHandler), "worker")
+	}, telemetry.NewMetrics(), slog.New(slog.DiscardHandler), "worker")
 	if err != nil {
 		t.Fatalf("runtimeopts.InstallTelemetry() error = %v", err)
 	}
-	cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	flushCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_ = cleanup(cleanupCtx)
+	_ = flush(flushCtx)
 }
 
 // TestWorkerRunLoopPanicIsRecovered covers the loop this process exists to run.

@@ -21,15 +21,15 @@ type TracingConfig struct {
 	Exporter         TraceExporterConfig
 }
 
+// TraceExporterConfig names where spans are pushed.
 type TraceExporterConfig struct {
+	// OTLPEndpoint is observability.otel.exporter.otlp_endpoint: a traces
+	// endpoint, or a bare collector root that resolves to <root>/v1/traces.
 	OTLPEndpoint string
-	OTLPHeaders  string
+	// OTLPHeaders is observability.otel.exporter.otlp_headers, shared with
+	// metrics because a collector credential belongs to the collector.
+	OTLPHeaders string
 }
-
-// TraceExporterEndpoint is the resolved OTLP traces endpoint and the setting that
-// supplied it. Metrics resolve the same shape through the same primitives; see
-// otlp_endpoint.go.
-type TraceExporterEndpoint = ExporterEndpoint
 
 var otelSetupMu sync.Mutex
 
@@ -38,20 +38,20 @@ var otelSetupMu sync.Mutex
 // shutdown function is non-nil only when a provider was installed. If setup
 // fails after endpoint resolution, the endpoint is still returned with the
 // error, and shutdown is nil.
-func SetupTracing(ctx context.Context, cfg TracingConfig) (endpoint TraceExporterEndpoint, shutdown func(context.Context) error, err error) {
+func SetupTracing(ctx context.Context, cfg TracingConfig) (endpoint ExporterEndpoint, shutdown func(context.Context) error, err error) {
 	sampler, err := buildTraceSampler(cfg.TracesSampler, cfg.TracesSamplerArg)
 	if err != nil {
-		return TraceExporterEndpoint{}, nil, err
+		return ExporterEndpoint{}, nil, err
 	}
 
 	res, err := newResource(ctx, cfg.Resource)
 	if err != nil {
-		return TraceExporterEndpoint{}, nil, err
+		return ExporterEndpoint{}, nil, err
 	}
 
 	endpoint, err = resolveTraceExporterEndpoint(cfg.Exporter)
 	if err != nil {
-		return TraceExporterEndpoint{}, nil, err
+		return ExporterEndpoint{}, nil, err
 	}
 
 	options := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
@@ -95,10 +95,10 @@ func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
 
 func newOTLPTraceExporter(
 	ctx context.Context,
-	endpoint TraceExporterEndpoint,
+	endpoint ExporterEndpoint,
 	cfg TraceExporterConfig,
 ) (sdktrace.SpanExporter, error) {
-	headers, err := otlpExporterHeaders(endpoint, traceExporterEnvConflicts, cfg.OTLPHeaders)
+	headers, err := otlpExporterHeaders(endpoint, cfg.OTLPHeaders)
 	if err != nil {
 		return nil, err
 	}
@@ -123,11 +123,11 @@ func newOTLPTraceExporter(
 // have one owned setting, so the whole order is the argument list below and
 // [resolveOTLPEndpoint] owns what that order means — including why a configured
 // header stops it.
-func resolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoint, error) {
+func resolveTraceExporterEndpoint(cfg TraceExporterConfig) (ExporterEndpoint, error) {
 	return resolveOTLPEndpoint(
 		otlpTracesPath,
 		cfg.OTLPHeaders,
-		[]otlpCandidate{{source: SharedOTLPExporterConfigKey, raw: cfg.OTLPEndpoint, configuredByService: true}},
+		[]otlpCandidate{{source: SharedOTLPExporterConfigKey, raw: cfg.OTLPEndpoint}},
 		ambientOTLPCandidates(otelExporterTracesEndpointEnv),
 	)
 }

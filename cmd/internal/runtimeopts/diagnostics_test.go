@@ -27,7 +27,7 @@ func TestListenDiagnosticsRefusesAnOccupiedAddress(t *testing.T) {
 	defer func() { _ = occupied.Close() }()
 
 	served, err := runtimeopts.ListenDiagnostics(
-		t.Context(), occupied.Addr().String(), "probe", func() bool { return true }, telemetry.New(), false,
+		t.Context(), occupied.Addr().String(), "probe", func() bool { return true }, telemetry.NewMetrics(), false,
 	)
 	if err == nil {
 		_ = served.Stop(t.Context(), time.Second)
@@ -48,7 +48,7 @@ func TestDiagnosticsListenerStopsAndJoins(t *testing.T) {
 	t.Parallel()
 
 	served, err := runtimeopts.ListenDiagnostics(
-		t.Context(), "127.0.0.1:0", "probe", func() bool { return true }, telemetry.New(), false,
+		t.Context(), "127.0.0.1:0", "probe", func() bool { return true }, telemetry.NewMetrics(), false,
 	)
 	if err != nil {
 		t.Fatalf("ListenDiagnostics() error = %v", err)
