@@ -76,7 +76,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	defer func() {
 		if cleanupSafe {
-			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryClose)
+			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 			defer cleanupCancel()
 			_ = telemetryCleanup(cleanupCtx)
 		}
@@ -131,7 +131,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	// hardStopRiver cancels River's running jobs and reports whether River
 	// joined within its stage of window.
 	hardStopRiver := func(window context.Context) (bool, error) {
-		stopCtx, cancelStop := runtimeopts.TeardownStage(window, riverHardStopClose)
+		stopCtx, cancelStop := runtimeopts.TeardownStage(window, riverHardStopTimeout)
 		defer cancelStop()
 		stopErr := client.StopAndCancel(stopCtx)
 		stopped := runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
@@ -203,6 +203,6 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if cleanupSafe {
 		cancelRun()
 	}
-	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
+	diagnosticsErr := diagnostics.Stop(window, diagnosticsShutdownTimeout)
 	return errors.Join(trigger, stopErr, diagnosticsErr)
 }

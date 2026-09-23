@@ -67,7 +67,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	// or not metrics were: a worker that refuses to start over its meter still
 	// owes the span exporter the flush that lets its goroutine end.
 	defer func() {
-		cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryClose)
+		cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 		defer cleanupCancel()
 		_ = telemetryCleanup(cleanupCtx)
 	}()
@@ -82,7 +82,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	registry, handlerCleanup, err := buildHandler(startupCtx, cfg, log)
 	defer func() {
 		if handlerCleanup != nil && cleanupSafe {
-			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, handlerClose)
+			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, handlerShutdownTimeout)
 			defer cleanupCancel()
 			handlerCleanup(cleanupCtx)
 		}

@@ -24,11 +24,11 @@ import (
 var errWorkerPanic = errors.New("worker run loop panicked")
 
 const (
-	diagnosticsClose = 5 * time.Second
-	backgroundClose  = 5 * time.Second
-	handlerClose     = 5 * time.Second
-	telemetryClose   = 5 * time.Second
-	workerTailBudget = diagnosticsClose + backgroundClose + handlerClose + telemetryClose
+	diagnosticsShutdownTimeout = 5 * time.Second
+	backgroundShutdownTimeout  = 5 * time.Second
+	handlerShutdownTimeout     = 5 * time.Second
+	telemetryShutdownTimeout   = 5 * time.Second
+	workerTailBudget           = diagnosticsShutdownTimeout + backgroundShutdownTimeout + handlerShutdownTimeout + telemetryShutdownTimeout
 )
 
 // runWorkerLifecycle admits, serves, and drains the consumer. cleanupSafe
@@ -93,8 +93,8 @@ func runWorkerLifecycle(
 	workerCtx, workerCancel := runtimeopts.TeardownStage(window, cfg.HTTP.ShutdownTimeout)
 	workerErr := worker.Shutdown(workerCtx)
 	workerCancel()
-	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
-	backgroundCtx, backgroundCancel := runtimeopts.TeardownStage(window, backgroundClose)
+	diagnosticsErr := diagnostics.Stop(window, diagnosticsShutdownTimeout)
+	backgroundCtx, backgroundCancel := runtimeopts.TeardownStage(window, backgroundShutdownTimeout)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	backgroundCancel()
 	cleanupSafe = runtimeopts.StoppedBeforeReturn(workerErr, workerDone)

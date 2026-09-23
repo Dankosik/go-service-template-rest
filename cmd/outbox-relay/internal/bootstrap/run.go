@@ -28,13 +28,13 @@ import (
 )
 
 const (
-	startupTimeout       = 30 * time.Second
-	defaultOutboxWorkers = 16
-	outboxDrain          = 25 * time.Second
-	diagnosticsClose     = 2 * time.Second
-	backgroundClose      = 5 * time.Second
-	telemetryClose       = 5 * time.Second
-	outboxTailBudget     = diagnosticsClose + backgroundClose + telemetryClose
+	startupTimeout             = 30 * time.Second
+	defaultOutboxWorkers       = 16
+	outboxDrain                = 25 * time.Second
+	diagnosticsShutdownTimeout = 2 * time.Second
+	backgroundShutdownTimeout  = 5 * time.Second
+	telemetryShutdownTimeout   = 5 * time.Second
+	outboxTailBudget           = diagnosticsShutdownTimeout + backgroundShutdownTimeout + telemetryShutdownTimeout
 )
 
 func Run(args []string) error {
@@ -65,7 +65,7 @@ func run(signalCtx context.Context, args []string) error {
 	}
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	defer func() {
-		cleanupCtx, cancel := runtimeopts.TeardownStage(cleanupWindow, telemetryClose)
+		cleanupCtx, cancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 		defer cancel()
 		_ = telemetryCleanup(cleanupCtx)
 	}()
@@ -205,8 +205,8 @@ func runLifecycle(
 	// under the background stage only once River has joined, because River's
 	// jobs publish through it.
 	stopTail := func(window context.Context, shutdownMessaging bool) (diagnosticsErr, backgroundErr, messagingErr error) {
-		diagnosticsErr = diagnostics.Stop(window, diagnosticsClose)
-		backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundClose)
+		diagnosticsErr = diagnostics.Stop(window, diagnosticsShutdownTimeout)
+		backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundShutdownTimeout)
 		defer cancelBackground()
 		backgroundErr = supervisor.Shutdown(backgroundCtx)
 		if shutdownMessaging {

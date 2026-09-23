@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	startupTimeout     = 15 * time.Second
-	diagnosticsClose   = 2 * time.Second
-	telemetryClose     = 5 * time.Second
-	riverHardStopClose = 5 * time.Second
-	jobsTailBudget     = riverHardStopClose + diagnosticsClose + telemetryClose
+	startupTimeout             = 15 * time.Second
+	diagnosticsShutdownTimeout = 2 * time.Second
+	telemetryShutdownTimeout   = 5 * time.Second
+	riverHardStopTimeout       = 5 * time.Second
+	jobsTailBudget             = riverHardStopTimeout + diagnosticsShutdownTimeout + telemetryShutdownTimeout
 )
 
 func validateRuntimeConfig(cfg config.Config) error {
