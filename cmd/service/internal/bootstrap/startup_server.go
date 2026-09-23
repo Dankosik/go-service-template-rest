@@ -63,57 +63,66 @@ type serverResult struct {
 	err  error
 }
 
-type runtimeListeners struct {
-	http net.Listener
-	// profile:grpc:start
-	grpc net.Listener
-	// profile:grpc:end
-	diagnostics net.Listener
+// boundServer is one server paired with the listener it serves. label names it
+// in the start log; name identifies it in serverResult.
+type boundServer struct {
+	name     string
+	label    string
+	server   runtimeServer
+	listener net.Listener
 }
 
-func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (runtimeListeners, string, error) {
-	var listeners runtimeListeners
+// bindRuntimeListeners binds every configured server's listener. On failure it
+// closes the listeners already bound and reports the failed stage.
+func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (bound []boundServer, failedStage string, err error) {
 	var listenConfig net.ListenConfig
 
 	httpListener, err := listenConfig.Listen(ctx, "tcp", args.cfg.HTTP.Addr)
 	if err != nil {
-		return listeners, "startup.http_listen", fmt.Errorf("listen http server: %w", err)
+		return nil, "startup.http_listen", fmt.Errorf("listen http server: %w", err)
 	}
-	listeners.http = boundedAPIListener(httpListener, args.cfg.HTTP.MaxConnections)
+	bound = append(bound, boundServer{
+		name:     "http",
+		label:    "http",
+		server:   args.httpSrv,
+		listener: boundedAPIListener(httpListener, args.cfg.HTTP.MaxConnections),
+	})
 
 	// profile:grpc:start
 	if args.grpcSrv != nil {
 		grpcListener, grpcErr := listenConfig.Listen(ctx, "tcp", args.cfg.GRPC.Server.Addr)
 		if grpcErr != nil {
-			listeners.close()
-			return runtimeListeners{}, "startup.grpc_listen", fmt.Errorf("listen gRPC server: %w", grpcErr)
+			closeBoundListeners(bound)
+			return nil, "startup.grpc_listen", fmt.Errorf("listen gRPC server: %w", grpcErr)
 		}
-		listeners.grpc = boundedAPIListener(grpcListener, grpcx.MaxConnections)
+		bound = append(bound, boundServer{
+			name:     "grpc",
+			label:    "gRPC",
+			server:   args.grpcSrv,
+			listener: boundedAPIListener(grpcListener, grpcx.MaxConnections),
+		})
 	}
 	// profile:grpc:end
 
 	if args.diagnosticsSrv != nil && args.cfg.Observability.Metrics.Addr != "" {
 		diagnosticsListener, diagnosticsListenErr := listenConfig.Listen(ctx, "tcp", args.cfg.Observability.Metrics.Addr)
 		if diagnosticsListenErr != nil {
-			listeners.close()
-			return runtimeListeners{}, "startup.metrics_listen", fmt.Errorf("listen diagnostics server: %w", diagnosticsListenErr)
+			closeBoundListeners(bound)
+			return nil, "startup.metrics_listen", fmt.Errorf("listen diagnostics server: %w", diagnosticsListenErr)
 		}
-		listeners.diagnostics = diagnosticsListener
+		bound = append(bound, boundServer{
+			name:     "diagnostics",
+			label:    "diagnostics",
+			server:   args.diagnosticsSrv,
+			listener: diagnosticsListener,
+		})
 	}
-	return listeners, "", nil
+	return bound, "", nil
 }
 
-func (l runtimeListeners) close() {
-	if l.http != nil {
-		_ = l.http.Close()
-	}
-	// profile:grpc:start
-	if l.grpc != nil {
-		_ = l.grpc.Close()
-	}
-	// profile:grpc:end
-	if l.diagnostics != nil {
-		_ = l.diagnostics.Close()
+func closeBoundListeners(bound []boundServer) {
+	for _, b := range bound {
+		_ = b.listener.Close()
 	}
 }
 
@@ -127,18 +136,13 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 		)
 	}
 
-	listeners, stage, err := bindRuntimeListeners(bootstrapCtx, args)
+	bound, stage, err := bindRuntimeListeners(bootstrapCtx, args)
 	if err != nil {
 		return rejectRuntimeStartup(bootstrapCtx, args.log, stage, err)
 	}
-	listener := listeners.http
-	// profile:grpc:start
-	grpcListener := listeners.grpc
-	// profile:grpc:end
-	diagnosticsListener := listeners.diagnostics
 
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
-		listeners.close()
+		closeBoundListeners(bound)
 		return rejectRuntimeStartup(
 			bootstrapCtx,
 			args.log,
@@ -147,32 +151,11 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 		)
 	}
 
-	serverCount := 1
-	// profile:grpc:start
-	if grpcListener != nil {
-		serverCount++
-	}
-	// profile:grpc:end
-	if diagnosticsListener != nil {
-		serverCount++
-	}
-	runErrCh := make(chan serverResult, serverCount)
-	go func() {
-		args.log.InfoContext(bootstrapCtx, "http server started", "addr", listener.Addr().String(), "env", args.cfg.App.Env)
-		runErrCh <- serverResult{name: "http", err: normalizeServeError(args.httpSrv.Serve(listener))}
-	}()
-	// profile:grpc:start
-	if grpcListener != nil {
+	runErrCh := make(chan serverResult, len(bound))
+	for _, b := range bound {
 		go func() {
-			args.log.InfoContext(bootstrapCtx, "gRPC server started", "addr", grpcListener.Addr().String(), "env", args.cfg.App.Env)
-			runErrCh <- serverResult{name: "grpc", err: args.grpcSrv.Serve(grpcListener)}
-		}()
-	}
-	// profile:grpc:end
-	if diagnosticsListener != nil {
-		go func() {
-			args.log.InfoContext(bootstrapCtx, "diagnostics server started", "addr", diagnosticsListener.Addr().String(), "env", args.cfg.App.Env)
-			runErrCh <- serverResult{name: "diagnostics", err: normalizeServeError(args.diagnosticsSrv.Serve(diagnosticsListener))}
+			args.log.InfoContext(bootstrapCtx, b.label+" server started", "addr", b.listener.Addr().String(), "env", args.cfg.App.Env)
+			runErrCh <- serverResult{name: b.name, err: normalizeServeError(b.server.Serve(b.listener))}
 		}()
 	}
 
