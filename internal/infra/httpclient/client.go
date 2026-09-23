@@ -125,7 +125,7 @@ func newClient(rawBaseURL string, policy targetPolicy, limits TransportLimits) (
 // admission remains held until terminal Read or Close. A terminal read releases
 // admission but does not remove the obligation to close the underlying body.
 func (c *Client) Do(request *http.Request) (*http.Response, error) {
-	return c.do(request, c.absoluteBodyBytes, nil, func() error {
+	return c.do(request, c.absoluteBodyBytes, func() {}, func() error {
 		if request == nil {
 			return nil
 		}
@@ -159,25 +159,20 @@ func (c *Client) DoWithPolicy(request *http.Request, policy OperationPolicy) (*h
 	})
 }
 
+// do owns cancelOperation from entry: every exit calls it exactly once.
 func (c *Client) do(request *http.Request, maxBodyBytes int64, cancelOperation func(), contextError func() error) (*http.Response, error) {
 	if request == nil || request.URL == nil {
-		if cancelOperation != nil {
-			cancelOperation()
-		}
+		cancelOperation()
 		return nil, errors.New("send outbound HTTP request: request URL is required")
 	}
 	if err := request.Context().Err(); err != nil {
-		if cancelOperation != nil {
-			cancelOperation()
-		}
+		cancelOperation()
 		return nil, fmt.Errorf("send outbound HTTP request: %w", err)
 	}
 	select {
 	case c.inFlight <- struct{}{}:
 	default:
-		if cancelOperation != nil {
-			cancelOperation()
-		}
+		cancelOperation()
 		if err := request.Context().Err(); err != nil {
 			return nil, fmt.Errorf("send outbound HTTP request: %w", err)
 		}
@@ -188,9 +183,7 @@ func (c *Client) do(request *http.Request, maxBodyBytes int64, cancelOperation f
 	releaseAdmissionAndCancelOperation := func() {
 		once.Do(func() {
 			<-c.inFlight
-			if cancelOperation != nil {
-				cancelOperation()
-			}
+			cancelOperation()
 		})
 	}
 
