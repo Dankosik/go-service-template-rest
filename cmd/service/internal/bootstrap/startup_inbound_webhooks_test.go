@@ -27,7 +27,7 @@ import (
 func TestInboundWebhookServiceStartup(t *testing.T) {
 	t.Parallel()
 
-	receiver, err := initInboundWebhookReceiver(config.Config{}, nil, telemetry.New())
+	receiver, err := initInboundWebhookReceiver(config.Config{}, nil, telemetry.NewMetrics())
 	if err != nil {
 		t.Fatalf("empty inbound config err=%v", err)
 	}
@@ -36,7 +36,7 @@ func TestInboundWebhookServiceStartup(t *testing.T) {
 	}
 	_, err = initInboundWebhookReceiver(config.Config{
 		InboundWebhooks: config.InboundWebhooksConfig{Endpoints: `{"endpoints":[{"endpoint_id":"orders","active_key_reference":"active"}]}`},
-	}, nil, telemetry.New())
+	}, nil, telemetry.NewMetrics())
 	if err == nil || !strings.Contains(err.Error(), "postgres") {
 		t.Fatalf("missing postgres error = %v", err)
 	}
@@ -48,7 +48,7 @@ func TestInboundWebhookHeaderOverflowUsesListener431(t *testing.T) {
 	handler, err := newHTTPHandler(
 		config.Config{HTTP: config.HTTPConfig{MaxBodyBytes: 1024, RequestTimeout: time.Second, MaxInFlight: 1}},
 		slog.New(slog.DiscardHandler),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		nil,
 		httpRuntimeBindings{
 			Handlers: httpx.Handlers{

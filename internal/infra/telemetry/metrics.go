@@ -47,7 +47,7 @@ func (m *Metrics) RecordTraceExporterInitialization(ctx context.Context, initial
 	return nil
 }
 
-// New builds the service metric registry.
+// NewMetrics builds the service metric registry.
 //
 // The Prometheus Go collector is deliberately absent: SetupMetrics registers the
 // OpenTelemetry go.* runtime instruments on the meter provider instead, and those
@@ -58,7 +58,7 @@ func (m *Metrics) RecordTraceExporterInitialization(ctx context.Context, initial
 // descriptors, resident memory, and process CPU seconds come from the operating
 // system, and no OpenTelemetry instrument here supplies them, so a
 // collector-only deployment does not get them.
-func New() *Metrics {
+func NewMetrics() *Metrics {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),

@@ -363,7 +363,7 @@ func TestOpenAPIRuntimeContract(t *testing.T) {
 			t,
 			slog.New(slog.DiscardHandler),
 			Handlers{Health: newTestHealth(t)},
-			telemetry.New(),
+			telemetry.NewMetrics(),
 			RouterConfig{},
 		)
 		for _, path := range []string{"/health/live", "/health/ready"} {

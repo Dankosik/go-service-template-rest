@@ -148,7 +148,7 @@ func TestInstallTelemetryReturnsUsableFlush(t *testing.T) {
 	t.Parallel()
 
 	var output bytes.Buffer
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	flush, err := InstallTelemetry(context.Background(), config.Config{
 		App:           config.AppConfig{Env: "test", Version: "v1"},
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{ServiceName: "runtimeopts-test"}},

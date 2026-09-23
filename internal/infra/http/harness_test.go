@@ -49,7 +49,7 @@ func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemet
 	// traffic; a test that wants "not ready" supplies a failing probe.
 	_ = h.Health.Refresh(context.Background())
 	if metrics == nil {
-		metrics = telemetry.New()
+		metrics = telemetry.NewMetrics()
 	}
 	if cfg.MaxBodyBytes <= 0 {
 		cfg.MaxBodyBytes = testRouterMaxBodyBytes

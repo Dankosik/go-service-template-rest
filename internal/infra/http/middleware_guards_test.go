@@ -20,7 +20,7 @@ func TestRouterAddsSecurityHeaders(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t),
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	resp := doRequest(h, http.MethodGet, "/health/live")
 
@@ -35,7 +35,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t),
-	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
+	}, telemetry.NewMetrics(), RouterConfig{MaxBodyBytes: 1})
 
 	t.Run("known content length is rejected before reading", func(t *testing.T) {
 		t.Parallel()

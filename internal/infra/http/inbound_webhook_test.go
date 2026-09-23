@@ -54,7 +54,7 @@ func inboundRouter(t *testing.T, receiver inboundwebhook.Receiver, cfg RouterCon
 	return mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{
 		Health:         newTestHealth(t),
 		InboundWebhook: receiver,
-	}, telemetry.New(), cfg)
+	}, telemetry.NewMetrics(), cfg)
 }
 
 func inboundRequest(body string) *http.Request {

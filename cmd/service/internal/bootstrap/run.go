@@ -128,7 +128,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	)
 	slog.SetDefault(bootstrapLog)
 
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	// A delivered signal only cancels signalCtx; the handler stays registered
 	// until stop runs when Run returns, so a repeated signal during teardown is
 	// absorbed rather than killing the process.

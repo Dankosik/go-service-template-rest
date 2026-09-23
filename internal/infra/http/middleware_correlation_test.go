@@ -19,7 +19,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t),
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	t.Run("generates request id when header is absent", func(t *testing.T) {
 		t.Parallel()
@@ -54,7 +54,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 		log := newTestServiceLogger(&out)
 		h := mustNewRouter(t, log, Handlers{
 			Health: newTestHealth(t),
-		}, telemetry.New(), RouterConfig{})
+		}, telemetry.NewMetrics(), RouterConfig{})
 		const invalidRequestID = "user@example.com"
 
 		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/does-not-exist", nil)

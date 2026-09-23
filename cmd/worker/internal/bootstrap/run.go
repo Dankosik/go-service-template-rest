@@ -52,7 +52,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 		return err
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg)
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	// A metrics provider that could not be built stops this binary, which is this
 	// composition root's own answer rather than InstallTelemetry's: a worker with
 	// no meter cannot report what it consumed, so nothing would notice it stopped

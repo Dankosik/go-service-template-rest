@@ -25,7 +25,7 @@ func TestOpenAPIRuntimeContractEndpoints(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t),
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	testCases := []struct {
 		name       string
@@ -75,7 +75,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailable(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t, failingProbe{name: "db", err: errors.New("down")}),
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	resp := doRequest(h, http.MethodGet, "/health/ready")
 
@@ -96,7 +96,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailableWhenDraining(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: healthSvc,
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	resp := doRequest(h, http.MethodGet, "/health/ready")
 
@@ -117,7 +117,7 @@ func TestOpenAPIRuntimeContractReadinessUnavailableBeforeAdmission(t *testing.T)
 		ReadinessGate: func(context.Context) error {
 			return errors.New("startup admission is not ready")
 		},
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	resp := doRequest(h, http.MethodGet, "/health/ready")
 
@@ -135,7 +135,7 @@ func TestOpenAPIRuntimeContractWrongHealthcheckPathRejected(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t),
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	// Deployment admission must fail deterministically when an unknown health path is used.
 	resp := doRequest(h, http.MethodGet, "/health")
@@ -162,14 +162,14 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 		{
 			name:     "missing logger",
 			handlers: Handlers{Health: newTestHealth(t), ReadinessGate: func(context.Context) error { return nil }},
-			metrics:  telemetry.New(),
+			metrics:  telemetry.NewMetrics(),
 			cfg:      RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			wantErr:  "logger is required",
 		},
 		{
 			name:    "missing health",
 			log:     log,
-			metrics: telemetry.New(),
+			metrics: telemetry.NewMetrics(),
 			cfg: RouterConfig{
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
@@ -180,7 +180,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 		{
 			name:    "missing readiness gate",
 			log:     log,
-			metrics: telemetry.New(),
+			metrics: telemetry.NewMetrics(),
 			cfg: RouterConfig{
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
@@ -201,7 +201,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 		{
 			name:    "negative max in flight",
 			log:     log,
-			metrics: telemetry.New(),
+			metrics: telemetry.NewMetrics(),
 			cfg: RouterConfig{
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
@@ -216,7 +216,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 		{
 			name:    "missing max body bytes",
 			log:     log,
-			metrics: telemetry.New(),
+			metrics: telemetry.NewMetrics(),
 			cfg:     RouterConfig{RequestTimeout: time.Second},
 			handlers: Handlers{
 				Health:        newTestHealth(t),
@@ -227,7 +227,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 		{
 			name:    "missing request timeout",
 			log:     log,
-			metrics: telemetry.New(),
+			metrics: telemetry.NewMetrics(),
 			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			handlers: Handlers{
 				Health:        newTestHealth(t),
@@ -407,11 +407,11 @@ func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
 	}
 
 	log := slog.New(slog.DiscardHandler)
-	ready := mustNewRouter(t, log, Handlers{Health: newTestHealth(t)}, telemetry.New(), RouterConfig{})
+	ready := mustNewRouter(t, log, Handlers{Health: newTestHealth(t)}, telemetry.NewMetrics(), RouterConfig{})
 	notReady := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t, failingProbe{name: "db", err: errors.New("down")}),
-	}, telemetry.New(), RouterConfig{})
-	tinyBodyLimit := mustNewRouter(t, log, Handlers{Health: newTestHealth(t)}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
+	}, telemetry.NewMetrics(), RouterConfig{})
+	tinyBodyLimit := mustNewRouter(t, log, Handlers{Health: newTestHealth(t)}, telemetry.NewMetrics(), RouterConfig{MaxBodyBytes: 1})
 
 	testCases := []struct {
 		name       string

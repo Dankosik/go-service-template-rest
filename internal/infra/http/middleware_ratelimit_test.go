@@ -307,7 +307,7 @@ func TestKeyedRateLimiterConcurrentRejectionsDoNotConsumeBudget(t *testing.T) {
 func TestRouterRejectsARateLimiterWithoutAKey(t *testing.T) {
 	t.Parallel()
 
-	_, err := Harden(newTestServiceLogger(nil), telemetry.New(), HardenConfig{
+	_, err := Harden(newTestServiceLogger(nil), telemetry.NewMetrics(), HardenConfig{
 		MaxBodyBytes:   1 << 10,
 		RequestTimeout: time.Second,
 		RateLimit:      mustNewKeyedRateLimiter(t, 1, 1, 8),

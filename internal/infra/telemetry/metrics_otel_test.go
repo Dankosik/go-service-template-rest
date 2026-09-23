@@ -22,7 +22,7 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 
 	telemetrytest.RestoreGlobals(t)
 
-	metrics := New()
+	metrics := NewMetrics()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		Resource: ResourceConfig{
 			ServiceName:       " test-service ",
@@ -113,7 +113,7 @@ func TestRecordTraceExporterInitializationIsScrapable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			telemetrytest.RestoreGlobals(t)
 
-			metrics := New()
+			metrics := NewMetrics()
 			result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 				Resource: ResourceConfig{
 					ServiceName:    "test-service",
@@ -240,7 +240,7 @@ func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
-	metrics := New()
+	metrics := NewMetrics()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		Resource: ResourceConfig{
 			ServiceName:    "degraded-service",

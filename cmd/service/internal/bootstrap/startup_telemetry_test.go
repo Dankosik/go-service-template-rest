@@ -35,7 +35,7 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig("http://127.0.0.1:4318"),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
 	if stage.tracingErr != nil {
@@ -59,7 +59,7 @@ func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig(""),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
 	if stage.tracingErr != nil {
@@ -80,7 +80,7 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig("http://127.0.0.1:4318"),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
 	stage.flush(context.Background())
@@ -272,7 +272,7 @@ func bootstrapTelemetryStageLog(t *testing.T, cfg config.Config) string {
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		cfg,
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 	)
 	stage.flush(context.Background())
@@ -416,7 +416,7 @@ func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing
 	cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint = "collector:4318"
 	cfg.Observability.OTel.TracesSampler = "always_on"
 
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	stage := bootstrapTelemetryStage(
 		context.Background(),
 		cfg,

@@ -160,7 +160,7 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 	}))
 	t.Cleanup(collector.Close)
 
-	metrics := New()
+	metrics := NewMetrics()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		Resource: ResourceConfig{
 			ServiceName:    "push-service",
@@ -211,7 +211,7 @@ func TestSetupMetricsSharedRootRejectsAmbientCredentials(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")
 
-	result, err := SetupMetrics(t.Context(), New(), MetricsConfig{
+	result, err := SetupMetrics(t.Context(), NewMetrics(), MetricsConfig{
 		Resource: ResourceConfig{ServiceName: "metrics-shared-root-test"},
 		Exporter: MetricExporterConfig{OTLPEndpoint: "https://collector.example"},
 	})
@@ -239,7 +239,7 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
-	metrics := New()
+	metrics := NewMetrics()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		Resource: ResourceConfig{
 			ServiceName:    "scrape-service",

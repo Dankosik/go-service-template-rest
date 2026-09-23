@@ -24,7 +24,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t),
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	t.Run("not found uses problem envelope", func(t *testing.T) {
 		t.Parallel()
@@ -333,7 +333,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 
 func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	telemetrytest.RestoreGlobals(t)
 	result, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
 		Resource: telemetry.ResourceConfig{
@@ -394,7 +394,7 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: newTestHealth(t),
-	}, telemetry.New(), RouterConfig{})
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	liveResp := doRequest(h, http.MethodGet, "/health/live")
 	if liveResp.Code != http.StatusOK {

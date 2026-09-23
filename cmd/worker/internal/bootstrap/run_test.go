@@ -123,7 +123,7 @@ func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{
 			ServiceName: "worker", TracesSampler: "always_off",
 		}},
-	}, telemetry.New(), slog.New(slog.DiscardHandler), "worker")
+	}, telemetry.NewMetrics(), slog.New(slog.DiscardHandler), "worker")
 	if err != nil {
 		t.Fatalf("runtimeopts.InstallTelemetry() error = %v", err)
 	}

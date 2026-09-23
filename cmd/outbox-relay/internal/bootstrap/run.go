@@ -57,7 +57,7 @@ func run(signalCtx context.Context, args []string) error {
 		return err
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "outbox_relay")
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	flushTelemetry, metricsErr := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "outbox")
 	if metricsErr != nil {
 		log.WarnContext(startupCtx, "outbox_metrics_degraded", "reason", telemetry.FailureReason(metricsErr))
