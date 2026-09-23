@@ -91,13 +91,13 @@ func validateObservabilityConfig(cfg *ObservabilityConfig) error {
 		)
 	}
 	cfg.OTel.ServiceName = strings.TrimSpace(cfg.OTel.ServiceName)
-	cfg.OTel.TracesSampler = strings.TrimSpace(cfg.OTel.TracesSampler)
+	cfg.OTel.TracesSampler = otelconfig.TracesSamplerOrDefault(cfg.OTel.TracesSampler)
 	cfg.OTel.Exporter.OTLPEndpoint = strings.TrimSpace(cfg.OTel.Exporter.OTLPEndpoint)
 	cfg.OTel.Exporter.OTLPMetricsEndpoint = strings.TrimSpace(cfg.OTel.Exporter.OTLPMetricsEndpoint)
 	if cfg.OTel.ServiceName == "" {
 		return fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
 	}
-	if err := otelconfig.ValidateTraceSampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg); err != nil {
+	if err := otelconfig.ValidateTracesSampler(cfg.OTel.TracesSampler, cfg.OTel.TracesSamplerArg); err != nil {
 		return fmt.Errorf("%w: observability.otel.%w", ErrValidate, err)
 	}
 	return nil

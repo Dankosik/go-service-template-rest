@@ -161,11 +161,11 @@ func TestResultRoundTripAndBounds(t *testing.T) {
 
 	body := []byte(`{"body":"created","location":"/widgets/1"}`)
 	legacy, err := json.Marshal(struct {
-		Schema int                 `json:"schema"`
-		Status int                 `json:"status"`
-		Header map[string][]string `json:"header"`
-		Body   []byte              `json:"body"`
-	}{Schema: resultSchema, Status: http.StatusCreated, Header: map[string][]string{"Location": {want.Location}}, Body: body})
+		SchemaVersion int                 `json:"schema"`
+		Status        int                 `json:"status"`
+		Header        map[string][]string `json:"header"`
+		Body          []byte              `json:"body"`
+	}{SchemaVersion: resultSchemaVersion, Status: http.StatusCreated, Header: map[string][]string{"Location": {want.Location}}, Body: body})
 	if err != nil {
 		t.Fatalf("marshal legacy result: %v", err)
 	}

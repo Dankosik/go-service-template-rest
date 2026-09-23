@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/messagingconfig"
 )
 
 const (
@@ -42,13 +44,13 @@ func DefaultWorkerConfig(consumer, filterSubject, deadLetterSubject string, maxC
 }
 
 func ValidateWorkerConfig(cfg WorkerConfig, maxPayloadBytes int) error {
-	if !validStreamOrConsumerName(cfg.Consumer) {
+	if !messagingconfig.ValidStreamOrConsumerName(cfg.Consumer) {
 		return fmt.Errorf("%w: invalid durable consumer", ErrRejected)
 	}
-	if !validSubject(cfg.FilterSubject, true) {
+	if !validFilterSubject(cfg.FilterSubject) {
 		return fmt.Errorf("%w: invalid filter subject", ErrRejected)
 	}
-	if !validSubject(cfg.DeadLetterSubject, false) {
+	if !validPublishSubject(cfg.DeadLetterSubject) {
 		return fmt.Errorf("%w: invalid dead-letter subject", ErrRejected)
 	}
 	if subjectMatches(cfg.FilterSubject, cfg.DeadLetterSubject) {

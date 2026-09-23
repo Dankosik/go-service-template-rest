@@ -31,8 +31,8 @@ func TestWebhookRequestContractAndAddressFallback(t *testing.T) {
 	}
 
 	visited := make([]netip.Addr, 0, 2)
-	result, err := tryPreparedAddresses(ctx, prepared, func(_ context.Context, candidate preparedSend) (sendResult, error) {
-		visited = append(visited, candidate.SelectedAddress)
+	result, err := tryPreparedAddresses(ctx, prepared, func(_ context.Context, _ preparedSend, address netip.Addr) (sendResult, error) {
+		visited = append(visited, address)
 		if len(visited) == 1 {
 			return sendResult{Evidence: transportEvidence{Certainty: sendCertaintyDefinitelyNotSent}}, context.DeadlineExceeded
 		}
@@ -43,8 +43,8 @@ func TestWebhookRequestContractAndAddressFallback(t *testing.T) {
 	}
 
 	visited = visited[:0]
-	result, err = tryPreparedAddresses(ctx, prepared, func(_ context.Context, candidate preparedSend) (sendResult, error) {
-		visited = append(visited, candidate.SelectedAddress)
+	result, err = tryPreparedAddresses(ctx, prepared, func(_ context.Context, _ preparedSend, address netip.Addr) (sendResult, error) {
+		visited = append(visited, address)
 		return sendResult{}, context.DeadlineExceeded
 	})
 	if !errors.Is(err, context.DeadlineExceeded) || result.Evidence.Certainty != sendCertaintyUnspecified || len(visited) != 1 {
@@ -72,11 +72,11 @@ func TestAdmitDestinationAddresses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if addresses[0] != netip.MustParseAddr("1.1.1.1") || len(admitted) != 2 || admitted[0] != netip.MustParseAddr("1.1.1.1") {
+	if len(admitted) != 2 || admitted[0] != netip.MustParseAddr("1.1.1.1") {
 		t.Fatalf("admitted addresses = %v; input = %v", admitted, addresses)
 	}
 	admitted[0] = netip.Addr{}
-	if addresses[0] != netip.MustParseAddr("1.1.1.1") {
+	if addresses[0] != netip.MustParseAddr("::ffff:1.1.1.1") {
 		t.Fatalf("admitted addresses alias input: %v", addresses)
 	}
 

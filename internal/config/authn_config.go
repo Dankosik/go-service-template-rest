@@ -99,7 +99,7 @@ func validateAuthnHTTPCompatibility(cfg HTTPConfig) error {
 // profile:grpc:start
 
 func validateAuthnGRPCCompatibility(cfg GRPCConfig) error {
-	if cfg.Server.Enabled && cfg.Server.TransportSecurity != "tls" {
+	if cfg.Server.Enabled && cfg.Server.TransportSecurity != GRPCTransportSecurityTLS {
 		return fmt.Errorf(
 			"%w: authn OIDC profile requires grpc.server.transport_security=tls",
 			ErrValidate,

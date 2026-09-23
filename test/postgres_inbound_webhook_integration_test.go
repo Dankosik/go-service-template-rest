@@ -62,6 +62,7 @@ func inboundReceiver(t *testing.T, dsn string) *postgresinboundwebhook.Receiver 
 	receiver, err := postgresinboundwebhook.NewReceiver(
 		pool,
 		inboundTrust(t, "orders"),
+		nil,
 		postgresinboundwebhook.WithClock(func() time.Time { return time.Unix(1700000000, 0).UTC() }),
 	)
 	if err != nil {
@@ -145,7 +146,7 @@ func TestPostgresInboundWebhookAtomicAcceptanceRollsBackOnJobFailure(t *testing.
 
 	receiver := inboundReceiver(t, dsn)
 	result, err := receiver.Receive(ctx, inboundDelivery("orders", inboundVectorID, inboundVectorBody, inboundVectorSignature))
-	if result != inboundwebhook.OutcomeUnavailable || !errors.Is(err, inboundwebhook.ErrUnavailable) {
+	if !errors.Is(err, inboundwebhook.ErrUnavailable) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	var receipts, jobs int

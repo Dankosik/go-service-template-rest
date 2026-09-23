@@ -19,6 +19,20 @@ import (
 	"golang.org/x/net/http/httpguts"
 )
 
+// checksumAlgorithm is the full-object checksum every upload requests and every
+// response must confirm.
+const checksumAlgorithm = types.ChecksumAlgorithmCrc64nvme
+
+// transferChecksumAlgorithm is checksumAlgorithm in the transfer manager's own
+// type; transfermanager v0.4.1 declares no constant for it.
+const transferChecksumAlgorithm = tmtypes.ChecksumAlgorithm(checksumAlgorithm)
+
+// hasFullObjectChecksum reports whether a response confirms a CRC64NVME
+// checksum over the whole object rather than a composite of parts.
+func hasFullObjectChecksum(crc64nvme *string, checksumType types.ChecksumType) bool {
+	return crc64nvme != nil && checksumType == types.ChecksumTypeFullObject
+}
+
 // Upload stores one object. This S3 adapter supports create-only uploads only
 // as single requests up to 8 MiB inclusive; a larger IfNotExists upload returns
 // objectstorage.ErrInvalid even when the configured object-size limit permits it.
@@ -36,7 +50,7 @@ func (c *Client) Upload(ctx context.Context, key string, source io.Reader, optio
 		input := &awss3.PutObjectInput{
 			Bucket: new(c.config.Bucket), Key: new(key), Body: source,
 			ContentLength: new(options.Size), ExpectedBucketOwner: c.expectedBucketOwner(),
-			ChecksumAlgorithm: types.ChecksumAlgorithmCrc64nvme,
+			ChecksumAlgorithm: checksumAlgorithm,
 		}
 		input.ContentType = optionalString(options.ContentType)
 		if options.IfNotExists {
@@ -46,7 +60,7 @@ func (c *Client) Upload(ctx context.Context, key string, source io.Reader, optio
 		if putErr != nil {
 			return mutationError(ctx, putErr)
 		}
-		if output == nil || output.ChecksumCRC64NVME == nil || output.ChecksumType != types.ChecksumTypeFullObject {
+		if output == nil || !hasFullObjectChecksum(output.ChecksumCRC64NVME, output.ChecksumType) {
 			return objectstorage.ErrIntegrity
 		}
 		return nil
@@ -56,12 +70,12 @@ func (c *Client) Upload(ctx context.Context, key string, source io.Reader, optio
 		Bucket: new(c.config.Bucket), Key: new(key), Body: readerOnly{Reader: source},
 		ContentLength: new(options.Size), MpuObjectSize: new(options.Size),
 		ContentType: optionalString(options.ContentType), ExpectedBucketOwner: c.expectedBucketOwner(),
-		ChecksumAlgorithm: tmtypes.ChecksumAlgorithm("CRC64NVME"), ChecksumType: tmtypes.ChecksumTypeFullObject,
+		ChecksumAlgorithm: transferChecksumAlgorithm, ChecksumType: tmtypes.ChecksumTypeFullObject,
 	})
 	if uploadErr != nil {
 		return mutationError(ctx, uploadErr)
 	}
-	if output == nil || output.ChecksumCRC64NVME == nil || output.ChecksumType != tmtypes.ChecksumTypeFullObject {
+	if output == nil || !hasFullObjectChecksum(output.ChecksumCRC64NVME, types.ChecksumType(output.ChecksumType)) {
 		return objectstorage.ErrIntegrity
 	}
 	return nil
@@ -84,23 +98,23 @@ func (c *Client) Download(ctx context.Context, key string) (objectstorage.Object
 		release()
 		return objectstorage.Object{}, readError(ctx, err)
 	}
-	if output == nil || output.Body == nil || output.ContentRange != nil || output.ChecksumCRC64NVME == nil || output.ChecksumType != types.ChecksumTypeFullObject {
-		if output != nil && output.Body != nil {
-			_ = output.Body.Close()
-		}
+	if output == nil || output.Body == nil {
 		release()
+		return objectstorage.Object{}, objectstorage.ErrIntegrity
+	}
+	// From here the body owns the response and the admission token: every
+	// refusal below closes it, which closes the response before releasing.
+	body := &downloadBody{ctx: ctx, body: output.Body, release: release}
+	if output.ContentRange != nil || !hasFullObjectChecksum(output.ChecksumCRC64NVME, output.ChecksumType) {
+		body.finish()
 		return objectstorage.Object{}, objectstorage.ErrIntegrity
 	}
 	metadata, err := c.metadata(output.ContentLength, output.ContentType, output.LastModified)
 	if err != nil {
-		_ = output.Body.Close()
-		release()
+		body.finish()
 		return objectstorage.Object{}, err
 	}
-	return objectstorage.Object{
-		Body:     &downloadBody{ctx: ctx, body: output.Body, release: release},
-		Metadata: metadata,
-	}, nil
+	return objectstorage.Object{Body: body, Metadata: metadata}, nil
 }
 
 func (c *Client) Metadata(ctx context.Context, key string) (objectstorage.Metadata, error) {
@@ -198,6 +212,10 @@ func validateCall(ctx context.Context, key string) error {
 	return nil
 }
 
+// acquire admits one operation. At most maximumActiveOperations run at once, and
+// a call beyond that is refused with objectstorage.ErrBusy rather than queued.
+// The returned release is idempotent; a downloaded body holds its slot until it
+// reaches EOF or is closed.
 func (c *Client) acquire(ctx context.Context) (func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("object storage admission: %w", err)
@@ -265,6 +283,8 @@ func optionalString(value string) *string {
 	return new(value)
 }
 
+// readerOnly hides any io.Seeker on the upload source, so the transfer manager
+// takes the object size from ContentLength instead of seeking the body.
 type readerOnly struct{ io.Reader }
 
 type downloadBody struct {

@@ -1,7 +1,6 @@
 package httpx
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -13,6 +12,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
+// Recover turns a handler panic into an ERROR record and, when nothing was
+// committed yet, a sanitized 500. http.ErrAbortHandler passes through.
 func Recover(log *slog.Logger, next http.Handler) http.Handler {
 	if log == nil {
 		log = slog.Default()
@@ -20,7 +21,7 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		trackedWriter, committed := trackResponseCommit(w)
-		defer func(ctx context.Context, request *http.Request) {
+		defer func(ctx context.Context) {
 			rec := recover()
 			if rec == nil {
 				return
@@ -35,22 +36,22 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 				panic(http.ErrAbortHandler)
 			}
 
-			route := cmp.Or(joinMethodAndPattern(request.Method, routePathTemplateForRequest(request)), "<unmatched>")
+			route := routeLabel(r.Method, routePathTemplateForRequest(r))
 			// debug.Stack is taken here, inside the deferred recovery, because
 			// that is the only point the panicking frames still exist.
 			log.ErrorContext(
 				ctx,
 				"http_panic_recovered",
 				append(
-					[]any{"method", request.Method, "route", route},
-					logctx.PanicAttrs(rec, debug.Stack())...,
+					[]any{"method", r.Method, "route", route},
+					logctx.PanicArgs(rec, debug.Stack())...,
 				)...,
 			)
 			if committed() {
 				return
 			}
 			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: failure.SanitizedDetail})
-		}(r.Context(), r)
+		}(r.Context())
 		next.ServeHTTP(trackedWriter, r)
 	})
 }

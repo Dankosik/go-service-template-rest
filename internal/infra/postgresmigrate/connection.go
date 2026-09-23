@@ -23,11 +23,10 @@ func openMigrationDB(opts MigrationOptions) (*sql.DB, error) {
 		return nil, errors.New("parse postgres migration dsn: invalid value redacted")
 	}
 	config.ConnectTimeout = opts.ConnectTimeout
+	postgres.ApplyStatementTimeouts(config, opts.StatementTimeout)
 	if config.RuntimeParams == nil {
 		config.RuntimeParams = make(map[string]string)
 	}
-	config.RuntimeParams["statement_timeout"] = postgres.RuntimeParamMilliseconds(opts.StatementTimeout)
-	config.RuntimeParams["idle_in_transaction_session_timeout"] = postgres.RuntimeParamMilliseconds(opts.StatementTimeout)
 	config.RuntimeParams["lock_timeout"] = postgres.RuntimeParamMilliseconds(opts.LockTimeout)
 	config.RuntimeParams["application_name"] = "goose-migrate"
 

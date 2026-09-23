@@ -26,57 +26,63 @@ func AmbientOTLPExporterEnv() []string {
 	return names
 }
 
-// traceExporterEnvConflicts are the standard OpenTelemetry exporter variables
-// this service must not ignore when it configures its own exporter.
+// sharedExporterEnvConflicts are the signal-agnostic standard OpenTelemetry
+// exporter variables this service must not ignore when it configures its own
+// exporter.
 //
-// otlptracehttp applies ambient environment first and explicit options second, so
-// WithEndpointURL already makes an injected ENDPOINT or INSECURE harmless.
-// Credential and trust material is different: this service sets no client
-// certificate and no root CA pool, so these would travel to the collector
-// unverified.
+// The official exporters apply ambient environment first and explicit options
+// second, so WithEndpointURL already makes an injected ENDPOINT or INSECURE
+// harmless. Credential and trust material is different: this service sets no
+// client certificate and no root CA pool, so these would travel to the
+// collector unverified.
 //
-// This applies only when observability.otel.exporter.otlp_endpoint named the
+// This applies only when this service's own configuration named the
 // destination. When the platform's own variables supplied it, the platform owns
 // the whole exporter configuration.
-//
-// Kept sorted so reported output is stable.
-var traceExporterEnvConflicts = []string{
+var sharedExporterEnvConflicts = []string{
 	"OTEL_EXPORTER_OTLP_CERTIFICATE",
 	"OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE",
 	"OTEL_EXPORTER_OTLP_CLIENT_KEY",
 	"OTEL_EXPORTER_OTLP_HEADERS",
+}
+
+// traceExporterEnvConflicts adds the traces-specific credential and trust
+// variables to sharedExporterEnvConflicts.
+var traceExporterEnvConflicts = append(slices.Clone(sharedExporterEnvConflicts),
 	"OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE",
 	"OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE",
 	"OTEL_EXPORTER_OTLP_TRACES_CLIENT_KEY",
 	"OTEL_EXPORTER_OTLP_TRACES_HEADERS",
-}
+)
 
-// metricExporterEnvConflicts are the ambient credential and trust variables a
-// configured metrics exporter must not silently honor; see
-// traceExporterEnvConflicts. Kept sorted so reported output is stable.
-var metricExporterEnvConflicts = []string{
-	"OTEL_EXPORTER_OTLP_CERTIFICATE",
-	"OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE",
-	"OTEL_EXPORTER_OTLP_CLIENT_KEY",
-	"OTEL_EXPORTER_OTLP_HEADERS",
+// metricExporterEnvConflicts adds the metrics-specific credential and trust
+// variables to sharedExporterEnvConflicts.
+var metricExporterEnvConflicts = append(slices.Clone(sharedExporterEnvConflicts),
 	"OTEL_EXPORTER_OTLP_METRICS_CERTIFICATE",
 	"OTEL_EXPORTER_OTLP_METRICS_CLIENT_CERTIFICATE",
 	"OTEL_EXPORTER_OTLP_METRICS_CLIENT_KEY",
 	"OTEL_EXPORTER_OTLP_METRICS_HEADERS",
-}
+)
 
-// ConflictingTraceExporterEnv returns the non-empty ambient exporter variables
-// that a configured exporter cannot safely ignore. See
-// traceExporterEnvConflicts for why the endpoint and transport-tuning variables
+// RejectedAmbientEnv returns the non-empty ambient exporter variables that
+// exporter setup refuses for this endpoint rather than ignores, sorted. See
+// sharedExporterEnvConflicts for why the endpoint and transport-tuning variables
 // are deliberately absent.
-func ConflictingTraceExporterEnv() []string {
-	return conflictingEnv(traceExporterEnvConflicts)
-}
-
-// ConflictingMetricExporterEnv returns the non-empty ambient exporter variables a
-// configured metrics exporter cannot safely ignore.
-func ConflictingMetricExporterEnv() []string {
-	return conflictingEnv(metricExporterEnvConflicts)
+//
+// Only an endpoint this service configured rejects any: when the platform named
+// the destination, the platform owns the credentials that come with it.
+func (e ExporterEndpoint) RejectedAmbientEnv() []string {
+	if !e.ConfiguredByService {
+		return nil
+	}
+	switch e.signalPath {
+	case otlpTracesPath:
+		return conflictingEnv(traceExporterEnvConflicts)
+	case otlpMetricsPath:
+		return conflictingEnv(metricExporterEnvConflicts)
+	default:
+		return nil
+	}
 }
 
 // conflictingEnv returns the non-empty variables among names, sorted so reported
@@ -93,9 +99,9 @@ func conflictingEnv(names []string) []string {
 // Both signals reject on the same terms, and the wording is the part worth
 // owning here: an operator matching on this message should not have to discover
 // that traces and metrics phrase the same refusal differently. Which variables
-// count is still each signal's own list.
-func rejectConflictingAmbientEnv(names []string) error {
-	conflicting := conflictingEnv(names)
+// count is the endpoint's own list.
+func rejectConflictingAmbientEnv(endpoint ExporterEndpoint) error {
+	conflicting := endpoint.RejectedAmbientEnv()
 	if len(conflicting) == 0 {
 		return nil
 	}

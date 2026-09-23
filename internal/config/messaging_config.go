@@ -18,6 +18,12 @@ type MessagingConfig struct {
 	Worker               MessagingWorkerConfig `koanf:"worker"`
 }
 
+// Enabled reports whether messaging transport is configured. Empty URLs mean
+// disabled rather than invalid; binaries that require transport reject that.
+func (c MessagingConfig) Enabled() bool {
+	return strings.TrimSpace(c.URLs) != ""
+}
+
 type MessagingWorkerConfig struct {
 	Consumer          string `koanf:"consumer"`
 	FilterSubject     string `koanf:"filter_subject"`

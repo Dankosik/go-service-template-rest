@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/problem"
@@ -53,9 +52,9 @@ func (r *recordingReceiver) Receive(ctx context.Context, delivery inboundwebhook
 func inboundRouter(t *testing.T, receiver inboundwebhook.Receiver, cfg RouterConfig) http.Handler {
 	t.Helper()
 	return mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{
-		Health:         health.New(),
+		Health:         newTestHealth(t),
 		InboundWebhook: receiver,
-	}, telemetry.New(), cfg)
+	}, telemetry.NewMetrics(), cfg)
 }
 
 func inboundRequest(body string) *http.Request {
@@ -210,7 +209,7 @@ func TestInboundWebhookAdmissionBeforeDurableWork(t *testing.T) {
 
 	rateReceiver := &recordingReceiver{outcome: inboundwebhook.OutcomeAccepted}
 	limited := inboundRouter(t, rateReceiver, RouterConfig{
-		RateLimit:    rejectAllLimiter{},
+		RateLimiter:  rejectAllLimiter{},
 		RateLimitKey: func(*http.Request) string { return "caller" },
 	})
 	rate := httptest.NewRecorder()
@@ -246,7 +245,6 @@ func TestInboundWebhookResponseContract(t *testing.T) {
 		{name: "rejected", outcome: inboundwebhook.OutcomeRejected, wantStatus: http.StatusBadRequest},
 		{name: "unknown", outcome: inboundwebhook.OutcomeUnknownEndpoint, wantStatus: http.StatusNotFound},
 		{name: "conflict", outcome: inboundwebhook.OutcomeConflict, wantStatus: http.StatusConflict},
-		{name: "unavailable", outcome: inboundwebhook.OutcomeUnavailable, wantStatus: http.StatusServiceUnavailable, wantRetry: true},
 		{name: "unavailable err", err: inboundwebhook.ErrUnavailable, wantStatus: http.StatusServiceUnavailable, wantRetry: true},
 		{name: "unexpected", err: errors.New("sql canary"), wantStatus: http.StatusInternalServerError},
 	}

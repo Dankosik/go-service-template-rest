@@ -22,7 +22,7 @@ func TestNewGRPCRuntimeThreadsServiceAndPolicyBindings(t *testing.T) {
 	server, err := newGRPCRuntime(
 		grpcRuntimeTestConfig(),
 		slog.New(slog.DiscardHandler),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		nil,
 		grpcRuntimeBindings{
 			Services: []grpcx.RegisterService{func(registrar grpc.ServiceRegistrar) {
@@ -67,7 +67,7 @@ func TestNewGRPCRuntimeRejectsUnreadableTLSCredentials(t *testing.T) {
 	if server, err := newGRPCRuntime(
 		cfg,
 		slog.New(slog.DiscardHandler),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		nil,
 		grpcRuntimeBindings{},
 	); err == nil || server != nil {

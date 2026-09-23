@@ -10,11 +10,11 @@
 // quietly runs without it. Keeping the mapping here is why there is one
 // place to add it.
 //
-// [InstallTelemetry], [DiagnosticsServer], [ListenDiagnostics], and the teardown
-// primitives are here on the same reasoning rather than as exceptions to it. Each
-// replaced copies that had already drifted: a degraded exporter logged with
-// different fields, a diagnostics join spelled once as a type and once inline,
-// and teardown stages that handed cleanup an already-expired context.
+// [InstallTelemetry], [ListenDiagnostics], and the teardown
+// primitives are here on the same reasoning rather than as exceptions to it.
+// Each is a step whose copies drift apart: a degraded exporter logged with
+// different fields, a diagnostics join written two ways, or a teardown stage
+// that hands cleanup an already-expired context.
 //
 // It sits under cmd/ rather than internal/ because mapping configuration onto
 // concrete adapters, and bounding a process teardown, are composition — which
@@ -62,9 +62,9 @@ func Metrics(cfg config.Config, instanceID string) telemetry.MetricsConfig {
 	return telemetry.MetricsConfig{
 		Resource: Resource(cfg, instanceID),
 		Exporter: telemetry.MetricExporterConfig{
-			OTLPEndpoint:       cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint,
-			SharedOTLPEndpoint: cfg.Observability.OTel.Exporter.OTLPEndpoint,
-			OTLPHeaders:        cfg.Observability.OTel.Exporter.OTLPHeaders,
+			OTLPMetricsEndpoint: cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint,
+			OTLPEndpoint:        cfg.Observability.OTel.Exporter.OTLPEndpoint,
+			OTLPHeaders:         cfg.Observability.OTel.Exporter.OTLPHeaders,
 		},
 	}
 }

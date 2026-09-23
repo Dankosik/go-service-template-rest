@@ -139,7 +139,7 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 		{name: "missing media", status: 200, body: activeJSON("subject-1", "client-1")},
 		{name: "wrong media", status: 200, ctype: "text/plain", body: activeJSON("subject-1", "client-1")},
 		{name: "malformed media", status: 200, ctype: "application/", body: activeJSON("subject-1", "client-1")},
-		{name: "oversize", status: 200, ctype: "application/json", body: strings.Repeat("x", MaxProviderBody+1)},
+		{name: "oversize", status: 200, ctype: "application/json", body: strings.Repeat("x", maxProviderBodyBytes+1)},
 		{name: "truncated", status: 200, ctype: "application/json", body: `{"active":true,"iss":"`},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -171,7 +171,7 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 	t.Run("gzip over limit", func(t *testing.T) {
 		var encoded bytes.Buffer
 		writer := gzip.NewWriter(&encoded)
-		_, _ = writer.Write([]byte(strings.Repeat("a", MaxProviderBody+1)))
+		_, _ = writer.Write([]byte(strings.Repeat("a", maxProviderBodyBytes+1)))
 		_ = writer.Close()
 		provider := newLoopbackProvider(t, func(response http.ResponseWriter, _ *http.Request) {
 			response.Header().Set("Content-Type", "application/json")
@@ -225,7 +225,7 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 func exactLimitJSON(t *testing.T) string {
 	t.Helper()
 	body := activeJSON("subject-1", "client-1")
-	pad := MaxProviderBody - len(body) - len(`,"pad":""`)
+	pad := maxProviderBodyBytes - len(body) - len(`,"pad":""`)
 	if pad < 0 {
 		return body
 	}

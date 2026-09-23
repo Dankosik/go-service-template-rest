@@ -39,7 +39,7 @@ func initInboundWebhookReceiver(
 	receiver, err := postgresinboundwebhook.NewReceiver(
 		pool,
 		trust,
-		postgresinboundwebhook.WithMeter(metrics.MeterProvider()),
+		metrics.MeterProvider(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("initialize inbound webhooks: %w", err)

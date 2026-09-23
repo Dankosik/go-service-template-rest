@@ -31,6 +31,7 @@ const (
 	DefaultConnectTimeout   = 3 * time.Second
 	DefaultStatementTimeout = 2 * time.Minute
 	DefaultLockTimeout      = 15 * time.Second
+	DefaultCleanupTimeout   = 15 * time.Second
 )
 
 func DefaultOptions(dsn string, source fs.FS, path string, logger *slog.Logger) MigrationOptions {
@@ -41,7 +42,7 @@ func DefaultOptions(dsn string, source fs.FS, path string, logger *slog.Logger) 
 		ConnectTimeout:   DefaultConnectTimeout,
 		StatementTimeout: DefaultStatementTimeout,
 		LockTimeout:      DefaultLockTimeout,
-		CleanupTimeout:   DefaultLockTimeout,
+		CleanupTimeout:   DefaultCleanupTimeout,
 		Logger:           logger,
 	}
 }
@@ -97,13 +98,16 @@ func migrate(
 	if err != nil {
 		return result, stageError(FailureConfig, err)
 	}
-	closeContext := "close postgres migration database"
+	// goose Provider.Close only closes db, so closing db covers both.
 	defer func() {
 		if closeErr := db.Close(); closeErr != nil {
-			retErr = withMigrationCleanup(retErr, fmt.Errorf("%s: %w", closeContext, closeErr))
+			retErr = withMigrationCleanup(retErr, fmt.Errorf("close postgres migration database: %w", closeErr))
 		}
 	}()
 
+	// WithLockTimeout(period, attempts): retry every second for the whole budget.
+	// CleanupTimeout serves twice: it bounds the unlock retries here and is the
+	// reserve kept back from the execution deadline for cleanup.
 	locker, err := gooselock.NewPostgresSessionLocker(
 		gooselock.WithLockTimeout(1, secondsCeiling(opts.LockTimeout)),
 		gooselock.WithUnlockTimeout(1, secondsCeiling(opts.CleanupTimeout)),
@@ -134,7 +138,6 @@ func migrate(
 		}
 		return result, stageError(FailureSource, fmt.Errorf("build goose provider: %w", err))
 	}
-	closeContext = "close goose provider"
 	if err := provider.Ping(executionCtx); err != nil {
 		return result, stageError(FailureConnect, fmt.Errorf("ping postgres migration database: %w", err))
 	}
@@ -143,12 +146,7 @@ func migrate(
 	if err != nil {
 		return result, stageError(FailureState, fmt.Errorf("read goose migration versions: %w", err))
 	}
-	result.Before = current
-	result.After = current
-	result.Target = target
-	result.BeforeKnown = true
-	result.AfterKnown = true
-	result.TargetKnown = true
+	result.recordVersions(current, target)
 	if direction == directionDown {
 		result.Target = 0
 	}
@@ -182,6 +180,9 @@ func migrate(
 		logMigrationResults(executionCtx, opts.Logger, applied, nil)
 		return result, stageError(FailureState, fmt.Errorf("read goose migration versions: %w", stateErr))
 	}
+	// goose GetVersions does not take the session lock, so the first read can
+	// predate a concurrent runner that finished while this one waited. A run that
+	// applied nothing reports the later read as Before.
 	if len(applied) == 0 {
 		result.Before = after
 	}
@@ -236,12 +237,7 @@ func migrateEmptySource(
 	if err != nil {
 		return result, withMigrationCleanup(stageError(FailureState, err), cleanup())
 	}
-	result.Before = version
-	result.After = version
-	result.Target = 0
-	result.BeforeKnown = true
-	result.AfterKnown = true
-	result.TargetKnown = true
+	result.recordVersions(version, 0)
 	logMigrationPlan(executionCtx, opts.Logger, direction, version, 0, 0)
 	return result, withMigrationCleanup(nil, cleanup())
 }

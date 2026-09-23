@@ -15,19 +15,16 @@ import (
 // t.Setenv forbids t.Parallel, so these run sequentially.
 //
 //nolint:paralleltest // ambient env control is process-wide state.
-func TestBuildTraceExporterOptions(t *testing.T) {
+func TestTraceExporterEndpointAndExporter(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
 		telemetrytest.ClearAmbientExporterEnv(t)
 
-		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{})
+		endpoint, err := resolveTraceExporterEndpoint(TraceExporterConfig{})
 		if err != nil {
-			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+			t.Fatalf("resolveTraceExporterEndpoint() error = %v", err)
 		}
 		if endpoint.Configured() {
 			t.Fatalf("endpoint = %+v, want unconfigured", endpoint)
-		}
-		if len(options) != 0 {
-			t.Fatalf("options len = %d, want 0", len(options))
 		}
 	})
 
@@ -35,29 +32,27 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		telemetrytest.ClearAmbientExporterEnv(t)
 		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector.example:4318")
 
-		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
+		endpoint, err := resolveTraceExporterEndpoint(TraceExporterConfig{
 			OTLPHeaders: "authorization=Bearer token",
 		})
 		if err != nil {
-			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+			t.Fatalf("resolveTraceExporterEndpoint() error = %v", err)
 		}
 		if endpoint.Configured() {
 			t.Fatalf("endpoint = %+v, want unconfigured", endpoint)
-		}
-		if len(options) != 0 {
-			t.Fatalf("options len = %d, want 0", len(options))
 		}
 	})
 
 	t.Run("configured endpoint and headers", func(t *testing.T) {
 		telemetrytest.ClearAmbientExporterEnv(t)
 
-		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
+		cfg := TraceExporterConfig{
 			OTLPEndpoint: "https://otel.example.com:4318",
 			OTLPHeaders:  "authorization=Bearer token",
-		})
+		}
+		endpoint, err := resolveTraceExporterEndpoint(cfg)
 		if err != nil {
-			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+			t.Fatalf("resolveTraceExporterEndpoint() error = %v", err)
 		}
 		if endpoint.Source != SharedOTLPExporterConfigKey {
 			t.Fatalf("endpoint source = %q, want %q", endpoint.Source, SharedOTLPExporterConfigKey)
@@ -65,8 +60,12 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		if !endpoint.ConfiguredByService {
 			t.Fatal("ConfiguredByService = false, want true")
 		}
-		if len(options) == 0 {
-			t.Fatal("options len = 0, want > 0")
+		exporter, err := newOTLPTraceExporter(t.Context(), endpoint, cfg)
+		if err != nil {
+			t.Fatalf("newOTLPTraceExporter() error = %v", err)
+		}
+		if err := exporter.Shutdown(t.Context()); err != nil {
+			t.Fatalf("exporter.Shutdown() error = %v", err)
 		}
 	})
 
@@ -80,17 +79,16 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPEndpoint: server.URL,
-		})
+		cfg := TraceExporterConfig{OTLPEndpoint: server.URL}
+		endpoint, err := resolveTraceExporterEndpoint(cfg)
 		if err != nil {
-			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+			t.Fatalf("resolveTraceExporterEndpoint() error = %v", err)
 		}
 		if !endpoint.Configured() {
 			t.Fatalf("endpoint = %+v, want configured", endpoint)
 		}
 
-		exportOneTestSpan(t, options)
+		exportOneTestSpan(t, endpoint, cfg)
 		assertCollectorPath(t, paths, "/v1/traces")
 	})
 
@@ -104,31 +102,51 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPEndpoint: server.URL + "/custom/traces",
-		})
+		cfg := TraceExporterConfig{OTLPEndpoint: server.URL + "/custom/traces"}
+		endpoint, err := resolveTraceExporterEndpoint(cfg)
 		if err != nil {
-			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+			t.Fatalf("resolveTraceExporterEndpoint() error = %v", err)
 		}
 		if !endpoint.Configured() {
 			t.Fatalf("endpoint = %+v, want configured", endpoint)
 		}
 
-		exportOneTestSpan(t, options)
+		exportOneTestSpan(t, endpoint, cfg)
 		assertCollectorPath(t, paths, "/custom/traces")
+	})
+
+	t.Run("malformed headers still report the resolved endpoint", func(t *testing.T) {
+		telemetrytest.ClearAmbientExporterEnv(t)
+		telemetrytest.RestoreGlobals(t)
+
+		endpoint, shutdown, err := SetupTracing(t.Context(), TracingConfig{
+			Exporter: TraceExporterConfig{
+				OTLPEndpoint: "https://otel.example.com:4318",
+				OTLPHeaders:  "malformed",
+			},
+		})
+		if err == nil {
+			t.Fatal("SetupTracing() error = nil, want non-nil")
+		}
+		if shutdown != nil {
+			t.Fatal("SetupTracing() shutdown != nil, want nil on error")
+		}
+		if endpoint.Source != SharedOTLPExporterConfigKey {
+			t.Fatalf("endpoint source = %q, want %q", endpoint.Source, SharedOTLPExporterConfigKey)
+		}
 	})
 
 	t.Run("scheme-less endpoint is rejected fail-closed", func(t *testing.T) {
 		telemetrytest.ClearAmbientExporterEnv(t)
 
-		_, _, err := buildTraceExporterOptions(TraceExporterConfig{
+		_, err := resolveTraceExporterEndpoint(TraceExporterConfig{
 			OTLPEndpoint: "otel.internal:4318",
 		})
 		if err == nil {
-			t.Fatal("buildTraceExporterOptions() error = nil, want non-nil")
+			t.Fatal("resolveTraceExporterEndpoint() error = nil, want non-nil")
 		}
 		if !strings.Contains(err.Error(), "unsupported scheme") {
-			t.Fatalf("buildTraceExporterOptions() error = %v, want unsupported scheme", err)
+			t.Fatalf("resolveTraceExporterEndpoint() error = %v, want unsupported scheme", err)
 		}
 	})
 }

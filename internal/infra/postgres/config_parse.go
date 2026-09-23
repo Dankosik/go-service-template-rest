@@ -1,12 +1,10 @@
 package postgres
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -22,6 +20,8 @@ var requiredPostgresDSNSettings = []string{
 	"sslmode",
 }
 
+// allowedPostgresSSLModes omits prefer and allow because pgconn implements them
+// as a second, differently encrypted fallback target.
 var allowedPostgresSSLModes = map[string]struct{}{
 	"disable":     {},
 	"require":     {},
@@ -100,7 +100,7 @@ func parsePoolConfig(rawDSN string) (*pgxpool.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: parse postgres dsn: invalid value redacted", ErrConfig)
 	}
-	if _, err := postgresProbeAddressFromPoolConfig(config); err != nil {
+	if err := requireSingleTCPTarget(config); err != nil {
 		return nil, err
 	}
 	return config, nil
@@ -122,26 +122,22 @@ func NormalizeDSN(rawDSN string) (string, error) {
 	if !strings.HasPrefix(dsn, "postgres://") && !strings.HasPrefix(dsn, "postgresql://") {
 		return "", fmt.Errorf("%w: postgres dsn must use postgres:// or postgresql:// URL format", ErrConfig)
 	}
-	settings, err := parsePostgresURLDSNSettings(dsn)
+	parsedURL, err := url.Parse(dsn)
+	if err != nil {
+		return "", fmt.Errorf("%w: parse postgres dsn: invalid value redacted", ErrConfig)
+	}
+	settings, err := postgresURLDSNSettings(parsedURL)
 	if err != nil {
 		return "", fmt.Errorf("%w: parse postgres dsn: invalid value redacted", ErrConfig)
 	}
 	if err := validatePostgresDSNSettings(settings); err != nil {
 		return "", err
 	}
-	return normalizePostgresURLDSN(dsn)
+	return normalizePostgresURLDSN(parsedURL), nil
 }
 
-func parsePostgresURLDSNSettings(dsn string) (map[string]string, error) {
+func postgresURLDSNSettings(parsedURL *url.URL) (map[string]string, error) {
 	settings := make(map[string]string)
-
-	parsedURL, err := url.Parse(dsn)
-	if err != nil {
-		if urlErr, ok := errors.AsType[*url.Error](err); ok {
-			return nil, fmt.Errorf("parse postgres url settings: %w", urlErr.Err)
-		}
-		return nil, fmt.Errorf("parse postgres url settings: %w", err)
-	}
 	if parsedURL.User != nil {
 		settings["user"] = parsedURL.User.Username()
 		if password, present := parsedURL.User.Password(); present {
@@ -211,35 +207,35 @@ func validatePostgresDSNSettings(settings map[string]string) error {
 	return nil
 }
 
-func normalizePostgresURLDSN(dsn string) (string, error) {
-	parsedURL, err := url.Parse(dsn)
-	if err != nil {
-		return "", fmt.Errorf("%w: parse postgres dsn: invalid value redacted", ErrConfig)
-	}
+// normalizePostgresURLDSN rewrites parsedURL in place and returns its string form.
+// An explicitly empty file key stops pgconn from substituting its $HOME default
+// (~/.pgpass, ~/.postgresql/*), so no ambient file can supply credentials.
+func normalizePostgresURLDSN(parsedURL *url.URL) string {
 	query := parsedURL.Query()
 	for _, key := range postgresFileDefaultDSNKeys {
 		query.Set(key.name, "")
 	}
 	parsedURL.RawQuery = query.Encode()
-	return parsedURL.String(), nil
+	return parsedURL.String()
 }
 
-// postgresProbeAddressFromPoolConfig extracts the single tcp host:port target.
-func postgresProbeAddressFromPoolConfig(config *pgxpool.Config) (string, error) {
+// requireSingleTCPTarget rejects a parsed config that is not exactly one TCP
+// host and port.
+func requireSingleTCPTarget(config *pgxpool.Config) error {
 	if config == nil || config.ConnConfig == nil {
-		return "", fmt.Errorf("%w: invalid postgres pool config", ErrConfig)
+		return fmt.Errorf("%w: invalid postgres pool config", ErrConfig)
 	}
 	if len(config.ConnConfig.Fallbacks) > 0 {
-		return "", fmt.Errorf("%w: postgres dsn fallback targets are not supported", ErrConfig)
+		return fmt.Errorf("%w: postgres dsn fallback targets are not supported", ErrConfig)
 	}
 
 	host := strings.TrimSpace(config.ConnConfig.Host)
 	port := config.ConnConfig.Port
 	if host == "" || port == 0 {
-		return "", fmt.Errorf("%w: postgres dsn requires valid single tcp host and port", ErrConfig)
+		return fmt.Errorf("%w: postgres dsn requires valid single tcp host and port", ErrConfig)
 	}
 	if network, _ := pgconn.NetworkAddress(host, port); network != "tcp" {
-		return "", fmt.Errorf("%w: postgres dsn requires valid single tcp host and port", ErrConfig)
+		return fmt.Errorf("%w: postgres dsn requires valid single tcp host and port", ErrConfig)
 	}
-	return net.JoinHostPort(host, strconv.Itoa(int(port))), nil
+	return nil
 }

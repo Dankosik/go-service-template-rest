@@ -37,34 +37,31 @@ const (
 type admissionPolicy struct {
 	business *admissionLimiter
 	health   *admissionLimiter
-	drain    *rpcDrain
 }
 
 // newAdmissionPolicy builds both budgets. Only business admissions contribute
 // to active load: a standing health watch per connected peer would turn active
 // into a peer count. Health refusals still use their dedicated signal because a
 // failed watch makes a health-aware client stop selecting the backend.
-func newAdmissionPolicy(businessLimit, healthLimit int, load loadRecorder) admissionPolicy {
-	drain := newRPCDrain()
+//
+// drain refuses business RPCs once Shutdown starts; health never consults it.
+func newAdmissionPolicy(businessLimit, healthLimit int, load serverLoad, drain *rpcDrain) admissionPolicy {
 	return admissionPolicy{
-		business: newAdmissionLimiter(businessLimit, load, drain),
-		health:   newAdmissionLimiter(healthLimit, healthShedRecorder{loadRecorder: load}, nil),
-		drain:    drain,
+		business: &admissionLimiter{
+			sem:    semaphore.NewWeighted(int64(businessLimit)),
+			shed:   load.shed,
+			active: load.active,
+			drain:  drain,
+		},
+		health: &admissionLimiter{
+			sem:  semaphore.NewWeighted(int64(healthLimit)),
+			shed: load.healthShed,
+		},
 	}
 }
 
-func (p admissionPolicy) statsHandler() drainStatsHandler { return drainStatsHandler{drain: p.drain} }
-
-type healthShedRecorder struct {
-	loadRecorder
-}
-
-type loadRecorder interface {
-	Admitted(ctx context.Context) func()
-	Shed(ctx context.Context)
-	HealthShed(ctx context.Context)
-}
-
+// serverLoad holds the admission instruments. An instrument that failed to
+// build is nil and simply goes unrecorded.
 type serverLoad struct {
 	active     metric.Int64UpDownCounter
 	shed       metric.Int64Counter
@@ -100,30 +97,6 @@ func newServerLoad(provider metric.MeterProvider) serverLoad {
 	return serverLoad{active: active, shed: shed, healthShed: healthShed}
 }
 
-func (l serverLoad) Admitted(ctx context.Context) func() {
-	if l.active == nil {
-		return func() {}
-	}
-	l.active.Add(ctx, 1)
-	return func() { l.active.Add(ctx, -1) }
-}
-
-func (l serverLoad) Shed(ctx context.Context) {
-	if l.shed != nil {
-		l.shed.Add(ctx, 1)
-	}
-}
-
-func (l serverLoad) HealthShed(ctx context.Context) {
-	if l.healthShed != nil {
-		l.healthShed.Add(ctx, 1)
-	}
-}
-
-func (healthShedRecorder) Admitted(context.Context) func() { return func() {} }
-
-func (r healthShedRecorder) Shed(ctx context.Context) { r.HealthShed(ctx) }
-
 // around holds one slot from the owning budget for the work below it. One policy
 // value backs both chains, which is what makes each budget process-wide rather
 // than per RPC kind.
@@ -140,18 +113,14 @@ func (p admissionPolicy) around(ctx context.Context, fullMethod string, call fun
 	}
 }
 
+// admissionLimiter is one budget. shed counts its refusals; active, when set,
+// counts its admitted work as load, and a nil active leaves it out of that
+// signal. A nil drain never refuses for draining.
 type admissionLimiter struct {
-	sem   *semaphore.Weighted
-	load  loadRecorder
-	drain *rpcDrain
-}
-
-func newAdmissionLimiter(limit int, load loadRecorder, drain *rpcDrain) *admissionLimiter {
-	return &admissionLimiter{
-		sem:   semaphore.NewWeighted(int64(limit)),
-		load:  load,
-		drain: drain,
-	}
+	sem    *semaphore.Weighted
+	shed   metric.Int64Counter
+	active metric.Int64UpDownCounter
+	drain  *rpcDrain
 }
 
 func (l *admissionLimiter) around(ctx context.Context, call func(context.Context) error) error {
@@ -159,12 +128,16 @@ func (l *admissionLimiter) around(ctx context.Context, call func(context.Context
 		return ownedStatus(codes.Unavailable, drainingFailureDetail)
 	}
 	if !l.sem.TryAcquire(1) {
-		l.load.Shed(ctx)
+		if l.shed != nil {
+			l.shed.Add(ctx, 1)
+		}
 		return ownedStatus(codes.ResourceExhausted, failure.AtCapacityDetail)
 	}
 	defer l.sem.Release(1)
-	release := l.load.Admitted(ctx)
-	defer release()
+	if l.active != nil {
+		l.active.Add(ctx, 1)
+		defer l.active.Add(ctx, -1)
+	}
 	return call(ctx)
 }
 

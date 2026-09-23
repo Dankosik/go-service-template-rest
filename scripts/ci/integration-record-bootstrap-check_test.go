@@ -18,9 +18,9 @@ func initExample() {
 		t.Fatal(err)
 	}
 
-	got := checkStartupMapping(startup, "startup.go", "example", "initExample", map[string]string{"Value": "cfg.Value"})
-	if want := "startup.go: canonical startup flows=0, want 1"; got != want {
-		t.Fatalf("checkStartupMapping() = %q, want %q", got, want)
+	err = checkStartupMapping(startup, "startup.go", "example", "initExample", map[string]string{"Value": "cfg.Value"})
+	if want := "startup.go: canonical startup flows=0, want 1"; err == nil || err.Error() != want {
+		t.Fatalf("checkStartupMapping() = %v, want %q", err, want)
 	}
 }
 
@@ -35,7 +35,7 @@ func initExample() {
 		t.Fatal(err)
 	}
 
-	if got := checkStartupMapping(startup, "startup.go", "example", "initExample", map[string]string{"Value": "cfg.Value"}); got != "" {
-		t.Fatalf("checkStartupMapping() = %q, want no diagnostic", got)
+	if err := checkStartupMapping(startup, "startup.go", "example", "initExample", map[string]string{"Value": "cfg.Value"}); err != nil {
+		t.Fatalf("checkStartupMapping() = %v, want no diagnostic", err)
 	}
 }

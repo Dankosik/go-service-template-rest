@@ -140,13 +140,15 @@ linters:
         # it has nothing to add to the wording, and wrapping would print the
         # binary's own name twice. Same module-relative fragment rule as above.
         - cmd/internal/runtimeopts\.InstallTelemetry\(
-        # ValidateGracePeriod and ListenDiagnostics are the same case: each
-        # already returns the whole operator-facing rejection — the configuration
-        # leaf to edit, or the component whose diagnostics address was taken. The
+        # ValidateGracePeriod, RequireDiagnosticsAddr, and ListenDiagnostics are
+        # the same case: each already returns the whole operator-facing
+        # rejection — the configuration key or code-owned budget to fit, or the
+        # component whose diagnostics address is missing or taken. The
         # composition root that receives one has not reached a stage to name and
         # would only print the binary's own name twice. Same module-relative
         # fragment rule as above.
         - cmd/internal/runtimeopts\.ValidateGracePeriod\(
+        - cmd/internal/runtimeopts\.RequireDiagnosticsAddr\(
         - cmd/internal/runtimeopts\.ListenDiagnostics\(
         - github.com/riverqueue/river\.JobSnooze\(
     staticcheck:
@@ -240,6 +242,7 @@ linters:
             - __MODULE__/internal/messagingconfig
             - __MODULE__/internal/inboundwebhook/manifest
             - __MODULE__/internal/observability/otelconfig
+            - __MODULE__/internal/outboundtrust
           deny:
             - pkg: __MODULE__/internal
               desc: config parsing must not depend on features, runtime adapters, or transport contracts.
@@ -332,6 +335,10 @@ linters:
             - "**/internal/authntrust/*.go"
             - "**/internal/authntrust/**/*.go"
             - "!**/internal/authntrust/*_test.go"
+          allow:
+            # The fixed HTTPS target shape is one rule shared with config and the
+            # outbound HTTP client; outboundtrust is itself a stdlib-only leaf.
+            - __MODULE__/internal/outboundtrust
           deny:
             - pkg: __MODULE__/internal
               desc: authntrust is a pure trust-rule leaf shared by internal/config and the verifier; a dependency here would put it back out of reach of one of them.

@@ -13,7 +13,7 @@ pagination, batching, fan-out, retries, or a paid provider call.
   `RequestTimeout` bounds a single request. Neither provides per-caller
   fairness: one client holding every slot gets everyone else shed for the
   capacity it took.
-- Wiring `RateLimit` requires supplying `RateLimitKey`; the router refuses one
+- Setting `HardenConfig.RateLimiter` requires supplying `RateLimitKey`; the router refuses one
   without the other at construction. `HeaderRateLimitKey` hashes the header
   value, because the header identifying a caller before authentication is
   usually the credential itself, and a credential used as a map key is one heap

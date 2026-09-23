@@ -34,7 +34,7 @@ func initObjectStorageWith(
 	runtime, err := build(ctx, s3.Config{
 		Provider: s3.Provider(cfg.Provider), Endpoint: cfg.Endpoint, Region: cfg.Region,
 		Bucket: cfg.Bucket, ExpectedBucketOwner: cfg.ExpectedBucketOwner,
-		CredentialSource: cfg.CredentialSource, MaxObjectBytes: cfg.MaxObjectBytes,
+		CredentialSource: s3.CredentialSource(cfg.CredentialSource), MaxObjectBytes: cfg.MaxObjectBytes,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build object storage runtime: %w", err)

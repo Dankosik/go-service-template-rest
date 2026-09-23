@@ -286,19 +286,15 @@ func TestSetAfterFromApplied(t *testing.T) {
 	t.Parallel()
 
 	sources := []*goose.Source{{Version: 1}, {Version: 2}, {Version: 3}}
-	up := RunResult{
-		Before: 1,
-		After:  1,
-	}
+	var up RunResult
+	up.recordVersions(1, 3)
 	setAfterFromApplied(&up, directionUp, sources, []*goose.MigrationResult{{Source: sources[1]}})
 	if up.After != 2 || !up.AfterKnown || up.AppliedCount != 1 {
 		t.Fatalf("up = %+v, want after 2 and applied count 1", up)
 	}
 
-	down := RunResult{
-		Before: 3,
-		After:  3,
-	}
+	var down RunResult
+	down.recordVersions(3, 0)
 	setAfterFromApplied(&down, directionDown, sources, []*goose.MigrationResult{
 		{Source: sources[2]},
 		{Source: sources[1]},

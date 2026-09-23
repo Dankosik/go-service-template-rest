@@ -241,7 +241,7 @@ func TestShedResponseIsCorrelatedAndLogged(t *testing.T) {
 		requests.Wait()
 	})
 
-	chain, err := Harden(log, telemetry.New(), HardenConfig{
+	chain, err := Harden(log, telemetry.NewMetrics(), HardenConfig{
 		MaxBodyBytes:   1,
 		RequestTimeout: time.Minute,
 		MaxInFlight:    1,

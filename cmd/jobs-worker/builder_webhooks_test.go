@@ -12,18 +12,18 @@ import (
 
 func TestBuildWebhookWorkers(t *testing.T) {
 	secret := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
-	cfg := config.Config{OutboundWebhooks: config.WebhooksConfig{
+	cfg := config.Config{OutboundWebhooks: config.OutboundWebhooksConfig{
 		Enabled:       true,
 		StaticSecrets: `{"entries":[{"owner_scope":"orders","receiver_id":"alpha","key_reference":"key-v1","secret":"whsec_` + secret + `"}]}`,
 	}}
-	runtime, err := buildWebhookWorkers(context.Background(), cfg, slog.Default())
+	registration, err := buildWebhookWorkers(context.Background(), cfg, slog.Default())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Workers == nil {
+	if registration.Workers == nil {
 		t.Fatal("workers are nil")
 	}
-	workers := runtime.Workers
+	workers := registration.Workers
 	secrets, err := postgreswebhook.ParseSecretManifest(cfg.OutboundWebhooks.StaticSecrets)
 	if err != nil {
 		t.Fatal(err)

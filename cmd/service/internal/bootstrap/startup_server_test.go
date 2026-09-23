@@ -17,6 +17,15 @@ import (
 	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
+func newTestHealth(tb testing.TB, probes ...health.Probe) *health.Service {
+	tb.Helper()
+	svc, err := health.New(health.Policy{ProbeBudget: time.Second, FailureThreshold: 1}, probes...)
+	if err != nil {
+		tb.Fatalf("health.New() error = %v", err)
+	}
+	return svc
+}
+
 func TestWaitForRuntimeStopReturnsOneStopError(t *testing.T) {
 	t.Parallel()
 	log := slog.New(slog.DiscardHandler)
@@ -130,7 +139,7 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
+	svc := newTestHealth(t)
 
 	err := serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:-1", ShutdownTimeout: time.Second}},
@@ -169,7 +178,7 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 			},
 		},
 		log:            slog.New(slog.DiscardHandler),
-		healthSvc:      health.New(),
+		healthSvc:      newTestHealth(t),
 		httpSrv:        newFakeRuntimeServer(),
 		diagnosticsSrv: newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
@@ -193,11 +202,11 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 	admission := new(startupAdmissionController)
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
-	bootstrapCtx := context.WithoutCancel(signalCtx)
+	startupCtx := context.WithoutCancel(signalCtx)
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- serveRuntime(signalCtx, bootstrapCtx, serveRuntimeArgs{
+		runErrCh <- serveRuntime(signalCtx, startupCtx, serveRuntimeArgs{
 			cfg: config.Config{
 				App:  config.AppConfig{Env: "test"},
 				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
@@ -206,7 +215,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 				},
 			},
 			log:            slog.New(slog.DiscardHandler),
-			healthSvc:      health.New(),
+			healthSvc:      newTestHealth(t),
 			httpSrv:        appSrv,
 			diagnosticsSrv: diagnosticsSrv,
 			readinessCheck: func(context.Context) error { return nil },
@@ -246,7 +255,7 @@ func TestServeHTTPRuntimeStopsAfterBackgroundFailure(t *testing.T) {
 				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
 			},
 			log:                slog.New(slog.DiscardHandler),
-			healthSvc:          health.New(),
+			healthSvc:          newTestHealth(t),
 			httpSrv:            srv,
 			readinessCheck:     func(context.Context) error { return nil },
 			backgroundFailures: failures,
@@ -268,7 +277,7 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
+	svc := newTestHealth(t)
 
 	signalCtx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -295,18 +304,18 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
+	svc := newTestHealth(t)
 	srv := newFakeRuntimeServer()
 	admission := new(startupAdmissionController)
 	readinessChecked := make(chan struct{}, 1)
 
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
-	bootstrapCtx := context.WithoutCancel(signalCtx)
+	startupCtx := context.WithoutCancel(signalCtx)
 
 	runErrCh := make(chan error, 1)
-	go func(signalCtx context.Context, bootstrapCtx context.Context) {
-		runErrCh <- serveRuntime(signalCtx, bootstrapCtx, serveRuntimeArgs{
+	go func(signalCtx context.Context, startupCtx context.Context) {
+		runErrCh <- serveRuntime(signalCtx, startupCtx, serveRuntimeArgs{
 			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 			log:       logger,
 			healthSvc: svc,
@@ -321,7 +330,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 			admission: admission,
 			shutdown:  testShutdownBudget(),
 		})
-	}(signalCtx, bootstrapCtx)
+	}(signalCtx, startupCtx)
 
 	waittest.ReceiveSignal(t, readinessChecked, time.Second, "internal readiness check")
 	waittest.Until(t, time.Second, func(context.Context) bool { return admission.Ready() }, "startup admission to be marked ready")
@@ -337,12 +346,12 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
+	svc := newTestHealth(t)
 
-	bootstrapCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	startupCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	err := serveRuntime(context.Background(), bootstrapCtx, serveRuntimeArgs{
+	err := serveRuntime(context.Background(), startupCtx, serveRuntimeArgs{
 		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:       logger,
 		healthSvc: svc,
@@ -367,7 +376,7 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 	t.Parallel()
 
 	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
+	svc := newTestHealth(t)
 	srv := newFakeRuntimeServer()
 	shutdownCalled := false
 
@@ -407,7 +416,7 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
+	svc := newTestHealth(t)
 	srv := newFakeRuntimeServer()
 	srv.onServe = func(net.Listener) error {
 		return errors.New("boom")
@@ -445,7 +454,7 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 	// assertion below failed for a reason the production code was not guilty of.
 	synctest.Test(t, func(t *testing.T) {
 		logger := slog.New(slog.DiscardHandler)
-		svc := health.New()
+		svc := newTestHealth(t)
 		srv := newFakeRuntimeServer()
 		admission := new(startupAdmissionController)
 		serveReturned := make(chan struct{})
@@ -516,7 +525,7 @@ func TestServeRuntimeCoordinatesGRPCReadinessAndDrain(t *testing.T) {
 				}},
 			},
 			log:            slog.New(slog.DiscardHandler),
-			healthSvc:      health.New(),
+			healthSvc:      newTestHealth(t),
 			httpSrv:        httpServer,
 			grpcSrv:        grpcServer,
 			readinessCheck: func(context.Context) error { return nil },
@@ -563,7 +572,7 @@ func TestServeRuntimeRejectsGRPCListenFailureBeforeServing(t *testing.T) {
 			}},
 		},
 		log:       slog.New(slog.DiscardHandler),
-		healthSvc: health.New(),
+		healthSvc: newTestHealth(t),
 		httpSrv:   newFakeRuntimeServer(),
 		grpcSrv:   grpcServer,
 		admission: new(startupAdmissionController),
@@ -622,7 +631,7 @@ func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 			},
 		},
 		log:            slog.New(slog.DiscardHandler),
-		healthSvc:      health.New(),
+		healthSvc:      newTestHealth(t),
 		httpSrv:        apiServer,
 		diagnosticsSrv: diagnosticsServer,
 		readinessCheck: func(context.Context) error { return nil },

@@ -18,7 +18,7 @@ const (
 func TestCachedFailsClosedBeforeFirstEvaluation(t *testing.T) {
 	t.Parallel()
 
-	svc := New(fakeProbe{name: "db"})
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: 1}, fakeProbe{name: "db"})
 
 	if err := svc.Cached(); !errors.Is(err, ErrNotEvaluated) {
 		t.Fatalf("Cached() error = %v, want ErrNotEvaluated", err)
@@ -31,8 +31,8 @@ func TestCachedServesWithoutTouchingProbes(t *testing.T) {
 	t.Parallel()
 
 	probe := &countingProbe{name: "db"}
-	svc := New(probe)
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, probe)
+	_ = svc.Refresh(context.Background())
 
 	if got := probe.calls.Load(); got != 1 {
 		t.Fatalf("probe calls after one refresh = %d, want 1", got)
@@ -52,15 +52,15 @@ func TestWatchReusesReadinessSeededByStartupAdmission(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		probe := &countingProbe{name: "db"}
-		svc := New(probe)
-		if err := svc.Refresh(t.Context(), testRefreshInterval, 1); err != nil {
+		svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: 1}, probe)
+		if err := svc.Refresh(t.Context()); err != nil {
 			t.Fatalf("Refresh() error = %v", err)
 		}
 
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan error, 1)
 		go func() {
-			done <- svc.Watch(ctx, time.Hour, testRefreshInterval, 1, nil)
+			done <- svc.Watch(ctx, time.Hour, nil)
 		}()
 		synctest.Wait()
 		if got := probe.calls.Load(); got != 1 {
@@ -79,22 +79,22 @@ func TestCachedHoldsHealthyUntilFailureThreshold(t *testing.T) {
 
 	downErr := errors.New("down")
 	probe := &countingProbe{name: "db"}
-	svc := New(probe)
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, probe)
 
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	_ = svc.Refresh(context.Background())
 	if err := svc.Cached(); err != nil {
 		t.Fatalf("Cached() after healthy refresh error = %v", err)
 	}
 
 	probe.err.Store(&downErr)
 	for attempt := 1; attempt < testFailureThreshold; attempt++ {
-		_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+		_ = svc.Refresh(context.Background())
 		if err := svc.Cached(); err != nil {
 			t.Fatalf("Cached() after %d/%d failures error = %v, want nil", attempt, testFailureThreshold, err)
 		}
 	}
 
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	_ = svc.Refresh(context.Background())
 	if err := svc.Cached(); !errors.Is(err, downErr) {
 		t.Fatalf("Cached() at threshold error = %v, want wrapped %v", err, downErr)
 	}
@@ -106,9 +106,9 @@ func TestCachedReportsFirstFailureImmediately(t *testing.T) {
 	t.Parallel()
 
 	downErr := errors.New("down")
-	svc := New(fakeProbe{name: "db", err: downErr})
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, fakeProbe{name: "db", err: downErr})
 
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	_ = svc.Refresh(context.Background())
 
 	if err := svc.Cached(); !errors.Is(err, downErr) {
 		t.Fatalf("Cached() error = %v, want wrapped %v", err, downErr)
@@ -122,11 +122,11 @@ func TestCachedReportsNewestFailureWhileAlreadyUnhealthy(t *testing.T) {
 	secondErr := errors.New("second failure")
 	probe := &countingProbe{name: "db"}
 	probe.err.Store(&firstErr)
-	svc := New(probe)
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, probe)
 
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	_ = svc.Refresh(context.Background())
 	probe.err.Store(&secondErr)
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	_ = svc.Refresh(context.Background())
 
 	if err := svc.Cached(); !errors.Is(err, secondErr) {
 		t.Fatalf("Cached() error = %v, want newest wrapped %v", err, secondErr)
@@ -139,15 +139,15 @@ func TestCachedRecoversAfterHealthyRefresh(t *testing.T) {
 	downErr := errors.New("down")
 	probe := &countingProbe{name: "db"}
 	probe.err.Store(&downErr)
-	svc := New(probe)
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, probe)
 
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	_ = svc.Refresh(context.Background())
 	if err := svc.Cached(); err == nil {
 		t.Fatal("Cached() error = nil, want failure")
 	}
 
 	probe.err.Store(nil)
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	_ = svc.Refresh(context.Background())
 	if err := svc.Cached(); err != nil {
 		t.Fatalf("Cached() after recovery error = %v", err)
 	}
@@ -158,8 +158,8 @@ func TestCachedRecoversAfterHealthyRefresh(t *testing.T) {
 func TestCachedDrainWinsOverFreshState(t *testing.T) {
 	t.Parallel()
 
-	svc := New(fakeProbe{name: "db"})
-	_ = svc.Refresh(context.Background(), testRefreshInterval, testFailureThreshold)
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, fakeProbe{name: "db"})
+	_ = svc.Refresh(context.Background())
 	svc.StartDrain()
 
 	if err := svc.Cached(); !errors.Is(err, ErrDraining) {
@@ -172,11 +172,11 @@ func TestWatchRefreshesOnIntervalAndStopsOnCancel(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		probe := &countingProbe{name: "db"}
-		svc := New(probe)
+		svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, probe)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		watchErr := make(chan error, 1)
-		go func() { watchErr <- svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, nil) }()
+		go func() { watchErr <- svc.Watch(ctx, testRefreshInterval, nil) }()
 
 		synctest.Wait()
 		if got := probe.calls.Load(); got != 1 {
@@ -208,11 +208,11 @@ func TestWatchBoundsEachEvaluationByProbeBudget(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		svc := New(blockingProbe{name: "db"})
+		svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: 1}, blockingProbe{name: "db"})
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, 1, nil) }()
+		go func() { _ = svc.Watch(ctx, testRefreshInterval, nil) }()
 
 		synctest.Sleep(testProbeBudget + time.Millisecond)
 
@@ -223,10 +223,9 @@ func TestWatchBoundsEachEvaluationByProbeBudget(t *testing.T) {
 	})
 }
 
-// TestWatchSpendsTheProbeBudgetNotTheInterval is the defect this signature
-// exists to prevent: the two used to be the same argument, so a probe budget
-// larger than the refresh period was silently clamped to the period and a
-// dependency that passed startup admission flapped in steady state.
+// TestWatchSpendsTheProbeBudgetNotTheInterval keeps a probe budget larger than
+// the refresh period from being clamped to the period, which would let a
+// dependency that passed startup admission flap in steady state.
 func TestWatchSpendsTheProbeBudgetNotTheInterval(t *testing.T) {
 	t.Parallel()
 
@@ -236,11 +235,11 @@ func TestWatchSpendsTheProbeBudgetNotTheInterval(t *testing.T) {
 			probeBudget = 4 * time.Second
 		)
 		probe := &deadlineProbe{}
-		svc := New(probe)
+		svc := mustNew(t, Policy{ProbeBudget: probeBudget, FailureThreshold: 1}, probe)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go func() { _ = svc.Watch(ctx, interval, probeBudget, 1, nil) }()
+		go func() { _ = svc.Watch(ctx, interval, nil) }()
 		synctest.Wait()
 
 		if got := probe.budget.Load(); time.Duration(got) != probeBudget {
@@ -257,13 +256,13 @@ func TestCachedRefusesAStaleVerdict(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		probe := &countingProbe{name: "db"}
-		svc := New(probe)
+		svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, probe)
 		transitions := make(chan error, 1)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan error, 1)
 		go func() {
-			done <- svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, func(err error) {
+			done <- svc.Watch(ctx, testRefreshInterval, func(err error) {
 				transitions <- err
 			})
 		}()
@@ -292,19 +291,24 @@ func TestCachedRefusesAStaleVerdict(t *testing.T) {
 	})
 }
 
-func TestWatchRejectsUnusableSettings(t *testing.T) {
+func TestNewRejectsUnusablePolicy(t *testing.T) {
 	t.Parallel()
 
-	svc := New(fakeProbe{name: "db"})
+	if _, err := New(Policy{FailureThreshold: 1}, fakeProbe{name: "db"}); err == nil {
+		t.Fatal("New(probeBudget=0) error = nil, want non-nil")
+	}
+	if _, err := New(Policy{ProbeBudget: testProbeBudget}, fakeProbe{name: "db"}); err == nil {
+		t.Fatal("New(threshold=0) error = nil, want non-nil")
+	}
+}
 
-	if err := svc.Watch(context.Background(), 0, testProbeBudget, 1, nil); err == nil {
+func TestWatchRejectsUnusableInterval(t *testing.T) {
+	t.Parallel()
+
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: 1}, fakeProbe{name: "db"})
+
+	if err := svc.Watch(context.Background(), 0, nil); err == nil {
 		t.Fatal("Watch(interval=0) error = nil, want non-nil")
-	}
-	if err := svc.Watch(context.Background(), testRefreshInterval, 0, 1, nil); err == nil {
-		t.Fatal("Watch(probeBudget=0) error = nil, want non-nil")
-	}
-	if err := svc.Watch(context.Background(), testRefreshInterval, testProbeBudget, 0, nil); err == nil {
-		t.Fatal("Watch(threshold=0) error = nil, want non-nil")
 	}
 }
 
@@ -312,11 +316,11 @@ func TestWatchReturnsImmediatelyOnCanceledContext(t *testing.T) {
 	t.Parallel()
 
 	probe := &countingProbe{name: "db"}
-	svc := New(probe)
+	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, probe)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if err := svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, nil); err != nil {
+	if err := svc.Watch(ctx, testRefreshInterval, nil); err != nil {
 		t.Fatalf("Watch() error = %v, want nil", err)
 	}
 	if got := probe.calls.Load(); got != 0 {
@@ -330,13 +334,13 @@ func TestWatchReportsOnlyEffectiveReadinessTransitions(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		downErr := errors.New("down")
 		probe := &countingProbe{name: "db"}
-		svc := New(probe)
+		svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: testFailureThreshold}, probe)
 		transitions := make(chan error, 2)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go func() {
-			_ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, func(err error) {
+			_ = svc.Watch(ctx, testRefreshInterval, func(err error) {
 				transitions <- err
 			})
 		}()

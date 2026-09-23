@@ -37,8 +37,8 @@ func TestMessagingCompositionRejectsDisabledTransportWithRegisteredHandler(t *te
 		built = true
 		return nil, nil, nil
 	})
-	if !errors.Is(err, natsjs.ErrRejected) || !strings.Contains(err.Error(), "messaging must be enabled for worker") {
-		t.Fatalf("run(disabled messaging) error = %v, want disabled ErrRejected", err)
+	if !errors.Is(err, config.ErrValidate) || !strings.Contains(err.Error(), "messaging must be enabled for worker") {
+		t.Fatalf("run(disabled messaging) error = %v, want disabled ErrValidate", err)
 	}
 	if built {
 		t.Fatal("worker built the feature handler while messaging was disabled")
@@ -116,20 +116,20 @@ func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 	telemetrytest.ClearAmbientExporterEnv(t)
 
-	cleanup, err := runtimeopts.InstallTelemetry(t.Context(), config.Config{
+	flush, err := runtimeopts.InstallTelemetry(t.Context(), config.Config{
 		App: config.AppConfig{
 			Env: "test", Version: "v1", Commit: "test-commit", InstanceID: "worker-test",
 		},
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{
 			ServiceName: "worker", TracesSampler: "always_off",
 		}},
-	}, telemetry.New(), slog.New(slog.DiscardHandler), "worker")
+	}, telemetry.NewMetrics(), slog.New(slog.DiscardHandler), "worker")
 	if err != nil {
 		t.Fatalf("runtimeopts.InstallTelemetry() error = %v", err)
 	}
-	cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	flushCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_ = cleanup(cleanupCtx)
+	_ = flush(flushCtx)
 }
 
 // TestWorkerRunLoopPanicIsRecovered covers the loop this process exists to run.
@@ -236,8 +236,8 @@ func TestMessagingCompositionRejectsMissingDiagnosticsBeforeConnection(t *testin
 	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
 		return testRegistry(t, "test", func(context.Context, string) error { return nil }), nil, nil
 	})
-	if !errors.Is(err, natsjs.ErrRejected) {
-		t.Fatalf("run(missing diagnostics) error = %v, want ErrRejected", err)
+	if !errors.Is(err, config.ErrValidate) {
+		t.Fatalf("run(missing diagnostics) error = %v, want ErrValidate", err)
 	}
 	if err := listener.Close(); err != nil {
 		t.Fatalf("close worker connection sentinel: %v", err)

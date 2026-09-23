@@ -22,7 +22,7 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 
 	telemetrytest.RestoreGlobals(t)
 
-	metrics := New()
+	metrics := NewMetrics()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		Resource: ResourceConfig{
 			ServiceName:       " test-service ",
@@ -113,7 +113,7 @@ func TestRecordTraceExporterInitializationIsScrapable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			telemetrytest.RestoreGlobals(t)
 
-			metrics := New()
+			metrics := NewMetrics()
 			result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 				Resource: ResourceConfig{
 					ServiceName:    "test-service",
@@ -240,7 +240,7 @@ func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
-	metrics := New()
+	metrics := NewMetrics()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		Resource: ResourceConfig{
 			ServiceName:    "degraded-service",
@@ -249,7 +249,7 @@ func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
 		},
 		// No scheme, which is what a hand written manifest usually carries and
 		// what the endpoint parser refuses fail-closed.
-		Exporter: MetricExporterConfig{OTLPEndpoint: "collector:4318"},
+		Exporter: MetricExporterConfig{OTLPMetricsEndpoint: "collector:4318"},
 	})
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v, want scrape-only degradation rather than no provider", err)

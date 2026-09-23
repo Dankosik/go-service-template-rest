@@ -2,7 +2,6 @@ package oauthintrospection
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -19,11 +18,13 @@ import (
 
 var _ bearerauthn.Verifier = (*Verifier)(nil)
 
+// Fixed provider-work bounds. Changing one is a code-reviewed trust decision;
+// shared token size and clock-skew bounds live in bearerauthn.
 const (
-	ProviderTimeout        = 5 * time.Second
-	MaxResponseHeaderBytes = 32 << 10
-	MaxProviderBody        = 1 << 20
-	MaxProviderInFlight    = 32
+	providerTimeout        = 5 * time.Second
+	maxProviderHeaderBytes = 32 << 10
+	maxProviderBodyBytes   = 1 << 20
+	maxProviderInFlight    = 32
 )
 
 type providerClient interface {
@@ -57,27 +58,27 @@ func newVerifier(policy Policy, client providerClient, now func() time.Time) *Ve
 
 func newProviderClient(policy Policy) (*httpclient.Client, error) {
 	limits := httpclient.TransportLimits{
-		ResponseHeaderTimeout:  ProviderTimeout,
-		MaxResponseHeaderBytes: MaxResponseHeaderBytes,
-		MaxInFlight:            MaxProviderInFlight,
-		AbsoluteBodyBytes:      MaxProviderBody,
+		ResponseHeaderTimeout:  providerTimeout,
+		MaxResponseHeaderBytes: maxProviderHeaderBytes,
+		MaxInFlight:            maxProviderInFlight,
+		AbsoluteBodyBytes:      maxProviderBodyBytes,
 	}
-	var (
-		client *httpclient.Client
-		err    error
-	)
 	switch policy.targetClass {
 	case authntrust.TargetClassExternalHTTPS:
-		client, err = httpclient.NewExternalHTTPS(policy.endpoint, limits)
+		client, err := httpclient.NewExternalHTTPS(policy.endpoint, limits)
+		if err != nil {
+			return nil, fmt.Errorf("build introspection client: %w", bearerauthn.NewError(bearerauthn.KindUnavailable))
+		}
+		return client, nil
 	case authntrust.TargetClassPrivateHTTPS:
-		client, err = httpclient.NewPrivateHTTPS(policy.endpoint, policy.privateSuffix, limits)
+		client, err := httpclient.NewPrivateHTTPS(policy.endpoint, policy.privateSuffix, limits)
+		if err != nil {
+			return nil, fmt.Errorf("build introspection client: %w", bearerauthn.NewError(bearerauthn.KindUnavailable))
+		}
+		return client, nil
 	default:
-		return nil, fmt.Errorf("build introspection client: %w", failure(bearerauthn.KindUnavailable))
+		return nil, fmt.Errorf("build introspection client: %w", bearerauthn.NewError(bearerauthn.KindUnavailable))
 	}
-	if err != nil {
-		return nil, fmt.Errorf("build introspection client: %w", failure(bearerauthn.KindUnavailable))
-	}
-	return client, nil
 }
 
 // Close releases idle provider connections. It is idempotent.
@@ -90,13 +91,12 @@ func (v *Verifier) Close() {
 
 // Verify implements bearerauthn.Verifier for one already-parsed opaque bearer.
 func (v *Verifier) Verify(ctx context.Context, token string) (bearerauthn.Result, error) {
-	request, err := v.newIntrospectionRequest(ctx, token)
+	attemptCtx, cancel := context.WithTimeout(ctx, providerTimeout)
+	defer cancel()
+	request, err := v.newIntrospectionRequest(attemptCtx, token)
 	if err != nil {
 		return bearerauthn.Result{}, classifyContextOrUnavailable(ctx)
 	}
-	attemptCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
-	defer cancel()
-	request = request.WithContext(attemptCtx)
 
 	response, err := v.client.Do(request)
 	if err != nil {
@@ -105,12 +105,12 @@ func (v *Verifier) Verify(ctx context.Context, token string) (bearerauthn.Result
 	if response != nil && response.Body != nil {
 		defer func() { _ = response.Body.Close() }()
 	}
-	body, err := readBoundedBody(response)
-	if err != nil {
+	body, ok := readBoundedBody(response)
+	if !ok {
 		return bearerauthn.Result{}, classifyContextOrUnavailable(ctx)
 	}
 	if response.StatusCode != http.StatusOK || !jsonMediaType(response.Header.Get("Content-Type")) {
-		return bearerauthn.Result{}, failure(bearerauthn.KindUnavailable)
+		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindUnavailable)
 	}
 	return admitResponse(body, v.policy, v.now())
 }
@@ -121,32 +121,26 @@ func (v *Verifier) newIntrospectionRequest(ctx context.Context, token string) (*
 	form.Set("token_type_hint", "access_token")
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, v.policy.endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("build introspection request: %w", failure(bearerauthn.KindUnavailable))
+		return nil, fmt.Errorf("build introspection request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Authorization", oauthBasicHeader(v.policy.clientID, v.policy.clientSecret))
+	// client_secret_basic form-encodes both values before Basic encoding
+	// (RFC 6749 section 2.3.1).
+	request.SetBasicAuth(url.QueryEscape(v.policy.clientID), url.QueryEscape(v.policy.clientSecret))
 	return request, nil
 }
 
-func oauthBasicHeader(clientID, clientSecret string) string {
-	user := url.QueryEscape(clientID)
-	password := url.QueryEscape(clientSecret)
-	return "Basic " + base64.StdEncoding.EncodeToString([]byte(user+":"+password))
-}
-
-func readBoundedBody(response *http.Response) ([]byte, error) {
+// readBoundedBody reports false for a missing, unreadable, or oversized body.
+func readBoundedBody(response *http.Response) ([]byte, bool) {
 	if response == nil || response.Body == nil {
-		return nil, failure(bearerauthn.KindUnavailable)
+		return nil, false
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, MaxProviderBody+1))
-	if err != nil {
-		return nil, fmt.Errorf("read introspection response: %w", failure(bearerauthn.KindUnavailable))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxProviderBodyBytes+1))
+	if err != nil || len(body) > maxProviderBodyBytes {
+		return nil, false
 	}
-	if len(body) > MaxProviderBody {
-		return nil, failure(bearerauthn.KindUnavailable)
-	}
-	return body, nil
+	return body, true
 }
 
 func jsonMediaType(value string) bool {
@@ -158,5 +152,5 @@ func classifyContextOrUnavailable(ctx context.Context) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("verify access token: %w", ctxErr)
 	}
-	return failure(bearerauthn.KindUnavailable)
+	return bearerauthn.VerificationFailure(bearerauthn.KindUnavailable)
 }

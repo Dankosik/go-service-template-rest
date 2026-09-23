@@ -2,10 +2,9 @@
 // wires one feature onto its generated contract and through the shared hardened
 // middleware chain.
 //
-// It deliberately owns no process lifecycle. The version this replaced carried
-// its own main, listener, signal handling, and shutdown — a hundred lines that
-// duplicated cmd/service/internal/bootstrap and got it worse, in the file a
-// reader opens first to learn how to compose a feature.
+// It deliberately owns no process lifecycle: listener, signal handling, and
+// shutdown belong to cmd/service/internal/bootstrap, not to the file a reader
+// opens first to learn how to compose a feature.
 //
 // What is worth copying is below: a feature package that knows nothing about
 // HTTP, an httpapi package that maps it onto the generated contract, one
@@ -67,10 +66,10 @@ func NewHandler(log *slog.Logger, writeToken string) (http.Handler, error) {
 		return nil, errors.New("reference service: write token is required")
 	}
 
-	repository := memory.New()
+	store := memory.New()
 	// A PostgreSQL store passes postgres.InTx behind the same article.Store port;
 	// nothing in the feature package changes.
-	articles, err := article.NewService(repository)
+	articles, err := article.NewService(store)
 	if err != nil {
 		return nil, fmt.Errorf("build article service: %w", err)
 	}
@@ -84,9 +83,7 @@ func NewHandler(log *slog.Logger, writeToken string) (http.Handler, error) {
 		RejectRequest: httpx.RejectRequest(log, authenticateChallenge),
 		// One classification table for the whole feature. Handlers return their
 		// use case's error and this decides what the client sees, so adding an
-		// operation does not mean copying a switch — which is how the local
-		// status table this replaced drifted and answered a 409 with the
-		// internal-error type.
+		// operation does not mean copying a status switch that can drift.
 		RejectResponse: httpx.RejectResponse(log, article.ClassifyError),
 	})
 	if err != nil {
@@ -95,7 +92,7 @@ func NewHandler(log *slog.Logger, writeToken string) (http.Handler, error) {
 
 	// The chain instruments every request, so it needs a registry to record into.
 	// This example exposes no scrape endpoint of its own.
-	handler, err := httpx.Harden(log, telemetry.New(), httpx.HardenConfig{
+	handler, err := httpx.Harden(log, telemetry.NewMetrics(), httpx.HardenConfig{
 		MaxBodyBytes:   maxBodyBytes,
 		RequestTimeout: requestTimeout,
 		MaxInFlight:    maxInFlight,

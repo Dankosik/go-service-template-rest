@@ -33,8 +33,22 @@ const (
 	headerDeadLetterReason = "Dead-Letter-Reason"
 )
 
+// envelopeHeaders are the publisher's own identity headers: everything the
+// envelope carries besides the broker's deduplication id and trace context.
+var envelopeHeaders = []string{headerMessageID, headerEventType, headerEventSchema, headerCreatedAt}
+
+// parseCreatedAt reads the envelope's creation time as UTC, reporting false
+// when it is absent, malformed, or zero.
+func parseCreatedAt(header nats.Header) (time.Time, bool) {
+	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))
+	if err != nil || createdAt.IsZero() {
+		return time.Time{}, false
+	}
+	return createdAt.UTC(), true
+}
+
 func validateEvent(event Event, maxPayloadBytes int) error {
-	if !validSubject(event.Subject, false) {
+	if !validPublishSubject(event.Subject) {
 		return fmt.Errorf("%w: invalid event subject", ErrRejected)
 	}
 	if err := validateRequiredValue("message ID", event.MessageID); err != nil {
@@ -63,10 +77,10 @@ func validateRequiredValue(name, value string) error {
 	if value == "" {
 		return fmt.Errorf("%w: %s is required", ErrRejected, name)
 	}
-	return validateOptionalValue(name, value)
+	return validateHeaderValue(name, value)
 }
 
-// validateOptionalValue rejects what must not travel in a NATS header.
+// validateHeaderValue rejects what must not travel in a NATS header.
 //
 // UTF-8 validity is checked before the scan below rather than left to it.
 // Ranging a string yields U+FFFD for each invalid byte, and U+FFFD is not a
@@ -79,7 +93,7 @@ func validateRequiredValue(name, value string) error {
 // test, so C1 (U+0080-U+009F) is refused alongside C0. Those bytes are as
 // unreadable in a subscriber's log line as the ASCII ones, and a header is read
 // far more often than it is parsed.
-func validateOptionalValue(name, value string) error {
+func validateHeaderValue(name, value string) error {
 	if len(value) > maxHeaderValueBytes {
 		return fmt.Errorf("%w: %s exceeds %d bytes", ErrRejected, name, maxHeaderValueBytes)
 	}
@@ -92,10 +106,9 @@ func validateOptionalValue(name, value string) error {
 	return nil
 }
 
+// buildNATSMessage encodes an event that has already passed validateEvent, and
+// rejects it only when the encoded envelope exceeds the configured bound.
 func buildNATSMessage(ctx context.Context, event Event, maxPayloadBytes int) (*nats.Msg, error) {
-	if err := validateEvent(event, maxPayloadBytes); err != nil {
-		return nil, err
-	}
 	header := make(nats.Header)
 	header.Set(headerMessageID, event.MessageID)
 	header.Set(jetstream.MsgIDHeader, event.PublicationID)
@@ -146,8 +159,8 @@ type remoteContext struct {
 // that metadata to the handler context after admission.
 func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message, remoteContext, error) {
 	header := msg.Headers()
-	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))
-	if err != nil || createdAt.IsZero() {
+	createdAt, ok := parseCreatedAt(header)
+	if !ok {
 		return Message{}, remoteContext{}, fmt.Errorf("%w: invalid creation time", ErrRejected)
 	}
 	// The validated values are what the Message below is built from, rather than
@@ -179,7 +192,7 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message,
 		publicationID: publicationID,
 		eventType:     eventType,
 		schema:        schema,
-		createdAt:     createdAt.UTC(),
+		createdAt:     createdAt,
 		payload:       slices.Clone(msg.Data()),
 		metadata: DeliveryMetadata{
 			Stream:           metadata.Stream,

@@ -14,7 +14,7 @@ import (
 
 // RejectFunc writes a transport-level rejection. The composition root supplies
 // these so this package maps the feature onto its contract without importing an
-// infra adapter to do it; see the reference binary for what it passes.
+// infra adapter to do it; see referenceservice.NewHandler for what it passes.
 type RejectFunc func(http.ResponseWriter, *http.Request, error)
 
 // Options carries what the composition root owns.
@@ -31,8 +31,10 @@ type Options struct {
 	// to 413, a failed security requirement to 401 with a WWW-Authenticate
 	// challenge, everything else to a sanitized 400.
 	RejectRequest RejectFunc
-	// RejectResponse maps a generated strict-server response failure: a spent
-	// request budget to 504, anything else to 500.
+	// RejectResponse maps an error a handler returns onto a response. It is the
+	// one place domain errors become statuses: the composition root builds it
+	// from the feature's classification table. A spent or canceled request
+	// answers 504, and an unclassified error 500.
 	RejectResponse RejectFunc
 }
 

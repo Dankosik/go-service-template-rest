@@ -30,6 +30,9 @@ func RequestID(ctx context.Context) string {
 	return requestID
 }
 
+// ContextWithAcceptedRequestID stores a request ID in ctx and returns the ID it
+// stored. It trims candidate and accepts it only when it is a token of at most
+// 128 bytes from [A-Za-z0-9._~-]; otherwise it generates a new one.
 func ContextWithAcceptedRequestID(ctx context.Context, candidate string) (context.Context, string) {
 	requestID := strings.TrimSpace(candidate)
 	if !validRequestID(requestID) {

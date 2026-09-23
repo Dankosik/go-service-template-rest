@@ -1,13 +1,24 @@
 //go:build ignore
 
+// integration-record-bootstrap-check verifies the bootstrap wiring that
+// scripts/integration-init.sh generates for one integration record.
+//
+// STARTUP must hold INIT_FUNC with adjacent statements
+// `client, err := <alias>.New(<alias>.Config{...})`, an `if err != nil` guard
+// returning nil and an error, and `return client, nil`; each FIELD=VALUE names
+// one Config field path and the config path it must map. RUN must hold the
+// construction `CLIENT_VAR, err := INIT_FUNC(CONFIG_PATH)` that wire_run_go
+// inserts: an immediate `if err != nil { return err }`, a later
+// `<name>Closed := false`, one assignment to CLIENT_VAR, and at least two Close
+// calls on it.
 package main
 
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -43,12 +54,12 @@ func runBootstrapCheck(arguments []string) (int, []string) {
 	if err != nil {
 		return 1, []string{err.Error()}
 	}
-	alias := importAlias(startup, importSuffix)
-	if alias == "" || alias == "." || alias == "_" {
+	alias := usableImportAlias(startup, importSuffix)
+	if alias == "" {
 		return 1, []string{fmt.Sprintf("%s: missing usable import ending in %s", startupFile, importSuffix)}
 	}
-	if diagnostic := checkStartupMapping(startup, startupFile, alias, initFunction, expected); diagnostic != "" {
-		return 1, []string{diagnostic}
+	if err := checkStartupMapping(startup, startupFile, alias, initFunction, expected); err != nil {
+		return 1, []string{err.Error()}
 	}
 
 	run, err := parseFile(runFile)
@@ -62,7 +73,7 @@ func runBootstrapCheck(arguments []string) (int, []string) {
 	return 0, diagnostics
 }
 
-func checkStartupMapping(startup *ast.File, startupFile, alias, initFunction string, expected map[string]string) string {
+func checkStartupMapping(startup *ast.File, startupFile, alias, initFunction string, expected map[string]string) error {
 	actual := map[string]string{}
 	startupFlows := 0
 	for _, declaration := range startup.Decls {
@@ -75,7 +86,7 @@ func checkStartupMapping(startup *ast.File, startupFile, alias, initFunction str
 		// refactoring to non-adjacent statements will not match.
 		for index := 0; index+2 < len(function.Body.List); index++ {
 			literal, ok := startupConstruction(function.Body.List[index], alias)
-			if !ok || !errorReturn(function.Body.List[index+1], true) || !clientReturn(function.Body.List[index+2]) {
+			if !ok || !returnsNilAndError(function.Body.List[index+1]) || !clientReturn(function.Body.List[index+2]) {
 				continue
 			}
 			startupFlows++
@@ -84,14 +95,14 @@ func checkStartupMapping(startup *ast.File, startupFile, alias, initFunction str
 	}
 
 	if startupFlows != 1 {
-		return fmt.Sprintf("%s: canonical startup flows=%d, want 1", startupFile, startupFlows)
+		return fmt.Errorf("%s: canonical startup flows=%d, want 1", startupFile, startupFlows)
 	}
 	for field, want := range expected {
 		if got := actual[field]; got != want {
-			return fmt.Sprintf("%s: mapping %s=%q, want %q", startupFile, field, got, want)
+			return fmt.Errorf("%s: mapping %s=%q, want %q", startupFile, field, got, want)
 		}
 	}
-	return ""
+	return nil
 }
 
 func checkRunLifecycle(run *ast.File, runFile, initFunction, clientVariable, configPath string) (bool, []string) {
@@ -110,14 +121,10 @@ func checkRunLifecycle(run *ast.File, runFile, initFunction, clientVariable, con
 			if !constructionOK {
 				continue
 			}
-			errorOK := errorReturn(function.Body.List[index+1], false)
-			closedOK := false
-			for later := index + 2; later < len(function.Body.List); later++ {
-				if falseAssignment(function.Body.List[later], closedVariable) {
-					closedOK = true
-					break
-				}
-			}
+			errorOK := returnsErr(function.Body.List[index+1])
+			closedOK := slices.ContainsFunc(function.Body.List[index+2:], func(statement ast.Stmt) bool {
+				return falseAssignment(statement, closedVariable)
+			})
 			assignments := assignmentsTo(function.Body, clientVariable)
 			closes := closeCalls(function.Body, clientVariable)
 			if !errorOK || !closedOK || assignments != 1 || closes < 2 {
@@ -143,27 +150,35 @@ func startupConstruction(statement ast.Stmt, alias string) (*ast.CompositeLit, b
 	if !ok || len(call.Args) != 1 {
 		return nil, false
 	}
-	constructor, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || constructor.Sel.Name != "New" || !ownedBy(constructor, alias) {
+	if !selectorNamed(call.Fun, alias, "New") {
 		return nil, false
 	}
 	literal, ok := call.Args[0].(*ast.CompositeLit)
-	return literal, ok && selectorTypeIs(literal.Type, alias, "Config")
+	return literal, ok && selectorNamed(literal.Type, alias, "Config")
 }
 
-func errorReturn(statement ast.Stmt, twoResults bool) bool {
+// returnsNilAndError matches `if err != nil { return nil, <non-nil> }`.
+func returnsNilAndError(statement ast.Stmt) bool {
+	returned := errGuardReturn(statement)
+	return returned != nil && len(returned.Results) == 2 &&
+		identifierIs(returned.Results[0], "nil") && !identifierIs(returned.Results[1], "nil")
+}
+
+// returnsErr matches `if err != nil { return err }`.
+func returnsErr(statement ast.Stmt) bool {
+	returned := errGuardReturn(statement)
+	return returned != nil && len(returned.Results) == 1 && identifierIs(returned.Results[0], "err")
+}
+
+// errGuardReturn returns the sole return statement of an `if err != nil`
+// guard, or nil when statement is not one.
+func errGuardReturn(statement ast.Stmt) *ast.ReturnStmt {
 	branch, ok := statement.(*ast.IfStmt)
 	if !ok || !errNotNil(branch.Cond) || len(branch.Body.List) != 1 {
-		return false
+		return nil
 	}
-	returned, ok := branch.Body.List[0].(*ast.ReturnStmt)
-	if !ok {
-		return false
-	}
-	if twoResults {
-		return len(returned.Results) == 2 && identifierIs(returned.Results[0], "nil") && !identifierIs(returned.Results[1], "nil")
-	}
-	return len(returned.Results) == 1 && identifierIs(returned.Results[0], "err")
+	returned, _ := branch.Body.List[0].(*ast.ReturnStmt)
+	return returned
 }
 
 func errNotNil(expression ast.Expr) bool {
@@ -220,8 +235,7 @@ func closeCalls(body *ast.BlockStmt, variable string) int {
 		if !ok {
 			return true
 		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if ok && selector.Sel.Name == "Close" && ownedBy(selector, variable) {
+		if selectorNamed(call.Fun, variable, "Close") {
 			count++
 		}
 		return true
@@ -229,29 +243,13 @@ func closeCalls(body *ast.BlockStmt, variable string) int {
 	return count
 }
 
-func parseFile(filename string) (*ast.File, error) {
-	parsed, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
-	if err != nil {
-		return nil, fmt.Errorf("%s: parse: %w", filename, err)
-	}
-	return parsed, nil
-}
-
 func collectMappings(prefix string, literal *ast.CompositeLit, mappings map[string]string) {
-	for _, element := range literal.Elts {
-		pair, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := pair.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		field := prefix + key.Name
-		if nested, ok := pair.Value.(*ast.CompositeLit); ok {
+	for key, value := range keyedFields(literal) {
+		field := prefix + key
+		if nested, ok := value.(*ast.CompositeLit); ok {
 			collectMappings(field+".", nested, mappings)
 			continue
 		}
-		mappings[field] = expressionPath(pair.Value)
+		mappings[field] = expressionPath(value)
 	}
 }

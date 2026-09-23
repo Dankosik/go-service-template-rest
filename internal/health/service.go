@@ -22,12 +22,26 @@ import (
 
 type Service struct {
 	probes   []Probe
+	policy   Policy
 	draining atomic.Bool
 	state    atomic.Pointer[readinessState]
 	// staleAfter is how old a cached verdict may be before Cached refuses it,
 	// in nanoseconds. Watch publishes it because Watch owns the cadence; zero,
 	// the value before any refresher is running, disables the guard.
 	staleAfter atomic.Int64
+}
+
+// Policy is how readiness evaluates its probes. It is fixed at construction so
+// startup admission and the steady-state refresher cannot disagree about it.
+type Policy struct {
+	// ProbeBudget bounds one evaluation of the complete serial probe set. It is
+	// separate from the refresh interval so a configured probe timeout is not
+	// clamped to the refresh period, which would let a dependency pass startup
+	// admission and then flap out of rotation.
+	ProbeBudget time.Duration
+	// FailureThreshold is how many consecutive failed evaluations turn a healthy
+	// verdict unhealthy. A service that has never been healthy fails at once.
+	FailureThreshold int
 }
 
 type Probe interface {
@@ -112,8 +126,15 @@ func (s *Service) armStaleness(state *readinessState, transitions *readinessTran
 	})
 }
 
-func New(probes ...Probe) *Service {
-	return &Service{probes: slices.Clone(probes)}
+// New builds a readiness service that evaluates probes in order under policy.
+func New(policy Policy, probes ...Probe) (*Service, error) {
+	if policy.ProbeBudget <= 0 {
+		return nil, errors.New("health: probe budget must be > 0")
+	}
+	if policy.FailureThreshold < 1 {
+		return nil, errors.New("health: failure threshold must be >= 1")
+	}
+	return &Service{probes: slices.Clone(probes), policy: policy}, nil
 }
 
 // Cached reports the most recently observed readiness without touching a
@@ -158,28 +179,12 @@ func (s *Service) staleness(state *readinessState) error {
 // last healthy verdict expires. StartDrain suppresses that deferred transition.
 //
 // The first evaluation runs immediately unless startup admission already seeded
-// the cache. failureThreshold applies only to the healthy-to-unhealthy
-// transition; a service that has never been healthy reports the failure at once.
-//
-// probeBudget bounds one evaluation and is separate from interval so a configured
-// probe timeout is not clamped to the refresh period, which would let a
-// dependency pass startup admission and then flap out of rotation. Evaluations
-// are serial, and the staleness budget uses the larger of the interval and probe
-// budget when a probe is slower than the requested cadence.
-func (s *Service) Watch(
-	ctx context.Context,
-	interval, probeBudget time.Duration,
-	failureThreshold int,
-	onTransition func(error),
-) error {
+// the cache. Evaluations are serial, and the staleness budget uses the larger of
+// the interval and the policy's probe budget when a probe is slower than the
+// requested cadence.
+func (s *Service) Watch(ctx context.Context, interval time.Duration, onTransition func(error)) error {
 	if interval <= 0 {
 		return errors.New("health watch: interval must be > 0")
-	}
-	if probeBudget <= 0 {
-		return errors.New("health watch: probe budget must be > 0")
-	}
-	if failureThreshold < 1 {
-		return errors.New("health watch: failure threshold must be >= 1")
 	}
 	if ctx.Err() != nil {
 		return nil
@@ -190,10 +195,10 @@ func (s *Service) Watch(
 	// Never cleared: this function returning is one of the ways the refresher
 	// stops, so clearing it on the way out would disarm the guard exactly when it
 	// is needed.
-	s.staleAfter.Store(int64(staleBudget(interval, probeBudget)))
+	s.staleAfter.Store(int64(staleBudget(interval, s.policy.ProbeBudget)))
 
 	if s.state.Load() == nil {
-		_ = s.Refresh(ctx, probeBudget, failureThreshold)
+		_ = s.Refresh(ctx)
 	}
 	state := s.state.Load()
 	transitions := readinessTransitions{previousErr: state.verdictErr, notify: onTransition}
@@ -209,7 +214,7 @@ func (s *Service) Watch(
 			}
 			return nil
 		case <-ticker.C:
-			_ = s.Refresh(ctx, probeBudget, failureThreshold)
+			_ = s.Refresh(ctx)
 			if staleTimer != nil {
 				staleTimer.Stop()
 			}
@@ -230,20 +235,23 @@ func (s *Service) Watch(
 // Startup admission calls it directly: it needs both the verdict, to decide
 // whether to admit traffic at all, and the seeded cache, so the first probe after
 // admission is answered from a real evaluation rather than ErrNotEvaluated.
-func (s *Service) Refresh(ctx context.Context, probeBudget time.Duration, failureThreshold int) error {
-	probeCtx, cancel := context.WithTimeout(ctx, probeBudget)
+func (s *Service) Refresh(ctx context.Context) error {
+	probeCtx, cancel := context.WithTimeout(ctx, s.policy.ProbeBudget)
 	defer cancel()
 
 	err := s.evaluate(probeCtx)
-	evaluatedAt := time.Now()
-	if err == nil {
-		s.state.Store(&readinessState{evaluatedAt: evaluatedAt})
-		return nil
-	}
+	s.state.Store(nextReadiness(s.state.Load(), err, s.policy.FailureThreshold, time.Now()))
+	return err
+}
 
+// nextReadiness folds one evaluation result into the previous cached state.
+func nextReadiness(previous *readinessState, err error, failureThreshold int, evaluatedAt time.Time) *readinessState {
+	if err == nil {
+		return &readinessState{evaluatedAt: evaluatedAt}
+	}
 	failures := 1
 	verdictErr := err
-	if previous := s.state.Load(); previous != nil {
+	if previous != nil {
 		failures = previous.consecutiveFailures + 1
 		// Hold the previous verdict until the streak reaches the threshold. A
 		// previously healthy instance stays in rotation through a blip; one that
@@ -253,8 +261,7 @@ func (s *Service) Refresh(ctx context.Context, probeBudget time.Duration, failur
 			verdictErr = previous.verdictErr
 		}
 	}
-	s.state.Store(&readinessState{verdictErr: verdictErr, consecutiveFailures: failures, evaluatedAt: evaluatedAt})
-	return err
+	return &readinessState{verdictErr: verdictErr, consecutiveFailures: failures, evaluatedAt: evaluatedAt}
 }
 
 func (s *Service) evaluate(ctx context.Context) error {

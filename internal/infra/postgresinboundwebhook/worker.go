@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 	"go.opentelemetry.io/otel/metric"
@@ -18,7 +19,16 @@ import (
 const (
 	quarantineReasonInvalidJSON = "invalid_json"
 	quarantineReasonRejected    = "schema_rejected"
-	terminalSnooze              = time.Second
+	// resnoozeDelay re-checks a receipt later; a River snooze does not consume an attempt.
+	resnoozeDelay = time.Second
+)
+
+// Receipt states match the outcome CHECK in the inbound webhook receipts table.
+const (
+	receiptPending     = "pending"
+	receiptHandled     = "handled"
+	receiptQuarantined = "quarantined"
+	receiptFailed      = "failed"
 )
 
 type storedReceipt struct {
@@ -28,10 +38,58 @@ type storedReceipt struct {
 	SignedAt   time.Time
 	ReceivedAt time.Time
 	Payload    []byte
-	Outcome    string
+	State      string
 }
 
-type receiptProcessor interface {
+// receiptRows reads and terminalizes receipts; the worker never enqueues jobs.
+type receiptRows struct {
+	pool *pgxpool.Pool
+}
+
+func (r receiptRows) loadByID(ctx context.Context, receiptID string) (storedReceipt, error) {
+	row, err := sqlcgen.New(r.pool).GetInboundWebhookReceiptByID(ctx, receiptID)
+	if err != nil {
+		return storedReceipt{}, fmt.Errorf("load inbound webhook receipt: %w", err)
+	}
+	return storedReceipt{
+		ReceiptID:  row.ReceiptID,
+		EndpointID: row.EndpointID,
+		DeliveryID: row.DeliveryID,
+		SignedAt:   row.SignedAt.Time,
+		ReceivedAt: row.ReceivedAt.Time,
+		Payload:    row.Payload,
+		State:      row.Outcome,
+	}, nil
+}
+
+func (r receiptRows) MarkHandled(ctx context.Context, receiptID string) (bool, error) {
+	n, err := sqlcgen.New(r.pool).MarkInboundWebhookHandled(ctx, receiptID)
+	if err != nil {
+		return false, fmt.Errorf("mark inbound webhook handled: %w", err)
+	}
+	return n == 1, nil
+}
+
+func (r receiptRows) MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error) {
+	n, err := sqlcgen.New(r.pool).MarkInboundWebhookQuarantined(ctx, sqlcgen.MarkInboundWebhookQuarantinedParams{
+		ReceiptID:      receiptID,
+		TerminalReason: &reason,
+	})
+	if err != nil {
+		return false, fmt.Errorf("mark inbound webhook quarantined: %w", err)
+	}
+	return n == 1, nil
+}
+
+func (r receiptRows) MarkFailed(ctx context.Context, receiptID string) (bool, error) {
+	n, err := sqlcgen.New(r.pool).MarkInboundWebhookFailed(ctx, receiptID)
+	if err != nil {
+		return false, fmt.Errorf("mark inbound webhook failed: %w", err)
+	}
+	return n == 1, nil
+}
+
+type receiptStateStore interface {
 	loadByID(ctx context.Context, receiptID string) (storedReceipt, error)
 	MarkHandled(ctx context.Context, receiptID string) (bool, error)
 	MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error)
@@ -42,13 +100,13 @@ type receiptProcessor interface {
 type Worker struct {
 	river.WorkerDefaults[receiptJobArgs]
 
-	store    receiptProcessor
+	store    receiptStateStore
 	registry *inboundwebhook.Registry
 	telem    telemetry
 }
 
-// NewWorker builds the River worker.
-func newWorker(store receiptProcessor, registry *inboundwebhook.Registry, telem telemetry) (*Worker, error) {
+// newWorker builds the River worker.
+func newWorker(store receiptStateStore, registry *inboundwebhook.Registry, telem telemetry) (*Worker, error) {
 	if store == nil || registry == nil {
 		return nil, errors.New("inbound webhook store and registry are required")
 	}
@@ -60,11 +118,7 @@ func AddWorker(workers *river.Workers, pool *pgxpool.Pool, registry *inboundwebh
 	if workers == nil || pool == nil {
 		return errors.New("inbound webhook workers and postgres pool are required")
 	}
-	store, err := newPostgresStore(pool)
-	if err != nil {
-		return err
-	}
-	worker, err := newWorker(store, registry, newTelemetry(meter, log))
+	worker, err := newWorker(receiptRows{pool: pool}, registry, newTelemetry(meter, log))
 	if err != nil {
 		return err
 	}
@@ -97,17 +151,17 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 	if err != nil {
 		w.telem.recordRetryingFailure(ctx, receiptID, logClassStorageRetryable)
 		if job.Attempt >= job.MaxAttempts {
-			return river.JobSnooze(terminalSnooze)
+			return river.JobSnooze(resnoozeDelay)
 		}
 		return errStorageUnavailable
 	}
-	if receipt.Outcome != "pending" {
+	if receipt.State != receiptPending {
 		return nil
 	}
 	if !w.registry.HasBinding(receipt.EndpointID) {
 		w.telem.recordRetryingFailure(ctx, receiptID, logClassBindingUnavailable)
 		// ponytail: reuse the existing snooze; isolate a queue if binding drift becomes load.
-		return river.JobSnooze(terminalSnooze)
+		return river.JobSnooze(resnoozeDelay)
 	}
 	if job.Attempt >= job.MaxAttempts {
 		return w.finalize(ctx, receiptID)
@@ -130,7 +184,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 			return errStorageUnavailable
 		}
 		if updated {
-			w.telem.recordProcessing(ctx, "handled")
+			w.telem.recordProcessing(ctx, receiptHandled)
 		}
 		return nil
 	case inboundwebhook.IsDecodeError(dispatchErr) && errors.Is(dispatchErr, inboundwebhook.ErrDecodeRejected):
@@ -144,7 +198,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 			return errStorageUnavailable
 		}
 		if updated {
-			w.telem.recordProcessing(ctx, "quarantined")
+			w.telem.recordProcessing(ctx, receiptQuarantined)
 		}
 		return nil
 	case inboundwebhook.IsDecodeError(dispatchErr):
@@ -160,10 +214,10 @@ func (w *Worker) finalize(ctx context.Context, receiptID string) error {
 	updated, err := w.store.MarkFailed(ctx, receiptID)
 	if err != nil {
 		w.telem.logFailure(ctx, receiptID, logClassTerminalizationRetryable)
-		return river.JobSnooze(terminalSnooze)
+		return river.JobSnooze(resnoozeDelay)
 	}
 	if updated {
-		w.telem.recordProcessing(ctx, "failed")
+		w.telem.recordProcessing(ctx, receiptFailed)
 	}
 	return nil
 }

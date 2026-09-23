@@ -40,6 +40,8 @@ func (b *shutdownBudget) start() {
 func (b *shutdownBudget) stage(base context.Context, want time.Duration) (context.Context, context.CancelFunc) {
 	b.start()
 	window, cancelWindow := context.WithDeadline(context.WithoutCancel(base), b.deadline)
+	// TeardownStage copies window's deadline onto a detached context, so the
+	// window can be released at once.
 	stage, cancelStage := runtimeopts.TeardownStage(window, want)
 	cancelWindow()
 	return stage, cancelStage
@@ -136,9 +138,8 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 	defer cancel()
 
 	if propagationDelay > 0 {
-		if deadline, ok := shutdownCtx.Deadline(); ok {
-			propagationDelay = min(propagationDelay, time.Until(deadline))
-		}
+		deadline, _ := shutdownCtx.Deadline()
+		propagationDelay = min(propagationDelay, time.Until(deadline))
 		if err := sleepWithContext(shutdownCtx, propagationDelay); err != nil {
 			return fmt.Errorf("drain propagation wait failed: %w", err)
 		}
@@ -152,13 +153,14 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 	}
 
 	var shutdownErr error
-	for completed := 0; completed < len(servers); completed++ {
+collect:
+	for range servers {
 		select {
 		case err := <-resultCh:
 			shutdownErr = errors.Join(shutdownErr, err)
 		case <-shutdownCtx.Done():
 			shutdownErr = errors.Join(shutdownErr, shutdownCtx.Err())
-			completed = len(servers)
+			break collect
 		}
 	}
 	if shutdownErr != nil {

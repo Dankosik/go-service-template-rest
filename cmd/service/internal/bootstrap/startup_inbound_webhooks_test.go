@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -28,7 +27,7 @@ import (
 func TestInboundWebhookServiceStartup(t *testing.T) {
 	t.Parallel()
 
-	receiver, err := initInboundWebhookReceiver(config.Config{}, nil, telemetry.New())
+	receiver, err := initInboundWebhookReceiver(config.Config{}, nil, telemetry.NewMetrics())
 	if err != nil {
 		t.Fatalf("empty inbound config err=%v", err)
 	}
@@ -37,7 +36,7 @@ func TestInboundWebhookServiceStartup(t *testing.T) {
 	}
 	_, err = initInboundWebhookReceiver(config.Config{
 		InboundWebhooks: config.InboundWebhooksConfig{Endpoints: `{"endpoints":[{"endpoint_id":"orders","active_key_reference":"active"}]}`},
-	}, nil, telemetry.New())
+	}, nil, telemetry.NewMetrics())
 	if err == nil || !strings.Contains(err.Error(), "postgres") {
 		t.Fatalf("missing postgres error = %v", err)
 	}
@@ -49,11 +48,11 @@ func TestInboundWebhookHeaderOverflowUsesListener431(t *testing.T) {
 	handler, err := newHTTPHandler(
 		config.Config{HTTP: config.HTTPConfig{MaxBodyBytes: 1024, RequestTimeout: time.Second, MaxInFlight: 1}},
 		slog.New(slog.DiscardHandler),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		nil,
 		httpRuntimeBindings{
 			Handlers: httpx.Handlers{
-				Health:         health.New(),
+				Health:         newTestHealth(t),
 				ReadinessGate:  func(context.Context) error { return nil },
 				InboundWebhook: nil,
 			},
@@ -152,7 +151,7 @@ func TestInboundWebhookRequestBufferBudget(t *testing.T) {
 		Runtime: config.RuntimeConfig{MemoryLimitRatio: 0.9},
 	}
 	var logged bytes.Buffer
-	reportRequestBufferBudget(slog.New(slog.NewJSONHandler(&logged, nil)), cfg, 1000)
+	reportRequestBufferBudget(slog.New(slog.NewJSONHandler(&logged, nil)), cfg, memoryLimit{containerBytes: 1000, gcBytes: 900})
 	if !strings.Contains(logged.String(), `"request_buffers.worst_case_bytes":400`) {
 		t.Fatalf("log = %s", logged.String())
 	}

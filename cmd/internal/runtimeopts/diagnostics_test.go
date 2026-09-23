@@ -27,7 +27,7 @@ func TestListenDiagnosticsRefusesAnOccupiedAddress(t *testing.T) {
 	defer func() { _ = occupied.Close() }()
 
 	served, err := runtimeopts.ListenDiagnostics(
-		t.Context(), occupied.Addr().String(), "probe", func() bool { return true }, telemetry.New(), false,
+		t.Context(), occupied.Addr().String(), "probe", func() bool { return true }, telemetry.NewMetrics(), false,
 	)
 	if err == nil {
 		_ = served.Stop(t.Context(), time.Second)
@@ -48,7 +48,7 @@ func TestDiagnosticsListenerStopsAndJoins(t *testing.T) {
 	t.Parallel()
 
 	served, err := runtimeopts.ListenDiagnostics(
-		t.Context(), "127.0.0.1:0", "probe", func() bool { return true }, telemetry.New(), false,
+		t.Context(), "127.0.0.1:0", "probe", func() bool { return true }, telemetry.NewMetrics(), false,
 	)
 	if err != nil {
 		t.Fatalf("ListenDiagnostics() error = %v", err)
@@ -66,31 +66,6 @@ func TestDiagnosticsListenerStopsAndJoins(t *testing.T) {
 	case <-served.Stopped():
 	default:
 		t.Fatal("Stop() returned before the serving goroutine had been joined")
-	}
-}
-
-func TestDiagnosticsServerGatesPprof(t *testing.T) {
-	t.Parallel()
-
-	for _, test := range []struct {
-		name         string
-		pprofEnabled bool
-		wantStatus   int
-	}{
-		{name: "disabled", wantStatus: http.StatusNotFound},
-		{name: "enabled", pprofEnabled: true, wantStatus: http.StatusOK},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			server := runtimeopts.DiagnosticsServer(func() bool { return true }, telemetry.New(), test.pprofEnabled)
-			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/debug/pprof/", nil)
-			response := httptest.NewRecorder()
-			server.Handler.ServeHTTP(response, request)
-			if response.Code != test.wantStatus {
-				t.Fatalf("/debug/pprof/ status = %d, want %d", response.Code, test.wantStatus)
-			}
-		})
 	}
 }
 

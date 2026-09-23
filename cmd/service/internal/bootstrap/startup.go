@@ -9,9 +9,9 @@ import (
 )
 
 type startupBootstrap struct {
-	cfg              config.Config
-	log              *slog.Logger
-	telemetryCleanup func(context.Context)
+	cfg            config.Config
+	log            *slog.Logger
+	flushTelemetry func(context.Context)
 }
 
 func bootstrapRuntime(
@@ -33,8 +33,8 @@ func bootstrapRuntime(
 	bootstrapReportStage(startupCtx, log, cfg, loadOptions, configReport, stage.tracingEndpoint, stage.tracingErr)
 
 	return startupBootstrap{
-		cfg:              cfg,
-		log:              log,
-		telemetryCleanup: stage.cleanup,
+		cfg:            cfg,
+		log:            log,
+		flushTelemetry: stage.flush,
 	}, nil
 }

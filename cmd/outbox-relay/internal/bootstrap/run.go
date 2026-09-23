@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -28,13 +27,13 @@ import (
 )
 
 const (
-	startupTimeout       = 30 * time.Second
-	defaultOutboxWorkers = 16
-	outboxDrain          = 25 * time.Second
-	diagnosticsClose     = 2 * time.Second
-	backgroundClose      = 5 * time.Second
-	telemetryClose       = 5 * time.Second
-	outboxTailBudget     = diagnosticsClose + backgroundClose + telemetryClose
+	startupTimeout             = 30 * time.Second
+	defaultOutboxWorkers       = 16
+	outboxDrain                = 25 * time.Second
+	diagnosticsShutdownTimeout = 2 * time.Second
+	backgroundShutdownTimeout  = 5 * time.Second
+	telemetryShutdownTimeout   = 5 * time.Second
+	outboxTailBudget           = diagnosticsShutdownTimeout + backgroundShutdownTimeout + telemetryShutdownTimeout
 )
 
 func Run(args []string) error {
@@ -43,14 +42,14 @@ func Run(args []string) error {
 	return run(signalCtx, args)
 }
 
-func run(signalCtx context.Context, args []string) (runErr error) {
+func run(signalCtx context.Context, args []string) error {
 	loadOptions, err := config.ParseLoadOptions(args)
 	if err != nil {
 		return err
 	}
 	startupCtx, cancelStartup := context.WithTimeout(signalCtx, startupTimeout)
 	defer cancelStartup()
-	cfg, _, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
+	cfg, _, err := config.Load(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load outbox relay config: %w", err)
 	}
@@ -58,16 +57,16 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 		return err
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "outbox_relay")
-	metrics := telemetry.New()
-	telemetryCleanup, metricsErr := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "outbox")
+	metrics := telemetry.NewMetrics()
+	flushTelemetry, metricsErr := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "outbox")
 	if metricsErr != nil {
 		log.WarnContext(startupCtx, "outbox_metrics_degraded", "reason", telemetry.FailureReason(metricsErr))
 	}
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	defer func() {
-		cleanupCtx, cancel := runtimeopts.TeardownStage(cleanupWindow, telemetryClose)
+		cleanupCtx, cancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 		defer cancel()
-		_ = telemetryCleanup(cleanupCtx)
+		_ = flushTelemetry(cleanupCtx)
 	}()
 
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
@@ -82,7 +81,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 			pool.Close()
 		}
 	}()
-	client, err := natsjs.Connect(
+	messaging, err := natsjs.Connect(
 		startupCtx,
 		runtimeopts.Messaging(cfg.Messaging),
 		natsjs.Observability{Logger: log},
@@ -92,12 +91,12 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	}
 	defer func() {
 		if cleanupSafe {
-			client.Close()
+			messaging.Close()
 		}
 	}()
 
 	workers := river.NewWorkers()
-	outboxWorker, err := outboxworker.New(client.Producer())
+	outboxWorker, err := outboxworker.New(messaging.Producer())
 	if err != nil {
 		return fmt.Errorf("initialize NATS outbox worker: %w", err)
 	}
@@ -111,21 +110,21 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("initialize River outbox worker: %w", err)
 	}
-	cleanupSafe, cleanupWindow, runErr = runLifecycle(
-		signalCtx, startupCtx, cfg, log, metrics, pool, client, riverClient,
+	cleanupSafe, cleanupWindow, err = runLifecycle(
+		signalCtx, startupCtx, cfg, log, metrics, pool, messaging, riverClient,
 	)
-	return runErr
+	return err
 }
 
 func validateRuntimeConfig(cfg config.Config) error {
 	if !cfg.Postgres.Enabled {
-		return fmt.Errorf("%w: postgres must be enabled for outbox relay", postgresoutbox.ErrConfig)
+		return fmt.Errorf("%w: postgres must be enabled for outbox relay", config.ErrValidate)
 	}
-	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
-		return fmt.Errorf("%w: messaging must be enabled for outbox relay", postgresoutbox.ErrConfig)
+	if !cfg.Messaging.Enabled() {
+		return fmt.Errorf("%w: messaging must be enabled for outbox relay", config.ErrValidate)
 	}
-	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
-		return fmt.Errorf("%w: outbox diagnostics address is required", postgresoutbox.ErrConfig)
+	if err := runtimeopts.RequireDiagnosticsAddr(cfg.Observability.Metrics.Addr, "outbox"); err != nil {
+		return err
 	}
 	return runtimeopts.ValidateGracePeriod(
 		cfg.HTTP.GracePeriod,
@@ -141,11 +140,14 @@ func riverClientConfig(workers *river.Workers, log *slog.Logger) *river.Config {
 		EnableTracePropagation: true,
 	})
 	return &river.Config{
+		// -1 keeps cancelled and discarded jobs indefinitely, so unpublished
+		// intent cannot disappear through cleanup.
 		CancelledJobRetentionPeriod: -1,
 		DiscardedJobRetentionPeriod: -1,
 		Logger:                      log,
-		PollOnly:                    true,
-		Plugins:                     []rivertype.Plugin{plugin},
+		// The pool's finite statement_timeout would cancel a long-lived LISTEN.
+		PollOnly: true,
+		Plugins:  []rivertype.Plugin{plugin},
 		Queues: map[string]river.QueueConfig{
 			postgresoutbox.Queue: {MaxWorkers: defaultOutboxWorkers},
 		},
@@ -154,6 +156,10 @@ func riverClientConfig(workers *river.Workers, log *slog.Logger) *river.Config {
 	}
 }
 
+// runLifecycle admits, serves, and drains the relay. It reports whether River
+// and the background tasks joined, so run may close the pool and NATS. The
+// returned window is already canceled and serves only as the parent for
+// runtimeopts.TeardownStage in deferred cleanup.
 func runLifecycle(
 	signalCtx context.Context,
 	startupCtx context.Context,
@@ -161,42 +167,56 @@ func runLifecycle(
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
 	pool postgresPinger,
-	client messagingRuntime,
+	messaging messagingRuntime,
 	riverClient riverRuntime,
-) (cleanupSafe bool, window context.Context, result error) {
-	window = runtimeopts.UnarmedTeardown(signalCtx)
-	var ready atomic.Bool
-	readiness := health.New(postgresReadinessProbe{pool: pool}, client)
-	if err := readiness.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
-		return true, window, fmt.Errorf("admit outbox readiness: %w", err)
+) (bool, context.Context, error) {
+	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
+	var admitted atomic.Bool
+	readiness, err := health.New(health.Policy{
+		ProbeBudget:      cfg.HTTP.ReadinessTimeout,
+		FailureThreshold: cfg.Health.FailureThreshold,
+	}, postgresReadinessProbe{pool: pool}, messaging)
+	if err != nil {
+		return true, unarmed, fmt.Errorf("build outbox readiness: %w", err)
+	}
+	if err := readiness.Refresh(startupCtx); err != nil {
+		return true, unarmed, fmt.Errorf("admit outbox readiness: %w", err)
 	}
 	diagnostics, err := runtimeopts.ListenDiagnostics(
 		startupCtx,
 		cfg.Observability.Metrics.Addr,
 		"outbox",
-		func() bool { return relayReady(ready.Load(), client.Ready(), readiness.Cached()) },
+		func() bool { return relayReady(admitted.Load(), messaging.Ready(), readiness.Cached()) },
 		metrics,
 		cfg.Observability.Pprof.Enabled,
 	)
 	if err != nil {
-		return true, window, err
+		return true, unarmed, err
 	}
 	runtimeCtx, cancelRuntime := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer cancelRuntime()
 	supervisor := background.New(runtimeCtx, log)
-	supervisor.Go(background.Task{Name: "messaging_connection", Run: client.Run})
+	supervisor.Go(background.Task{Name: "messaging_connection", Run: messaging.Run})
 	supervisor.Go(background.Task{
 		Name: "dependency_readiness",
 		Run: func(ctx context.Context) error {
-			return readiness.Watch(
-				ctx,
-				cfg.Health.RefreshInterval,
-				cfg.HTTP.ReadinessTimeout,
-				cfg.Health.FailureThreshold,
-				nil,
-			)
+			return readiness.Watch(ctx, cfg.Health.RefreshInterval, nil)
 		},
 	})
+	// stopTail stops diagnostics, then the background tasks. Messaging drains
+	// under the background stage only once River has joined, because River's
+	// jobs publish through it.
+	stopTail := func(window context.Context, shutdownMessaging bool) (diagnosticsErr, backgroundErr, messagingErr error) {
+		diagnosticsErr = diagnostics.Stop(window, diagnosticsShutdownTimeout)
+		backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundShutdownTimeout)
+		defer cancelBackground()
+		backgroundErr = supervisor.Shutdown(backgroundCtx)
+		if shutdownMessaging {
+			messagingErr = messaging.Shutdown(backgroundCtx)
+		}
+		return diagnosticsErr, backgroundErr, messagingErr
+	}
+
 	started, err := runtimeopts.StartRuntime(startupCtx, runtimeCtx, cancelRuntime, riverClient.Start)
 	if err != nil {
 		window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
@@ -207,31 +227,26 @@ func runLifecycle(
 			riverErr = riverClient.StopAndCancel(riverCtx)
 			cancelRiver()
 		}
-		diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
-		backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundClose)
-		backgroundErr := supervisor.Shutdown(backgroundCtx)
-		cancelBackground()
-		riverStopped := riverErr == nil
-		cleanupSafe := riverStopped && !errors.Is(backgroundErr, context.DeadlineExceeded)
-		return cleanupSafe, window, errors.Join(
+		diagnosticsErr, backgroundErr, _ := stopTail(window, false)
+		return relayCleanupSafe(riverErr == nil, backgroundErr), window, errors.Join(
 			fmt.Errorf("start River outbox worker: %w", err),
 			riverErr,
 			diagnosticsErr,
 			backgroundErr,
 		)
 	}
-	ready.Store(true)
+	admitted.Store(true)
 
 	var trigger error
 	select {
 	case <-signalCtx.Done():
-	case trigger = <-supervisor.Failures():
+	case trigger = <-supervisor.FirstFailure():
 	case <-riverClient.Stopped():
 		trigger = errors.New("river outbox worker stopped unexpectedly")
 	case <-diagnostics.Stopped():
 		trigger = errors.New("outbox diagnostics stopped unexpectedly")
 	}
-	ready.Store(false)
+	admitted.Store(false)
 	readiness.StartDrain()
 	window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
@@ -240,18 +255,18 @@ func runLifecycle(
 	cancelRiver()
 	riverStopped := riverErr == nil
 	if riverStopped {
-		client.StopPublish()
+		messaging.StopPublish()
 	}
-	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
-	backgroundCtx, cancelBackground := runtimeopts.TeardownStage(window, backgroundClose)
-	backgroundErr := supervisor.Shutdown(backgroundCtx)
-	var messagingErr error
-	if riverStopped {
-		messagingErr = client.Shutdown(backgroundCtx)
-	}
-	cancelBackground()
-	cleanupSafe = riverStopped && !errors.Is(backgroundErr, context.DeadlineExceeded)
-	return cleanupSafe, window, errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
+	diagnosticsErr, backgroundErr, messagingErr := stopTail(window, riverStopped)
+	return relayCleanupSafe(riverStopped, backgroundErr), window,
+		errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
+}
+
+// relayCleanupSafe reports whether the pool and NATS may be closed: River has
+// joined, so no job still publishes, and the background tasks that use both
+// finished within their stage.
+func relayCleanupSafe(riverStopped bool, backgroundErr error) bool {
+	return riverStopped && !errors.Is(backgroundErr, context.DeadlineExceeded)
 }
 
 type postgresReadinessProbe struct {
@@ -270,8 +285,8 @@ type messagingRuntime interface {
 	Shutdown(ctx context.Context) error
 }
 
-func relayReady(started, messagingReady bool, dependencyErr error) bool {
-	return started && messagingReady && dependencyErr == nil
+func relayReady(admitted, messagingReady bool, dependencyErr error) bool {
+	return admitted && messagingReady && dependencyErr == nil
 }
 
 type riverRuntime interface {

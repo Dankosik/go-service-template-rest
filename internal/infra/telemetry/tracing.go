@@ -3,7 +3,6 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
@@ -22,15 +21,15 @@ type TracingConfig struct {
 	Exporter         TraceExporterConfig
 }
 
+// TraceExporterConfig names where spans are pushed.
 type TraceExporterConfig struct {
+	// OTLPEndpoint is observability.otel.exporter.otlp_endpoint: a traces
+	// endpoint, or a bare collector root that resolves to <root>/v1/traces.
 	OTLPEndpoint string
-	OTLPHeaders  string
+	// OTLPHeaders is observability.otel.exporter.otlp_headers, shared with
+	// metrics because a collector credential belongs to the collector.
+	OTLPHeaders string
 }
-
-// TraceExporterEndpoint is the resolved OTLP traces endpoint and the setting that
-// supplied it. Metrics resolve the same shape through the same primitives; see
-// otlp_endpoint.go.
-type TraceExporterEndpoint = ExporterEndpoint
 
 var otelSetupMu sync.Mutex
 
@@ -39,41 +38,32 @@ var otelSetupMu sync.Mutex
 // shutdown function is non-nil only when a provider was installed. If setup
 // fails after endpoint resolution, the endpoint is still returned with the
 // error, and shutdown is nil.
-func SetupTracing(ctx context.Context, cfg TracingConfig) (endpoint TraceExporterEndpoint, shutdown func(context.Context) error, err error) {
+func SetupTracing(ctx context.Context, cfg TracingConfig) (endpoint ExporterEndpoint, shutdown func(context.Context) error, err error) {
 	sampler, err := buildTraceSampler(cfg.TracesSampler, cfg.TracesSamplerArg)
 	if err != nil {
-		return TraceExporterEndpoint{}, nil, err
+		return ExporterEndpoint{}, nil, err
 	}
 
 	res, err := newResource(ctx, cfg.Resource)
 	if err != nil {
-		return TraceExporterEndpoint{}, nil, err
+		return ExporterEndpoint{}, nil, err
 	}
 
-	exporterOptions, endpoint, err := buildTraceExporterOptions(cfg.Exporter)
+	endpoint, err = resolveTraceExporterEndpoint(cfg.Exporter)
 	if err != nil {
-		return TraceExporterEndpoint{}, nil, err
-	}
-	if !endpoint.Configured() {
-		// Keep valid trace IDs for propagation and log correlation without recording spans that cannot be exported.
-		sampler = sdktrace.NeverSample()
+		return ExporterEndpoint{}, nil, err
 	}
 
-	options := []sdktrace.TracerProviderOption{
-		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sampler),
-	}
+	options := []sdktrace.TracerProviderOption{sdktrace.WithResource(res)}
 	if endpoint.Configured() {
-		if endpoint.fromConfig() {
-			if err := rejectConflictingAmbientEnv(traceExporterEnvConflicts); err != nil {
-				return endpoint, nil, err
-			}
-		}
-		exporter, err := otlptracehttp.New(ctx, exporterOptions...)
+		exporter, err := newOTLPTraceExporter(ctx, endpoint, cfg.Exporter)
 		if err != nil {
-			return endpoint, nil, fmt.Errorf("create otlp trace exporter: %w", err)
+			return endpoint, nil, err
 		}
-		options = append(options, sdktrace.WithBatcher(exporter))
+		options = append(options, sdktrace.WithSampler(sampler), sdktrace.WithBatcher(exporter))
+	} else {
+		// Keep valid trace IDs for propagation and log correlation without recording spans that cannot be exported.
+		options = append(options, sdktrace.WithSampler(sdktrace.NeverSample()))
 	}
 
 	otelSetupMu.Lock()
@@ -87,11 +77,11 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (endpoint TraceExporte
 }
 
 func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
-	if err := otelconfig.ValidateTraceSampler(name, arg); err != nil {
+	if err := otelconfig.ValidateTracesSampler(name, arg); err != nil {
 		return nil, fmt.Errorf("build trace sampler: %w", err)
 	}
 
-	switch otelconfig.TraceSamplerOrDefault(name) {
+	switch otelconfig.TracesSamplerOrDefault(name) {
 	case otelconfig.SamplerAlwaysOn:
 		return sdktrace.AlwaysSample(), nil
 	case otelconfig.SamplerAlwaysOff:
@@ -103,26 +93,26 @@ func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
 	}
 }
 
-func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option, TraceExporterEndpoint, error) {
-	options := make([]otlptracehttp.Option, 0, 2)
-	endpoint, err := resolveTraceExporterEndpoint(cfg)
+func newOTLPTraceExporter(
+	ctx context.Context,
+	endpoint ExporterEndpoint,
+	cfg TraceExporterConfig,
+) (sdktrace.SpanExporter, error) {
+	headers, err := otlpExporterHeaders(endpoint, cfg.OTLPHeaders)
 	if err != nil {
-		return nil, TraceExporterEndpoint{}, err
-	}
-	if !endpoint.Configured() {
-		return options, endpoint, nil
+		return nil, err
 	}
 
-	options = append(options, otlptracehttp.WithEndpointURL(endpoint.URL))
-	if headers := strings.TrimSpace(cfg.OTLPHeaders); headers != "" {
-		parsedHeaders, err := parseOTLPHeaders(headers)
-		if err != nil {
-			return nil, TraceExporterEndpoint{}, err
-		}
-		options = append(options, otlptracehttp.WithHeaders(parsedHeaders))
+	exporterOptions := []otlptracehttp.Option{otlptracehttp.WithEndpointURL(endpoint.URL)}
+	if len(headers) != 0 {
+		exporterOptions = append(exporterOptions, otlptracehttp.WithHeaders(headers))
 	}
 
-	return options, endpoint, nil
+	exporter, err := otlptracehttp.New(ctx, exporterOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("create otlp trace exporter: %w", err)
+	}
+	return exporter, nil
 }
 
 // resolveTraceExporterEndpoint reports which OTLP traces endpoint the exporter
@@ -133,11 +123,11 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 // have one owned setting, so the whole order is the argument list below and
 // [resolveOTLPEndpoint] owns what that order means — including why a configured
 // header stops it.
-func resolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoint, error) {
+func resolveTraceExporterEndpoint(cfg TraceExporterConfig) (ExporterEndpoint, error) {
 	return resolveOTLPEndpoint(
 		otlpTracesPath,
 		cfg.OTLPHeaders,
-		[]otlpCandidate{{source: SharedOTLPExporterConfigKey, raw: cfg.OTLPEndpoint, configuredByService: true}},
+		[]otlpCandidate{{source: SharedOTLPExporterConfigKey, raw: cfg.OTLPEndpoint}},
 		ambientOTLPCandidates(otelExporterTracesEndpointEnv),
 	)
 }

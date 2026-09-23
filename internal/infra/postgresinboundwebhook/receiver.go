@@ -60,7 +60,7 @@ type Receiver struct {
 	telem telemetry
 }
 
-// ReceiverOption adjusts test seams without changing production ownership.
+// ReceiverOption adjusts optional receiver collaborators such as the clock.
 type ReceiverOption func(*Receiver)
 
 // WithClock injects the verification clock.
@@ -80,22 +80,16 @@ func withStore(store receiptAcceptor) ReceiverOption {
 	}
 }
 
-// WithMeter installs capability telemetry.
-func WithMeter(meter metric.MeterProvider) ReceiverOption {
-	return func(r *Receiver) {
-		r.telem = newTelemetry(meter, nil)
-	}
-}
-
-// NewReceiver builds the concrete acceptance adapter.
-func NewReceiver(pool *pgxpool.Pool, trust *TrustManifest, opts ...ReceiverOption) (*Receiver, error) {
+// NewReceiver builds the concrete acceptance adapter. A nil meter disables
+// ingress metrics.
+func NewReceiver(pool *pgxpool.Pool, trust *TrustManifest, meter metric.MeterProvider, opts ...ReceiverOption) (*Receiver, error) {
 	if trust == nil {
 		return nil, errors.New("inbound webhook trust manifest is required")
 	}
 	receiver := &Receiver{
 		trust: trust,
 		now:   func() time.Time { return time.Now().UTC() },
-		telem: newTelemetry(nil, nil),
+		telem: newTelemetry(meter, nil),
 	}
 	for _, opt := range opts {
 		opt(receiver)
@@ -116,27 +110,15 @@ func NewReceiver(pool *pgxpool.Pool, trust *TrustManifest, opts ...ReceiverOptio
 // Receive verifies then durably accepts one signed delivery.
 func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery) (inboundwebhook.Outcome, error) {
 	if r == nil || r.trust == nil || r.store == nil {
-		return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
+		return "", inboundwebhook.ErrUnavailable
 	}
 	delivery = delivery.Clone()
 	if _, ok := r.trust.Lookup(delivery.EndpointID); !ok {
 		return inboundwebhook.OutcomeUnknownEndpoint, nil
 	}
-	if !validDeliveryID(delivery.DeliveryID) {
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.OutcomeRejected, nil
-	}
-	signedAt, ok := parseSignedTimestamp(delivery.Timestamp)
+	signedAt, ok := r.verify(delivery)
 	if !ok {
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.OutcomeRejected, nil
-	}
-	if !timestampInTolerance(signedAt, r.now()) {
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.OutcomeRejected, nil
-	}
-	if !r.signatureOK(delivery) {
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
+		r.telem.recordIngress(ctx, inboundwebhook.OutcomeRejected)
 		return inboundwebhook.OutcomeRejected, nil
 	}
 	digest := sha256.Sum256(delivery.Body)
@@ -149,18 +131,31 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 		Payload:    delivery.Body,
 	})
 	if err != nil {
-		if errors.Is(err, postgres.ErrCommitUnknown) {
-			r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
-			return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
+		// runInTx can join ctx.Err() with commit-unknown; an unknown commit stays unavailable.
+		canceled := errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+		if canceled && !errors.Is(err, postgres.ErrCommitUnknown) {
+			return "", fmt.Errorf("accept inbound webhook receipt: %w", err)
 		}
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			return inboundwebhook.OutcomeUnavailable, fmt.Errorf("accept inbound webhook receipt: %w", err)
-		}
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
-		return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
+		r.telem.recordIngress(ctx, ingressUnavailable)
+		return "", inboundwebhook.ErrUnavailable
 	}
-	r.telem.recordIngress(ctx, string(outcome))
+	r.telem.recordIngress(ctx, outcome)
 	return outcome, nil
+}
+
+// verify checks the delivery ID, timestamp, and tolerance before the signature.
+func (r *Receiver) verify(delivery inboundwebhook.Delivery) (time.Time, bool) {
+	if !validDeliveryID(delivery.DeliveryID) {
+		return time.Time{}, false
+	}
+	signedAt, ok := parseSignedTimestamp(delivery.Timestamp)
+	if !ok || !timestampInTolerance(signedAt, r.now()) {
+		return time.Time{}, false
+	}
+	if !r.signatureOK(delivery) {
+		return time.Time{}, false
+	}
+	return signedAt, true
 }
 
 func (r *Receiver) signatureOK(delivery inboundwebhook.Delivery) bool {
@@ -256,52 +251,9 @@ func (s *postgresStore) Accept(ctx context.Context, record receiptRecord) (inbou
 		return nil
 	})
 	if err != nil {
-		return inboundwebhook.OutcomeUnavailable, fmt.Errorf("accept inbound webhook receipt: %w", err)
+		return "", fmt.Errorf("accept inbound webhook receipt: %w", err)
 	}
 	return outcome, nil
-}
-
-func (s *postgresStore) loadByID(ctx context.Context, receiptID string) (storedReceipt, error) {
-	row, err := sqlcgen.New(s.pool).GetInboundWebhookReceiptByID(ctx, receiptID)
-	if err != nil {
-		return storedReceipt{}, fmt.Errorf("load inbound webhook receipt: %w", err)
-	}
-	return storedReceipt{
-		ReceiptID:  row.ReceiptID,
-		EndpointID: row.EndpointID,
-		DeliveryID: row.DeliveryID,
-		SignedAt:   row.SignedAt.Time,
-		ReceivedAt: row.ReceivedAt.Time,
-		Payload:    row.Payload,
-		Outcome:    row.Outcome,
-	}, nil
-}
-
-func (s *postgresStore) MarkHandled(ctx context.Context, receiptID string) (bool, error) {
-	n, err := sqlcgen.New(s.pool).MarkInboundWebhookHandled(ctx, receiptID)
-	if err != nil {
-		return false, fmt.Errorf("mark inbound webhook handled: %w", err)
-	}
-	return n == 1, nil
-}
-
-func (s *postgresStore) MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error) {
-	n, err := sqlcgen.New(s.pool).MarkInboundWebhookQuarantined(ctx, sqlcgen.MarkInboundWebhookQuarantinedParams{
-		ReceiptID:      receiptID,
-		TerminalReason: &reason,
-	})
-	if err != nil {
-		return false, fmt.Errorf("mark inbound webhook quarantined: %w", err)
-	}
-	return n == 1, nil
-}
-
-func (s *postgresStore) MarkFailed(ctx context.Context, receiptID string) (bool, error) {
-	n, err := sqlcgen.New(s.pool).MarkInboundWebhookFailed(ctx, receiptID)
-	if err != nil {
-		return false, fmt.Errorf("mark inbound webhook failed: %w", err)
-	}
-	return n == 1, nil
 }
 
 // profile:inbound-webhooks-standard:end

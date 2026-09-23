@@ -29,18 +29,18 @@ import (
 	// profile:inbound-webhooks-standard:end
 )
 
-// WorkersRuntime is the builder result: validated workers and an optional
-// binder that registers workers requiring the pool after it is opened.
-type WorkersRuntime struct {
+// WorkerRegistration is the builder result: validated workers and an optional
+// binder that adds the workers requiring the pool to them once it is opened.
+type WorkerRegistration struct {
 	Workers *river.Workers
 	// profile:inbound-webhooks-standard:start
-	Bind func(context.Context, *river.Workers, *pgxpool.Pool, metric.MeterProvider) error
+	Bind func(context.Context, *pgxpool.Pool, metric.MeterProvider) error
 	// profile:inbound-webhooks-standard:end
 }
 
 // WorkersBuilder is binary-local business composition. Derived services add
 // their typed River workers here; the reusable binary has no default job kind.
-type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (WorkersRuntime, error)
+type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (WorkerRegistration, error)
 
 func Run(args []string, buildWorkers WorkersBuilder) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -59,7 +59,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	}
 	startupCtx, cancelStartup := context.WithTimeout(signalCtx, startupTimeout)
 	defer cancelStartup()
-	cfg, _, err := config.LoadJobsWorkerDetailedWithContext(startupCtx, loadOptions)
+	cfg, _, err := config.LoadJobsWorker(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load jobs worker config: %w", err)
 	}
@@ -68,28 +68,28 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	}
 
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "jobs_worker")
-	metrics := telemetry.New()
-	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "jobs_worker")
+	metrics := telemetry.NewMetrics()
+	flushTelemetry, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "jobs_worker")
 	// False means bounded shutdown returned without joining River. Its pool and
 	// telemetry stay alive until process exit instead of being closed under it.
 	cleanupSafe := true
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	defer func() {
 		if cleanupSafe {
-			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryClose)
+			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 			defer cleanupCancel()
-			_ = telemetryCleanup(cleanupCtx)
+			_ = flushTelemetry(cleanupCtx)
 		}
 	}()
 	if err != nil {
 		return err
 	}
 
-	runtime, err := buildWorkers(startupCtx, cfg, log)
+	registration, err := buildWorkers(startupCtx, cfg, log)
 	if err != nil {
 		return fmt.Errorf("build jobs workers: %w", err)
 	}
-	if runtime.Workers == nil {
+	if registration.Workers == nil {
 		return errors.New("jobs workers are not registered")
 	}
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
@@ -102,8 +102,8 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		}
 	}()
 	// profile:inbound-webhooks-standard:start
-	if runtime.Bind != nil {
-		if err := runtime.Bind(startupCtx, runtime.Workers, pool, metrics.MeterProvider()); err != nil {
+	if registration.Bind != nil {
+		if err := registration.Bind(startupCtx, pool, metrics.MeterProvider()); err != nil {
 			return fmt.Errorf("bind jobs workers: %w", err)
 		}
 	}
@@ -116,31 +116,40 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		JobTimeout:                  river.JobTimeoutDefault,
 		Logger:                      log,
 		MaxAttempts:                 river.MaxAttemptsDefault,
-		PollOnly:                    true,
+		// The pool's finite statement_timeout would cancel a long-lived LISTEN.
+		PollOnly: true,
 		Plugins: []rivertype.Plugin{
 			otelriver.NewMiddleware(&otelriver.MiddlewareConfig{EnableTracePropagation: true}),
 		},
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: cfg.Jobs.MaxWorkers},
 		},
-		Workers: runtime.Workers,
+		Workers: registration.Workers,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize River client: %w", err)
 	}
-	// stopStartedRiver reports whether River joined and the window it armed, so
-	// run hands deferred cleanup that deadline, as runLifecycle does elsewhere.
-	stopStartedRiver := func(base context.Context, trigger error) (bool, context.Context, error) {
-		window, cancelProcess := runtimeopts.ArmTeardown(base, cfg.HTTP.GracePeriod)
-		defer cancelProcess()
-		stopCtx, cancelStop := runtimeopts.TeardownStage(window, riverHardStopClose)
+	// hardStopRiver cancels River's running jobs and reports whether River
+	// joined within its stage of window.
+	hardStopRiver := func(window context.Context) (bool, error) {
+		stopCtx, cancelStop := runtimeopts.TeardownStage(window, riverHardStopTimeout)
 		defer cancelStop()
 		stopErr := client.StopAndCancel(stopCtx)
 		stopped := runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 		if !stopped {
 			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", stopCtx.Err()))
 		}
-		return stopped, window, errors.Join(trigger, stopErr)
+		return stopped, stopErr
+	}
+	// stopStartedRiver arms the process window for a River that started but
+	// cannot serve, and hands deferred cleanup that window and River's join.
+	stopStartedRiver := func(trigger error) error {
+		window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+		defer cancelProcess()
+		cleanupWindow = window
+		var stopErr error
+		cleanupSafe, stopErr = hardStopRiver(window)
+		return errors.Join(trigger, stopErr)
 	}
 
 	runCtx, cancelRun := context.WithCancel(context.WithoutCancel(signalCtx))
@@ -149,8 +158,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if err != nil {
 		startErr := fmt.Errorf("start River client: %w", err)
 		if started {
-			cleanupSafe, cleanupWindow, err = stopStartedRiver(signalCtx, startErr)
-			return err
+			return stopStartedRiver(startErr)
 		}
 		return startErr
 	}
@@ -166,8 +174,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		cfg.Observability.Pprof.Enabled,
 	)
 	if err != nil {
-		cleanupSafe, cleanupWindow, err = stopStartedRiver(signalCtx, err)
-		return err
+		return stopStartedRiver(err)
 	}
 
 	var trigger error
@@ -188,14 +195,10 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	cancelStop()
 	riverStopped := runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
 	if !riverStopped {
-		hardStopCtx, cancelHardStop := runtimeopts.TeardownStage(window, riverHardStopClose)
-		stopErr = client.StopAndCancel(hardStopCtx)
-		riverStopped = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
-		if !riverStopped {
-			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", hardStopCtx.Err()))
-		}
-		cancelHardStop()
+		riverStopped, stopErr = hardStopRiver(window)
 	}
+	// A soft stop that ran out of time but still joined, directly or through
+	// the hard stop, is a degraded success: River finished and cleanup is safe.
 	if riverStopped && errors.Is(stopErr, context.DeadlineExceeded) {
 		stopErr = nil
 	}
@@ -203,6 +206,6 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if cleanupSafe {
 		cancelRun()
 	}
-	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
+	diagnosticsErr := diagnostics.Stop(window, diagnosticsShutdownTimeout)
 	return errors.Join(trigger, stopErr, diagnosticsErr)
 }

@@ -21,9 +21,9 @@ type TelemetryFlush func(context.Context) error
 // The two signals are installed independently: a metrics provider that could not
 // be built must not cost the process its tracer, because logctx reads request
 // correlation off the span context that provider produces. That is also why the
-// flush is returned even alongside an error — a caller that refuses to start
-// still has a tracer to release, and returning nil there is how the exporter
-// goroutine outlived the process that gave up on it.
+// flush is returned even alongside an error: a caller that refuses to start
+// still has a tracer to release, and without the flush its exporter goroutine
+// outlives the process that gave up on it.
 //
 // component prefixes the degraded-signal records. It is a parameter rather than
 // a constant because those names are what an operator's alert matches on, and
@@ -34,7 +34,8 @@ type TelemetryFlush func(context.Context) error
 // consumed, while the relay keeps publishing against the no-op provider
 // [telemetry.Metrics] already returns. The operator-facing wording is still
 // built here, so a caller applies its policy rather than restating what failed.
-// Everything below is degradation; all callers report it the same way here.
+// A degraded tracer or metrics export is logged here, the same way for every
+// caller, and does not fail the install.
 //
 // cmd/service does not use this. Its telemetry stage carries per-signal startup
 // budgets, the additional ambient-environment report, and trace-exporter initialization

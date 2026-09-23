@@ -64,7 +64,7 @@ func Open(ctx context.Context, opts Options) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 	poolConfig.ConnConfig.ConnectTimeout = postgresConnectTimeout
-	applyStatementTimeouts(poolConfig.ConnConfig, defaultStatementTimeout)
+	ApplyStatementTimeouts(poolConfig.ConnConfig, defaultStatementTimeout)
 	applyContextWatcher(poolConfig.ConnConfig, defaultStatementTimeout)
 	poolConfig.ConnConfig.Tracer = otelpgx.NewTracer(
 		otelpgx.WithTrimSQLInSpanName(),
@@ -134,14 +134,14 @@ func (h *contextWatcherHandler) HandleUnwatchAfterCancel() {
 	h.handler.HandleUnwatchAfterCancel()
 }
 
-// applyStatementTimeouts publishes the budget as session defaults on every
-// pooled connection.
+// ApplyStatementTimeouts publishes the budget as session defaults on every
+// connection opened from connConfig. The runtime pool and migrations share it.
 //
 // These are startup parameters rather than a per-query SET, so they apply to
-// connections the pool opens later. idle_in_transaction_session_timeout covers
+// connections a pool opens later. idle_in_transaction_session_timeout covers
 // what statement_timeout cannot: a transaction that ran a fast statement and then
 // lost its client holds its locks while no statement is running at all.
-func applyStatementTimeouts(connConfig *pgx.ConnConfig, statementTimeout time.Duration) {
+func ApplyStatementTimeouts(connConfig *pgx.ConnConfig, statementTimeout time.Duration) {
 	if connConfig == nil {
 		return
 	}
@@ -155,15 +155,15 @@ func applyStatementTimeouts(connConfig *pgx.ConnConfig, statementTimeout time.Du
 }
 
 // RuntimeParamMilliseconds renders a duration as a PostgreSQL runtime-parameter
-// value. internal/infra/postgresmigrate publishes its own timeouts through it.
+// value. internal/infra/postgresmigrate publishes its lock timeout through it.
 //
 // Rounded up rather than truncated so a caller never publishes less time than
 // its timeout. One millisecond more cannot fail a statement that would have
 // succeeded; one millisecond less can cancel one.
 //
 // The unit is written out because PostgreSQL reads a bare integer against each
-// setting's own default unit, which is milliseconds for these three and not for
-// every setting a caller might add next.
+// setting's own default unit, which is milliseconds for the current timeouts
+// and not for every setting a caller might add next.
 func RuntimeParamMilliseconds(duration time.Duration) string {
 	milliseconds := math.Ceil(float64(duration) / float64(time.Millisecond))
 	return strconv.FormatInt(int64(milliseconds), 10) + "ms"

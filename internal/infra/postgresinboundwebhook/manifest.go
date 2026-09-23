@@ -5,7 +5,6 @@ package postgresinboundwebhook
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json/v2"
 	"errors"
 	"strings"
@@ -14,11 +13,6 @@ import (
 
 	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
 	"github.com/example/go-service-template-rest/internal/webhooksecret"
-)
-
-const (
-	maxSecretManifestBytes   = 1 << 20
-	maxSecretManifestEntries = 4096
 )
 
 // Endpoint is the non-secret trust identity for one inbound endpoint.
@@ -52,18 +46,18 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 	if raw == "" {
 		return &SecretManifest{secrets: map[string]map[string][]byte{}}, nil
 	}
-	if len(raw) > maxSecretManifestBytes {
+	if len(raw) > webhooksecret.MaxManifestBytes {
 		return nil, errors.New("parse inbound webhook secrets: document size is invalid")
 	}
 	var document secretDocument
 	if err := json.UnmarshalRead(strings.NewReader(raw), &document, json.RejectUnknownMembers(true)); err != nil {
 		return nil, errors.New("parse inbound webhook secrets: invalid JSON")
 	}
-	if len(document.Entries) == 0 || len(document.Entries) > maxSecretManifestEntries {
+	if len(document.Entries) == 0 || len(document.Entries) > webhooksecret.MaxManifestEntries {
 		return nil, errors.New("parse inbound webhook secrets: entries are required")
 	}
 	manifest := &SecretManifest{secrets: make(map[string]map[string][]byte)}
-	bindings := make(map[[sha256.Size]byte]string)
+	var bindings webhooksecret.Bindings[string]
 	for _, entry := range document.Entries {
 		if !inboundmanifest.ValidEndpointID(entry.EndpointID) {
 			return nil, errors.New("parse inbound webhook secrets: invalid identifier")
@@ -78,11 +72,9 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 		if _, exists := manifest.secrets[entry.EndpointID][entry.KeyReference]; exists {
 			return nil, errors.New("parse inbound webhook secrets: duplicate binding")
 		}
-		digest := sha256.Sum256(secret)
-		if previous, exists := bindings[digest]; exists && previous != entry.EndpointID {
+		if !bindings.Bind(secret, entry.EndpointID) {
 			return nil, errors.New("parse inbound webhook secrets: key is cross-bound")
 		}
-		bindings[digest] = entry.EndpointID
 		if manifest.secrets[entry.EndpointID] == nil {
 			manifest.secrets[entry.EndpointID] = make(map[string][]byte)
 		}
@@ -100,7 +92,6 @@ func BindSecrets(endpoints *EndpointManifest, secrets *SecretManifest) (*TrustMa
 	trust := &TrustManifest{
 		bindings: make(map[string]endpointBinding, len(endpointIDs)),
 	}
-	referenced := make(map[string]map[string]struct{})
 	for _, id := range endpointIDs {
 		endpoint, _ := endpoints.Lookup(id)
 		keys, ok := secrets.secrets[id]
@@ -112,27 +103,23 @@ func BindSecrets(endpoints *EndpointManifest, secrets *SecretManifest) (*TrustMa
 			return nil, errors.New("parse inbound webhook secrets: missing referenced key")
 		}
 		bound := endpointSecrets{active: bytes.Clone(active)}
-		if referenced[id] == nil {
-			referenced[id] = make(map[string]struct{})
-		}
-		referenced[id][endpoint.ActiveKeyReference] = struct{}{}
 		if endpoint.PredecessorKeyReference != "" {
 			predecessor, ok := keys[endpoint.PredecessorKeyReference]
 			if !ok {
 				return nil, errors.New("parse inbound webhook secrets: missing referenced key")
 			}
 			bound.predecessor = bytes.Clone(predecessor)
-			referenced[id][endpoint.PredecessorKeyReference] = struct{}{}
 		}
 		trust.bindings[id] = endpointBinding{endpoint: endpoint, secrets: bound}
 	}
+	// Parsed key references are never empty, so an absent predecessor matches nothing.
 	for endpointID, keys := range secrets.secrets {
-		used := referenced[endpointID]
-		if used == nil {
+		binding, ok := trust.bindings[endpointID]
+		if !ok {
 			return nil, errors.New("parse inbound webhook secrets: unused key")
 		}
 		for reference := range keys {
-			if _, ok := used[reference]; !ok {
+			if reference != binding.endpoint.ActiveKeyReference && reference != binding.endpoint.PredecessorKeyReference {
 				return nil, errors.New("parse inbound webhook secrets: unused key")
 			}
 		}

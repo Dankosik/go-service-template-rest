@@ -30,9 +30,9 @@ http:
   addr: ":18081"
 `)
 
-	cfg, _, err := LoadDetailed(LoadOptions{ConfigPath: mountPath})
+	cfg, _, err := Load(t.Context(), LoadOptions{ConfigPath: mountPath})
 	if err != nil {
-		t.Fatalf("LoadDetailed() with a projected ConfigMap error = %v", err)
+		t.Fatalf("Load() with a projected ConfigMap error = %v", err)
 	}
 	if cfg.HTTP.Addr != ":18081" {
 		t.Fatalf("HTTP.Addr = %q, want the projected file's value", cfg.HTTP.Addr)
@@ -45,9 +45,9 @@ http:
 func TestRejectsAConfigDirectory(t *testing.T) {
 	resetConfigEnv(t)
 
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: t.TempDir()})
+	_, _, err := Load(t.Context(), LoadOptions{ConfigPath: t.TempDir()})
 	if err == nil {
-		t.Fatal("LoadDetailed() with a directory error = nil, want rejection")
+		t.Fatal("Load() with a directory error = nil, want rejection")
 	}
 	if !strings.Contains(err.Error(), "is a directory") {
 		t.Fatalf("error = %v, want the directory named", err)
@@ -65,9 +65,9 @@ func TestRejectsAnOversizedConfigFile(t *testing.T) {
 		t.Fatalf("os.WriteFile() error = %v", err)
 	}
 
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	_, _, err := Load(t.Context(), LoadOptions{ConfigPath: path})
 	if err == nil {
-		t.Fatal("LoadDetailed() with an oversized file error = nil, want rejection")
+		t.Fatal("Load() with an oversized file error = nil, want rejection")
 	}
 	if !strings.Contains(err.Error(), "exceeds max size limit") {
 		t.Fatalf("error = %v, want the size limit named", err)

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
@@ -38,15 +39,15 @@ func run(args []string, stdout io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg, _, err := config.LoadDetailedWithContext(ctx, loadOptions)
+	cfg, _, err := config.Load(ctx, loadOptions)
 	if err != nil {
 		wrapped := fmt.Errorf("load config: %w", err)
 		logMigrationTerminal(logger, postgresmigrate.RunResult{}, wrapped, postgresmigrate.FailureConfig)
 		return wrapped
 	}
 	// Rebuilt now that the identity is known, so a migration run is attributable
-	// to the same service, version, and environment as the three long-running
-	// binaries rather than being the one job whose records carry none of them.
+	// to the same service, version, and environment as the long-running binaries
+	// rather than being the one job whose records carry none of them.
 	logger = runtimeopts.Logger(stdout, cfg)
 	if !cfg.Postgres.Enabled {
 		err := errors.New("postgres is required by the DATABASE=postgres profile")
@@ -75,9 +76,11 @@ func run(args []string, stdout io.Writer) error {
 	return nil
 }
 
-func resolveMigrationSource() (fs.FS, string, error) {
+// resolveMigrationSource prefers the image's migrations over a local checkout's.
+// dir is relative to source, because fs.FS paths carry no leading slash.
+func resolveMigrationSource() (source fs.FS, dir string, err error) {
 	if err := requireDirectory(imageMigrationSourcePath); err == nil {
-		return os.DirFS("/"), "migrations", nil
+		return os.DirFS("/"), strings.TrimPrefix(imageMigrationSourcePath, "/"), nil
 	} else if !errors.Is(err, errMigrationSourceMissing) {
 		return nil, "", err
 	}

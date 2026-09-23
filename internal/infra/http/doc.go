@@ -22,7 +22,7 @@
 // transport, which is what keeps one domain identity from answering 404 here and
 // Internal there; there is deliberately no HTTP-only mapper seam.
 //
-// To charge callers against a budget, set [HardenConfig.RateLimit] and
+// To charge callers against a budget, set [HardenConfig.RateLimiter] and
 // [HardenConfig.RateLimitKey] together. Their field comments own why neither has
 // a default that a template could honestly guess.
 //

@@ -120,9 +120,9 @@ func TestHTTPClientConstructionRequiresBothOwners(t *testing.T) {
 	t.Cleanup(owner.Close)
 	base, err := httpclient.NewExternalHTTPS("https://resource.example.com", httpclient.TransportLimits{
 		ResponseHeaderTimeout:  defaultAcquisitionTimeout,
-		MaxResponseHeaderBytes: maxTokenResponseHeaders,
+		MaxResponseHeaderBytes: maxTokenResponseHeaderBytes,
 		MaxInFlight:            maxTokenRequestsInFlight,
-		AbsoluteBodyBytes:      maxTokenResponseBody,
+		AbsoluteBodyBytes:      maxTokenResponseBodyBytes,
 	})
 	if err != nil {
 		t.Fatalf("NewExternalHTTPS() error = %v", err)

@@ -23,18 +23,20 @@ type Client struct {
 	producer  *Producer
 	telemetry *telemetry
 
-	ready       atomic.Bool
-	draining    atomic.Bool
-	intentional atomic.Bool
-	terminal    chan error
-	closed      chan struct{}
-	closedOnce  sync.Once
+	ready          atomic.Bool
+	draining       atomic.Bool
+	closeRequested atomic.Bool
+	terminal       chan error
+	closed         chan struct{}
+	closedOnce     sync.Once
 
 	probeMu       sync.RWMutex
 	consumer      pullConsumer
 	workerClaimed atomic.Bool
 }
 
+// Connect validates cfg, dials the broker, and returns a client whose first
+// readiness probe passed. ctx bounds the dial and the probe.
 func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error) {
 	if err := ValidateConfig(cfg); err != nil {
 		return nil, err
@@ -50,7 +52,6 @@ func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error
 	c.telemetry = telemetry
 	nc, err := nats.Connect(strings.Join(cfg.URLs, ","), c.connectOptions(ctx, cfg)...)
 	if err != nil {
-		c.Close()
 		return nil, fmt.Errorf("%w: messaging connection failed", ErrRejected)
 	}
 	c.nc = nc
@@ -59,7 +60,7 @@ func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error
 		c.Close()
 		return nil, fmt.Errorf("%w: messaging protocol initialization failed", ErrRejected)
 	}
-	c.producer = newProducer(c, cfg.MaxPayloadBytes)
+	c.producer = newProducer(c)
 	if err := c.Check(ctx); err != nil {
 		c.Close()
 		return nil, err
@@ -67,6 +68,12 @@ func Connect(ctx context.Context, cfg Config, obs Observability) (*Client, error
 	return c, nil
 }
 
+// connectOptions is the connection policy. ReconnectBufSize(-1) disables the
+// client's reconnect buffer, so a publish during a disconnect fails at once
+// rather than waiting in memory for a reconnect that may never come.
+// Reconnection gives up after MaxReconnects attempts about ReconnectWait
+// apart, and the closed handler then reports a terminal fault unless this
+// client asked for the close.
 func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 	options := []nats.Option{
 		nats.Name("service-messaging"),
@@ -89,7 +96,7 @@ func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 		nats.ClosedHandler(func(_ *nats.Conn) {
 			c.ready.Store(false)
 			c.closedOnce.Do(func() { close(c.closed) })
-			if !c.intentional.Load() {
+			if !c.closeRequested.Load() {
 				c.signalTerminal(fmt.Errorf("%w: connection closed after reconnect exhaustion", ErrTerminal))
 			}
 		}),
@@ -103,50 +110,59 @@ func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 	return options
 }
 
+// Producer returns the client's publisher.
 func (c *Client) Producer() *Producer { return c.producer }
 
+// Name identifies the client as a readiness dependency.
 func (c *Client) Name() string { return "messaging" }
 
+// Ready reports the last readiness probe's result, and false once draining
+// starts. It does no I/O.
 func (c *Client) Ready() bool {
 	return c != nil && c.ready.Load() && !c.draining.Load()
 }
 
+// Check probes the broker and records the result as readiness.
 func (c *Client) Check(ctx context.Context) error {
-	if c == nil || c.nc == nil || !c.nc.IsConnected() || c.draining.Load() {
-		if c != nil {
-			c.ready.Store(false)
-		}
+	if c == nil {
 		return fmt.Errorf("%w: connection is not ready", ErrRejected)
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
+	err := c.probe(ctx)
+	c.ready.Store(err == nil)
+	return err
+}
+
+// probe confirms the connection, the source stream, and — once a worker owns
+// one — the durable consumer. Check records its result as readiness.
+func (c *Client) probe(ctx context.Context) error {
+	if c.nc == nil || !c.nc.IsConnected() || c.draining.Load() {
+		return fmt.Errorf("%w: connection is not ready", ErrRejected)
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	stream, err := c.js.Stream(probeCtx, c.cfg.Stream)
 	if err != nil {
-		c.ready.Store(false)
 		return fmt.Errorf("%w: source stream is unavailable", ErrRejected)
 	}
 	if _, err := stream.Info(probeCtx); err != nil {
-		c.ready.Store(false)
 		return fmt.Errorf("%w: source stream information is unavailable", ErrRejected)
 	}
 	c.probeMu.RLock()
 	consumer := c.consumer
 	c.probeMu.RUnlock()
 	if consumer != nil {
-		_, err = consumer.Info(probeCtx)
-		if err != nil {
-			c.ready.Store(false)
+		if _, err := consumer.Info(probeCtx); err != nil {
 			return fmt.Errorf("%w: durable consumer is unavailable", ErrRejected)
 		}
 	}
 	if !c.nc.IsConnected() {
-		c.ready.Store(false)
 		return fmt.Errorf("%w: connection changed during readiness probe", ErrRejected)
 	}
-	c.ready.Store(true)
 	return nil
 }
 
+// Run blocks until ctx ends or the connection fails terminally, and returns
+// which one happened.
 func (c *Client) Run(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -156,6 +172,8 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 }
 
+// StopPublish refuses new publications with [ErrDraining] and withdraws
+// readiness. Publications already in flight continue.
 func (c *Client) StopPublish() {
 	if c == nil {
 		return
@@ -164,12 +182,14 @@ func (c *Client) StopPublish() {
 	c.ready.Store(false)
 }
 
+// Shutdown stops publishing, drains the connection, and waits for it to close
+// or for ctx to end, closing it outright then.
 func (c *Client) Shutdown(ctx context.Context) error {
 	if c == nil || c.nc == nil {
 		return nil
 	}
 	c.StopPublish()
-	c.intentional.Store(true)
+	c.closeRequested.Store(true)
 	if err := c.nc.Drain(); err != nil && !errors.Is(err, nats.ErrConnectionClosed) {
 		c.Close()
 		return fmt.Errorf("%w: messaging connection drain failed", ErrTerminal)
@@ -183,11 +203,13 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	}
 }
 
+// Close closes the connection without draining. It is safe to call more than
+// once.
 func (c *Client) Close() {
 	if c == nil {
 		return
 	}
-	c.intentional.Store(true)
+	c.closeRequested.Store(true)
 	c.ready.Store(false)
 	c.draining.Store(true)
 	if c.nc != nil {
@@ -203,15 +225,12 @@ func (c *Client) signalTerminal(err error) {
 	}
 }
 
+// boundedTimeout is operationTimeout, shortened to what remains of ctx's
+// deadline. nats.Timeout takes a duration rather than a context, so the
+// connection dial needs the bound spelled out.
 func boundedTimeout(ctx context.Context) time.Duration {
 	if deadline, ok := ctx.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining < operationTimeout {
-			if remaining <= 0 {
-				return time.Nanosecond
-			}
-			return remaining
-		}
+		return max(time.Nanosecond, min(operationTimeout, time.Until(deadline)))
 	}
 	return operationTimeout
 }
