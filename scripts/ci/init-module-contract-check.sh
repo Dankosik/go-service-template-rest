@@ -3,6 +3,29 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# Every canonical profile: name, module, service name, harness, then the
+# initialization overrides. --list-profiles prints the names CI splits into
+# parallel parts.
+profile_specs=(
+	"minimal github.com/acme/service service core"
+	"oidc-jwt github.com/acme/service service core AUTHN=oidc-jwt GRPC=enabled"
+	"oidc-introspection github.com/acme/service service core AUTHN=oidc-introspection GRPC=enabled"
+	"postgres github.com/acme/service service core DATABASE=postgres"
+	"http-idempotency github.com/acme/service service core DATABASE=postgres HTTP_IDEMPOTENCY=postgres"
+	"jobs github.com/acme/service service core DATABASE=postgres JOBS=postgres"
+	"webhooks github.com/acme/service service core DATABASE=postgres JOBS=postgres WEBHOOKS=durable"
+	"inbound-webhooks github.com/acme/service service core DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks"
+	"outbox github.com/acme/service service core DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream"
+	"messaging github.com/acme/service service core MESSAGING=nats-jetstream"
+	"object-storage github.com/acme/service service core OBJECT_STORAGE=s3"
+	"outbound-auth github.com/acme/service/v2 service all GRPC=enabled OUTBOUND_HTTP=bounded OUTBOUND_AUTH=oauth2-client-credentials AGENT_HARNESS=all"
+)
+
+if [[ ${1:-} == --list-profiles ]]; then
+	for spec in "${profile_specs[@]}"; do printf '%s\n' "${spec%% *}"; done
+	exit 0
+fi
+
 if [[ ${1:-} == --select-from-files ]]; then
 	engine=false
 	selected=' '
@@ -368,33 +391,37 @@ verify_profile() {
 	fi
 }
 
-canonical_checkout="${tmp}/canonical-source"
-git clone -q "${checkout}" "${canonical_checkout}"
-git -C "${canonical_checkout}" remote set-url origin https://github.com/Dankosik/go-service-template-rest.git
-run_init "${canonical_checkout}" "" >/dev/null
-git -C "${canonical_checkout}" diff --quiet
-[[ -z "$(git -C "${canonical_checkout}" status --porcelain)" ]]
-unchanged_failure "${canonical_checkout}" github.com/acme/forbidden
+# The canonical re-run, the refusals and the resumed partial failure do not
+# depend on a profile. They run by default; CI runs them in one part and sets
+# INIT_MODULE_SHARED_CHECKS=0 in the others.
+shared_checks() {
+	canonical_checkout="${tmp}/canonical-source"
+	git clone -q "${checkout}" "${canonical_checkout}"
+	git -C "${canonical_checkout}" remote set-url origin https://github.com/Dankosik/go-service-template-rest.git
+	run_init "${canonical_checkout}" "" >/dev/null
+	git -C "${canonical_checkout}" diff --quiet
+	[[ -z "$(git -C "${canonical_checkout}" status --porcelain)" ]]
+	unchanged_failure "${canonical_checkout}" github.com/acme/forbidden
 
-unchanged_failure "${checkout}" "" CODEOWNER=
-unchanged_failure "${checkout}" "" GRPC=
-unchanged_failure "${checkout}" "" GRPC=custom
-unchanged_failure "${checkout}" 'bad module'
-unchanged_failure "${checkout}" github.com/example/go-service-template-rest
-unchanged_failure "${checkout}" "" HTTP_IDEMPOTENCY=postgres
-unchanged_failure "${checkout}" "" JOBS=postgres
-unchanged_failure "${checkout}" "" WEBHOOKS=durable
-unchanged_failure "${checkout}" "" INBOUND_WEBHOOKS=standard-webhooks
-unchanged_failure "${checkout}" "" OUTBOX=postgres MESSAGING=nats-jetstream
-unchanged_failure "${checkout}" "" DATABASE=postgres OUTBOX=postgres
+	unchanged_failure "${checkout}" "" CODEOWNER=
+	unchanged_failure "${checkout}" "" GRPC=
+	unchanged_failure "${checkout}" "" GRPC=custom
+	unchanged_failure "${checkout}" 'bad module'
+	unchanged_failure "${checkout}" github.com/example/go-service-template-rest
+	unchanged_failure "${checkout}" "" HTTP_IDEMPOTENCY=postgres
+	unchanged_failure "${checkout}" "" JOBS=postgres
+	unchanged_failure "${checkout}" "" WEBHOOKS=durable
+	unchanged_failure "${checkout}" "" INBOUND_WEBHOOKS=standard-webhooks
+	unchanged_failure "${checkout}" "" OUTBOX=postgres MESSAGING=nats-jetstream
+	unchanged_failure "${checkout}" "" DATABASE=postgres OUTBOX=postgres
 
-partial_checkout="${tmp}/service-partial"
-git clone -q "${checkout}" "${partial_checkout}"
-git -C "${partial_checkout}" remote set-url origin git@github.com:acme/service.git
-fail_bin="${tmp}/fail-bin"
-mkdir -p "${fail_bin}"
-real_go="$(command -v go)"
-cat >"${fail_bin}/go" <<EOF
+	partial_checkout="${tmp}/service-partial"
+	git clone -q "${checkout}" "${partial_checkout}"
+	git -C "${partial_checkout}" remote set-url origin git@github.com:acme/service.git
+	fail_bin="${tmp}/fail-bin"
+	mkdir -p "${fail_bin}"
+	real_go="$(command -v go)"
+	cat >"${fail_bin}/go" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1-}" == tool && "\${2-}" == -modfile=tools/go.mod && "\${3-}" == sqlc && "\${4-}" == generate ]] &&
 	grep -Fxq 'state = "initializing"' template.lock 2>/dev/null; then
@@ -402,17 +429,22 @@ if [[ "\${1-}" == tool && "\${2-}" == -modfile=tools/go.mod && "\${3-}" == sqlc 
 fi
 exec "${real_go}" "\$@"
 EOF
-chmod +x "${fail_bin}/go"
-if run_init "${partial_checkout}" github.com/acme/service DATABASE=postgres HTTP_IDEMPOTENCY=postgres "PATH=${fail_bin}:${PATH}" >/dev/null 2>&1; then
-	echo "initializer contract: injected partial failure unexpectedly succeeded" >&2
-	exit 1
+	chmod +x "${fail_bin}/go"
+	if run_init "${partial_checkout}" github.com/acme/service DATABASE=postgres HTTP_IDEMPOTENCY=postgres "PATH=${fail_bin}:${PATH}" >/dev/null 2>&1; then
+		echo "initializer contract: injected partial failure unexpectedly succeeded" >&2
+		exit 1
+	fi
+	grep -Fxq 'state = "initializing"' "${partial_checkout}/template.lock"
+	test -d "${partial_checkout}/scripts/profiles"
+	run_init "${partial_checkout}" github.com/acme/service DATABASE=postgres HTTP_IDEMPOTENCY=postgres >/dev/null
+	assert_identity "${partial_checkout}" github.com/acme/service service core
+	unformatted=$(cd "${partial_checkout}" && gofmt -l internal/config cmd/service/internal/bootstrap)
+	[[ -z ${unformatted} ]] || { echo "resumed initialization left unformatted Go files: ${unformatted}" >&2; exit 1; }
+}
+
+if [[ ${INIT_MODULE_SHARED_CHECKS:-1} == 1 ]]; then
+	shared_checks
 fi
-grep -Fxq 'state = "initializing"' "${partial_checkout}/template.lock"
-test -d "${partial_checkout}/scripts/profiles"
-run_init "${partial_checkout}" github.com/acme/service DATABASE=postgres HTTP_IDEMPOTENCY=postgres >/dev/null
-assert_identity "${partial_checkout}" github.com/acme/service service core
-unformatted=$(cd "${partial_checkout}" && gofmt -l internal/config cmd/service/internal/bootstrap)
-[[ -z ${unformatted} ]] || { echo "resumed initialization left unformatted Go files: ${unformatted}" >&2; exit 1; }
 
 run_selected_profile() {
 	local name=$1
@@ -426,17 +458,9 @@ run_selected_profile() {
 	verify_profile "${name}" "$@"
 }
 
-run_selected_profile minimal github.com/acme/service service core
-run_selected_profile oidc-jwt github.com/acme/service service core AUTHN=oidc-jwt GRPC=enabled
-run_selected_profile oidc-introspection github.com/acme/service service core AUTHN=oidc-introspection GRPC=enabled
-run_selected_profile postgres github.com/acme/service service core DATABASE=postgres
-run_selected_profile http-idempotency github.com/acme/service service core DATABASE=postgres HTTP_IDEMPOTENCY=postgres
-run_selected_profile jobs github.com/acme/service service core DATABASE=postgres JOBS=postgres
-run_selected_profile webhooks github.com/acme/service service core DATABASE=postgres JOBS=postgres WEBHOOKS=durable
-run_selected_profile inbound-webhooks github.com/acme/service service core DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks
-run_selected_profile outbox github.com/acme/service service core DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream
-run_selected_profile messaging github.com/acme/service service core MESSAGING=nats-jetstream
-run_selected_profile object-storage github.com/acme/service service core OBJECT_STORAGE=s3
-run_selected_profile outbound-auth github.com/acme/service/v2 service all GRPC=enabled OUTBOUND_HTTP=bounded OUTBOUND_AUTH=oauth2-client-credentials AGENT_HARNESS=all
+for spec in "${profile_specs[@]}"; do
+	read -r -a profile_args <<<"${spec}"
+	run_selected_profile "${profile_args[@]}"
+done
 
 echo "initializer contract passed"
