@@ -23,8 +23,24 @@ type contextKey uint8
 
 const refreshFailureKey contextKey = iota
 
+// refreshFailure records whether a key refresh failed during one Verify call.
 type refreshFailure struct {
 	failed atomic.Bool
+}
+
+// withRefreshObserver attaches a fresh observer to one Verify call's context.
+// Verify reads it after parsing; the refresh reporter marks it when a refresh
+// triggered by that call fails.
+func withRefreshObserver(ctx context.Context) (context.Context, *refreshFailure) {
+	observer := new(refreshFailure)
+	return context.WithValue(ctx, refreshFailureKey, observer), observer
+}
+
+// refreshObserverFrom returns the observer of the Verify call that triggered a
+// refresh. A scheduled refresh has none.
+func refreshObserverFrom(ctx context.Context) (*refreshFailure, bool) {
+	observer, ok := ctx.Value(refreshFailureKey).(*refreshFailure)
+	return observer, ok
 }
 
 // Verifier owns one issuer's parser, cached JWKS resolver, and refresh lifetime.
@@ -59,7 +75,11 @@ func New(
 		return nil, err
 	}
 	processCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	metrics := newJWKSMetrics(meterProvider)
+	abandon := func(stage string) error {
+		cancel()
+		closeIdle()
+		return errors.New("OIDC startup failed at " + stage)
+	}
 	ignoreFirstHTTPRequestError := false
 	keys, err := keyfunc.NewDefaultOverrideCtx(processCtx, []string{jwksURI}, keyfunc.Override{
 		Client:                    jwksClient,
@@ -68,25 +88,11 @@ func New(
 		RateLimitWaitMax:          time.Nanosecond,
 		RefreshInterval:           refreshInterval,
 		RefreshUnknownKID:         rate.NewLimiter(rate.Every(refreshCooldown), 1),
-		RefreshErrorHandlerFunc: func(string) func(context.Context, error) {
-			return func(refreshCtx context.Context, _ error) {
-				if !shouldReportRefreshFailure(processCtx, refreshCtx) {
-					return
-				}
-				if observed, ok := refreshCtx.Value(refreshFailureKey).(*refreshFailure); ok {
-					observed.failed.Store(true)
-				}
-				eventCtx := context.WithoutCancel(refreshCtx)
-				metrics.recordRefreshFailure(eventCtx)
-				log.WarnContext(eventCtx, "authn_jwks_refresh_failed", "component", "authn")
-			}
-		},
-		ValidationSkipAll: false,
+		RefreshErrorHandlerFunc:   refreshFailureReporter(processCtx, newJWKSMetrics(meterProvider), log),
+		ValidationSkipAll:         false,
 	})
 	if err != nil {
-		cancel()
-		closeIdle()
-		return nil, errors.New("OIDC startup failed at JWKS load")
+		return nil, abandon("JWKS load")
 	}
 	signingKeys, err := keyfunc.New(keyfunc.Options{
 		Ctx:          processCtx,
@@ -94,18 +100,40 @@ func New(
 		UseWhitelist: []jwkset.USE{"", jwkset.UseSig},
 	})
 	if err != nil {
-		cancel()
-		closeIdle()
-		return nil, errors.New("OIDC startup failed at JWKS key selection")
+		return nil, abandon("JWKS key selection")
 	}
 	return newVerifier(policy, signingKeys.KeyfuncCtx, time.Now, cancel, closeIdle), nil
+}
+
+// refreshFailureReporter builds keyfunc's refresh error handler. It marks the
+// observer of the Verify call that triggered the refresh, then counts and logs
+// the failure without its text. It is bound to processCtx, so it goes quiet once
+// the verifier closes.
+func refreshFailureReporter(
+	processCtx context.Context,
+	metrics jwksMetrics,
+	log *slog.Logger,
+) func(string) func(context.Context, error) {
+	return func(string) func(context.Context, error) {
+		return func(refreshCtx context.Context, _ error) {
+			if !shouldReportRefreshFailure(processCtx, refreshCtx) {
+				return
+			}
+			if observer, ok := refreshObserverFrom(refreshCtx); ok {
+				observer.failed.Store(true)
+			}
+			eventCtx := context.WithoutCancel(refreshCtx)
+			metrics.recordRefreshFailure(eventCtx)
+			log.WarnContext(eventCtx, "authn_jwks_refresh_failed", "component", "authn")
+		}
+	}
 }
 
 func shouldReportRefreshFailure(processCtx, refreshCtx context.Context) bool {
 	if processCtx.Err() != nil {
 		return false
 	}
-	_, requestRefresh := refreshCtx.Value(refreshFailureKey).(*refreshFailure)
+	_, requestRefresh := refreshObserverFrom(refreshCtx)
 	return !requestRefresh || refreshCtx.Err() == nil
 }
 
@@ -156,8 +184,7 @@ func (v *Verifier) Verify(ctx context.Context, compact string) (bearerauthn.Resu
 	if len(compact) > bearerauthn.MaxTokenBytes {
 		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindOversize)
 	}
-	refresh := new(refreshFailure)
-	verifyCtx := context.WithValue(ctx, refreshFailureKey, refresh)
+	verifyCtx, refresh := withRefreshObserver(ctx)
 	claims := new(accessTokenClaims)
 	token, err := v.parser.ParseWithClaims(compact, claims, func(token *jwt.Token) (any, error) {
 		if v.policy.strictRFC9068() && !validAccessTokenType(token.Header["typ"]) {
