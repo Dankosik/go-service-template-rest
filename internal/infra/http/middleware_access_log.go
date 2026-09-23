@@ -35,7 +35,7 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		if skipHealthProbeLog(r, routePathTemplate, logHealthProbes) {
 			return
 		}
-		// The method is used verbatim. Normalizing it to a bounded label was
+		// The method is used verbatim. Normalizing it to a bounded label would be
 		// unreachable: routeLabel discards the method whenever the
 		// route template is empty, and a non-empty template means chi matched a
 		// route, which only exists for the methods the contract declares. The

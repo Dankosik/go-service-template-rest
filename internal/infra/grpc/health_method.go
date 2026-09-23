@@ -45,8 +45,9 @@ func isHealthCheck(fullMethod string) bool {
 }
 
 // isHealthMethod matches the whole standard health service by prefix, so a
-// method grpc-go adds to it later is exempted from routine access logs, the
-// business RPC budget, and protocol telemetry without an edit here.
+// method grpc-go adds to it later is exempted from the business RPC budget,
+// deadline, drain accounting, error sanitizing, and protocol telemetry without an
+// edit here.
 // Over-matching costs a metric series or the wrong finite budget rather than
 // publishing work or leaving it unbounded.
 //

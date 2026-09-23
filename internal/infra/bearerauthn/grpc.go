@@ -63,8 +63,8 @@ func (r *Runtime) StreamInterceptor() grpc.StreamServerInterceptor {
 // health service. This is the boundary that decides which RPC needs no
 // credential, so a method grpc-go adds to grpc.health.v1.Health later must be
 // authenticated until someone deliberately publishes it. The transport adapter
-// in internal/infra/grpc also exempts only Check from admission; its wider
-// health-service prefix governs logging and telemetry alone.
+// in internal/infra/grpc likewise exempts only Check from admission; its wider
+// health-service prefix routes budgets and telemetry, never trust.
 func publicHealthMethod(fullMethod string) bool {
 	return fullMethod == healthpb.Health_Check_FullMethodName
 }

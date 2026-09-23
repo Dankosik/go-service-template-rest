@@ -80,6 +80,12 @@ func New(
 		closeIdle()
 		return errors.New("OIDC startup failed at " + stage)
 	}
+	// keyfunc's defaults are tuned for availability over trust, so three are
+	// overridden: a failed first key load fails startup instead of serving with
+	// an empty key set; a request-triggered refresh never waits on the limiter
+	// (zero means the one-minute default, so the smallest positive wait stands
+	// in for none); and the whitelist below needs a second Keyfunc, because the
+	// default constructor accepts keys of any use.
 	ignoreFirstHTTPRequestError := false
 	keys, err := keyfunc.NewDefaultOverrideCtx(processCtx, []string{jwksURI}, keyfunc.Override{
 		Client:                    jwksClient,

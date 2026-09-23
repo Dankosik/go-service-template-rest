@@ -78,8 +78,8 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg HardenConfig, apiS
 	if cfg.MaxInFlight < 0 {
 		return nil, errors.New("http router: max in flight must be >= 0")
 	}
-	// Same reason: a limiter with no key silently limits nothing, which looks
-	// exactly like a limiter that is working.
+	// A limiter with no key silently limits nothing, which looks exactly like a
+	// limiter that is working, so Harden refuses it.
 	if cfg.RateLimiter != nil && cfg.RateLimitKey == nil {
 		return nil, errors.New("http router: rate limit key is required when a rate limiter is configured")
 	}

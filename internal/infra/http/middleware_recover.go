@@ -12,6 +12,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
+// Recover turns a handler panic into an ERROR record and, when nothing was
+// committed yet, a sanitized 500. http.ErrAbortHandler passes through.
 func Recover(log *slog.Logger, next http.Handler) http.Handler {
 	if log == nil {
 		log = slog.Default()

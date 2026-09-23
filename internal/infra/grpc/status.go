@@ -116,8 +116,8 @@ func methodDomain(fullMethod string) string {
 //
 // It is the only place the error a handler or policy actually returned is
 // recorded. The status carries no detail on purpose — see the package doc on why
-// a dependency's own text is not the caller's business — and the access log
-// carries only the code, so without this the whole %w chain a service built is
+// a dependency's own text is not the caller's business — and telemetry carries
+// only the code, so without this the whole %w chain a service built is
 // discarded at the boundary and an INTERNAL is undiagnosable without reproducing
 // the call.
 //
@@ -149,9 +149,8 @@ func mappedStatus(mapped failure.Classification, domain string) error {
 	rendered := status.New(grpcCode(mapped.Code), detail)
 	if details := classifiedDetails(mapped, domain); len(details) > 0 {
 		// A detail that cannot be attached must not cost the caller its status.
-		// The only documented failure is an OK code, which this function cannot
-		// produce, so the arm exists to keep that promise rather than to handle
-		// a case anyone has seen.
+		// WithDetails fails for an OK code, which grpcCode never returns, so the
+		// arm keeps that promise rather than handling a case anyone has seen.
 		if withDetails, err := rendered.WithDetails(details...); err == nil {
 			rendered = withDetails
 		}

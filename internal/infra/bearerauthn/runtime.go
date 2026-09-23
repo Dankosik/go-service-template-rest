@@ -19,6 +19,10 @@ const (
 // Verifier is the consumer-owned trust-engine contract. It verifies one already
 // parsed bearer value and returns a principal plus expiry, or one sanitized
 // invalid, unavailable, or caller-context failure.
+//
+// A success must carry a complete Result: an identified principal and a
+// non-zero expiry; [Runtime] treats anything less as KindUnavailable. Close must
+// be idempotent, because [Runtime.Close] may reach it more than once.
 type Verifier interface {
 	Verify(ctx context.Context, token string) (Result, error)
 	Close()

@@ -77,6 +77,10 @@ func admitResponse(body []byte, policy Policy, now time.Time) (bearerauthn.Resul
 	}, nil
 }
 
+// decodeObjectMembers accepts exactly one JSON object with unique member names
+// and nothing after it. encoding/json would keep the last of duplicate members
+// and ignore trailing data, and either lets two parties read one response
+// differently.
 func decodeObjectMembers(body []byte) (map[string]json.RawMessage, error) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	token, err := decoder.Token()

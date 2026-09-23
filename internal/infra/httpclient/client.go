@@ -90,6 +90,8 @@ func newClient(rawBaseURL string, policy targetPolicy, limits TransportLimits) (
 		return nil, errors.New("build outbound HTTP client: default transport has unexpected type")
 	}
 	transport := baseTransport.Clone()
+	// No environment proxy: a proxy would be the address actually dialed, which
+	// takes both the dial gate and the authority pin out of the path.
 	transport.Proxy = nil
 	transport.ResponseHeaderTimeout = limits.ResponseHeaderTimeout
 	transport.MaxResponseHeaderBytes = limits.MaxResponseHeaderBytes
@@ -226,6 +228,8 @@ func (b *boundedBody) Read(buffer []byte) (int, error) {
 	if b.tooLarge {
 		return 0, ErrResponseTooLarge
 	}
+	// Reading one byte past the budget is what tells a body that ends exactly at
+	// the limit from one that exceeds it.
 	if b.remaining < int64(len(buffer)) {
 		buffer = buffer[:int(b.remaining)+1]
 	}

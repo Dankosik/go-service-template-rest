@@ -42,6 +42,9 @@ func newProviderAcquirer(cfg Config, tokenHTTP *http.Client) acquireToken {
 	}
 }
 
+// sanitizeToken admits only a usable bearer token and copies out what callers
+// need. x/oauth2 treats a zero expiry as never expiring and keeps the raw
+// provider response on the token, so both are refused or dropped here.
 func sanitizeToken(token *oauth2.Token) (*oauth2.Token, error) {
 	if token == nil || token.AccessToken == "" || token.Expiry.IsZero() ||
 		!time.Now().Add(defaultEarlyExpiry).Before(token.Expiry) ||

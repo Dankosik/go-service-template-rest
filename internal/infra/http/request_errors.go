@@ -132,9 +132,9 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error, violati
 	if r != nil {
 		ctx = r.Context()
 	}
-	// The chain rather than the outer %T this used to publish: a validator
-	// rejection arrives wrapped, so that type was *openapi3filter.RequestError for
-	// a missing credential, a body that failed its schema, and an unparseable path
+	// The class chain rather than the outer %T: a validator rejection arrives
+	// wrapped, so that type is *openapi3filter.RequestError for a missing
+	// credential, a body that failed its schema, and an unparseable path
 	// parameter alike.
 	//
 	// The fields are what make a 400 actionable at all. Without them an operator
