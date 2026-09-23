@@ -5,7 +5,6 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"os"
 	"strings"
@@ -43,8 +42,8 @@ func runBootstrapCheck(arguments []string) (int, []string) {
 	if err != nil {
 		return 1, []string{err.Error()}
 	}
-	alias := importAlias(startup, importSuffix)
-	if alias == "" || alias == "." || alias == "_" {
+	alias := usableImportAlias(startup, importSuffix)
+	if alias == "" {
 		return 1, []string{fmt.Sprintf("%s: missing usable import ending in %s", startupFile, importSuffix)}
 	}
 	if diagnostic := checkStartupMapping(startup, startupFile, alias, initFunction, expected); diagnostic != "" {
@@ -143,12 +142,11 @@ func startupConstruction(statement ast.Stmt, alias string) (*ast.CompositeLit, b
 	if !ok || len(call.Args) != 1 {
 		return nil, false
 	}
-	constructor, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || constructor.Sel.Name != "New" || !ownedBy(constructor, alias) {
+	if !selectorNamed(call.Fun, alias, "New") {
 		return nil, false
 	}
 	literal, ok := call.Args[0].(*ast.CompositeLit)
-	return literal, ok && selectorTypeIs(literal.Type, alias, "Config")
+	return literal, ok && selectorNamed(literal.Type, alias, "Config")
 }
 
 func errorReturn(statement ast.Stmt, twoResults bool) bool {
@@ -220,8 +218,7 @@ func closeCalls(body *ast.BlockStmt, variable string) int {
 		if !ok {
 			return true
 		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if ok && selector.Sel.Name == "Close" && ownedBy(selector, variable) {
+		if selectorNamed(call.Fun, variable, "Close") {
 			count++
 		}
 		return true
@@ -229,29 +226,13 @@ func closeCalls(body *ast.BlockStmt, variable string) int {
 	return count
 }
 
-func parseFile(filename string) (*ast.File, error) {
-	parsed, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
-	if err != nil {
-		return nil, fmt.Errorf("%s: parse: %w", filename, err)
-	}
-	return parsed, nil
-}
-
 func collectMappings(prefix string, literal *ast.CompositeLit, mappings map[string]string) {
-	for _, element := range literal.Elts {
-		pair, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, ok := pair.Key.(*ast.Ident)
-		if !ok {
-			continue
-		}
-		field := prefix + key.Name
-		if nested, ok := pair.Value.(*ast.CompositeLit); ok {
+	for key, value := range keyedFields(literal) {
+		field := prefix + key
+		if nested, ok := value.(*ast.CompositeLit); ok {
 			collectMappings(field+".", nested, mappings)
 			continue
 		}
-		mappings[field] = expressionPath(pair.Value)
+		mappings[field] = expressionPath(value)
 	}
 }

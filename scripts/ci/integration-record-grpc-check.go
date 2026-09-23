@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"os"
 )
@@ -21,9 +20,9 @@ func main() {
 		os.Exit(2)
 	}
 	filename, authMode := arguments[0], arguments[1]
-	parsed, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
+	parsed, err := parseFile(filename)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: parse: %v\n", filename, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	if err := checkGRPCClient(parsed, authMode); err != nil {
@@ -35,9 +34,9 @@ func main() {
 // checkGRPCClient matches the expected constructor shape, not equivalent data
 // flow in every form. Refactoring the adapter may require updating this check.
 func checkGRPCClient(file *ast.File, authMode string) error {
-	grpcAlias := importAlias(file, "/internal/infra/grpcclient")
-	oauthAlias := importAlias(file, "/internal/infra/oauth2clientcredentials")
-	credentialsAlias := importAlias(file, "google.golang.org/grpc/credentials")
+	grpcAlias := usableImportAlias(file, "/internal/infra/grpcclient")
+	oauthAlias := usableImportAlias(file, "/internal/infra/oauth2clientcredentials")
+	credentialsAlias := usableImportAlias(file, "google.golang.org/grpc/credentials")
 	if grpcAlias == "" || credentialsAlias == "" {
 		return errors.New("missing gRPC owners")
 	}
@@ -132,35 +131,18 @@ func targetAssignment(assignment *ast.AssignStmt) bool {
 }
 
 func tlsCredentialCall(call *ast.CallExpr, alias string) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "NewTLS" || !ownedBy(selector, alias) || len(call.Args) != 1 {
+	if !selectorNamed(call.Fun, alias, "NewTLS") || len(call.Args) != 1 {
 		return false
 	}
-	literal := pointerCompositeLiteral(call.Args[0])
-	if literal == nil {
-		return false
-	}
-	for _, element := range literal.Elts {
-		pair, pairOK := element.(*ast.KeyValueExpr)
-		if !pairOK {
-			continue
-		}
-		key, keyOK := pair.Key.(*ast.Ident)
-		if keyOK && key.Name == "ServerName" && identifierIs(pair.Value, "hostname") {
-			return true
-		}
-	}
-	return false
+	return identifierIs(keyedFields(pointerCompositeLiteral(call.Args[0]))["ServerName"], "hostname")
 }
 
 func grpcConnectionCall(call *ast.CallExpr, alias string) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	return ok && selector.Sel.Name == "New" && ownedBy(selector, alias) && connectionArguments(call.Args)
+	return selectorNamed(call.Fun, alias, "New") && connectionArguments(call.Args)
 }
 
 func authConnectionCall(call *ast.CallExpr) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	return ok && selector.Sel.Name == "GRPC" && ownedBy(selector, "auth") && connectionArguments(call.Args)
+	return selectorNamed(call.Fun, "auth", "GRPC") && connectionArguments(call.Args)
 }
 
 func connectionArguments(arguments []ast.Expr) bool {
@@ -168,20 +150,7 @@ func connectionArguments(arguments []ast.Expr) bool {
 		return false
 	}
 	literal, ok := arguments[1].(*ast.CompositeLit)
-	if !ok {
-		return false
-	}
-	for _, element := range literal.Elts {
-		pair, pairOK := element.(*ast.KeyValueExpr)
-		if !pairOK {
-			continue
-		}
-		key, keyOK := pair.Key.(*ast.Ident)
-		if keyOK && key.Name == "TransportCredentials" && identifierIs(pair.Value, "creds") {
-			return true
-		}
-	}
-	return false
+	return ok && identifierIs(keyedFields(literal)["TransportCredentials"], "creds")
 }
 
 func closeFlow(file *ast.File, authMode string) (int, int, int) {

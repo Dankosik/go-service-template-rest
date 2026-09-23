@@ -5,8 +5,6 @@ package main
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
 )
 
@@ -27,9 +25,9 @@ func runConstructorCheck(arguments []string) (int, error) {
 	}
 
 	filename, importSuffix, expected, forbidden, authMode := arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]
-	parsed, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
+	parsed, err := parseFile(filename)
 	if err != nil {
-		return 1, fmt.Errorf("%s: parse: %w", filename, err)
+		return 1, err
 	}
 	if err := checkConstructorAST(parsed, importSuffix, expected, forbidden, authMode); err != nil {
 		return 1, fmt.Errorf("%s: %w", filename, err)
@@ -40,8 +38,8 @@ func runConstructorCheck(arguments []string) (int, error) {
 // checkConstructorAST matches the expected constructor shape, not equivalent
 // data flow in every form. Refactoring the adapter may require updating this check.
 func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, authMode string) error {
-	alias := importAlias(parsed, importSuffix)
-	if alias == "" || alias == "." || alias == "_" {
+	alias := usableImportAlias(parsed, importSuffix)
+	if alias == "" {
 		return fmt.Errorf("missing usable import ending in %s", importSuffix)
 	}
 
@@ -52,8 +50,8 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 	doerBindings := 0
 	authConfigBindings := 0
 	returnedClients := 0
-	openapiAlias := importAlias(parsed, "/internal/openapi")
-	oauthAlias := importAlias(parsed, "/internal/infra/oauth2clientcredentials")
+	openapiAlias := usableImportAlias(parsed, "/internal/openapi")
+	oauthAlias := usableImportAlias(parsed, "/internal/infra/oauth2clientcredentials")
 	for _, declaration := range parsed.Decls {
 		function, ok := declaration.(*ast.FuncDecl)
 		if !ok || function.Recv != nil || function.Name.Name != "New" || function.Body == nil {
@@ -78,15 +76,8 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 			if !ok {
 				continue
 			}
-			selector, ok := call.Fun.(*ast.SelectorExpr)
-			if !ok {
-				continue
-			}
-			if assigned.Name == "transport" && selector.Sel.Name == expected {
-				owner, ownerOK := selector.X.(*ast.Ident)
-				if ownerOK && owner.Name == alias && validArguments(expected, call.Args) {
-					expectedAssignments++
-				}
+			if assigned.Name == "transport" && selectorNamed(call.Fun, alias, expected) && validArguments(expected, call.Args) {
+				expectedAssignments++
 			}
 
 			if assigned.Name == "generated" && openapiAlias != "" && generatedClientCall(call, openapiAlias, authMode) {
@@ -95,7 +86,7 @@ func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, au
 			if authMode == "oauth2-client-credentials" && assigned.Name == "authenticated" && oauthHTTPCall(call) {
 				authBindings++
 			}
-			if authMode == "oauth2-client-credentials" && assigned.Name == "auth" && oauthConfigCall(call, oauthAlias) {
+			if authMode == "oauth2-client-credentials" && assigned.Name == "auth" && oauthConfigMapping(call, oauthAlias) {
 				authConfigBindings++
 			}
 		}
@@ -134,8 +125,7 @@ func countForbiddenCalls(file *ast.File, alias, forbidden string) int {
 		if !ok {
 			return true
 		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if ok && selector.Sel.Name == forbidden && ownedBy(selector, alias) {
+		if selectorNamed(call.Fun, alias, forbidden) {
 			count++
 		}
 		return true
@@ -144,24 +134,21 @@ func countForbiddenCalls(file *ast.File, alias, forbidden string) int {
 }
 
 func generatedClientCall(call *ast.CallExpr, openapiAlias, authMode string) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "NewClient" || !ownedBy(selector, openapiAlias) || len(call.Args) != 2 {
+	if !selectorNamed(call.Fun, openapiAlias, "NewClient") || len(call.Args) != 2 {
 		return false
 	}
 	baseURL, ok := call.Args[0].(*ast.CallExpr)
 	if !ok {
 		return false
 	}
-	baseSelector, ok := baseURL.Fun.(*ast.SelectorExpr)
-	if !ok || baseSelector.Sel.Name != "BaseURL" || !ownedBy(baseSelector, "transport") {
+	if !selectorNamed(baseURL.Fun, "transport", "BaseURL") {
 		return false
 	}
 	option, ok := call.Args[1].(*ast.CallExpr)
 	if !ok || len(option.Args) != 1 {
 		return false
 	}
-	optionSelector, ok := option.Fun.(*ast.SelectorExpr)
-	if !ok || optionSelector.Sel.Name != "WithHTTPClient" || !ownedBy(optionSelector, openapiAlias) {
+	if !selectorNamed(option.Fun, openapiAlias, "WithHTTPClient") {
 		return false
 	}
 	wantDoer := "transport"
@@ -173,17 +160,7 @@ func generatedClientCall(call *ast.CallExpr, openapiAlias, authMode string) bool
 }
 
 func oauthHTTPCall(call *ast.CallExpr) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	return ok && selector.Sel.Name == "HTTP" && ownedBy(selector, "auth") && len(call.Args) == 1 && identifierIs(call.Args[0], "transport")
-}
-
-func oauthConfigCall(call *ast.CallExpr, alias string) bool {
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "New" || !ownedBy(selector, alias) || len(call.Args) != 1 {
-		return false
-	}
-	literal, ok := call.Args[0].(*ast.CompositeLit)
-	return ok && selectorTypeIs(literal.Type, alias, "Config") && oauthConfigMapping(call, alias)
+	return selectorNamed(call.Fun, "auth", "HTTP") && len(call.Args) == 1 && identifierIs(call.Args[0], "transport")
 }
 
 func returnedClientFields(expression ast.Expr) map[string]string {
@@ -201,19 +178,10 @@ func returnedClientFields(expression ast.Expr) map[string]string {
 
 func validArguments(constructor string, arguments []ast.Expr) bool {
 	if constructor == "NewExternalHTTPS" {
-		return len(arguments) == 2 && selectorIs(arguments[0], "cfg", "BaseURL") &&
-			selectorIs(arguments[1], "cfg", "Limits")
+		return len(arguments) == 2 && selectorNamed(arguments[0], "cfg", "BaseURL") &&
+			selectorNamed(arguments[1], "cfg", "Limits")
 	}
 	return constructor == "NewPrivateHTTPS" && len(arguments) == 3 &&
-		selectorIs(arguments[0], "cfg", "BaseURL") && selectorIs(arguments[1], "cfg", "PrivateDNSSuffix") &&
-		selectorIs(arguments[2], "cfg", "Limits")
-}
-
-func selectorIs(expression ast.Expr, ownerName, fieldName string) bool {
-	selector, ok := expression.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != fieldName {
-		return false
-	}
-	owner, ok := selector.X.(*ast.Ident)
-	return ok && owner.Name == ownerName
+		selectorNamed(arguments[0], "cfg", "BaseURL") && selectorNamed(arguments[1], "cfg", "PrivateDNSSuffix") &&
+		selectorNamed(arguments[2], "cfg", "Limits")
 }
