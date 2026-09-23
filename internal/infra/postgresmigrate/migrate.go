@@ -143,12 +143,7 @@ func migrate(
 	if err != nil {
 		return result, stageError(FailureState, fmt.Errorf("read goose migration versions: %w", err))
 	}
-	result.Before = current
-	result.After = current
-	result.Target = target
-	result.BeforeKnown = true
-	result.AfterKnown = true
-	result.TargetKnown = true
+	result.recordVersions(current, target)
 	if direction == directionDown {
 		result.Target = 0
 	}
@@ -236,12 +231,7 @@ func migrateEmptySource(
 	if err != nil {
 		return result, withMigrationCleanup(stageError(FailureState, err), cleanup())
 	}
-	result.Before = version
-	result.After = version
-	result.Target = 0
-	result.BeforeKnown = true
-	result.AfterKnown = true
-	result.TargetKnown = true
+	result.recordVersions(version, 0)
 	logMigrationPlan(executionCtx, opts.Logger, direction, version, 0, 0)
 	return result, withMigrationCleanup(nil, cleanup())
 }
