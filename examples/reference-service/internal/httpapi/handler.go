@@ -23,10 +23,10 @@ type handler struct {
 	articles *article.Service
 }
 
-// CreateArticle authorizes the caller, maps the generated request body onto the
-// feature-owned draft, then maps each domain error identity onto its documented
-// status. The use case never sees an HTTP type and this transport never invents a
-// business rule.
+// CreateArticle authorizes the caller and maps the generated request body onto
+// the feature-owned draft. It returns domain errors unmapped; Options.RejectResponse
+// turns them into statuses. The use case never sees an HTTP type and this
+// transport never invents a business rule.
 //
 // The authorization check is why the identity seam exists: the contract's
 // security requirement already proved a credential, and
@@ -62,8 +62,7 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 	})
 	if err != nil {
 		// Returned rather than mapped here. The composition root installs
-		// article.ClassifyError once for the whole feature, so the switch that used to
-		// live in every operation exists in one place. Wrapping adds the
+		// article.ClassifyError once for the whole feature. Wrapping adds the
 		// operation while preserving the sentinel identity errors.Is matches on;
 		// an error the table does not recognize stays a 500, which is the honest
 		// answer for a fault this service did not anticipate.

@@ -2,10 +2,9 @@
 // wires one feature onto its generated contract and through the shared hardened
 // middleware chain.
 //
-// It deliberately owns no process lifecycle. The version this replaced carried
-// its own main, listener, signal handling, and shutdown — a hundred lines that
-// duplicated cmd/service/internal/bootstrap and got it worse, in the file a
-// reader opens first to learn how to compose a feature.
+// It deliberately owns no process lifecycle: listener, signal handling, and
+// shutdown belong to cmd/service/internal/bootstrap, not to the file a reader
+// opens first to learn how to compose a feature.
 //
 // What is worth copying is below: a feature package that knows nothing about
 // HTTP, an httpapi package that maps it onto the generated contract, one
@@ -84,9 +83,7 @@ func NewHandler(log *slog.Logger, writeToken string) (http.Handler, error) {
 		RejectRequest: httpx.RejectRequest(log, authenticateChallenge),
 		// One classification table for the whole feature. Handlers return their
 		// use case's error and this decides what the client sees, so adding an
-		// operation does not mean copying a switch — which is how the local
-		// status table this replaced drifted and answered a 409 with the
-		// internal-error type.
+		// operation does not mean copying a status switch that can drift.
 		RejectResponse: httpx.RejectResponse(log, article.ClassifyError),
 	})
 	if err != nil {
