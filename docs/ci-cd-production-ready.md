@@ -50,9 +50,11 @@ closure; `test-all` and standalone `gosec` remain the main/nightly oracles.
 Instruction-only quality does not install Go. Gitleaks uses the tools-module
 version through a checksum-pinned binary and range scans pull requests, merge
 groups, and main pushes; tags and manual runs retain full-history proof.
-Integration builds one image only when a selected runtime gate needs it and
-reuses that image for lifecycle, migration, and the canonical Make-owned
-vulnerability gate. The always-reported `required` job fails when any
+Integration runs each selected suite (database, messaging, process, race,
+image) as its own parallel leg; a suite leg starts its own containers, so the
+slowest suite, not their sum, bounds the job. The image leg builds one image
+only when a selected runtime gate needs it and reuses that image for
+lifecycle, migration, and the canonical Make-owned vulnerability gate. The always-reported `required` job fails when any
 applicable leaf fails or is cancelled and accepts deliberate path skips.
 Pull requests and merge groups are path-aware; main pushes, tags, and manual
 runs deliberately select the full surface set.
