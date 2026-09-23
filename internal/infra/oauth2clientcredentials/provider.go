@@ -31,9 +31,9 @@ func newNoRedirectHTTPClient(transport http.RoundTripper) *http.Client {
 func newTokenHTTPClient(cfg Config) (*httpclient.Client, error) {
 	client, err := httpclient.NewExternalHTTPS(cfg.TokenURL, httpclient.TransportLimits{
 		ResponseHeaderTimeout:  defaultAcquisitionTimeout,
-		MaxResponseHeaderBytes: maxTokenResponseHeaders,
+		MaxResponseHeaderBytes: maxTokenResponseHeaderBytes,
 		MaxInFlight:            maxTokenRequestsInFlight,
-		AbsoluteBodyBytes:      maxTokenResponseBody,
+		AbsoluteBodyBytes:      maxTokenResponseBodyBytes,
 	})
 	if err != nil {
 		return nil, ErrInvalidConfiguration

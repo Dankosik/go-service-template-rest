@@ -18,11 +18,13 @@ import (
 
 var _ bearerauthn.Verifier = (*Verifier)(nil)
 
+// Fixed provider-work bounds. Changing one is a code-reviewed trust decision;
+// shared token size and clock-skew bounds live in bearerauthn.
 const (
-	ProviderTimeout        = 5 * time.Second
-	MaxResponseHeaderBytes = 32 << 10
-	MaxProviderBody        = 1 << 20
-	MaxProviderInFlight    = 32
+	providerTimeout        = 5 * time.Second
+	maxProviderHeaderBytes = 32 << 10
+	maxProviderBodyBytes   = 1 << 20
+	maxProviderInFlight    = 32
 )
 
 type providerClient interface {
@@ -56,10 +58,10 @@ func newVerifier(policy Policy, client providerClient, now func() time.Time) *Ve
 
 func newProviderClient(policy Policy) (*httpclient.Client, error) {
 	limits := httpclient.TransportLimits{
-		ResponseHeaderTimeout:  ProviderTimeout,
-		MaxResponseHeaderBytes: MaxResponseHeaderBytes,
-		MaxInFlight:            MaxProviderInFlight,
-		AbsoluteBodyBytes:      MaxProviderBody,
+		ResponseHeaderTimeout:  providerTimeout,
+		MaxResponseHeaderBytes: maxProviderHeaderBytes,
+		MaxInFlight:            maxProviderInFlight,
+		AbsoluteBodyBytes:      maxProviderBodyBytes,
 	}
 	switch policy.targetClass {
 	case authntrust.TargetClassExternalHTTPS:
@@ -89,7 +91,7 @@ func (v *Verifier) Close() {
 
 // Verify implements bearerauthn.Verifier for one already-parsed opaque bearer.
 func (v *Verifier) Verify(ctx context.Context, token string) (bearerauthn.Result, error) {
-	attemptCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
+	attemptCtx, cancel := context.WithTimeout(ctx, providerTimeout)
 	defer cancel()
 	request, err := v.newIntrospectionRequest(attemptCtx, token)
 	if err != nil {
@@ -134,8 +136,8 @@ func readBoundedBody(response *http.Response) ([]byte, bool) {
 	if response == nil || response.Body == nil {
 		return nil, false
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, MaxProviderBody+1))
-	if err != nil || len(body) > MaxProviderBody {
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxProviderBodyBytes+1))
+	if err != nil || len(body) > maxProviderBodyBytes {
 		return nil, false
 	}
 	return body, true
