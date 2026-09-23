@@ -13,6 +13,12 @@ import (
 // already a complete endpoint for that signal; the signal-agnostic one is a root
 // that OTLP defines each signal's path relative to.
 const (
+	// SharedOTLPExporterConfigKey names the service-owned OTLP endpoint shared
+	// by traces and metrics when it contains a collector root.
+	SharedOTLPExporterConfigKey = "observability.otel.exporter.otlp_endpoint"
+	// MetricExporterConfigKey names the service-owned metrics-only endpoint.
+	MetricExporterConfigKey = "observability.otel.exporter.otlp_metrics_endpoint"
+
 	otelExporterEndpointEnv        = "OTEL_EXPORTER_OTLP_ENDPOINT"
 	otelExporterTracesEndpointEnv  = "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
 	otelExporterMetricsEndpointEnv = "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"
@@ -30,6 +36,9 @@ type ExporterEndpoint struct {
 	// an operator can tell a platform-injected endpoint from this service's own.
 	// Empty when URL is empty.
 	Source string
+	// ConfiguredByService distinguishes this service's configuration from an
+	// endpoint supplied by the platform environment.
+	ConfiguredByService bool
 }
 
 // Configured reports whether an exporter should be built.
@@ -85,6 +94,8 @@ type otlpCandidate struct {
 	// base marks a signal-agnostic collector root, which gets the signal's OTLP
 	// path appended. The zero value is a complete endpoint for one signal.
 	base bool
+	// configuredByService marks values from the service's typed configuration.
+	configuredByService bool
 }
 
 // resolveOTLPEndpoint walks the settings this service owns and then the ambient
@@ -145,7 +156,10 @@ func (c otlpCandidate) resolve(signalPath string) (ExporterEndpoint, bool, error
 	if err != nil {
 		return ExporterEndpoint{}, false, err
 	}
-	return ExporterEndpoint{URL: endpoint.endpointURL, Source: c.source}, true, nil
+	return ExporterEndpoint{
+		URL: endpoint.endpointURL, Source: c.source,
+		ConfiguredByService: c.configuredByService,
+	}, true, nil
 }
 
 // ambientOTLPCandidates are the standard OpenTelemetry endpoint variables in the

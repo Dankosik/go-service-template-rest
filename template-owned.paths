@@ -99,6 +99,7 @@ scripts/ci/docs-contract-check.sh
 scripts/ci/git-changed-paths.sh
 scripts/ci/golangci-lint.sh
 scripts/ci/install-gitleaks.sh
+scripts/ci/integration-record-ast-common.go
 scripts/ci/integration-record-bootstrap-check.go
 scripts/ci/integration-record-check.sh
 scripts/ci/integration-record-constructor-check.go

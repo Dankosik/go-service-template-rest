@@ -27,8 +27,32 @@ func TestRunRejectsPositionalArgumentsWithSafeTerminalRecord(t *testing.T) {
 		record["failure.stage"] != "config" {
 		t.Fatalf("terminal record = %#v", record)
 	}
+	for _, field := range []string{"migration.before", "migration.target", "migration.after"} {
+		if _, ok := record[field]; ok {
+			t.Fatalf("terminal record includes unread %s: %#v", field, record)
+		}
+	}
 	if strings.Contains(output.String(), "secret-canary") {
 		t.Fatalf("terminal output disclosed argument: %s", output.String())
+	}
+}
+
+func TestLogMigrationTerminalIncludesObservedZeroVersions(t *testing.T) {
+	t.Parallel()
+
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	logMigrationTerminal(logger, postgresmigrate.RunResult{
+		BeforeKnown: true,
+		TargetKnown: true,
+		AfterKnown:  true,
+	}, nil, "")
+
+	record := decodeLastJSONRecord(t, output.Bytes())
+	for _, field := range []string{"migration.before", "migration.target", "migration.after"} {
+		if value, ok := record[field]; !ok || value != float64(0) {
+			t.Fatalf("terminal record %s = %#v, want observed zero: %#v", field, value, record)
+		}
 	}
 }
 

@@ -28,9 +28,9 @@ const (
 // mistyped metrics endpoint report the trace exporter as degraded. Metrics
 // degradation is reported where it happens, by reportMetricExporterState.
 type telemetryStage struct {
-	cleanup       func(context.Context)
-	traceEndpoint telemetry.TraceExporterEndpoint
-	tracingErr    error
+	cleanup         func(context.Context)
+	tracingEndpoint telemetry.TraceExporterEndpoint
+	tracingErr      error
 }
 
 // bootstrapTelemetryStage installs both signals, independently.
@@ -62,30 +62,30 @@ func bootstrapTelemetryStage(
 	metricsCancel()
 	reportMetricExporterState(startupCtx, log, metricsResult, metricsErr)
 
-	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
-	traceEndpoint, tracingShutdown, tracingErr := telemetry.SetupTracing(telemetryCtx, runtimeopts.Tracing(cfg, instanceID))
-	telemetryCancel()
+	tracingCtx, tracingCancel := withStageBudget(startupCtx, startupTelemetryBudget)
+	tracingEndpoint, tracingShutdown, tracingErr := telemetry.SetupTracing(tracingCtx, runtimeopts.Tracing(cfg, instanceID))
+	tracingCancel()
 	// Reporting follows setup because only setup knows which setting supplied
 	// the endpoint, and the additional-variable record must not name the source
 	// that was honored.
-	reportAdditionalAmbientOTLPEnv(startupCtx, log, traceEndpoint, metricsResult.Endpoint)
-	recordTraceExporterInitialization(startupCtx, log, metrics, traceEndpoint, tracingErr)
+	reportAdditionalAmbientOTLPEnv(startupCtx, log, tracingEndpoint, metricsResult.Endpoint)
+	recordTraceExporterInitialization(startupCtx, log, metrics, tracingEndpoint, tracingErr)
 
 	return telemetryStage{
-		cleanup:       newTelemetryCleanup(log, tracingShutdown, metricsResult.Shutdown),
-		traceEndpoint: traceEndpoint,
-		tracingErr:    tracingErr,
+		cleanup:         newTelemetryCleanup(log, tracingShutdown, metricsResult.Shutdown),
+		tracingEndpoint: tracingEndpoint,
+		tracingErr:      tracingErr,
 	}
 }
 
 // traceExporterState names the trace-export outcome in the one line an operator
 // already reads at startup. Without it, "this service exports no traces" is
 // only recoverable by correlating a separate warning that a log filter may drop.
-func traceExporterState(traceEndpoint telemetry.TraceExporterEndpoint, telemetryInitErr error) string {
+func traceExporterState(tracingEndpoint telemetry.TraceExporterEndpoint, tracingInitErr error) string {
 	switch {
-	case telemetryInitErr != nil:
+	case tracingInitErr != nil:
 		return "degraded"
-	case !traceEndpoint.Configured():
+	case !tracingEndpoint.Configured():
 		return "disabled"
 	default:
 		return "initialized"
@@ -103,10 +103,10 @@ func recordTraceExporterInitialization(
 	ctx context.Context,
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
-	endpoint telemetry.TraceExporterEndpoint,
-	telemetryInitErr error,
+	tracingEndpoint telemetry.TraceExporterEndpoint,
+	tracingInitErr error,
 ) {
-	initialized := traceExporterState(endpoint, telemetryInitErr) == "initialized"
+	initialized := traceExporterState(tracingEndpoint, tracingInitErr) == "initialized"
 	if err := metrics.RecordTraceExporterInitialization(ctx, initialized); err != nil {
 		log.WarnContext(
 			ctx,
@@ -195,28 +195,23 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 func reportAdditionalAmbientOTLPEnv(
 	ctx context.Context,
 	log *slog.Logger,
-	traceEndpoint telemetry.TraceExporterEndpoint,
+	tracingEndpoint telemetry.TraceExporterEndpoint,
 	metricsEndpoint telemetry.ExporterEndpoint,
 ) {
-	honored := []string{traceEndpoint.Source, metricsEndpoint.Source}
+	honored := []string{tracingEndpoint.Source, metricsEndpoint.Source}
 	additional := slices.DeleteFunc(telemetry.AmbientOTLPExporterEnv(), func(name string) bool {
 		return slices.Contains(honored, name)
 	})
+	additional = withoutConflicting(additional, tracingEndpoint.ConfiguredByService, telemetry.ConflictingTraceExporterEnv)
 	additional = withoutConflicting(
-		additional, traceEndpoint.Source, []string{telemetry.TraceExporterConfigKey}, telemetry.ConflictingTraceExporterEnv,
-	)
-	additional = withoutConflicting(
-		additional,
-		metricsEndpoint.Source,
-		[]string{telemetry.TraceExporterConfigKey, telemetry.MetricExporterConfigKey},
-		telemetry.ConflictingMetricExporterEnv,
+		additional, metricsEndpoint.ConfiguredByService, telemetry.ConflictingMetricExporterEnv,
 	)
 	if len(additional) == 0 {
 		return
 	}
 
 	mode := startupDependencyModeFeatureOff
-	if traceEndpoint.Configured() || metricsEndpoint.Configured() {
+	if tracingEndpoint.Configured() || metricsEndpoint.Configured() {
 		mode = startupDependencyModeConfigured
 	}
 
@@ -233,7 +228,7 @@ func reportAdditionalAmbientOTLPEnv(
 			"env.present", strings.Join(additional, ", "),
 			// The shared exporter root, which is what an operator sets to own
 			// both destinations rather than one signal's override.
-			"config.key", telemetry.TraceExporterConfigKey,
+			"config.key", telemetry.SharedOTLPExporterConfigKey,
 		)...,
 	)
 }
@@ -245,11 +240,10 @@ func reportAdditionalAmbientOTLPEnv(
 // nothing was refused.
 func withoutConflicting(
 	additional []string,
-	source string,
-	configKeys []string,
+	configuredByService bool,
 	conflicting func() []string,
 ) []string {
-	if !slices.Contains(configKeys, source) {
+	if !configuredByService {
 		return additional
 	}
 	rejected := conflicting()

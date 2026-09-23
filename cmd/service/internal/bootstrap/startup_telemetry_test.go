@@ -41,8 +41,8 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	if stage.tracingErr != nil {
 		t.Fatalf("bootstrapTelemetryStage() tracing error = %v", stage.tracingErr)
 	}
-	if stage.traceEndpoint.Source != telemetry.TraceExporterConfigKey {
-		t.Fatalf("endpoint source = %q, want %q", stage.traceEndpoint.Source, telemetry.TraceExporterConfigKey)
+	if stage.tracingEndpoint.Source != telemetry.SharedOTLPExporterConfigKey {
+		t.Fatalf("endpoint source = %q, want %q", stage.tracingEndpoint.Source, telemetry.SharedOTLPExporterConfigKey)
 	}
 	t.Cleanup(func() { stage.cleanup(context.Background()) })
 }
@@ -65,8 +65,8 @@ func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	if stage.tracingErr != nil {
 		t.Fatalf("bootstrapTelemetryStage() tracing error = %v", stage.tracingErr)
 	}
-	if stage.traceEndpoint.Source != "OTEL_EXPORTER_OTLP_ENDPOINT" {
-		t.Fatalf("endpoint source = %q, want the ambient endpoint variable", stage.traceEndpoint.Source)
+	if stage.tracingEndpoint.Source != "OTEL_EXPORTER_OTLP_ENDPOINT" {
+		t.Fatalf("endpoint source = %q, want the ambient endpoint variable", stage.tracingEndpoint.Source)
 	}
 	t.Cleanup(func() { stage.cleanup(context.Background()) })
 }
@@ -229,15 +229,16 @@ func TestReportAdditionalAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer secret-value")
 
-	for _, source := range []string{telemetry.MetricExporterConfigKey, telemetry.TraceExporterConfigKey} {
+	for _, source := range []string{telemetry.MetricExporterConfigKey, telemetry.SharedOTLPExporterConfigKey} {
 		var buf bytes.Buffer
 		reportAdditionalAmbientOTLPEnv(
 			context.Background(),
 			slog.New(slog.NewJSONHandler(&buf, nil)),
 			telemetry.TraceExporterEndpoint{},
 			telemetry.ExporterEndpoint{
-				URL:    "https://collector.example/v1/metrics",
-				Source: source,
+				URL:                 "https://collector.example/v1/metrics",
+				Source:              source,
+				ConfiguredByService: true,
 			},
 		)
 
@@ -287,8 +288,9 @@ func TestReportAdditionalAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 
 func configuredTestTraceEndpoint() telemetry.TraceExporterEndpoint {
 	return telemetry.TraceExporterEndpoint{
-		URL:    "http://127.0.0.1:4318/v1/traces",
-		Source: telemetry.TraceExporterConfigKey,
+		URL:                 "http://127.0.0.1:4318/v1/traces",
+		Source:              telemetry.SharedOTLPExporterConfigKey,
+		ConfiguredByService: true,
 	}
 }
 
@@ -416,8 +418,8 @@ func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing
 	if stage.tracingErr != nil {
 		t.Fatalf("tracing error = %v, want tracing to survive an unusable metrics endpoint", stage.tracingErr)
 	}
-	if stage.traceEndpoint.Source != telemetry.TraceExporterConfigKey {
-		t.Fatalf("trace endpoint source = %q, want the configured trace endpoint", stage.traceEndpoint.Source)
+	if stage.tracingEndpoint.Source != telemetry.SharedOTLPExporterConfigKey {
+		t.Fatalf("trace endpoint source = %q, want the configured shared OTLP endpoint", stage.tracingEndpoint.Source)
 	}
 
 	// A no-op provider hands back an invalid span context, which is exactly what

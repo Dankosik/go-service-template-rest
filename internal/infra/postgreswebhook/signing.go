@@ -17,7 +17,7 @@ func signV1(deliveryID string, attemptedAt time.Time, body []byte, keys [][]byte
 	}
 	entries := make([]string, 0, len(keys))
 	for _, key := range keys {
-		if len(key) < 32 || len(key) > 64 {
+		if len(key) < minWebhookSigningKeyBytes || len(key) > maxWebhookSigningKeyBytes {
 			return "", errors.New("sign webhook: key must contain 32..64 bytes")
 		}
 		webhook, err := standardwebhooks.NewWebhookRaw(key)

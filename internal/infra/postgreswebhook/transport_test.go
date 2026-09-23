@@ -15,7 +15,7 @@ import (
 func TestWebhookRequestContractAndAddressFallback(t *testing.T) {
 	deadline := time.Now().Add(time.Minute)
 	prepared := preparedSend{
-		Attempt: deliveryAttempt{ID: "whd_test", Body: []byte(`{"ok":true}`), AttemptedAt: time.Unix(1_700_000_000, 0), Deadline: deadline},
+		Attempt: deliveryAttempt{DeliveryID: "whd_test", Body: []byte(`{"ok":true}`), AttemptedAt: time.Unix(1_700_000_000, 0), Deadline: deadline},
 		URL:     mustWebhookURL(t, "https://example.com/hooks"), Signature: "v1,signature",
 		Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("1.1.1.1")},
 	}

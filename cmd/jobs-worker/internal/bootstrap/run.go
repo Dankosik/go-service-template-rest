@@ -30,11 +30,11 @@ import (
 )
 
 // WorkersRuntime is the builder result: validated workers and an optional
-// post-pool binder.
+// binder that registers workers requiring the pool after it is opened.
 type WorkersRuntime struct {
 	Workers *river.Workers
 	// profile:inbound-webhooks-standard:start
-	Bind func(context.Context, *pgxpool.Pool, metric.MeterProvider) error
+	Bind func(context.Context, *river.Workers, *pgxpool.Pool, metric.MeterProvider) error
 	// profile:inbound-webhooks-standard:end
 }
 
@@ -103,7 +103,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	}()
 	// profile:inbound-webhooks-standard:start
 	if runtime.Bind != nil {
-		if err := runtime.Bind(startupCtx, pool, metrics.MeterProvider()); err != nil {
+		if err := runtime.Bind(startupCtx, runtime.Workers, pool, metrics.MeterProvider()); err != nil {
 			return fmt.Errorf("bind jobs workers: %w", err)
 		}
 	}
@@ -183,12 +183,12 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, cfg.HTTP.ShutdownTimeout)
 	stopErr := client.Stop(stopCtx)
 	cancelStop()
-	cleanupSafe = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
-	if !cleanupSafe {
+	riverStopped := runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
+	if !riverStopped {
 		hardStopCtx, cancelHardStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
 		stopErr = client.StopAndCancel(hardStopCtx)
-		cleanupSafe = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
-		if !cleanupSafe {
+		riverStopped = runtimeopts.StoppedBeforeReturn(stopErr, client.Stopped())
+		if !riverStopped {
 			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", hardStopCtx.Err()))
 		} else if errors.Is(stopErr, context.DeadlineExceeded) {
 			stopErr = nil
@@ -197,6 +197,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	} else if errors.Is(stopErr, context.DeadlineExceeded) {
 		stopErr = nil
 	}
+	cleanupSafe = riverStopped
 	if cleanupSafe {
 		cancelRun()
 	}

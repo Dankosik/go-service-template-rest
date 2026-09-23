@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	inboundmanifest "github.com/example/go-service-template-rest/internal/inboundwebhook/manifest"
 	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 )
 
@@ -34,7 +35,7 @@ func testTrust(t *testing.T, endpoint string, active, predecessor []byte) *Trust
 		secrets += `,{"endpoint_id":"` + endpoint + `","key_reference":"pred","secret":"whsec_` + base64.StdEncoding.EncodeToString(predecessor) + `"}`
 	}
 	secrets += `]}`
-	parsedEndpoints, err := ParseEndpointManifest(endpoints)
+	parsedEndpoints, err := inboundmanifest.ParseEndpoints(endpoints)
 	if err != nil {
 		t.Fatal(err)
 	}

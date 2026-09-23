@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	maxSecretManifestBytes   = 1 << 20
-	maxSecretManifestEntries = 4096
+	maxSecretManifestBytes    = 1 << 20
+	maxSecretManifestEntries  = 4096
+	minWebhookSigningKeyBytes = 32
+	maxWebhookSigningKeyBytes = 64
 )
 
 type secretTuple struct {
@@ -62,7 +64,7 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 			return nil, errors.New("parse webhook secret manifest: secret encoding is invalid")
 		}
 		secret, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil || len(secret) < 32 || len(secret) > 64 {
+		if err != nil || len(secret) < minWebhookSigningKeyBytes || len(secret) > maxWebhookSigningKeyBytes {
 			return nil, errors.New("parse webhook secret manifest: secret encoding is invalid")
 		}
 		tuple := secretTuple{owner: entry.OwnerScope, receiver: entry.ReceiverID, reference: entry.KeyReference}

@@ -11,11 +11,15 @@ import (
 //
 //nolint:iface // Consumers compose the provider-neutral port outside this package.
 type Store interface {
+	// Upload may return ErrOutcomeUnknown after the provider accepted the write;
+	// establish the outcome before treating it as absent or retrying on that basis.
 	Upload(ctx context.Context, key string, source io.Reader, options UploadOptions) error
 	// Download returns a live streaming body. The caller keeps ctx valid while
 	// reading and must close Body; Read can return an error after partial bytes.
 	Download(ctx context.Context, key string) (Object, error)
 	Metadata(ctx context.Context, key string) (Metadata, error)
+	// Delete may return ErrOutcomeUnknown after the provider applied the delete;
+	// establish the outcome before treating it as unapplied or retrying on that basis.
 	Delete(ctx context.Context, key string) error
 	PresignGet(ctx context.Context, key string, ttl time.Duration) (string, error)
 }

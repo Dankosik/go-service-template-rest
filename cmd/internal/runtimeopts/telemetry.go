@@ -29,14 +29,12 @@ type TelemetryFlush func(context.Context) error
 // a constant because those names are what an operator's alert matches on, and
 // the binaries already publish their own.
 //
-// The metrics error is returned rather than logged because the two callers
-// answer it differently, and that difference is a policy each of them owns: a
-// worker with no meter cannot report what it consumed, so nothing would notice
-// it stopped consuming, while the relay keeps publishing against the no-op
-// provider [telemetry.Metrics] already returns. The operator-facing wording is
-// still built here, so a caller applies its policy rather than restating what
-// failed. Everything below is degradation both report the same way, so it is
-// reported here.
+// The metrics error is returned rather than logged because callers apply
+// different policies: the workers stop when they cannot report what they
+// consumed, while the relay keeps publishing against the no-op provider
+// [telemetry.Metrics] already returns. The operator-facing wording is still
+// built here, so a caller applies its policy rather than restating what failed.
+// Everything below is degradation; all callers report it the same way here.
 //
 // cmd/service does not use this. Its telemetry stage carries per-signal startup
 // budgets, the additional ambient-environment report, and trace-exporter initialization

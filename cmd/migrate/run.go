@@ -121,12 +121,18 @@ func logMigrationTerminal(
 		outcome = "no_change"
 	}
 	attrs := []any{
-		"migration.before", result.Before,
-		"migration.target", result.Target,
-		"migration.after", result.After,
 		"migration.applied_count", result.AppliedCount,
 		"migration.duration", result.Duration,
 		"outcome", outcome,
+	}
+	if result.BeforeKnown {
+		attrs = append(attrs, "migration.before", result.Before)
+	}
+	if result.TargetKnown {
+		attrs = append(attrs, "migration.target", result.Target)
+	}
+	if result.AfterKnown {
+		attrs = append(attrs, "migration.after", result.After)
 	}
 	if err != nil {
 		attrs = append(

@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/json/v2"
 	"errors"
-	"fmt"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -48,15 +47,6 @@ type secretEntry struct {
 	EndpointID   string `json:"endpoint_id"`
 	KeyReference string `json:"key_reference"`
 	Secret       string `json:"secret"`
-}
-
-// ParseEndpointManifest parses the non-secret endpoint document.
-func ParseEndpointManifest(raw string) (*EndpointManifest, error) {
-	manifest, err := inboundmanifest.ParseEndpoints(raw)
-	if err != nil {
-		return nil, fmt.Errorf("%w", err)
-	}
-	return manifest, nil
 }
 
 // ParseSecretManifest parses environment-only secret material.

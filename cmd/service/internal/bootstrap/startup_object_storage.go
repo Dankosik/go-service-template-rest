@@ -10,11 +10,11 @@ import (
 )
 
 type objectStorageRuntime interface {
-	objectstorage.Store
 	Close()
 }
 
 var _ objectStorageRuntime = (*s3.Client)(nil)
+var _ objectstorage.Store = (*s3.Client)(nil)
 
 // initObjectStorage constructs the selected adapter without probing its provider.
 func initObjectStorage(ctx context.Context, cfg config.ObjectStorageConfig) (objectStorageRuntime, error) { //nolint:ireturn // runtimeWiring needs the lifecycle seam.

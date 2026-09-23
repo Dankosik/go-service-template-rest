@@ -119,7 +119,7 @@ func (h handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return handler{
 		base:    h.base,
 		derived: h.derived.WithAttrs(slices.Clone(attrs)),
-		ops:     append(slices.Clone(h.ops), operation{attrs: attrs}),
+		ops:     append(slices.Clone(h.ops), operation{attrs: slices.Clone(attrs)}),
 		grouped: h.grouped,
 	}
 }

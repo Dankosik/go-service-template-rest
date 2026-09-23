@@ -29,8 +29,11 @@ const (
 // completed; an errored result is not authoritative database state.
 type RunResult struct {
 	Before       int64
+	BeforeKnown  bool
 	Target       int64
+	TargetKnown  bool
 	After        int64
+	AfterKnown   bool
 	AppliedCount int
 	Duration     time.Duration
 }
@@ -86,6 +89,7 @@ func setAfterFromApplied(
 	if len(applied) == 0 {
 		return
 	}
+	result.AfterKnown = true
 	switch direction {
 	case directionUp:
 		result.After = migrationVersion(applied[len(applied)-1])

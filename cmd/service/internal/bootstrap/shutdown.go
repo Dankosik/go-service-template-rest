@@ -37,13 +37,10 @@ func (b *shutdownBudget) start() {
 	b.started.Do(func() { b.deadline = time.Now().Add(b.grace) })
 }
 
-func (b *shutdownBudget) stage(base context.Context, want time.Duration) context.Context {
+func (b *shutdownBudget) stage(base context.Context, want time.Duration) (context.Context, context.CancelFunc) {
 	b.start()
 	ctx, cancel := runtimeopts.TeardownStage(base, b.deadline, want)
-	// Consumed synchronously by the stage. Releasing the timer at the call site
-	// would defeat the bound.
-	context.AfterFunc(ctx, cancel)
-	return ctx
+	return ctx, cancel
 }
 
 // clamp reports how long a stage asking for want may actually take, for the one
@@ -233,7 +230,9 @@ func shutdownDiagnostics(base context.Context, logger *slog.Logger, budget *shut
 		return nil
 	}
 
-	err := server.Shutdown(budget.stage(base, diagnosticsShutdownTimeout))
+	shutdownCtx, cancel := budget.stage(base, diagnosticsShutdownTimeout)
+	err := server.Shutdown(shutdownCtx)
+	cancel()
 	switch {
 	case err == nil, errors.Is(err, http.ErrServerClosed):
 		logger.InfoContext(base, "diagnostics_stopped", startupLogArgs(startupLogComponentShutdown, "diagnostics", "success")...)

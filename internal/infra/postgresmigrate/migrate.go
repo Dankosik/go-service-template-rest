@@ -153,6 +153,9 @@ func migrate(
 	result.Before = current
 	result.After = current
 	result.Target = target
+	result.BeforeKnown = true
+	result.AfterKnown = true
+	result.TargetKnown = true
 	if direction == directionDown {
 		result.Target = 0
 	}
@@ -240,11 +243,15 @@ func migrateEmptySource(
 		)
 	}
 	version, err := emptySourceVersion(executionCtx, lockConn, store)
-	result.Before = version
-	result.After = version
 	if err != nil {
 		return result, withMigrationCleanup(stageError(FailureState, err), cleanup())
 	}
+	result.Before = version
+	result.After = version
+	result.Target = 0
+	result.BeforeKnown = true
+	result.AfterKnown = true
+	result.TargetKnown = true
 	logMigrationPlan(executionCtx, opts.Logger, direction, version, 0, 0)
 	return result, withMigrationCleanup(nil, cleanup())
 }

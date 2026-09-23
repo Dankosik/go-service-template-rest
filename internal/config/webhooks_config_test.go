@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -24,8 +25,12 @@ func TestWebhooksConfigContract(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			webhooks, pg, jobConfig := valid, postgres, jobs
 			test.mutate(&webhooks, &pg, &jobConfig)
-			if err := validateWebhooks(webhooks, pg, jobConfig); !errors.Is(err, ErrValidate) {
+			err := validateWebhooks(webhooks, pg, jobConfig)
+			if !errors.Is(err, ErrValidate) {
 				t.Fatalf("error = %v, want ErrValidate", err)
+			}
+			if test.name == "jobs disabled" && !strings.Contains(err.Error(), "jobs.max_workers") {
+				t.Fatalf("error = %v, want jobs.max_workers prerequisite", err)
 			}
 		})
 	}

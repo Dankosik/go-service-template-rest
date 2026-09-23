@@ -8,32 +8,39 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"path"
-	"strconv"
-	"strings"
 )
 
 func main() {
-	arguments := os.Args[1:]
+	exitCode, err := runConstructorCheck(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	os.Exit(exitCode)
+}
+
+func runConstructorCheck(arguments []string) (int, error) {
 	if len(arguments) > 0 && arguments[0] == "--" {
 		arguments = arguments[1:]
 	}
 	if len(arguments) != 5 {
-		fmt.Fprintln(os.Stderr, "usage: integration-record-constructor-check FILE IMPORT_SUFFIX EXPECTED FORBIDDEN AUTH")
-		os.Exit(2)
+		return 2, fmt.Errorf("usage: integration-record-constructor-check FILE IMPORT_SUFFIX EXPECTED FORBIDDEN AUTH")
 	}
 
 	filename, importSuffix, expected, forbidden, authMode := arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]
 	parsed, err := parser.ParseFile(token.NewFileSet(), filename, nil, 0)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: parse: %v\n", filename, err)
-		os.Exit(1)
+		return 1, fmt.Errorf("%s: parse: %w", filename, err)
 	}
+	if err := checkConstructorAST(parsed, importSuffix, expected, forbidden, authMode); err != nil {
+		return 1, fmt.Errorf("%s: %w", filename, err)
+	}
+	return 0, nil
+}
 
+func checkConstructorAST(parsed *ast.File, importSuffix, expected, forbidden, authMode string) error {
 	alias := importAlias(parsed, importSuffix)
 	if alias == "" || alias == "." || alias == "_" {
-		fmt.Fprintf(os.Stderr, "%s: missing usable import ending in %s\n", filename, importSuffix)
-		os.Exit(1)
+		return fmt.Errorf("missing usable import ending in %s", importSuffix)
 	}
 
 	expectedAssignments := 0
@@ -127,52 +134,10 @@ func main() {
 	}
 	if expectedAssignments != 1 || forbiddenCalls != 0 || generatedBindings != 1 || returnedClients != 1 ||
 		authBindings != wantAuthBindings || doerBindings != wantDoerBindings || authConfigBindings != wantAuthConfigBindings {
-		fmt.Fprintf(os.Stderr, "%s: constructor=%d forbidden=%d generated=%d returned=%d auth=%d authConfig=%d doer=%d\n",
-			filename, expectedAssignments, forbiddenCalls, generatedBindings, returnedClients, authBindings, authConfigBindings, doerBindings)
-		os.Exit(1)
+		return fmt.Errorf("constructor=%d forbidden=%d generated=%d returned=%d auth=%d authConfig=%d doer=%d",
+			expectedAssignments, forbiddenCalls, generatedBindings, returnedClients, authBindings, authConfigBindings, doerBindings)
 	}
-}
-
-func returnedClientFields(expression ast.Expr) map[string]string {
-	fields := map[string]string{}
-	pointer, ok := expression.(*ast.UnaryExpr)
-	if !ok || pointer.Op != token.AND {
-		return fields
-	}
-	literal, ok := pointer.X.(*ast.CompositeLit)
-	if !ok {
-		return fields
-	}
-	typeName, ok := literal.Type.(*ast.Ident)
-	if !ok || typeName.Name != "Client" {
-		return fields
-	}
-	for _, element := range literal.Elts {
-		pair, ok := element.(*ast.KeyValueExpr)
-		if !ok {
-			continue
-		}
-		key, keyOK := pair.Key.(*ast.Ident)
-		value, valueOK := pair.Value.(*ast.Ident)
-		if keyOK && valueOK {
-			fields[key.Name] = value.Name
-		}
-	}
-	return fields
-}
-
-func importAlias(file *ast.File, suffix string) string {
-	for _, spec := range file.Imports {
-		importPath, err := strconv.Unquote(spec.Path.Value)
-		if err != nil || !strings.HasSuffix(importPath, suffix) {
-			continue
-		}
-		if spec.Name != nil {
-			return spec.Name.Name
-		}
-		return path.Base(importPath)
-	}
-	return ""
+	return nil
 }
 
 func generatedClientCall(call *ast.CallExpr, openapiAlias, authMode string) bool {
@@ -209,74 +174,35 @@ func oauthHTTPCall(call *ast.CallExpr) bool {
 	return ok && selector.Sel.Name == "HTTP" && ownedBy(selector, "auth") && len(call.Args) == 1 && identifierIs(call.Args[0], "transport")
 }
 
-func oauthConfigCall(call *ast.CallExpr, oauthAlias string) bool {
+func oauthConfigCall(call *ast.CallExpr, alias string) bool {
 	selector, ok := call.Fun.(*ast.SelectorExpr)
-	if !ok || selector.Sel.Name != "New" || !ownedBy(selector, oauthAlias) || len(call.Args) != 1 {
+	if !ok || selector.Sel.Name != "New" || !ownedBy(selector, alias) || len(call.Args) != 1 {
 		return false
 	}
 	literal, ok := call.Args[0].(*ast.CompositeLit)
-	if !ok || !selectorTypeIs(literal.Type, oauthAlias, "Config") {
-		return false
+	return ok && selectorTypeIs(literal.Type, alias, "Config") && oauthConfigMapping(call, alias)
+}
+
+func returnedClientFields(expression ast.Expr) map[string]string {
+	fields := map[string]string{}
+	pointer, ok := expression.(*ast.UnaryExpr)
+	if !ok || pointer.Op != token.AND {
+		return fields
 	}
-	fields := map[string]ast.Expr{}
-	for _, element := range literal.Elts {
-		pair, pairOK := element.(*ast.KeyValueExpr)
-		if !pairOK {
-			continue
-		}
-		key, keyOK := pair.Key.(*ast.Ident)
-		if !keyOK {
-			continue
-		}
-		fields[key.Name] = pair.Value
+	literal, ok := pointer.X.(*ast.CompositeLit)
+	if !ok {
+		return fields
 	}
-	return selectorPathIs(fields["TokenURL"], "cfg.OAuth.TokenURL") &&
-		selectorPathIs(fields["ClientID"], "cfg.OAuth.ClientID") &&
-		selectorPathIs(fields["ClientSecret"], "cfg.OAuth.ClientSecret") &&
-		stringsFieldsCall(fields["Scopes"], "cfg.OAuth.Scopes")
+	typeName, ok := literal.Type.(*ast.Ident)
+	if !ok || typeName.Name != "Client" {
+		return fields
+	}
+	return clientLiteralFields(expression)
 }
 
 func selectorTypeIs(expression ast.Expr, ownerName, typeName string) bool {
 	selector, ok := expression.(*ast.SelectorExpr)
 	return ok && selector.Sel.Name == typeName && ownedBy(selector, ownerName)
-}
-
-func selectorPathIs(expression ast.Expr, want string) bool {
-	return expressionPath(expression) == want
-}
-
-func stringsFieldsCall(expression ast.Expr, argument string) bool {
-	call, ok := expression.(*ast.CallExpr)
-	if !ok || len(call.Args) != 1 {
-		return false
-	}
-	selector, ok := call.Fun.(*ast.SelectorExpr)
-	return ok && selector.Sel.Name == "Fields" && ownedBy(selector, "strings") && selectorPathIs(call.Args[0], argument)
-}
-
-func ownedBy(selector *ast.SelectorExpr, ownerName string) bool {
-	owner, ok := selector.X.(*ast.Ident)
-	return ok && owner.Name == ownerName
-}
-
-func identifierIs(expression ast.Expr, name string) bool {
-	identifier, ok := expression.(*ast.Ident)
-	return ok && identifier.Name == name
-}
-
-func expressionPath(expression ast.Expr) string {
-	switch value := expression.(type) {
-	case *ast.Ident:
-		return value.Name
-	case *ast.SelectorExpr:
-		prefix := expressionPath(value.X)
-		if prefix == "" {
-			return ""
-		}
-		return prefix + "." + value.Sel.Name
-	default:
-		return ""
-	}
 }
 
 func validArguments(constructor string, arguments []ast.Expr) bool {

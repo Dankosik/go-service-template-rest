@@ -30,7 +30,7 @@ func bootstrapRuntime(
 	log := bootstrapLoggerStage(cfg)
 	stage := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
 
-	bootstrapReportStage(startupCtx, log, cfg, loadOptions, configReport, stage.traceEndpoint, stage.tracingErr)
+	bootstrapReportStage(startupCtx, log, cfg, loadOptions, configReport, stage.tracingEndpoint, stage.tracingErr)
 
 	return startupBootstrap{
 		cfg:              cfg,

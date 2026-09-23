@@ -53,7 +53,7 @@ func (h *handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error 
 		return cancelJob("webhook delivery deadline exhausted")
 	}
 	attempt := deliveryAttempt{
-		ID: job.Args.DeliveryID, OwnerScope: job.Args.OwnerScope,
+		DeliveryID: job.Args.DeliveryID, OwnerScope: job.Args.OwnerScope,
 		ReceiverID: job.Args.ReceiverID, URL: job.Args.URL,
 		Body: job.Args.Body, AttemptedAt: attemptedAt, Deadline: deadline,
 		KeyReference:         job.Args.ActiveKeyReference,
