@@ -1247,6 +1247,13 @@ fi
 go mod tidy
 go -C tools mod tidy
 
+# End with the service's own formatter. strip_profile's gofmt keeps each
+# removal aligned but leaves the blank line that fenced a marked import block
+# inside its group, and the module-path rewrite can reorder an import group
+# that mixes this module with third-party paths. gofumpt and goimports reject
+# both, so without this pass the service would fail its own fmt-check.
+make fmt
+
 if [[ ! -f .env ]]; then
 	cp env/.env.example .env
 	echo "created .env from env/.env.example"
