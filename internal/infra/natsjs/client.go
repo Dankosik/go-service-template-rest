@@ -118,7 +118,7 @@ func (c *Client) Check(ctx context.Context) error {
 		}
 		return fmt.Errorf("%w: connection is not ready", ErrRejected)
 	}
-	probeCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
+	probeCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	stream, err := c.js.Stream(probeCtx, c.cfg.Stream)
 	if err != nil {
@@ -203,15 +203,12 @@ func (c *Client) signalTerminal(err error) {
 	}
 }
 
+// boundedTimeout is operationTimeout, shortened to what remains of ctx's
+// deadline. nats.Timeout takes a duration rather than a context, so the
+// connection dial needs the bound spelled out.
 func boundedTimeout(ctx context.Context) time.Duration {
 	if deadline, ok := ctx.Deadline(); ok {
-		remaining := time.Until(deadline)
-		if remaining < operationTimeout {
-			if remaining <= 0 {
-				return time.Nanosecond
-			}
-			return remaining
-		}
+		return max(time.Nanosecond, min(operationTimeout, time.Until(deadline)))
 	}
 	return operationTimeout
 }

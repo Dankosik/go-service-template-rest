@@ -36,7 +36,7 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 		}
 	}()
 
-	probeCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
+	probeCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	dlqStream, err := c.js.StreamNameBySubject(probeCtx, cfg.DeadLetterSubject)
 	if err != nil {

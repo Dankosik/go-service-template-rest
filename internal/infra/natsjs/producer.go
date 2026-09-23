@@ -45,7 +45,7 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 		p.client.telemetry.recordPublish(ctx, event, outcomeRejected, reasonInvalidMessage, started)
 		return PublishResult{}, err
 	}
-	publishCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
+	publishCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	ack, err := p.client.js.PublishMsg(
 		publishCtx,
