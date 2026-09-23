@@ -84,23 +84,23 @@ func (c *Client) Download(ctx context.Context, key string) (objectstorage.Object
 		release()
 		return objectstorage.Object{}, readError(ctx, err)
 	}
-	if output == nil || output.Body == nil || output.ContentRange != nil || output.ChecksumCRC64NVME == nil || output.ChecksumType != types.ChecksumTypeFullObject {
-		if output != nil && output.Body != nil {
-			_ = output.Body.Close()
-		}
+	if output == nil || output.Body == nil {
 		release()
+		return objectstorage.Object{}, objectstorage.ErrIntegrity
+	}
+	// From here the body owns the response and the admission token: every
+	// refusal below closes it, which closes the response before releasing.
+	body := &downloadBody{ctx: ctx, body: output.Body, release: release}
+	if output.ContentRange != nil || output.ChecksumCRC64NVME == nil || output.ChecksumType != types.ChecksumTypeFullObject {
+		body.finish()
 		return objectstorage.Object{}, objectstorage.ErrIntegrity
 	}
 	metadata, err := c.metadata(output.ContentLength, output.ContentType, output.LastModified)
 	if err != nil {
-		_ = output.Body.Close()
-		release()
+		body.finish()
 		return objectstorage.Object{}, err
 	}
-	return objectstorage.Object{
-		Body:     &downloadBody{ctx: ctx, body: output.Body, release: release},
-		Metadata: metadata,
-	}, nil
+	return objectstorage.Object{Body: body, Metadata: metadata}, nil
 }
 
 func (c *Client) Metadata(ctx context.Context, key string) (objectstorage.Metadata, error) {
