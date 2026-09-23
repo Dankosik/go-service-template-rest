@@ -41,11 +41,6 @@ const (
 // DATABASE=none profile has none, so its stub declares no sentinel.
 var errDependencyInit = errors.New("dependency init")
 
-type postgresStartupRuntime struct {
-	cfg config.Config
-	log *slog.Logger
-}
-
 type runtimeDependencies struct {
 	readiness health.Probe
 	postgres  *pgxpool.Pool
@@ -112,10 +107,7 @@ func initRuntimeDependencies(
 	bootstrap startupBootstrap,
 ) (runtimeDependencies, error) {
 	postgresCtx, postgresCancel := withStageBudget(startupCtx, postgresStartupBudget)
-	pg, err := initPostgresDependency(startupCtx, postgresCtx, postgresStartupRuntime{
-		cfg: bootstrap.cfg,
-		log: bootstrap.log,
-	})
+	pg, err := initPostgresDependency(startupCtx, postgresCtx, bootstrap.cfg.Postgres, bootstrap.log)
 	postgresCancel()
 	if err != nil {
 		return runtimeDependencies{}, err
@@ -196,11 +188,16 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 	return nil
 }
 
-func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.Context, runtime postgresStartupRuntime) (*pgxpool.Pool, error) {
-	if !runtime.cfg.Postgres.Enabled {
+func initPostgresDependency(
+	bootstrapCtx context.Context,
+	dependencyCtx context.Context,
+	cfg config.PostgresConfig,
+	log *slog.Logger,
+) (*pgxpool.Pool, error) {
+	if !cfg.Enabled {
 		return nil, rejectPostgresStartupForDependencyInit(
 			bootstrapCtx,
-			runtime.log,
+			log,
 			errors.New("postgres is required by the DATABASE=postgres profile"),
 		)
 	}
@@ -208,14 +205,14 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 	probeCtx, probeCancel := withStageBudget(dependencyCtx, postgresProbeBudget)
 	probeStarted := time.Now()
 
-	pg, probeErr := initPostgres(probeCtx, runtime.cfg.Postgres)
+	pg, probeErr := initPostgres(probeCtx, cfg)
 	probeErr = cmp.Or(probeErr, dependencyCtx.Err(), probeCtx.Err())
 	probeCancel()
 	probeDuration := time.Since(probeStarted)
 
 	if probeErr != nil {
 		sanitizedErr := postgresDependencyInitFailure(probeErr)
-		recordDependencyProbeRejection(bootstrapCtx, runtime, probeDuration, sanitizedErr)
+		recordDependencyProbeRejection(bootstrapCtx, log, probeDuration, sanitizedErr)
 		if pg != nil {
 			pg.Close()
 		}
@@ -225,7 +222,7 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 	// The probe duration is reported here because nothing else measures how long
 	// a dependency took to become usable, and a startup that is slow rather than
 	// broken is otherwise indistinguishable from one that is merely starting.
-	runtime.log.InfoContext(
+	log.InfoContext(
 		bootstrapCtx,
 		"startup_dependency_ready",
 		startupLogArgs(
@@ -273,11 +270,11 @@ func rejectPostgresStartupForDependencyInit(
 
 func recordDependencyProbeRejection(
 	ctx context.Context,
-	runtime postgresStartupRuntime,
+	log *slog.Logger,
 	probeDuration time.Duration,
 	err error,
 ) {
-	runtime.log.ErrorContext(
+	log.ErrorContext(
 		ctx,
 		"startup_blocked",
 		startupLogArgs(

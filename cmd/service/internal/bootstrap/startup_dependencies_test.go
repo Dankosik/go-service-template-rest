@@ -149,12 +149,12 @@ func TestPostgresRuntimeReadinessProbeFailsAfterChildDeadlineWithNilProbeResult(
 func TestInitPostgresDependencyRejectsDisabledProfile(t *testing.T) {
 	t.Parallel()
 
-	runtime := postgresStartupRuntime{
-		cfg: config.Config{},
-		log: slog.New(slog.DiscardHandler),
-	}
-
-	pg, err := initPostgresDependency(context.Background(), context.Background(), runtime)
+	pg, err := initPostgresDependency(
+		context.Background(),
+		context.Background(),
+		config.PostgresConfig{},
+		slog.New(slog.DiscardHandler),
+	)
 	if err == nil {
 		t.Fatal("initPostgresDependency() error = nil, want required-profile rejection")
 	}
@@ -205,17 +205,14 @@ func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 	probeCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	runtime := postgresStartupRuntime{
-		cfg: config.Config{Postgres: config.PostgresConfig{ //nolint:gosec // Local test DSN; no live credential.
-			Enabled: true,
-			DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
+	cfg := config.PostgresConfig{ //nolint:gosec // Local test DSN; no live credential.
+		Enabled: true,
+		DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
 
-			MaxOpenConns: 1,
-		}},
-		log: slog.New(slog.DiscardHandler),
+		MaxOpenConns: 1,
 	}
 
-	pool, err := initPostgresDependency(context.Background(), probeCtx, runtime)
+	pool, err := initPostgresDependency(context.Background(), probeCtx, cfg, slog.New(slog.DiscardHandler))
 	if err == nil {
 		t.Fatal("initPostgresDependency() error = nil, want cancellation rejection")
 	}
