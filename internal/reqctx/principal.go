@@ -36,20 +36,24 @@ func (p Principal) HasScope(scope string) bool {
 	return slices.Contains(p.Scopes, scope)
 }
 
+// Identified reports whether p names a caller: an issuer plus a subject or a
+// client ID.
+func (p Principal) Identified() bool {
+	return strings.TrimSpace(p.Issuer) != "" &&
+		(strings.TrimSpace(p.Subject) != "" || strings.TrimSpace(p.ClientID) != "")
+}
+
 // CallerIdentity returns the collision-free opaque identity a feature uses to
 // scope caller-owned state. Subject is authoritative when present; client ID is
 // the supported machine-caller fallback. The result is correlatable and must
 // not be logged.
 func (p Principal) CallerIdentity() (string, bool) {
-	if strings.TrimSpace(p.Issuer) == "" {
+	if !p.Identified() {
 		return "", false
 	}
 	kind, value := "subject", p.Subject
 	if strings.TrimSpace(value) == "" {
 		kind, value = "client", p.ClientID
-	}
-	if strings.TrimSpace(value) == "" {
-		return "", false
 	}
 	return kind + ":" + strconv.Itoa(len(p.Issuer)) + ":" + p.Issuer + ":" + strconv.Itoa(len(value)) + ":" + value, true
 }

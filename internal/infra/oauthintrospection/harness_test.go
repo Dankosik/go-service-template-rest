@@ -141,8 +141,8 @@ func newLoopbackProviderClient(t *testing.T, server *httptest.Server) *http.Clie
 	}
 	transport := source.Clone()
 	transport.Proxy = nil
-	transport.ResponseHeaderTimeout = ProviderTimeout
-	transport.MaxResponseHeaderBytes = MaxResponseHeaderBytes
+	transport.ResponseHeaderTimeout = providerTimeout
+	transport.MaxResponseHeaderBytes = maxProviderHeaderBytes
 	client := &http.Client{
 		Transport: transport,
 		CheckRedirect: func(*http.Request, []*http.Request) error {

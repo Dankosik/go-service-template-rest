@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	// profile:authn-bearer:start
+	"time"
+	// profile:authn-bearer:end
 
 	"github.com/example/go-service-template-rest/internal/failure"
 	// profile:authn-bearer:start
@@ -19,38 +22,33 @@ import (
 // a service declares security requirements without naming its own challenge.
 const defaultAuthenticateChallenge = "Bearer"
 
-// RejectRequest returns the validator error mapper this repository installs:
-// oversized bodies become 413, failed security requirements become 401 with a
-// WWW-Authenticate challenge, and everything else becomes a sanitized 400.
-//
-// A service wiring its own generated validator needs this, or it reproduces the
-// defect where a missing credential is reported as a malformed request.
-func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
-	if strings.TrimSpace(challenge) == "" {
-		challenge = defaultAuthenticateChallenge
-	}
-	return handleGeneratedRequestError(log, challenge)
-}
-
-func handleMalformedGeneratedRequest(w http.ResponseWriter, r *http.Request, err error) {
+func handleMalformedGeneratedRequest(w http.ResponseWriter, r *http.Request, err error, violations []fieldViolation) {
 	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		writeProblem(w, r, requestEntityTooLargeProblem())
 		return
 	}
 	// The one place a rejection tells the caller more than "invalid". The detail
 	// stays generic; requestViolations owns what may go beside it.
-	writeMalformedRequestProblem(w, r, requestViolations(err))
+	writeMalformedRequestProblem(w, r, violations)
 }
 
-// handleGeneratedRequestError maps a validator rejection, adding the one case
-// handleMalformedGeneratedRequest cannot classify on its own.
+// RejectRequest returns the validator error mapper this repository installs:
+// oversized bodies become 413, failed security requirements become 401 with a
+// WWW-Authenticate challenge, and everything else becomes a sanitized 400.
+//
+// A service wiring its own generated validator needs this, or it reproduces the
+// defect where a missing credential is reported as a malformed request.
 //
 // A failed security requirement is 401, not 400: the framing was fine and the
 // credential was the problem, and no client library retries with credentials on
 // a 400.
-func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
+func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
+	if strings.TrimSpace(challenge) == "" {
+		challenge = defaultAuthenticateChallenge
+	}
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		logStrictRequestError(log, r, err)
+		violations := requestViolations(err)
+		logStrictRequestError(log, r, err, violations)
 		// profile:authn-bearer:start
 		if kind, ok := bearerauthn.KindOf(err); ok {
 			writeBearerRejection(w, r, kind, challenge)
@@ -78,11 +76,16 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 			writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing or invalid"})
 			return
 		}
-		handleMalformedGeneratedRequest(w, r, err)
+		handleMalformedGeneratedRequest(w, r, err, violations)
 	}
 }
 
 // profile:authn-bearer:start
+
+// bearerUnavailableRetryAfter is the Retry-After hint while authentication trust
+// cannot be established.
+const bearerUnavailableRetryAfter = 30 * time.Second
+
 func writeBearerRejection(w http.ResponseWriter, r *http.Request, kind bearerauthn.Kind, challenge string) {
 	// In bearerauthn.Kind declaration order, as that package's errors.go is, so
 	// a category added there lands in one obvious place here.
@@ -102,8 +105,11 @@ func writeBearerRejection(w http.ResponseWriter, r *http.Request, kind beareraut
 		w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 		writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
 	case bearerauthn.KindUnavailable:
-		w.Header().Set("Retry-After", "30")
-		writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "authentication trust is unavailable"})
+		writeProblem(w, r, problemResponse{
+			code:       problem.CodeServiceUnavailable,
+			detail:     "authentication trust is unavailable",
+			retryAfter: bearerUnavailableRetryAfter,
+		})
 	default:
 		w.Header().Set("WWW-Authenticate", challenge)
 		writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
@@ -112,7 +118,7 @@ func writeBearerRejection(w http.ResponseWriter, r *http.Request, kind beareraut
 
 // profile:authn-bearer:end
 
-func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
+func logStrictRequestError(log *slog.Logger, r *http.Request, err error, violations []fieldViolation) {
 	if log == nil {
 		return
 	}
@@ -126,9 +132,9 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 	if r != nil {
 		ctx = r.Context()
 	}
-	// The chain rather than the outer %T this used to publish: a validator
-	// rejection arrives wrapped, so that type was *openapi3filter.RequestError for
-	// a missing credential, a body that failed its schema, and an unparseable path
+	// The class chain rather than the outer %T: a validator rejection arrives
+	// wrapped, so that type is *openapi3filter.RequestError for a missing
+	// credential, a body that failed its schema, and an unparseable path
 	// parameter alike.
 	//
 	// The fields are what make a 400 actionable at all. Without them an operator
@@ -137,7 +143,7 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 	// Only the names are recorded — requestViolations owns why the reasons stay
 	// out of the record and go to the caller instead.
 	attrs := []slog.Attr{slog.String("error_chain", failure.ClassChain(err))}
-	if fields := violationFields(requestViolations(err)); len(fields) > 0 {
+	if fields := violationFields(violations); len(fields) > 0 {
 		attrs = append(attrs, slog.Any("invalid_fields", fields))
 	}
 	log.LogAttrs(ctx, slog.LevelWarn, "http_request_rejected", attrs...)

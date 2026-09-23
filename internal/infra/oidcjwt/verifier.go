@@ -2,6 +2,7 @@ package oidcjwt
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -22,8 +23,24 @@ type contextKey uint8
 
 const refreshFailureKey contextKey = iota
 
+// refreshFailure records whether a key refresh failed during one Verify call.
 type refreshFailure struct {
 	failed atomic.Bool
+}
+
+// withRefreshObserver attaches a fresh observer to one Verify call's context.
+// Verify reads it after parsing; the refresh reporter marks it when a refresh
+// triggered by that call fails.
+func withRefreshObserver(ctx context.Context) (context.Context, *refreshFailure) {
+	observer := new(refreshFailure)
+	return context.WithValue(ctx, refreshFailureKey, observer), observer
+}
+
+// refreshObserverFrom returns the observer of the Verify call that triggered a
+// refresh. A scheduled refresh has none.
+func refreshObserverFrom(ctx context.Context) (*refreshFailure, bool) {
+	observer, ok := ctx.Value(refreshFailureKey).(*refreshFailure)
+	return observer, ok
 }
 
 // Verifier owns one issuer's parser, cached JWKS resolver, and refresh lifetime.
@@ -58,7 +75,17 @@ func New(
 		return nil, err
 	}
 	processCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	metrics := newJWKSMetrics(meterProvider)
+	abandon := func(stage string) error {
+		cancel()
+		closeIdle()
+		return errors.New("OIDC startup failed at " + stage)
+	}
+	// keyfunc's defaults are tuned for availability over trust, so three are
+	// overridden: a failed first key load fails startup instead of serving with
+	// an empty key set; a request-triggered refresh never waits on the limiter
+	// (zero means the one-minute default, so the smallest positive wait stands
+	// in for none); and the whitelist below needs a second Keyfunc, because the
+	// default constructor accepts keys of any use.
 	ignoreFirstHTTPRequestError := false
 	keys, err := keyfunc.NewDefaultOverrideCtx(processCtx, []string{jwksURI}, keyfunc.Override{
 		Client:                    jwksClient,
@@ -67,25 +94,11 @@ func New(
 		RateLimitWaitMax:          time.Nanosecond,
 		RefreshInterval:           refreshInterval,
 		RefreshUnknownKID:         rate.NewLimiter(rate.Every(refreshCooldown), 1),
-		RefreshErrorHandlerFunc: func(string) func(context.Context, error) {
-			return func(refreshCtx context.Context, _ error) {
-				if !shouldReportRefreshFailure(processCtx, refreshCtx) {
-					return
-				}
-				if observed, ok := refreshCtx.Value(refreshFailureKey).(*refreshFailure); ok {
-					observed.failed.Store(true)
-				}
-				eventCtx := context.WithoutCancel(refreshCtx)
-				metrics.recordRefreshFailure(eventCtx)
-				log.WarnContext(eventCtx, "authn_jwks_refresh_failed", "component", "authn")
-			}
-		},
-		ValidationSkipAll: false,
+		RefreshErrorHandlerFunc:   refreshFailureReporter(processCtx, newJWKSMetrics(meterProvider), log),
+		ValidationSkipAll:         false,
 	})
 	if err != nil {
-		cancel()
-		closeIdle()
-		return nil, failure(bearerauthn.KindUnavailable)
+		return nil, abandon("JWKS load")
 	}
 	signingKeys, err := keyfunc.New(keyfunc.Options{
 		Ctx:          processCtx,
@@ -93,18 +106,40 @@ func New(
 		UseWhitelist: []jwkset.USE{"", jwkset.UseSig},
 	})
 	if err != nil {
-		cancel()
-		closeIdle()
-		return nil, failure(bearerauthn.KindUnavailable)
+		return nil, abandon("JWKS key selection")
 	}
 	return newVerifier(policy, signingKeys.KeyfuncCtx, time.Now, cancel, closeIdle), nil
+}
+
+// refreshFailureReporter builds keyfunc's refresh error handler. It marks the
+// observer of the Verify call that triggered the refresh, then counts and logs
+// the failure without its text. It is bound to processCtx, so it goes quiet once
+// the verifier closes.
+func refreshFailureReporter(
+	processCtx context.Context,
+	metrics jwksMetrics,
+	log *slog.Logger,
+) func(string) func(context.Context, error) {
+	return func(string) func(context.Context, error) {
+		return func(refreshCtx context.Context, _ error) {
+			if !shouldReportRefreshFailure(processCtx, refreshCtx) {
+				return
+			}
+			if observer, ok := refreshObserverFrom(refreshCtx); ok {
+				observer.failed.Store(true)
+			}
+			eventCtx := context.WithoutCancel(refreshCtx)
+			metrics.recordRefreshFailure(eventCtx)
+			log.WarnContext(eventCtx, "authn_jwks_refresh_failed", "component", "authn")
+		}
+	}
 }
 
 func shouldReportRefreshFailure(processCtx, refreshCtx context.Context) bool {
 	if processCtx.Err() != nil {
 		return false
 	}
-	_, requestRefresh := refreshCtx.Value(refreshFailureKey).(*refreshFailure)
+	_, requestRefresh := refreshObserverFrom(refreshCtx)
 	return !requestRefresh || refreshCtx.Err() == nil
 }
 
@@ -153,17 +188,16 @@ func (v *Verifier) Close() {
 // Verify implements bearerauthn.Verifier for one already-parsed compact JWT.
 func (v *Verifier) Verify(ctx context.Context, compact string) (bearerauthn.Result, error) {
 	if len(compact) > bearerauthn.MaxTokenBytes {
-		return bearerauthn.Result{}, failure(bearerauthn.KindOversize)
+		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindOversize)
 	}
-	refresh := new(refreshFailure)
-	verifyCtx := context.WithValue(ctx, refreshFailureKey, refresh)
+	verifyCtx, refresh := withRefreshObserver(ctx)
 	claims := new(accessTokenClaims)
 	token, err := v.parser.ParseWithClaims(compact, claims, func(token *jwt.Token) (any, error) {
 		if v.policy.strictRFC9068() && !validAccessTokenType(token.Header["typ"]) {
-			return nil, failure(bearerauthn.KindInvalid)
+			return nil, bearerauthn.VerificationFailure(bearerauthn.KindInvalid)
 		}
 		if v.keyFunc == nil {
-			return nil, failure(bearerauthn.KindUnavailable)
+			return nil, bearerauthn.VerificationFailure(bearerauthn.KindUnavailable)
 		}
 		return v.keyFunc(verifyCtx)(token)
 	})
@@ -174,13 +208,13 @@ func (v *Verifier) Verify(ctx context.Context, compact string) (bearerauthn.Resu
 		// A failed JWKS refresh makes verification unavailable even when the
 		// token could otherwise be rejected as invalid.
 		if refresh.failed.Load() {
-			return bearerauthn.Result{}, failure(bearerauthn.KindUnavailable)
+			return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindUnavailable)
 		}
-		return bearerauthn.Result{}, failure(bearerauthn.KindInvalid)
+		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindInvalid)
 	}
-	principal, err := principalFromClaims(claims, v.policy.strictRFC9068())
-	if err != nil || claims.ExpiresAt == nil {
-		return bearerauthn.Result{}, failure(bearerauthn.KindInvalid)
+	principal, ok := principalFromClaims(claims, v.policy.strictRFC9068())
+	if !ok || claims.ExpiresAt == nil {
+		return bearerauthn.Result{}, bearerauthn.VerificationFailure(bearerauthn.KindInvalid)
 	}
 	return bearerauthn.Result{Principal: principal, ExpiresAt: claims.ExpiresAt.Time}, nil
 }

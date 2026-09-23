@@ -210,7 +210,7 @@ func TestInboundWebhookAdmissionBeforeDurableWork(t *testing.T) {
 
 	rateReceiver := &recordingReceiver{outcome: inboundwebhook.OutcomeAccepted}
 	limited := inboundRouter(t, rateReceiver, RouterConfig{
-		RateLimit:    rejectAllLimiter{},
+		RateLimiter:  rejectAllLimiter{},
 		RateLimitKey: func(*http.Request) string { return "caller" },
 	})
 	rate := httptest.NewRecorder()

@@ -45,12 +45,12 @@ func policyErrorBoundary(log *slog.Logger) aroundRPC {
 	}
 }
 
-func mapHandlerError(err error, mappers []failure.Mapper, domain string) (error, bool) {
+func mapHandlerError(err error, mappers []failure.Mapper, domain string) (mapped error, sanitized bool) {
 	if err == nil {
 		return nil, false
 	}
-	if mapped, ok := mapContextError(err); ok {
-		return mapped, false
+	if contextStatus, ok := mapContextError(err); ok {
+		return contextStatus, false
 	}
 	if owned, ok := errors.AsType[*ownedStatusError](err); ok {
 		return owned, false
@@ -60,18 +60,18 @@ func mapHandlerError(err error, mappers []failure.Mapper, domain string) (error,
 	if grpcStatus, ok := directStatus(err); ok && grpcStatus.Code() == codes.Unimplemented {
 		return ownedStatus(codes.Unimplemented, "method not implemented"), false
 	}
-	if mapped, ok := failure.Classify(err, mappers); ok {
-		return mappedStatus(mapped, domain), false
+	if classified, ok := failure.Classify(err, mappers); ok {
+		return mappedStatus(classified, domain), false
 	}
 	return ownedStatus(codes.Internal, failure.SanitizedDetail), true
 }
 
-func mapPolicyError(err error) (error, bool) {
+func mapPolicyError(err error) (mapped error, sanitized bool) {
 	if err == nil {
 		return nil, false
 	}
-	if mapped, ok := mapContextError(err); ok {
-		return mapped, false
+	if contextStatus, ok := mapContextError(err); ok {
+		return contextStatus, false
 	}
 	// Deliberately do not unwrap: only a status the policy returned directly is
 	// service-owned output.
@@ -81,7 +81,7 @@ func mapPolicyError(err error) (error, bool) {
 	return ownedStatus(codes.Internal, failure.SanitizedDetail), true
 }
 
-func mapContextError(err error) (error, bool) {
+func mapContextError(err error) (mapped error, matched bool) {
 	switch {
 	case errors.Is(err, context.Canceled):
 		return ownedStatus(codes.Canceled, "request canceled"), true
@@ -116,8 +116,8 @@ func methodDomain(fullMethod string) string {
 //
 // It is the only place the error a handler or policy actually returned is
 // recorded. The status carries no detail on purpose — see the package doc on why
-// a dependency's own text is not the caller's business — and the access log
-// carries only the code, so without this the whole %w chain a service built is
+// a dependency's own text is not the caller's business — and telemetry carries
+// only the code, so without this the whole %w chain a service built is
 // discarded at the boundary and an INTERNAL is undiagnosable without reproducing
 // the call.
 //
@@ -145,55 +145,58 @@ func recordUnhandledFailure(ctx context.Context, log *slog.Logger, method string
 }
 
 func mappedStatus(mapped failure.Classification, domain string) error {
-	code := codes.Internal
-	switch mapped.Code {
-	case failure.CodeBadRequest, failure.CodeUnprocessableContent:
-		code = codes.InvalidArgument
-	// profile:http-idempotency-postgres:start
-	case failure.CodeIdempotencyKeyMismatch:
-		code = codes.InvalidArgument
-	// profile:http-idempotency-postgres:end
-	case failure.CodeUnauthorized:
-		code = codes.Unauthenticated
-	case failure.CodeForbidden:
-		code = codes.PermissionDenied
-	case failure.CodeNotFound:
-		code = codes.NotFound
-	case failure.CodeMethodNotAllowed:
-		code = codes.Unimplemented
-	case failure.CodeAlreadyExists:
-		code = codes.AlreadyExists
-	case failure.CodeRequestEntityTooLarge, failure.CodeTooManyRequests:
-		code = codes.ResourceExhausted
-	// profile:authn-bearer:start
-	case failure.CodeRequestHeaderFieldsTooLarge:
-		code = codes.ResourceExhausted
-	// profile:authn-bearer:end
-	case failure.CodeServiceUnavailable:
-		code = codes.Unavailable
-	// profile:http-idempotency-postgres:start
-	case failure.CodeIdempotencyUnavailable, failure.CodeIdempotencyOutcomeUnknown:
-		code = codes.Unavailable
-	// profile:http-idempotency-postgres:end
-	case failure.CodeGatewayTimeout:
-		code = codes.DeadlineExceeded
-	case failure.CodeInternalError:
-		code = codes.Internal
-	}
-
 	detail := cmp.Or(strings.TrimSpace(mapped.Detail), failure.SanitizedDetail)
-
-	rendered := status.New(code, detail)
+	rendered := status.New(grpcCode(mapped.Code), detail)
 	if details := classifiedDetails(mapped, domain); len(details) > 0 {
 		// A detail that cannot be attached must not cost the caller its status.
-		// The only documented failure is an OK code, which this function cannot
-		// produce, so the arm exists to keep that promise rather than to handle
-		// a case anyone has seen.
+		// WithDetails fails for an OK code, which grpcCode never returns, so the
+		// arm keeps that promise rather than handling a case anyone has seen.
 		if withDetails, err := rendered.WithDetails(details...); err == nil {
 			rendered = withDetails
 		}
 	}
 	return &ownedStatusError{status: rendered}
+}
+
+// grpcCode is the status code a classified failure answers with. A code with no
+// closer gRPC meaning is Internal.
+func grpcCode(code failure.Code) codes.Code {
+	switch code {
+	case failure.CodeBadRequest, failure.CodeUnprocessableContent:
+		return codes.InvalidArgument
+	// profile:http-idempotency-postgres:start
+	case failure.CodeIdempotencyKeyMismatch:
+		return codes.InvalidArgument
+	// profile:http-idempotency-postgres:end
+	case failure.CodeUnauthorized:
+		return codes.Unauthenticated
+	case failure.CodeForbidden:
+		return codes.PermissionDenied
+	case failure.CodeNotFound:
+		return codes.NotFound
+	case failure.CodeMethodNotAllowed:
+		return codes.Unimplemented
+	case failure.CodeAlreadyExists:
+		return codes.AlreadyExists
+	case failure.CodeRequestEntityTooLarge, failure.CodeTooManyRequests:
+		return codes.ResourceExhausted
+	// profile:authn-bearer:start
+	case failure.CodeRequestHeaderFieldsTooLarge:
+		return codes.ResourceExhausted
+	// profile:authn-bearer:end
+	case failure.CodeServiceUnavailable:
+		return codes.Unavailable
+	// profile:http-idempotency-postgres:start
+	case failure.CodeIdempotencyUnavailable, failure.CodeIdempotencyOutcomeUnknown:
+		return codes.Unavailable
+	// profile:http-idempotency-postgres:end
+	case failure.CodeGatewayTimeout:
+		return codes.DeadlineExceeded
+	case failure.CodeInternalError:
+		return codes.Internal
+	default:
+		return codes.Internal
+	}
 }
 
 // classifiedDetails renders the parts of a classified answer that a caller

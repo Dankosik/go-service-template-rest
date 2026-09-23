@@ -38,6 +38,9 @@ func (r *Runtime) UnaryInterceptor() grpc.UnaryServerInterceptor {
 
 // StreamInterceptor authenticates every stream once and bounds its
 // handler-visible context and message operations by the verified token lifetime.
+// The bound holds fully for protobuf messages; receiving a non-protobuf message
+// is checked against it only before and after the read, which can block past
+// expiry.
 func (r *Runtime) StreamInterceptor() grpc.StreamServerInterceptor {
 	return func(
 		server any,
@@ -60,8 +63,8 @@ func (r *Runtime) StreamInterceptor() grpc.StreamServerInterceptor {
 // health service. This is the boundary that decides which RPC needs no
 // credential, so a method grpc-go adds to grpc.health.v1.Health later must be
 // authenticated until someone deliberately publishes it. The transport adapter
-// in internal/infra/grpc also exempts only Check from admission; its wider
-// health-service prefix governs logging and telemetry alone.
+// in internal/infra/grpc likewise exempts only Check from admission; its wider
+// health-service prefix routes budgets and telemetry, never trust.
 func publicHealthMethod(fullMethod string) bool {
 	return fullMethod == healthpb.Health_Check_FullMethodName
 }
@@ -160,7 +163,7 @@ func (s serverStreamWithContext) Context() context.Context {
 func (s serverStreamWithContext) RecvMsg(message any) error {
 	received, ok := message.(proto.Message)
 	if !ok {
-		return s.recvMsg(message)
+		return s.recvNonProtoMsg(message)
 	}
 	detached := received.ProtoReflect().Type().New().Interface()
 	if err := waitMessageOperation(s.ctx, func() error {
@@ -185,7 +188,7 @@ func (s serverStreamWithContext) SendMsg(message any) error {
 	return nil
 }
 
-func (s serverStreamWithContext) recvMsg(message any) error {
+func (s serverStreamWithContext) recvNonProtoMsg(message any) error {
 	if err := s.ctx.Err(); err != nil {
 		return fmt.Errorf("receive authenticated gRPC message: %w", err)
 	}

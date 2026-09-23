@@ -10,10 +10,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// applyHTTPPolicy installs the fallback answers for requests the mounted API did
+// applyFallbackPolicy installs the fallback answers for requests the mounted API did
 // not match: what an unrouted path returns, and what an unmatched method returns
 // beside its Allow header.
-func applyHTTPPolicy(root chi.Router) {
+func applyFallbackPolicy(root chi.Router) {
 	root.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, notFoundProblem())
 	})

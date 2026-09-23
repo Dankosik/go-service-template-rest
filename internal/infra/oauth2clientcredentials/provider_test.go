@@ -19,6 +19,17 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 	return f(request)
 }
 
+// newNoRedirectHTTPClient stands in for httpclient.Client.StandardClient over a
+// fake transport.
+func newNoRedirectHTTPClient(transport http.RoundTripper) *http.Client {
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
 func TestProviderDelegatesParsingAndPublishesOnlySafeBearerState(t *testing.T) {
 	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		clientID, clientSecret, ok := request.BasicAuth()
