@@ -206,19 +206,10 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 		w.client.telemetry.logTerminalDelivery(ctx, source.Subject(), metadata, reasonDeadLetterEnvelope, nil)
 		return fmt.Errorf("%w: retained source cannot fit dead-letter envelope", ErrTerminal)
 	}
-	publishCtx, cancel := context.WithTimeout(ctx, operationTimeout)
-	_, err := w.client.js.PublishMsg(
-		publishCtx,
-		msg,
-		jetstream.WithMsgID(transferID),
-		jetstream.WithExpectStream(w.dlqStream),
-		jetstream.WithRetryAttempts(0),
-	)
-	cancel()
-	if err != nil {
-		outcome, _, wrapped := classifyPublishError(err)
+	if _, err := w.client.publishOnce(ctx, msg, transferID, w.dlqStream); err != nil {
+		outcome, _, _ := classifyPublishError(err)
 		w.client.telemetry.recordDeadLetterTransfer(ctx, outcome)
-		if errors.Is(wrapped, ErrAmbiguous) {
+		if outcome == outcomeAmbiguous {
 			return w.requestRedelivery(ctx, source, metadata, w.cfg.DeadLetterRetryDelay, redeliveryDeadLetter)
 		}
 		w.client.telemetry.logTerminalDelivery(ctx, source.Subject(), metadata, reasonDeadLetterRejected, nil)

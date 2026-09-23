@@ -45,15 +45,7 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 		p.client.telemetry.recordPublish(ctx, event, outcomeRejected, reasonInvalidMessage, started)
 		return PublishResult{}, err
 	}
-	publishCtx, cancel := context.WithTimeout(ctx, operationTimeout)
-	defer cancel()
-	ack, err := p.client.js.PublishMsg(
-		publishCtx,
-		msg,
-		jetstream.WithMsgID(event.PublicationID),
-		jetstream.WithExpectStream(p.client.cfg.Stream),
-		jetstream.WithRetryAttempts(0),
-	)
+	ack, err := p.client.publishOnce(ctx, msg, event.PublicationID, p.client.cfg.Stream)
 	if err != nil {
 		outcome, reason, wrapped := classifyPublishError(err)
 		setSpanOutcome(span, outcome)
@@ -66,11 +58,26 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 	return result, nil
 }
 
+// publishOnce makes exactly one publish attempt of msg to stream under
+// operationTimeout. msgID is the broker's deduplication id, which is what makes
+// retrying an ambiguous attempt safe; retries stay with the caller.
+func (c *Client) publishOnce(ctx context.Context, msg *nats.Msg, msgID, stream string) (*jetstream.PubAck, error) {
+	publishCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
+	//nolint:wrapcheck // classifyPublishError maps the broker error onto this package's sentinels.
+	return c.js.PublishMsg(
+		publishCtx,
+		msg,
+		jetstream.WithMsgID(msgID),
+		jetstream.WithExpectStream(stream),
+		jetstream.WithRetryAttempts(0),
+	)
+}
+
 func classifyPublishError(err error) (outcome, reason string, wrapped error) {
-	if errors.Is(err, nats.ErrNoResponders) || errors.Is(err, jetstream.ErrNoStreamResponse) || errors.Is(err, jetstream.ErrStreamNotFound) {
-		return outcomeRejected, reasonBrokerRejected, fmt.Errorf("%w: broker rejected publish", ErrRejected)
-	}
-	if _, ok := errors.AsType[*jetstream.APIError](err); ok {
+	_, apiErr := errors.AsType[*jetstream.APIError](err)
+	if apiErr || errors.Is(err, nats.ErrNoResponders) || errors.Is(err, jetstream.ErrNoStreamResponse) ||
+		errors.Is(err, jetstream.ErrStreamNotFound) {
 		return outcomeRejected, reasonBrokerRejected, fmt.Errorf("%w: broker rejected publish", ErrRejected)
 	}
 	return outcomeAmbiguous, reasonAckUnavailable, fmt.Errorf("%w: publish acknowledgement unavailable", ErrAmbiguous)
