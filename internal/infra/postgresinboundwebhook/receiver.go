@@ -122,20 +122,8 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 	if _, ok := r.trust.Lookup(delivery.EndpointID); !ok {
 		return inboundwebhook.OutcomeUnknownEndpoint, nil
 	}
-	if !validDeliveryID(delivery.DeliveryID) {
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.OutcomeRejected, nil
-	}
-	signedAt, ok := parseSignedTimestamp(delivery.Timestamp)
+	signedAt, ok := r.verify(delivery)
 	if !ok {
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.OutcomeRejected, nil
-	}
-	if !timestampInTolerance(signedAt, r.now()) {
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
-		return inboundwebhook.OutcomeRejected, nil
-	}
-	if !r.signatureOK(delivery) {
 		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
 		return inboundwebhook.OutcomeRejected, nil
 	}
@@ -149,11 +137,9 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 		Payload:    delivery.Body,
 	})
 	if err != nil {
-		if errors.Is(err, postgres.ErrCommitUnknown) {
-			r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
-			return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
-		}
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		// runInTx can join ctx.Err() with commit-unknown; an unknown commit stays unavailable.
+		canceled := errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+		if canceled && !errors.Is(err, postgres.ErrCommitUnknown) {
 			return inboundwebhook.OutcomeUnavailable, fmt.Errorf("accept inbound webhook receipt: %w", err)
 		}
 		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
@@ -161,6 +147,21 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 	}
 	r.telem.recordIngress(ctx, string(outcome))
 	return outcome, nil
+}
+
+// verify checks the delivery ID, timestamp, and tolerance before the signature.
+func (r *Receiver) verify(delivery inboundwebhook.Delivery) (time.Time, bool) {
+	if !validDeliveryID(delivery.DeliveryID) {
+		return time.Time{}, false
+	}
+	signedAt, ok := parseSignedTimestamp(delivery.Timestamp)
+	if !ok || !timestampInTolerance(signedAt, r.now()) {
+		return time.Time{}, false
+	}
+	if !r.signatureOK(delivery) {
+		return time.Time{}, false
+	}
+	return signedAt, true
 }
 
 func (r *Receiver) signatureOK(delivery inboundwebhook.Delivery) bool {
