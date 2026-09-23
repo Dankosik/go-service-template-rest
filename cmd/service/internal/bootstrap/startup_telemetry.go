@@ -78,17 +78,24 @@ func bootstrapTelemetryStage(
 	}
 }
 
+// Trace-export outcomes reported by traceExporterState.
+const (
+	traceExporterDegraded    = "degraded"
+	traceExporterDisabled    = "disabled"
+	traceExporterInitialized = "initialized"
+)
+
 // traceExporterState names the trace-export outcome in the one line an operator
 // already reads at startup. Without it, "this service exports no traces" is
 // only recoverable by correlating a separate warning that a log filter may drop.
 func traceExporterState(tracingEndpoint telemetry.TraceExporterEndpoint, tracingInitErr error) string {
 	switch {
 	case tracingInitErr != nil:
-		return "degraded"
+		return traceExporterDegraded
 	case !tracingEndpoint.Configured():
-		return "disabled"
+		return traceExporterDisabled
 	default:
-		return "initialized"
+		return traceExporterInitialized
 	}
 }
 
@@ -97,7 +104,7 @@ func traceExporterState(tracingEndpoint telemetry.TraceExporterEndpoint, tracing
 // the boot log; a service that answers every request while exporting no traces
 // needs a signal that survives to a dashboard.
 //
-// initialized mirrors traceExporterState's initialized case rather than restating the
+// initialized compares against traceExporterState rather than restating the
 // condition, so the startup log line and this metric cannot drift apart.
 func recordTraceExporterInitialization(
 	ctx context.Context,
@@ -106,7 +113,7 @@ func recordTraceExporterInitialization(
 	tracingEndpoint telemetry.TraceExporterEndpoint,
 	tracingInitErr error,
 ) {
-	initialized := traceExporterState(tracingEndpoint, tracingInitErr) == "initialized"
+	initialized := traceExporterState(tracingEndpoint, tracingInitErr) == traceExporterInitialized
 	if err := metrics.RecordTraceExporterInitialization(ctx, initialized); err != nil {
 		log.WarnContext(
 			ctx,
