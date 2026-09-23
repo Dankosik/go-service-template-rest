@@ -28,7 +28,7 @@ const (
 // mistyped metrics endpoint report the trace exporter as degraded. Metrics
 // degradation is reported where it happens, by reportMetricExporterState.
 type telemetryStage struct {
-	cleanup         func(context.Context)
+	flush           func(context.Context)
 	tracingEndpoint telemetry.TraceExporterEndpoint
 	tracingErr      error
 }
@@ -72,7 +72,7 @@ func bootstrapTelemetryStage(
 	recordTraceExporterInitialization(startupCtx, log, metrics, tracingEndpoint, tracingErr)
 
 	return telemetryStage{
-		cleanup:         newTelemetryCleanup(log, tracingShutdown, metricsResult.Shutdown),
+		flush:           newTelemetryFlush(log, tracingShutdown, metricsResult.Shutdown),
 		tracingEndpoint: tracingEndpoint,
 		tracingErr:      tracingErr,
 	}
@@ -129,7 +129,7 @@ func recordTraceExporterInitialization(
 	}
 }
 
-// newTelemetryCleanup builds the flush, which takes its bound from the context
+// newTelemetryFlush builds the flush, which takes its bound from the context
 // it is called with.
 //
 // It deliberately derives no deadline of its own. The flush is the last teardown
@@ -137,7 +137,7 @@ func recordTraceExporterInitialization(
 // a number only the caller holding the shutdown budget knows. A fixed deadline
 // here would let the total teardown grow past the platform's grace period and
 // get this stage killed for it.
-func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) error) func(context.Context) {
+func newTelemetryFlush(log *slog.Logger, shutdowns ...func(context.Context) error) func(context.Context) {
 	return func(shutdownCtx context.Context) {
 		log.InfoContext(
 			shutdownCtx,

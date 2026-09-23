@@ -58,7 +58,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	// no meter cannot report what it consumed, so nothing would notice it stopped
 	// consuming, while a worker with no exporter for spans still records every
 	// count an alert is built on.
-	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "worker")
+	flushTelemetry, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "worker")
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	// False means the handler did not join within the shutdown budget. Its
 	// dependencies stay intact and process exit owns them.
@@ -69,7 +69,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	defer func() {
 		cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 		defer cleanupCancel()
-		_ = telemetryCleanup(cleanupCtx)
+		_ = flushTelemetry(cleanupCtx)
 	}()
 	if err != nil {
 		return err

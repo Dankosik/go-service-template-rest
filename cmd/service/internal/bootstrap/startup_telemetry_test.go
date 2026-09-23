@@ -44,7 +44,7 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	if stage.tracingEndpoint.Source != telemetry.SharedOTLPExporterConfigKey {
 		t.Fatalf("endpoint source = %q, want %q", stage.tracingEndpoint.Source, telemetry.SharedOTLPExporterConfigKey)
 	}
-	t.Cleanup(func() { stage.cleanup(context.Background()) })
+	t.Cleanup(func() { stage.flush(context.Background()) })
 }
 
 // A platform that injects only the standard endpoint variable must still get
@@ -68,7 +68,7 @@ func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	if stage.tracingEndpoint.Source != "OTEL_EXPORTER_OTLP_ENDPOINT" {
 		t.Fatalf("endpoint source = %q, want the ambient endpoint variable", stage.tracingEndpoint.Source)
 	}
-	t.Cleanup(func() { stage.cleanup(context.Background()) })
+	t.Cleanup(func() { stage.flush(context.Background()) })
 }
 
 //nolint:paralleltest // Mutates process-wide environment and telemetry providers.
@@ -83,7 +83,7 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 		telemetry.New(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
-	stage.cleanup(context.Background())
+	stage.flush(context.Background())
 	err := stage.tracingErr
 	if err == nil {
 		t.Fatal("bootstrapTelemetryStage() tracing error = nil, want ambient env rejection")
@@ -413,7 +413,7 @@ func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing
 		metrics,
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
-	t.Cleanup(func() { stage.cleanup(context.Background()) })
+	t.Cleanup(func() { stage.flush(context.Background()) })
 
 	if stage.tracingErr != nil {
 		t.Fatalf("tracing error = %v, want tracing to survive an unusable metrics endpoint", stage.tracingErr)

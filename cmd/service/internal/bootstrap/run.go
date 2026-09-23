@@ -154,7 +154,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	defer func() {
 		telemetryCtx, cancelTelemetry := shutdown.stage(signalCtx, telemetryShutdownTimeout)
 		defer cancelTelemetry()
-		bootstrap.telemetryCleanup(telemetryCtx)
+		bootstrap.flushTelemetry(telemetryCtx)
 	}()
 
 	// The GC limit is published before any dependency allocates, so the first

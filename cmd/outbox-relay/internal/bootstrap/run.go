@@ -58,7 +58,7 @@ func run(signalCtx context.Context, args []string) error {
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "outbox_relay")
 	metrics := telemetry.New()
-	telemetryCleanup, metricsErr := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "outbox")
+	flushTelemetry, metricsErr := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "outbox")
 	if metricsErr != nil {
 		log.WarnContext(startupCtx, "outbox_metrics_degraded", "reason", telemetry.FailureReason(metricsErr))
 	}
@@ -66,7 +66,7 @@ func run(signalCtx context.Context, args []string) error {
 	defer func() {
 		cleanupCtx, cancel := runtimeopts.TeardownStage(cleanupWindow, telemetryShutdownTimeout)
 		defer cancel()
-		_ = telemetryCleanup(cleanupCtx)
+		_ = flushTelemetry(cleanupCtx)
 	}()
 
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
