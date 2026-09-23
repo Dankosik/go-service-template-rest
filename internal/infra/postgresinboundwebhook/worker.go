@@ -18,7 +18,16 @@ import (
 const (
 	quarantineReasonInvalidJSON = "invalid_json"
 	quarantineReasonRejected    = "schema_rejected"
-	terminalSnooze              = time.Second
+	// resnoozeDelay re-checks a receipt later; a River snooze does not consume an attempt.
+	resnoozeDelay = time.Second
+)
+
+// Receipt states match the outcome CHECK in the inbound webhook receipts table.
+const (
+	receiptPending     = "pending"
+	receiptHandled     = "handled"
+	receiptQuarantined = "quarantined"
+	receiptFailed      = "failed"
 )
 
 type storedReceipt struct {
@@ -28,10 +37,10 @@ type storedReceipt struct {
 	SignedAt   time.Time
 	ReceivedAt time.Time
 	Payload    []byte
-	Outcome    string
+	State      string
 }
 
-type receiptProcessor interface {
+type receiptStateStore interface {
 	loadByID(ctx context.Context, receiptID string) (storedReceipt, error)
 	MarkHandled(ctx context.Context, receiptID string) (bool, error)
 	MarkQuarantined(ctx context.Context, receiptID, reason string) (bool, error)
@@ -42,13 +51,13 @@ type receiptProcessor interface {
 type Worker struct {
 	river.WorkerDefaults[receiptJobArgs]
 
-	store    receiptProcessor
+	store    receiptStateStore
 	registry *inboundwebhook.Registry
 	telem    telemetry
 }
 
-// NewWorker builds the River worker.
-func newWorker(store receiptProcessor, registry *inboundwebhook.Registry, telem telemetry) (*Worker, error) {
+// newWorker builds the River worker.
+func newWorker(store receiptStateStore, registry *inboundwebhook.Registry, telem telemetry) (*Worker, error) {
 	if store == nil || registry == nil {
 		return nil, errors.New("inbound webhook store and registry are required")
 	}
@@ -97,17 +106,17 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 	if err != nil {
 		w.telem.recordRetryingFailure(ctx, receiptID, logClassStorageRetryable)
 		if job.Attempt >= job.MaxAttempts {
-			return river.JobSnooze(terminalSnooze)
+			return river.JobSnooze(resnoozeDelay)
 		}
 		return errStorageUnavailable
 	}
-	if receipt.Outcome != "pending" {
+	if receipt.State != receiptPending {
 		return nil
 	}
 	if !w.registry.HasBinding(receipt.EndpointID) {
 		w.telem.recordRetryingFailure(ctx, receiptID, logClassBindingUnavailable)
 		// ponytail: reuse the existing snooze; isolate a queue if binding drift becomes load.
-		return river.JobSnooze(terminalSnooze)
+		return river.JobSnooze(resnoozeDelay)
 	}
 	if job.Attempt >= job.MaxAttempts {
 		return w.finalize(ctx, receiptID)
@@ -130,7 +139,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 			return errStorageUnavailable
 		}
 		if updated {
-			w.telem.recordProcessing(ctx, "handled")
+			w.telem.recordProcessing(ctx, receiptHandled)
 		}
 		return nil
 	case inboundwebhook.IsDecodeError(dispatchErr) && errors.Is(dispatchErr, inboundwebhook.ErrDecodeRejected):
@@ -144,7 +153,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 			return errStorageUnavailable
 		}
 		if updated {
-			w.telem.recordProcessing(ctx, "quarantined")
+			w.telem.recordProcessing(ctx, receiptQuarantined)
 		}
 		return nil
 	case inboundwebhook.IsDecodeError(dispatchErr):
@@ -160,10 +169,10 @@ func (w *Worker) finalize(ctx context.Context, receiptID string) error {
 	updated, err := w.store.MarkFailed(ctx, receiptID)
 	if err != nil {
 		w.telem.logFailure(ctx, receiptID, logClassTerminalizationRetryable)
-		return river.JobSnooze(terminalSnooze)
+		return river.JobSnooze(resnoozeDelay)
 	}
 	if updated {
-		w.telem.recordProcessing(ctx, "failed")
+		w.telem.recordProcessing(ctx, receiptFailed)
 	}
 	return nil
 }

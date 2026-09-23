@@ -60,7 +60,7 @@ type Receiver struct {
 	telem telemetry
 }
 
-// ReceiverOption adjusts test seams without changing production ownership.
+// ReceiverOption adjusts optional receiver collaborators such as the clock.
 type ReceiverOption func(*Receiver)
 
 // WithClock injects the verification clock.
@@ -124,7 +124,7 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 	}
 	signedAt, ok := r.verify(delivery)
 	if !ok {
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeRejected))
+		r.telem.recordIngress(ctx, inboundwebhook.OutcomeRejected)
 		return inboundwebhook.OutcomeRejected, nil
 	}
 	digest := sha256.Sum256(delivery.Body)
@@ -142,10 +142,10 @@ func (r *Receiver) Receive(ctx context.Context, delivery inboundwebhook.Delivery
 		if canceled && !errors.Is(err, postgres.ErrCommitUnknown) {
 			return inboundwebhook.OutcomeUnavailable, fmt.Errorf("accept inbound webhook receipt: %w", err)
 		}
-		r.telem.recordIngress(ctx, string(inboundwebhook.OutcomeUnavailable))
+		r.telem.recordIngress(ctx, inboundwebhook.OutcomeUnavailable)
 		return inboundwebhook.OutcomeUnavailable, inboundwebhook.ErrUnavailable
 	}
-	r.telem.recordIngress(ctx, string(outcome))
+	r.telem.recordIngress(ctx, outcome)
 	return outcome, nil
 }
 
@@ -274,7 +274,7 @@ func (s *postgresStore) loadByID(ctx context.Context, receiptID string) (storedR
 		SignedAt:   row.SignedAt.Time,
 		ReceivedAt: row.ReceivedAt.Time,
 		Payload:    row.Payload,
-		Outcome:    row.Outcome,
+		State:      row.Outcome,
 	}, nil
 }
 
