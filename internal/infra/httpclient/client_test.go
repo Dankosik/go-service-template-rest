@@ -162,6 +162,39 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 	}
 }
 
+func TestStandardClientSendsThroughDoWithoutRedirects(t *testing.T) {
+	t.Parallel()
+	var calls int
+	client := &Client{
+		inFlight:          make(chan struct{}, 1),
+		absoluteBodyBytes: fixedMaxBodyBytes,
+		httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{
+				StatusCode: http.StatusTemporaryRedirect,
+				Header:     http.Header{"Location": []string{"/elsewhere"}},
+				Body:       http.NoBody,
+				Request:    request,
+			}, nil
+		}), CheckRedirect: refuseRedirect},
+	}
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://api.example.com/path", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.StandardClient().Do(request)
+	if err != nil {
+		t.Fatalf("StandardClient().Do() error = %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusTemporaryRedirect || calls != 1 {
+		t.Fatalf("status = %d, calls = %d; want the redirect returned after one call", response.StatusCode, calls)
+	}
+	if len(client.inFlight) != 0 {
+		t.Fatal("admission was not released after the body closed")
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {

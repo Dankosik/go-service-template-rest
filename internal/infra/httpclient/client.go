@@ -112,12 +112,16 @@ func newClient(rawBaseURL string, policy targetPolicy, limits TransportLimits) (
 		inFlight:          make(chan struct{}, limits.MaxInFlight),
 		absoluteBodyBytes: limits.AbsoluteBodyBytes,
 		httpClient: &http.Client{
-			Transport: roundTripper,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+			Transport:     roundTripper,
+			CheckRedirect: refuseRedirect,
 		},
 	}, nil
+}
+
+// refuseRedirect returns a redirect response to the caller instead of following
+// it: a followed Location would leave the one authority this client is pinned to.
+func refuseRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 // Do sends one non-streaming request under the provider-wide limits. The caller
@@ -250,6 +254,31 @@ func (b *boundedBody) Close() error {
 		return fmt.Errorf("close outbound HTTP response body: %w", err)
 	}
 	return nil
+}
+
+// StandardClient returns an *http.Client for an SDK that needs one. Every
+// request it sends goes through Do, and it returns redirects rather than
+// following them, as Do does.
+func (c *Client) StandardClient() *http.Client {
+	return &http.Client{
+		Transport:     doRoundTripper{client: c},
+		CheckRedirect: refuseRedirect,
+	}
+}
+
+type doRoundTripper struct {
+	client *Client
+}
+
+// RoundTrip drops a response that arrives with an error: RoundTripper allows
+// only one of the two, and Do returns both only where http.Client did, which
+// closes that body first.
+func (t doRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	response, err := t.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 // BaseURL returns the validated provider base URL.

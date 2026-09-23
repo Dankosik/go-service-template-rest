@@ -11,23 +11,6 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
-type doerRoundTripper struct {
-	client *httpclient.Client
-}
-
-func (t doerRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return t.client.Do(request) //nolint:wrapcheck // The fixed-target client owns the safe public error.
-}
-
-func newNoRedirectHTTPClient(transport http.RoundTripper) *http.Client {
-	return &http.Client{
-		Transport: transport,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-}
-
 func newTokenHTTPClient(cfg Config) (*httpclient.Client, error) {
 	client, err := httpclient.NewExternalHTTPS(cfg.TokenURL, httpclient.TransportLimits{
 		ResponseHeaderTimeout:  defaultAcquisitionTimeout,
@@ -42,7 +25,7 @@ func newTokenHTTPClient(cfg Config) (*httpclient.Client, error) {
 }
 
 func newAcquirer(cfg Config, bounded *httpclient.Client) acquireToken {
-	return newProviderAcquirer(cfg, newNoRedirectHTTPClient(doerRoundTripper{client: bounded}))
+	return newProviderAcquirer(cfg, bounded.StandardClient())
 }
 
 func newProviderAcquirer(cfg Config, tokenHTTP *http.Client) acquireToken {
