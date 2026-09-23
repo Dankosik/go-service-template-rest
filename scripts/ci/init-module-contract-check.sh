@@ -102,14 +102,22 @@ run_init() {
 	local module="$2"
 	shift 2
 	local command=(bash ./scripts/init-module.sh)
+	# The clean environment keeps caller input out of initialization, but an
+	# explicit module or build cache only says where downloads and builds
+	# live; without it every run re-downloads what CI already restored.
+	local caches=("") name
 
 	[[ -z "${module}" ]] || command+=("${module}")
+	for name in GOMODCACHE TOOL_GOMODCACHE GOCACHE; do
+		[[ -z ${!name:-} ]] || caches+=("${name}=${!name}")
+	done
 	(
 		cd "${root}"
 		env -i \
 			HOME="${HOME}" \
 			PATH="${PATH}" \
 			TMPDIR="${TMPDIR:-/tmp}" \
+			"${caches[@]:1}" \
 			GOMAXPROCS="${GOMAXPROCS:-${VALIDATION_JOBS:-2}}" \
 			VALIDATION_JOBS="${VALIDATION_JOBS:-2}" \
 			VALIDATION_PARALLEL_TESTS="${VALIDATION_PARALLEL_TESTS:-2}" \
