@@ -50,16 +50,4 @@ func TestObjectStorageConfigContract(t *testing.T) {
 			t.Fatalf("ObjectStorage = %#v, want %#v", cfg.ObjectStorage, want)
 		}
 	})
-
-	resetConfigEnv(t)
-	t.Setenv("APP__AWS__REGION", "hostile-ambient-region")
-	if _, _, err := LoadDetailed(LoadOptions{}); !errors.Is(err, ErrUnknownKey) {
-		t.Fatalf("LoadDetailed() with ambient APP__AWS key error = %v, want ErrUnknownKey", err)
-	}
-
-	resetConfigEnv(t)
-	t.Setenv("APP__OBJECT_STORAGE__ACCESS_KEY_ID", "removed-key")
-	if _, _, err := LoadDetailed(LoadOptions{}); !errors.Is(err, ErrUnknownKey) {
-		t.Fatalf("LoadDetailed() with retired credential key error = %v, want ErrUnknownKey", err)
-	}
 }

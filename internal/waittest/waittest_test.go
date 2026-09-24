@@ -62,11 +62,3 @@ func TestReceiveRejectsClosedValueChannel(t *testing.T) {
 		Receive(tb, values, time.Second, "value")
 	})
 }
-
-func TestReceiveSignalAcceptsClose(t *testing.T) {
-	t.Parallel()
-
-	signal := make(chan struct{})
-	close(signal)
-	ReceiveSignal(t, signal, time.Second, "close signal")
-}

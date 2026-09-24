@@ -3,9 +3,8 @@ package outboundtrust
 
 import "net/netip"
 
-// ianaSpecialPurposeRegistryRevision pins both special-purpose registries used
-// below. Update the corpus with the revision, never the date alone.
-const ianaSpecialPurposeRegistryRevision = "2025-10-09"
+// The prefixes below reflect the IANA IPv4 and IPv6 special-purpose address
+// registries as of 2025-10-09. Update the corpus and revision together.
 
 var (
 	nonPublicIPv4Prefixes = [...]netip.Prefix{

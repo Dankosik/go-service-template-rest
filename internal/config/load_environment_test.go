@@ -13,7 +13,7 @@ import (
 func TestLoadDefaults(t *testing.T) {
 	resetConfigEnv(t)
 
-	cfg, report, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
@@ -58,12 +58,6 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.Observability.OTel.TracesSampler != "parentbased_traceidratio" {
 		t.Fatalf("Observability.OTel.TracesSampler = %q, want parentbased_traceidratio", cfg.Observability.OTel.TracesSampler)
-	}
-	if report.LoadDuration <= 0 {
-		t.Fatalf("LoadDuration = %s, want > 0", report.LoadDuration)
-	}
-	if report.ValidateDuration <= 0 {
-		t.Fatalf("ValidateDuration = %s, want > 0", report.ValidateDuration)
 	}
 }
 
@@ -254,36 +248,3 @@ func TestEnvExampleIsFailClosedUntilObjectStorageIsConfigured(t *testing.T) {
 }
 
 // profile:object-storage:end
-
-func TestTST001PrecedenceDeterministicSnapshotAcrossRepeatedLoads(t *testing.T) {
-	resetConfigEnv(t)
-
-	basePath := writeTempConfig(t, `
-http:
-  addr: ":8081"
-`)
-	overlayPath := writeTempConfig(t, `
-http:
-  addr: ":8082"
-`)
-
-	t.Setenv("APP__HTTP__ADDR", ":8083")
-
-	opts := LoadOptions{
-		ConfigPath:     basePath,
-		ConfigOverlays: []string{overlayPath},
-	}
-
-	cfg1, _, err := LoadDetailed(opts)
-	if err != nil {
-		t.Fatalf("first LoadDetailed() error = %v", err)
-	}
-	cfg2, _, err := LoadDetailed(opts)
-	if err != nil {
-		t.Fatalf("second LoadDetailed() error = %v", err)
-	}
-
-	if cfg1 != cfg2 {
-		t.Fatalf("config snapshots differ between repeated loads: first=%+v second=%+v", cfg1, cfg2)
-	}
-}

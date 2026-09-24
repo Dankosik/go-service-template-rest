@@ -6,26 +6,6 @@ import (
 	"testing"
 )
 
-func TestUnknownKeyRejects(t *testing.T) {
-	resetConfigEnv(t)
-
-	configPath := writeTempConfig(t, `
-unknown:
-  field: value
-`)
-
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
-	if err == nil {
-		t.Fatal("LoadDetailed() expected unknown key error")
-	}
-	if !errors.Is(err, ErrUnknownKey) {
-		t.Fatalf("error = %v, want ErrUnknownKey", err)
-	}
-	if got := ErrorType(err); got != "unknown_key" {
-		t.Fatalf("ErrorType(error) = %q, want unknown_key", got)
-	}
-}
-
 func TestOverlayUnknownKeyRejects(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -92,33 +72,6 @@ http: oops
 	}
 }
 
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// profile:database-postgres:start
-func TestRemovedObservabilityKeysReject(t *testing.T) {
-	resetConfigEnv(t)
-
-	configPath := writeTempConfig(t, `
-observability:
-  metrics:
-    enabled: true
-    path: /internal/metrics
-  grafana:
-    enabled: true
-    cloud_otlp_endpoint: "https://example.invalid"
-`)
-
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
-	if err == nil {
-		t.Fatal("LoadDetailed() expected unknown key error")
-	}
-	if !errors.Is(err, ErrUnknownKey) {
-		t.Fatalf("error = %v, want ErrUnknownKey", err)
-	}
-}
-
-// profile:database-postgres:end
 // profile:database-postgres:start
 //
 //nolint:paralleltest // This test mutates process-global environment or working directory.

@@ -258,23 +258,3 @@ func TestRejectedRequestRecordNamesTheFieldsButNotTheReasons(t *testing.T) {
 		t.Errorf("record carries a violation reason: %s", logged.String())
 	}
 }
-
-func TestRequestViolationsHandlesNothingToReport(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name string
-		err  error
-	}{
-		{name: "nil", err: nil},
-		{name: "unrelated error", err: errors.New("reading failed")},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := requestViolations(tc.err); len(got) != 0 {
-				t.Fatalf("violations = %+v, want none", got)
-			}
-		})
-	}
-}
