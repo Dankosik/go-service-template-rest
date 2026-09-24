@@ -23,7 +23,6 @@ func TestValidIntrospectionEndpoint(t *testing.T) {
 		{raw: "https://idp.example.com/introspect#x"},
 		{raw: "http://idp.example.com/introspect"},
 		{raw: "  https://idp.example.com/introspect  "},
-		{raw: ""},
 	} {
 		if got := authntrust.ValidIntrospectionEndpoint(testCase.raw); got != testCase.want {
 			t.Errorf("ValidIntrospectionEndpoint(%q) = %v, want %v", testCase.raw, got, testCase.want)

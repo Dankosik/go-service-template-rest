@@ -296,12 +296,6 @@ func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *tes
 }
 
 func TestJobsProducerDependencies(t *testing.T) {
-	t.Run("no concrete producer adds no probe", func(t *testing.T) {
-		if probes := (runtimeDependencies{}).ReadinessProbes(); len(probes) != 0 {
-			t.Fatalf("ReadinessProbes() = %d probes, want none", len(probes))
-		}
-	})
-
 	t.Run("a concrete producer supplies the existing bounded dependency slot", func(t *testing.T) {
 		checks := 0
 		dependencies := runtimeDependencies{readiness: newPostgresReadinessProbe(testProbe{

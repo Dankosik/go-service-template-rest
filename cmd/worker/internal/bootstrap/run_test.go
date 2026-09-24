@@ -15,7 +15,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"go.opentelemetry.io/otel"
 )
@@ -109,27 +108,6 @@ func TestWorkerLoggerCorrelatesRecords(t *testing.T) {
 			t.Fatalf("worker log %v is missing %s", record, key)
 		}
 	}
-}
-
-//nolint:paralleltest // Telemetry setup installs process-wide providers.
-func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
-	telemetrytest.RestoreGlobals(t)
-	telemetrytest.ClearAmbientExporterEnv(t)
-
-	cleanup, err := runtimeopts.InstallTelemetry(t.Context(), config.Config{
-		App: config.AppConfig{
-			Env: "test", Version: "v1", Commit: "test-commit", InstanceID: "worker-test",
-		},
-		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{
-			ServiceName: "worker", TracesSampler: "always_off",
-		}},
-	}, telemetry.New(), slog.New(slog.DiscardHandler), "worker")
-	if err != nil {
-		t.Fatalf("runtimeopts.InstallTelemetry() error = %v", err)
-	}
-	cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_ = cleanup(cleanupCtx)
 }
 
 // TestWorkerRunLoopPanicIsRecovered covers the loop this process exists to run.

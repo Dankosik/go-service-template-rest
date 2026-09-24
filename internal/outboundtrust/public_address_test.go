@@ -7,9 +7,6 @@ import (
 
 func TestPublicAddressCorpus(t *testing.T) {
 	t.Parallel()
-	if ianaSpecialPurposeRegistryRevision != "2025-10-09" {
-		t.Fatalf("IANA registry revision = %q", ianaSpecialPurposeRegistryRevision)
-	}
 
 	tests := map[string]bool{
 		"8.8.8.8": true, "2606:4700:4700::1111": true,

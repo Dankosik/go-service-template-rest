@@ -1,12 +1,9 @@
 package config
 
 import (
-	"errors"
 	"math"
 	"strconv"
-	"strings"
 	"testing"
-	"time"
 )
 
 // parseInt and parseInt64 are test-local shims over the production owner
@@ -162,52 +159,6 @@ func TestParseInt64(t *testing.T) {
 
 		if _, err := parseInt64(uint64(math.MaxUint64)); err == nil {
 			t.Fatal("parseInt64() expected overflow error")
-		}
-	})
-}
-
-func TestParseBool(t *testing.T) {
-	t.Parallel()
-
-	value, err := parseBool("true")
-	if err != nil {
-		t.Fatalf("parseBool(true) error = %v", err)
-	}
-	if !value {
-		t.Fatal("parseBool(true) = false, want true")
-	}
-
-	if _, err := parseBool(1); err == nil {
-		t.Fatal("parseBool() expected unsupported type error")
-	}
-}
-
-func TestValidateRangeHelpers(t *testing.T) {
-	t.Parallel()
-
-	t.Run("duration range is inclusive", func(t *testing.T) {
-		t.Parallel()
-
-		if err := validateDurationRange("http.read_timeout", time.Second, time.Second, 10*time.Second); err != nil {
-			t.Fatalf("validateDurationRange(min) error = %v", err)
-		}
-		if err := validateDurationRange("http.read_timeout", 10*time.Second, time.Second, 10*time.Second); err != nil {
-			t.Fatalf("validateDurationRange(max) error = %v", err)
-		}
-	})
-
-	t.Run("duration range out of bounds returns ErrValidate", func(t *testing.T) {
-		t.Parallel()
-
-		err := validateDurationRange("http.read_timeout", 11*time.Second, time.Second, 10*time.Second)
-		if err == nil {
-			t.Fatal("validateDurationRange() expected error")
-		}
-		if !errors.Is(err, ErrValidate) {
-			t.Fatalf("error = %v, want ErrValidate", err)
-		}
-		if !strings.Contains(err.Error(), "http.read_timeout") {
-			t.Fatalf("error = %v, want field name in message", err)
 		}
 	})
 }

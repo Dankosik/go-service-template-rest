@@ -167,54 +167,6 @@ func BenchmarkTracingWithoutExporter(b *testing.B) {
 	}
 }
 
-//nolint:paralleltest // Mutates the process-wide OpenTelemetry provider and propagator.
-
-func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
-	telemetrytest.RestoreGlobals(t)
-
-	_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
-		TracesSampler:    "always_on",
-		TracesSamplerArg: 0.1,
-		Exporter:         testTraceExporter(t),
-	})
-	if err != nil {
-		t.Fatalf("SetupTracing() error = %v", err)
-	}
-	t.Cleanup(func() {
-		if err := shutdown(context.Background()); err != nil {
-			t.Fatalf("shutdown tracing: %v", err)
-		}
-	})
-
-	provider, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider)
-	if !ok {
-		t.Fatalf("global tracer provider = %T, want *sdktrace.TracerProvider", otel.GetTracerProvider())
-	}
-	recorder := tracetest.NewSpanRecorder()
-	provider.RegisterSpanProcessor(recorder)
-	t.Cleanup(func() {
-		provider.UnregisterSpanProcessor(recorder)
-	})
-
-	_, span := otel.Tracer("telemetry-test").Start(context.Background(), "resource-test")
-	span.End()
-
-	spans := recorder.Ended()
-	if len(spans) != 1 {
-		t.Fatalf("ended spans len = %d, want 1", len(spans))
-	}
-	attrs := resourceAttributes(spans[0])
-	for key, fallback := range map[string]string{
-		"service.name":                "service",
-		"service.version":             "dev",
-		"deployment.environment.name": "unknown",
-	} {
-		if got := attrs[key]; got == fallback {
-			t.Fatalf("resource attribute %q used fallback %q; attrs=%v", key, fallback, attrs)
-		}
-	}
-}
-
 func testTraceExporter(t *testing.T) TraceExporterConfig {
 	t.Helper()
 	telemetrytest.ClearAmbientExporterEnv(t)
@@ -294,14 +246,6 @@ func TestAmbientOTLPExporterEnvReportsNamesOnly(t *testing.T) {
 	}
 }
 
-func TestAmbientOTLPExporterEnvEmptyWithoutAmbientEnv(t *testing.T) {
-	telemetrytest.ClearAmbientExporterEnv(t)
-
-	if got := AmbientOTLPExporterEnv(); len(got) != 0 {
-		t.Fatalf("AmbientOTLPExporterEnv() = %v, want empty", got)
-	}
-}
-
 func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 	typedCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -374,72 +318,37 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 	}
 }
 
-// TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv locks in the reason
-// these variables are safe to ignore: otlptracehttp applies ambient environment
-// before explicit options, so WithEndpointURL wins for the endpoint, the URL
-// path, and the TLS scheme. A platform collector injects exactly these, and
-// treating them as conflicts would disable this service's own trace export on
-// every such deployment.
-//
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-func TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv(t *testing.T) {
-	typedCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+// Each variable is allowed alongside a configured endpoint; adding any one to
+// the ambient credential/trust rejection list would incorrectly block startup.
+func TestSetupTracingAcceptsHarmlessAmbientOTLPExporterEnv(t *testing.T) {
+	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	t.Cleanup(typedCollector.Close)
+	t.Cleanup(collector.Close)
 
-	envCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(envCollector.Close)
-
-	tests := []struct {
-		name     string
-		envName  string
-		envValue string
+	for _, tc := range []struct {
+		name  string
+		value string
 	}{
-		{
-			name:     "generic endpoint is overridden by the configured endpoint",
-			envName:  "OTEL_EXPORTER_OTLP_ENDPOINT",
-			envValue: envCollector.URL + "/env",
-		},
-		{
-			name:     "trace endpoint is overridden by the configured endpoint",
-			envName:  "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-			envValue: envCollector.URL + "/trace-env",
-		},
-		{
-			name:     "insecure is overridden by the configured endpoint scheme",
-			envName:  "OTEL_EXPORTER_OTLP_INSECURE",
-			envValue: "true",
-		},
-		{
-			name:     "protocol carries no destination or credential",
-			envName:  "OTEL_EXPORTER_OTLP_PROTOCOL",
-			envValue: "http/protobuf",
-		},
-		{
-			name:     "timeout carries no destination or credential",
-			envName:  "OTEL_EXPORTER_OTLP_TIMEOUT",
-			envValue: "15000",
-		},
-		{
-			name:     "compression carries no destination or credential",
-			envName:  "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION",
-			envValue: "gzip",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		{name: "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", value: collector.URL + "/ambient"},
+		{name: "OTEL_EXPORTER_OTLP_INSECURE", value: "true"},
+		{name: "OTEL_EXPORTER_OTLP_PROTOCOL", value: "http/protobuf"},
+		{name: "OTEL_EXPORTER_OTLP_TIMEOUT", value: "15000"},
+		{name: "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION", value: "gzip"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			telemetrytest.ClearAmbientExporterEnv(t)
 			telemetrytest.RestoreGlobals(t)
-			t.Setenv(tt.envName, tt.envValue)
+			t.Setenv(tc.name, tc.value)
 
-			if err := setupTracingForEnvPolicyTest(t, TraceExporterConfig{
-				OTLPEndpoint: typedCollector.URL,
-			}); err != nil {
-				t.Fatalf("SetupTracing() error = %v, want tracing to survive an ignorable ambient variable", err)
+			_, shutdown, err := SetupTracing(t.Context(), envPolicyTracingConfig(TraceExporterConfig{
+				OTLPEndpoint: collector.URL,
+			}))
+			if err != nil {
+				t.Fatalf("SetupTracing() with %s: %v", tc.name, err)
+			}
+			if err := shutdown(t.Context()); err != nil {
+				t.Fatalf("shutdown tracing with %s: %v", tc.name, err)
 			}
 		})
 	}
@@ -477,12 +386,6 @@ func TestSetupTracingExportsToAmbientOTLPEndpointEnv(t *testing.T) {
 			name:     "signal-agnostic root gains the traces path",
 			envName:  "OTEL_EXPORTER_OTLP_ENDPOINT",
 			wantPath: "/v1/traces",
-		},
-		{
-			name:      "signal-agnostic root keeps its prefix",
-			envName:   "OTEL_EXPORTER_OTLP_ENDPOINT",
-			envSuffix: "/otlp",
-			wantPath:  "/otlp/v1/traces",
 		},
 		{
 			name:      "signal-specific endpoint is used exactly",

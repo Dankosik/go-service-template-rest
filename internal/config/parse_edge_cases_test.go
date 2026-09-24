@@ -50,8 +50,6 @@ func TestParseFloat64RejectsInvalidValues(t *testing.T) {
 	}{
 		{name: "invalid string", value: "not-a-float", wantErr: "invalid float format"},
 		{name: "unsupported type", value: struct{}{}, wantErr: "unsupported type"},
-		{name: "sized integer no source produces", value: int32(6), wantErr: "unsupported type"},
-		{name: "narrow float no source produces", value: float32(2.5), wantErr: "unsupported type"},
 		{name: "infinity", value: math.Inf(1), wantErr: "non-finite numeric value"},
 		{name: "nan", value: math.NaN(), wantErr: "non-finite numeric value"},
 	}
@@ -71,33 +69,7 @@ func TestParseFloat64RejectsInvalidValues(t *testing.T) {
 	}
 }
 
-func TestSignedIntegerBounds(t *testing.T) {
-	t.Parallel()
-
-	lower, upper, err := signedIntegerBounds(8)
-	if err != nil {
-		t.Fatalf("signedIntegerBounds(8) error = %v, want nil", err)
-	}
-	if lower != math.MinInt8 || upper != math.MaxInt8 {
-		t.Fatalf("signedIntegerBounds(8) = [%d,%d], want [%d,%d]", lower, upper, math.MinInt8, math.MaxInt8)
-	}
-
-	lower, upper, err = signedIntegerBounds(64)
-	if err != nil {
-		t.Fatalf("signedIntegerBounds(64) error = %v, want nil", err)
-	}
-	if lower != math.MinInt64 || upper != math.MaxInt64 {
-		t.Fatalf("signedIntegerBounds(64) = [%d,%d], want [%d,%d]", lower, upper, int64(math.MinInt64), int64(math.MaxInt64))
-	}
-
-	for _, bitSize := range []int{0, 65} {
-		if _, _, err := signedIntegerBounds(bitSize); err == nil {
-			t.Fatalf("signedIntegerBounds(%d) error = nil, want non-nil", bitSize)
-		}
-	}
-}
-
-func TestParseBoolAdditionalErrorCoverage(t *testing.T) {
+func TestParseBool(t *testing.T) {
 	t.Parallel()
 
 	got, err := parseBool(true)

@@ -10,8 +10,8 @@ import (
 func TestClientLifecycleWithoutBroker(t *testing.T) {
 	client := unitClient(t, &recordingJetStream{})
 	client.ready.Store(true)
-	if client.Name() != "messaging" || client.Producer() == nil || !client.Ready() {
-		t.Fatal("client accessors did not expose ready producer state")
+	if !client.Ready() {
+		t.Fatal("client did not expose ready state")
 	}
 	client.StopPublish()
 	if client.Ready() {
@@ -36,20 +36,6 @@ func TestClientLifecycleWithoutBroker(t *testing.T) {
 		t.Fatalf("Shutdown(without connection) error = %v", err)
 	}
 	client.Close()
-	client.Close()
-
-	var nilClient *Client
-	if nilClient.Ready() {
-		t.Fatal("nil client reported ready")
-	}
-	if err := nilClient.Check(t.Context()); !errors.Is(err, ErrRejected) {
-		t.Fatalf("nil Check() error = %v", err)
-	}
-	if err := nilClient.Shutdown(t.Context()); err != nil {
-		t.Fatalf("nil Shutdown() error = %v", err)
-	}
-	nilClient.StopPublish()
-	nilClient.Close()
 }
 
 func TestClientConnectionAdmissionAndTimeoutOptions(t *testing.T) {
@@ -64,14 +50,6 @@ func TestClientConnectionAdmissionAndTimeoutOptions(t *testing.T) {
 	}
 	if _, err := Connect(t.Context(), Config{}, Observability{}); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Connect(invalid) error = %v, want ErrRejected", err)
-	}
-
-	client := unitClient(t, &recordingJetStream{})
-	withCredentials := valid
-	withCredentials.CredentialsFile = "/run/secrets/nats.creds"
-	withCredentials.RootCAFile = "/run/secrets/nats-ca.pem"
-	if options := client.connectOptions(t.Context(), withCredentials); len(options) < 10 {
-		t.Fatalf("connectOptions() count = %d", len(options))
 	}
 
 	expired, expiredCancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))

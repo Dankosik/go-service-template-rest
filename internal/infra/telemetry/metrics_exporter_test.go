@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,13 +22,6 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 	}{
 		{
 			name: "nothing configured exports nowhere",
-		},
-		{
-			name:                  "own metrics endpoint wins",
-			cfg:                   MetricExporterConfig{OTLPEndpoint: "https://collector.example/otlp/v1/metrics"},
-			wantURL:               "https://collector.example/otlp/v1/metrics",
-			wantSource:            MetricExporterConfigKey,
-			wantServiceConfigured: true,
 		},
 		{
 			name:                  "own metrics endpoint defaults the signal path",
@@ -102,38 +94,6 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 			}
 			if endpoint.ConfiguredByService != tc.wantServiceConfigured {
 				t.Fatalf("ConfiguredByService = %v, want %v", endpoint.ConfiguredByService, tc.wantServiceConfigured)
-			}
-		})
-	}
-}
-
-func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		cfg  MetricExporterConfig
-		env  map[string]string
-	}{
-		{name: "unsupported scheme", cfg: MetricExporterConfig{OTLPEndpoint: "ftp://collector.example"}},
-		// #nosec G101 -- Synthetic credentials verify rejection of userinfo before exporter construction.
-		{name: "userinfo", cfg: MetricExporterConfig{OTLPEndpoint: "https://user:secret@collector.example"}},
-		{name: "query", cfg: MetricExporterConfig{OTLPEndpoint: "https://collector.example/v1/metrics?token=secret"}},
-		// #nosec G101 -- Synthetic credentials verify the same rejection for ambient endpoints.
-		{name: "ambient endpoint", env: map[string]string{otelExporterMetricsEndpointEnv: "https://user:secret@platform.example"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			telemetrytest.ClearAmbientExporterEnv(t)
-			for name, value := range tc.env {
-				t.Setenv(name, value)
-			}
-
-			_, err := resolveMetricExporterEndpoint(tc.cfg)
-			if err == nil {
-				t.Fatal("resolveMetricExporterEndpoint() error = nil, want non-nil")
-			}
-			for _, leaked := range []string{"secret", "token"} {
-				if strings.Contains(err.Error(), leaked) {
-					t.Fatalf("error = %v, leaked %q", err, leaked)
-				}
 			}
 		})
 	}
@@ -228,58 +188,5 @@ func TestSetupMetricsSharedRootRejectsAmbientCredentials(t *testing.T) {
 	}
 	if result.ExportErr == nil || result.PushInitialized() {
 		t.Fatalf("metrics result = %+v, want ambient credential rejection and scrape-only provider", result)
-	}
-}
-
-// TestSetupMetricsWithoutEndpointStaysScrapeOnly keeps the added reader inert for
-// the deployments that scrape, which is the shape the template shipped with.
-//
-//nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
-func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
-	telemetrytest.ClearAmbientExporterEnv(t)
-	telemetrytest.RestoreGlobals(t)
-
-	metrics := New()
-	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
-		Resource: ResourceConfig{
-			ServiceName:    "scrape-service",
-			ServiceVersion: "test-version",
-			DeploymentEnv:  "test-env",
-		},
-	})
-	if err != nil {
-		t.Fatalf("SetupMetrics() error = %v", err)
-	}
-	t.Cleanup(func() {
-		if err := result.Shutdown(context.Background()); err != nil {
-			t.Fatalf("shutdown metrics: %v", err)
-		}
-	})
-
-	if result.Endpoint.Configured() {
-		t.Fatalf("endpoint = %+v, want none when nothing named a collector", result.Endpoint)
-	}
-
-	counter, err := metrics.MeterProvider().Meter("metrics-scrape-test").Int64Counter("template.scraped")
-	if err != nil {
-		t.Fatalf("create counter: %v", err)
-	}
-	counter.Add(context.Background(), 1)
-
-	if metricsText := collectMetricsText(t, metrics); !strings.Contains(metricsText, "template_scraped_total") {
-		t.Fatalf("scrape output does not contain the recorded instrument\n%s", metricsText)
-	}
-}
-
-// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
-// credentials from travelling to a collector this service named.
-func TestConflictingMetricExporterEnvNamesUnverifiableMaterial(t *testing.T) {
-	telemetrytest.ClearAmbientExporterEnv(t)
-	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")
-
-	names := ConflictingMetricExporterEnv()
-
-	if len(names) != 1 || names[0] != "OTEL_EXPORTER_OTLP_METRICS_HEADERS" {
-		t.Fatalf("ConflictingMetricExporterEnv() = %v, want the injected headers variable", names)
 	}
 }

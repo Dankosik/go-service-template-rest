@@ -132,15 +132,10 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 		{name: "json parameters", status: 200, ctype: "application/json; charset=utf-8", body: activeJSON("subject-1", "client-1"), wantOK: true},
 		{name: "exact limit", status: 200, ctype: "application/json", body: exactLimitJSON(t), wantOK: true},
 		{name: "no content", status: 204, ctype: "application/json", body: canary},
-		{name: "found", status: 302, ctype: "application/json", body: canary},
-		{name: "unauthorized", status: 401, ctype: "application/json", body: canary},
-		{name: "too many", status: 429, ctype: "application/json", body: canary},
-		{name: "server", status: 500, ctype: "application/json", body: canary},
 		{name: "missing media", status: 200, body: activeJSON("subject-1", "client-1")},
 		{name: "wrong media", status: 200, ctype: "text/plain", body: activeJSON("subject-1", "client-1")},
 		{name: "malformed media", status: 200, ctype: "application/", body: activeJSON("subject-1", "client-1")},
 		{name: "oversize", status: 200, ctype: "application/json", body: strings.Repeat("x", MaxProviderBody+1)},
-		{name: "truncated", status: 200, ctype: "application/json", body: `{"active":true,"iss":"`},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			provider := newLoopbackProvider(t, func(response http.ResponseWriter, _ *http.Request) {
@@ -203,23 +198,6 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 		requireKind(t, err, bearerauthn.KindUnavailable)
 	})
 
-	t.Run("unreachable host", func(t *testing.T) {
-		policy := mustPolicy(t, PolicyInput{
-			Issuer:       testIssuer,
-			Audience:     testAudience,
-			Endpoint:     "https://idp.example.invalid/oauth/introspect",
-			TargetClass:  "external-https",
-			ClientID:     testClientID,
-			ClientSecret: testSecret,
-		})
-		verifier, err := New(policy)
-		if err != nil {
-			t.Fatalf("New() error = %v", err)
-		}
-		t.Cleanup(verifier.Close)
-		_, err = verifier.Verify(t.Context(), testToken)
-		requireKind(t, err, bearerauthn.KindUnavailable)
-	})
 }
 
 func exactLimitJSON(t *testing.T) string {

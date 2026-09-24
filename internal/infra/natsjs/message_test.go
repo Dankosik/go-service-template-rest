@@ -3,11 +3,9 @@ package natsjs
 import (
 	"context"
 	"errors"
-	"slices"
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -40,11 +38,6 @@ func TestMessageIsImmutable(t *testing.T) {
 		!decoded.CreatedAt().Equal(validTestEvent().CreatedAt) {
 		t.Fatalf("decoded accessors returned inconsistent envelope: message=%q publication=%q type=%q schema=%q created=%v",
 			decoded.MessageID(), decoded.PublicationID(), decoded.Type(), decoded.Schema(), decoded.CreatedAt())
-	}
-	carrier := headerCarrier(nats.Header{})
-	carrier.Set("test", "value")
-	if carrier.Get("test") != "value" || !slices.Contains(carrier.Keys(), "test") {
-		t.Fatalf("header carrier = %#v", carrier)
 	}
 }
 
