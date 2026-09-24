@@ -197,7 +197,6 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 		_, err := verifier.Verify(t.Context(), testToken)
 		requireKind(t, err, bearerauthn.KindUnavailable)
 	})
-
 }
 
 func exactLimitJSON(t *testing.T) string {

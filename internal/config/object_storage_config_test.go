@@ -50,5 +50,4 @@ func TestObjectStorageConfigContract(t *testing.T) {
 			t.Fatalf("ObjectStorage = %#v, want %#v", cfg.ObjectStorage, want)
 		}
 	})
-
 }

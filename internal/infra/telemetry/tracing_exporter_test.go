@@ -63,7 +63,6 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		exportOneTestSpan(t, options)
 		assertCollectorPath(t, paths, "/custom/traces")
 	})
-
 }
 
 //nolint:paralleltest // ambient env control is process-wide state.
