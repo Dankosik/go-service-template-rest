@@ -11,15 +11,21 @@ require_literal() {
 
 forbid_literal() {
 	local file=$1 literal=$2
+	[[ -f ${file} ]] || return 0
 	if grep -Fq -- "${literal}" "${file}"; then
 		printf '%s: stale contract literal: %s\n' "${file}" "${literal}" >&2
 		exit 1
 	fi
 }
 
-metrics_default=$(awk -F'"' '$2 == "observability.metrics.addr" { print $4; exit }' internal/config/observability_config.go)
-[[ -n ${metrics_default} ]] || { echo 'metrics address default is missing' >&2; exit 1; }
-require_literal docs/configuration-source-policy.md "defaults to \`${metrics_default}\`"
+# A derived repository that replaced this observability config owns its own
+# metrics defaults, so the documented default binds only where the config exists.
+observability_config=internal/config/observability_config.go
+if [[ -f ${observability_config} ]]; then
+	metrics_default=$(awk -F'"' '$2 == "observability.metrics.addr" { print $4; exit }' "${observability_config}")
+	[[ -n ${metrics_default} ]] || { echo 'metrics address default is missing' >&2; exit 1; }
+	require_literal docs/configuration-source-policy.md "defaults to \`${metrics_default}\`"
+fi
 forbid_literal docs/architecture/http.md 'Diagnostics default to'
 forbid_literal docs/first-production-feature.md 'loopback by default'
 forbid_literal docs/railway-deployment-profile.md 'default loopback bind'
@@ -50,7 +56,8 @@ if [[ -f ${client} ]]; then
 	require_literal README.md 'A fixed-authority HTTPS client with mandatory header, decoded-body, and request-concurrency ceilings'
 fi
 
-if [[ -f scripts/init-module.sh ]]; then
+# Initialized repositories keep a stale copy of the source-only initializer.
+if [[ -f scripts/init-module.sh ]] && ! grep -Fqx 'state = "complete"' template.lock 2>/dev/null; then
 	require_literal scripts/init-module.sh 'OUTBOUND_HTTP must be one of: none, bounded'
 fi
 if [[ -f docs/production-contract.md ]]; then
