@@ -146,6 +146,7 @@ retain their boundaries.
 | Authorized external, costly, sensitive, destructive, or irreversible action | [External Effects](docs/spec-first-workflow/shared/external-effects.md) |
 | Accepted work first enters another checkout | [Repository Boundaries](docs/spec-first-workflow/shared/repository-boundaries.md) |
 | Repository boundary or generated-source ownership changes, or a new contract capability, integration adapter or outbound target, persistence or durable flow, durable schema, or executable entry point is added | [Repository Architecture](docs/repo-architecture.md) |
+| A task reads, changes, or analyses a relational database schema, or writes a migration | [Database Schema](docs/database-schema.md) |
 | Proof spans several surfaces or needs a specialized command branch | [Validation Routing](docs/validation-routing.md) |
 | A prompt for another agent, session, phase, or native entry skill must be written | [Prompt Composition](docs/prompt-composition.md) |
 | Instructions, tools, roles, or skills change | [Prompt Maintenance](docs/prompt-maintenance.md); also [Skill Authoring](docs/skill-authoring.md) for skills |

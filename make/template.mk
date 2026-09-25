@@ -116,7 +116,7 @@ TEMPLATE ?= ../go-service-template-rest
 .PHONY: run-outbox-relay build-outbox-relay test-outbox-race
 .PHONY: run-jobs-worker build-jobs-worker
 .PHONY: test-webhook-race
-.PHONY: sqlc-generate migration-history-check migration-check migration-validate compose-up compose-down
+.PHONY: sqlc-generate migration-history-check migration-check migration-validate compose-up compose-down db-up db-down
 
 help:
 	@echo "Setup and everyday development:"
@@ -134,6 +134,7 @@ help:
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt committed template instructions"
 	@echo "  make run"
+	@echo "  make db-up | db-down                      # local PostgreSQL with migrations; docs/database-schema.md"
 	@echo "  make benchmark-capture | benchmark-compare | benchmark-http"
 	@echo "  make pgo-manifest | build-pgo PGO_PROFILE=<cpu.pprof>"
 	@echo "  make run-worker or make build-worker"
@@ -790,6 +791,27 @@ compose-up:
 
 compose-down:
 	@if [ ! -f env/docker-compose.yml ]; then echo "not applicable: no compose environment"; else docker compose -f env/docker-compose.yml down -v; fi
+
+# A per-service project keeps instances of different repositories apart; port 0
+# lets Docker pick a free host port unless POSTGRES_PORT is set.
+DB_COMPOSE = docker compose -p $(SERVICE_NAME)-db -f env/docker-compose.yml
+
+db-up:
+	@if [ ! -f env/docker-compose.yml ] || [ ! -d "$(MIGRATION_DIR)" ]; then \
+		echo "not applicable: no compose environment or migration directory"; exit 0; \
+	fi; \
+	POSTGRES_PORT=$${POSTGRES_PORT:-0} $(DB_COMPOSE) up -d --wait postgres && \
+	port=$$($(DB_COMPOSE) port postgres 5432 | sed 's/.*://') && \
+	dsn="postgres://app:app@localhost:$${port}/app?sslmode=disable" && \
+	case "$(MIGRATION_ENGINE)" in \
+		goose) $(GO) tool -modfile=tools/go.mod goose -env=none -dir "$(MIGRATION_DIR)" postgres "$${dsn}" up ;; \
+		golang-migrate) $(GO) run -mod=readonly -tags=postgres github.com/golang-migrate/migrate/v4/cmd/migrate -path "$(MIGRATION_DIR)" -database "$${dsn}" up ;; \
+		*) echo "unsupported migration engine: $(MIGRATION_ENGINE)" >&2; exit 2 ;; \
+	esac && \
+	printf 'database: %s\npsql:     %s exec -T postgres psql -U app -d app\nstop:     make db-down\n' "$${dsn}" '$(DB_COMPOSE)'
+
+db-down:
+	@if [ ! -f env/docker-compose.yml ]; then echo "not applicable: no compose environment"; else $(DB_COMPOSE) down -v; fi
 
 vendor:
 	go mod vendor
