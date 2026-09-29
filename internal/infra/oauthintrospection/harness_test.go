@@ -65,13 +65,9 @@ func mustPolicy(t *testing.T, input PolicyInput) Policy {
 	return policy
 }
 
-func activeJSON(clientID string) string {
-	body := `{"active":true,"iss":"` + testIssuer + `","aud":"` + testAudience +
-		`","exp":` + strconv.FormatInt(testNow.Add(time.Hour).Unix(), 10) + `,"sub":"subject-1"`
-	if clientID != "" {
-		body += `,"client_id":"` + clientID + `"`
-	}
-	return body + `}`
+func activeJSON() string {
+	return `{"active":true,"iss":"` + testIssuer + `","aud":"` + testAudience +
+		`","exp":` + strconv.FormatInt(testNow.Add(time.Hour).Unix(), 10) + `,"sub":"subject-1","client_id":"client-1"}`
 }
 
 func newLoopbackProvider(t *testing.T, handler http.HandlerFunc) *loopbackProvider {
@@ -103,7 +99,7 @@ func newLoopbackProvider(t *testing.T, handler http.HandlerFunc) *loopbackProvid
 			return
 		}
 		response.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(response, activeJSON("client-1"))
+		_, _ = io.WriteString(response, activeJSON())
 	}))
 	server.StartTLS()
 	t.Cleanup(server.Close)

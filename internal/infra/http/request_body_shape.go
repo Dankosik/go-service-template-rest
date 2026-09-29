@@ -91,11 +91,8 @@ func compileBodyShape(ref *openapi3.SchemaRef, depth int) (*bodyShape, bool) {
 		return nil, false
 	}
 	schema := ref.Value
-	fields := reflect.ValueOf(schema).Elem()
-	for i := range fields.NumField() {
-		if !structuralSchemaFields[fields.Type().Field(i).Name] && !fields.Field(i).IsZero() {
-			return nil, false
-		}
+	if !hasOnlyStructuralFields(schema) {
+		return nil, false
 	}
 	if schema.Type == nil || len(*schema.Type) != 1 {
 		return nil, false
@@ -137,6 +134,16 @@ func compileBodyShape(ref *openapi3.SchemaRef, depth int) (*bodyShape, bool) {
 		return nil, false
 	}
 	return shape, true
+}
+
+func hasOnlyStructuralFields(schema *openapi3.Schema) bool {
+	fields := reflect.ValueOf(schema).Elem()
+	for i := range fields.NumField() {
+		if !structuralSchemaFields[fields.Type().Field(i).Name] && !fields.Field(i).IsZero() {
+			return false
+		}
+	}
+	return true
 }
 
 func compileObjectShape(shape *bodyShape, schema *openapi3.Schema, depth int) bool {
