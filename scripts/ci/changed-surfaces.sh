@@ -442,13 +442,13 @@ self_test() {
 		scratch=$(mktemp -d)
 		trap 'rm -rf -- "${scratch}"' EXIT
 		cd "${scratch}"
-		# The profile name is a printf argument so this script carries no
-		# marker itself: scripts/ci is inside the initializer's render scope.
+		# The marker keyword and profile name are printf arguments so this
+		# template-owned script carries no renderable Markdown marker itself.
 		marker_profile=grpc
 		git init -q
 		printf 'package x\n\n// profile:%s:start\nvar _ = 1\n\n// profile:%s:end\n' "${marker_profile}" "${marker_profile}" >marked.go
 		printf 'package x\n' >plain.go
-		printf '# Doc\n\n<!-- profile:%s:start -->\nprose\n<!-- profile:%s:end -->\n' "${marker_profile}" "${marker_profile}" >marked.md
+		printf '# Doc\n\n<!-- %s:%s:start -->\nprose\n<!-- %s:%s:end -->\n' profile "${marker_profile}" profile "${marker_profile}" >marked.md
 		git add -A
 		git -c user.name=self-test -c user.email=self-test@example.invalid commit -qm base
 		output="$(printf '%s\n' marked.go | classify)"
@@ -461,7 +461,7 @@ self_test() {
 		printf 'package x\n' >marked.go
 		output="$(printf '%s\n' marked.go | classify)"
 		has_line "${output}" 'module_initializer=true'
-		printf '# Doc\n\n<!-- profile:%s:start -->\nnew prose\n<!-- profile:%s:end -->\n' "${marker_profile}" "${marker_profile}" >marked.md
+		printf '# Doc\n\n<!-- %s:%s:start -->\nnew prose\n<!-- %s:%s:end -->\n' profile "${marker_profile}" profile "${marker_profile}" >marked.md
 		output="$(printf '%s\n' marked.md | classify)"
 		has_line "${output}" 'module_initializer=false'
 		printf '# Doc\n\nprose\n' >marked.md
