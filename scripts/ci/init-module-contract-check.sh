@@ -27,6 +27,9 @@ if [[ ${1:-} == --list-profiles ]]; then
 fi
 
 if [[ ${1:-} == --select-from-files ]]; then
+	# The optional base lets a change that deletes a marked file, or its
+	# markers, still select the profiles those markers belong to.
+	base=${2:-}
 	engine=false
 	selected=' '
 	add_selected() {
@@ -35,11 +38,40 @@ if [[ ${1:-} == --select-from-files ]]; then
 		esac
 		selected+=" $1 "
 	}
+	marker_names() {
+		{
+			if [[ -f $1 ]]; then cat -- "$1"; fi
+			if [[ -n ${base} ]]; then git show "${base}:$1" 2>/dev/null || true; fi
+		} | grep -oE 'profile:[a-z0-9-]+:start' | sed -e 's/^profile://' -e 's/:start$//' | sort -u || true
+	}
+	# A changed file's markers select the canonical profile that keeps each
+	# block; minimal already renders every block removed. An unknown marker
+	# falls back to the engine set.
+	select_marker_profiles() {
+		local marker
+		while IFS= read -r marker; do
+			case "${marker}" in
+			authn-bearer | authn-oidc-jwt | grpc) add_selected oidc-jwt ;;
+			authn-oidc-introspection) add_selected oidc-introspection ;;
+			database-postgres) add_selected postgres ;;
+			http-idempotency-postgres) add_selected http-idempotency ;;
+			jobs-postgres) add_selected jobs ;;
+			webhooks-durable) add_selected webhooks ;;
+			inbound-webhooks-standard) add_selected inbound-webhooks ;;
+			outbox-postgres) add_selected outbox ;;
+			messaging-nats-jetstream) add_selected messaging ;;
+			object-storage) add_selected object-storage ;;
+			outbound-auth-*) add_selected outbound-auth ;;
+			*) engine=true ;;
+			esac
+		done < <(marker_names "$1")
+	}
 	while IFS= read -r file; do
 		[[ -n ${file} ]] || continue
 		case "${file}" in
 		scripts/init-module.sh | scripts/ci/init-module-contract-check.sh | scripts/ci/template-init-check.sh | template-owned.paths | template.lock | env/.env.example | env/config/*)
 			engine=true
+			continue
 			;;
 		scripts/profiles/authn-oidc-introspection* | *oauthintrospection*)
 			add_selected oidc-introspection
@@ -76,13 +108,17 @@ if [[ ${1:-} == --select-from-files ]]; then
 			add_selected outbound-auth
 			;;
 		esac
+		select_marker_profiles "${file}"
 	done
+	# An engine change, or one no profile claims, adds the engine set to
+	# whatever the changed files selected.
 	if [[ ${engine} == true || ${selected} == ' ' ]]; then
-		printf '%s\n' minimal oidc-jwt postgres outbound-auth
-	else
-		# shellcheck disable=SC2086
-		printf '%s\n' minimal ${selected} | awk 'NF'
+		add_selected oidc-jwt
+		add_selected postgres
+		add_selected outbound-auth
 	fi
+	# shellcheck disable=SC2086
+	printf '%s\n' minimal ${selected} | awk 'NF'
 	exit 0
 fi
 
