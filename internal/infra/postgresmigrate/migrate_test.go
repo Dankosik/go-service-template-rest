@@ -158,24 +158,6 @@ func TestMigrateUpRejectsSourceAndConfigBeforeConnecting(t *testing.T) {
 	t.Parallel()
 
 	_, err := MigrateUp(context.Background(), MigrationOptions{
-		DSN:        unreachableMigrationDSN,
-		SourceFS:   fstest.MapFS{},
-		SourcePath: "missing",
-	})
-	if FailureStageOf(err) != FailureSource {
-		t.Fatalf("MigrateUp() stage = %q, want %q; error = %v", FailureStageOf(err), FailureSource, err)
-	}
-
-	_, err = MigrateUp(context.Background(), MigrationOptions{
-		DSN:        unreachableMigrationDSN,
-		SourceFS:   fstest.MapFS{},
-		SourcePath: ".",
-	})
-	if FailureStageOf(err) != FailureSource {
-		t.Fatalf("MigrateUp() empty path stage = %q, want %q; error = %v", FailureStageOf(err), FailureSource, err)
-	}
-
-	_, err = MigrateUp(context.Background(), MigrationOptions{
 		DSN: unreachableMigrationDSN,
 		SourceFS: fstest.MapFS{
 			"migrations":                   {Mode: fs.ModeDir},

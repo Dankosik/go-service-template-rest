@@ -172,11 +172,13 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		return err
 	}
 	objectStorageClosed := false
-	defer func() {
+	closeObjectStorage := func() {
 		if !objectStorageClosed {
 			objectStorage.Close()
+			objectStorageClosed = true
 		}
-	}()
+	}
+	defer closeObjectStorage()
 	// profile:object-storage:end
 
 	// scripts/integration-init.sh (wire_run_go) inserts integration clients
@@ -197,10 +199,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 
 		runtimeCloseCtx, cancelRuntimeClose := shutdown.stage(signalCtx, dependencyCloseTimeout)
 		// profile:object-storage:start
-		if !objectStorageClosed {
-			objectStorage.Close()
-			objectStorageClosed = true
-		}
+		closeObjectStorage()
 		// profile:object-storage:end
 		dependencies.Close(runtimeCloseCtx)
 		cancelRuntimeClose()

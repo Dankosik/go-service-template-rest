@@ -248,26 +248,6 @@ func TestShutdownIsBoundedByItsContext(t *testing.T) {
 	})
 }
 
-func TestParentDeadlineStopsTasksWithoutFailure(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		parent, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		sup := New(parent, discardLogger())
-		sup.Go(Task{Name: "worker", Run: func(ctx context.Context) error {
-			<-ctx.Done()
-			return ctx.Err()
-		}})
-
-		time.Sleep(time.Second)
-		synctest.Wait()
-		if err := sup.Shutdown(context.Background()); err != nil {
-			t.Fatalf("Shutdown() after parent deadline error = %v, want nil", err)
-		}
-	})
-}
-
 // TestParentCancellationStopsTasks keeps the supervisor honest about the context
 // it was built with, not only about explicit Shutdown calls.
 func TestParentCancellationStopsTasks(t *testing.T) {

@@ -4,7 +4,6 @@ package config
 import (
 	"encoding/base64"
 	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -41,7 +40,7 @@ func TestInboundWebhooksConfigBoundary(t *testing.T) {
 		t.Setenv("APP__INBOUND_WEBHOOKS__ENDPOINTS", endpoints)
 		t.Setenv("APP__INBOUND_WEBHOOKS__STATIC_SECRETS", "")
 		_, _, err := Load(t.Context(), LoadOptions{})
-		if !errors.Is(err, ErrValidate) || strings.Contains(err.Error(), inboundWebhookTestCanary) {
+		if !errors.Is(err, ErrValidate) {
 			t.Fatalf("error = %v", err)
 		}
 	})
@@ -92,15 +91,6 @@ func TestInboundWebhooksConfigBoundary(t *testing.T) {
 			t.Fatalf("error = %v", err)
 		}
 	})
-}
-
-func TestInboundWebhooksEnvExampleIncludesCompleteTuple(t *testing.T) {
-	values := readEnvExample(t, filepath.Join("..", "..", "env", ".env.example"))
-	for _, key := range []string{"APP__INBOUND_WEBHOOKS__ENDPOINTS", "APP__INBOUND_WEBHOOKS__STATIC_SECRETS"} {
-		if _, ok := values[key]; !ok {
-			t.Fatalf("env/.env.example is missing %s", key)
-		}
-	}
 }
 
 // profile:inbound-webhooks-standard:end

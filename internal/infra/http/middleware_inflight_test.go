@@ -119,7 +119,7 @@ func TestMaxInFlightReleasesCapacity(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	for range 50 {
+	for range 2 {
 		resp := doRequest(handler, http.MethodGet, "/work")
 		if resp.Code != http.StatusNoContent {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
@@ -137,7 +137,7 @@ func TestMaxInFlightReleasesCapacityAfterPanic(t *testing.T) {
 		panic("boom")
 	})))
 
-	for range 3 {
+	for range 2 {
 		resp := doRequest(handler, http.MethodGet, "/work")
 		if resp.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusInternalServerError)

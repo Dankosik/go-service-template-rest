@@ -37,6 +37,7 @@ func Load(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
 }
 
 // profile:jobs-postgres:start
+//
 // LoadJobsWorker loads the immutable snapshot required by the jobs-worker
 // binary. It validates only the sections that binary consumes.
 func LoadJobsWorker(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {

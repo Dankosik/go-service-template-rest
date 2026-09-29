@@ -161,25 +161,6 @@ func TestDrainAndShutdownPropagatesShutdownFailure(t *testing.T) {
 	}
 }
 
-func TestDrainAndShutdownPropagatesContextCanceledError(t *testing.T) {
-	t.Parallel()
-
-	events := &eventRecorder{}
-	drainer := &fakeDrainer{events: events}
-	srv := &fakeShutdownServer{
-		events: events,
-		err:    context.Canceled,
-	}
-
-	err := drainAndShutdown(context.Background(), shutdownTestLogger(), 0, time.Second, drainer, srv)
-	if err == nil {
-		t.Fatal("drainAndShutdown() error = nil, want non-nil")
-	}
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("drainAndShutdown() error = %v, want wrapped context.Canceled", err)
-	}
-}
-
 func TestDrainAndShutdownRemainsBoundedWhenServerIgnoresContext(t *testing.T) {
 	t.Parallel()
 

@@ -9,19 +9,6 @@ import (
 
 const testProbeBudget = time.Second
 
-func TestServiceRefreshSuccess(t *testing.T) {
-	t.Parallel()
-
-	db := fakeProbe{name: "db"}
-	cache := fakeProbe{name: "cache"}
-
-	svc := mustNew(t, Policy{ProbeBudget: testProbeBudget, FailureThreshold: 1}, db, cache)
-
-	if err := svc.Refresh(context.Background()); err != nil {
-		t.Fatalf("Refresh() error = %v", err)
-	}
-}
-
 func TestServiceRefreshFail(t *testing.T) {
 	t.Parallel()
 

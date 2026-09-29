@@ -212,7 +212,9 @@ func runLifecycle(
 		defer cancelBackground()
 		backgroundErr = supervisor.Shutdown(backgroundCtx)
 		if shutdownMessaging {
-			messagingErr = messaging.Shutdown(backgroundCtx)
+			if err := messaging.Shutdown(backgroundCtx); err != nil {
+				messagingErr = fmt.Errorf("shutdown outbox messaging: %w", err)
+			}
 		}
 		return diagnosticsErr, backgroundErr, messagingErr
 	}

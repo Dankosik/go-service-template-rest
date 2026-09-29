@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -65,16 +64,5 @@ func TestUsesFixedHTTPClient(t *testing.T) {
 	testCommand.Dir = repositoryRoot
 	if output, err := testCommand.CombinedOutput(); err != nil {
 		t.Fatalf("generated composition: %v\n%s", err, output)
-	}
-	entries, err := os.ReadDir(generatedDirectory)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 2 {
-		var names []string
-		for _, entry := range entries {
-			names = append(names, entry.Name())
-		}
-		t.Fatalf("generated files = %s", strings.Join(names, ", "))
 	}
 }

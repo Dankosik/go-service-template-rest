@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/netip"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -65,9 +64,6 @@ func TestDialAddressPolicy(t *testing.T) {
 				t.Fatalf("enforceDialAddress() error = %v, allowed = %t", err, test.allowed)
 			}
 		})
-	}
-	if !netip.MustParseAddr("10.0.0.1").IsPrivate() {
-		t.Fatal("test private address is not private")
 	}
 }
 

@@ -255,8 +255,11 @@ if [[ -n "$(git -C "${template}" status --porcelain -- "${template_pathspecs[@]}
 	fail "commit them first so check and apply use one reviewable template revision"
 fi
 source_snapshot=$(mktemp -d "${TMPDIR:-/tmp}/template-sync.XXXXXX")
-git -C "${template}" archive HEAD -- "${source_pathspecs[@]}" |
-	tar -xf - -C "${source_snapshot}"
+# bsdtar stops reading at the end-of-archive marker, so a pipe can kill
+# git archive with SIGPIPE under pipefail. Extract from a file instead.
+git -C "${template}" archive --output="${source_snapshot}/.source.tar" HEAD -- "${source_pathspecs[@]}"
+tar -xf "${source_snapshot}/.source.tar" -C "${source_snapshot}"
+rm -f -- "${source_snapshot}/.source.tar"
 source_root="${source_snapshot}"
 source_symlink=$(first_manifest_symlink "${source_root}")
 [[ -z "${source_symlink}" ]] ||

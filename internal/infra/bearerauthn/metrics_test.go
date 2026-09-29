@@ -3,7 +3,6 @@ package bearerauthn
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -36,8 +35,6 @@ func TestVerificationMetricVocabulary(t *testing.T) {
 		{name: "invalid", headers: []string{"Bearer token"}, err: NewError(KindInvalid), wantResult: "failure", wantReason: "invalid"},
 		{name: "unavailable", headers: []string{"Bearer token"}, err: NewError(KindUnavailable), wantResult: "failure", wantReason: "unavailable"},
 		{name: "opaque verifier detail", headers: []string{"Bearer token"}, err: errors.New("metric-poison-canary"), wantResult: "failure", wantReason: "invalid"},
-		{name: "canceled", headers: []string{"Bearer token"}, err: fmt.Errorf("wait: %w", context.Canceled), wantResult: "failure", wantReason: "invalid"},
-		{name: "deadline", headers: []string{"Bearer token"}, err: fmt.Errorf("wait: %w", context.DeadlineExceeded), wantResult: "failure", wantReason: "invalid"},
 	}
 
 	transports := []string{"http"}

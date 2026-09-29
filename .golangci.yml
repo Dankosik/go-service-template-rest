@@ -129,6 +129,8 @@ linters:
         # fragment is deliberately module-relative: scripts/init-module.sh
         # rewrites the module path in a derived repository.
         - internal/failure\.Op\(
+        # VerificationFailure already wraps the sanitized authentication cause.
+        - internal/infra/bearerauthn\.VerificationFailure\(
         # InstrumentSet.Err reports the failure the set already wrapped with the
         # metric name that could not be created. A call-site wrap would add a
         # second, less specific prefix to the only registration error the

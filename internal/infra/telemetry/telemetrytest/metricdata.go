@@ -1,7 +1,6 @@
 package telemetrytest
 
 import (
-	"context"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -41,7 +40,7 @@ func ForEachMetric(tb testing.TB, reader *sdkmetric.ManualReader, visit func(met
 	tb.Helper()
 
 	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(context.Background(), &collected); err != nil {
+	if err := reader.Collect(tb.Context(), &collected); err != nil {
 		tb.Fatalf("collect metrics: %v", err)
 	}
 	for _, scope := range collected.ScopeMetrics {

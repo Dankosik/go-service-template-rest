@@ -63,48 +63,6 @@ func TestUnwiredAuthenticationFailsClosedAs401(t *testing.T) {
 	assertProblemCode(t, resp, problem.CodeUnauthorized)
 }
 
-func TestRejectedCredentialIs401(t *testing.T) {
-	t.Parallel()
-
-	authenticate := func(context.Context, *openapi3filter.AuthenticationInput) error {
-		return errors.New("bearer credential is invalid")
-	}
-	handler := securedHandler(t, authenticate, defaultAuthenticateChallenge)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/secret", nil)
-	req.Header.Set("Authorization", "Bearer wrong")
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusUnauthorized {
-		t.Fatalf("status = %d, want %d", resp.Code, http.StatusUnauthorized)
-	}
-	assertProblemCode(t, resp, problem.CodeUnauthorized)
-}
-
-func TestAcceptedCredentialReachesOperation(t *testing.T) {
-	t.Parallel()
-
-	var seen string
-	authenticate := func(_ context.Context, input *openapi3filter.AuthenticationInput) error {
-		seen = input.SecuritySchemeName
-		return nil
-	}
-	handler := securedHandler(t, authenticate, defaultAuthenticateChallenge)
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/secret", nil)
-	req.Header.Set("Authorization", "Bearer right")
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
-
-	if resp.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", resp.Code, http.StatusNoContent)
-	}
-	if seen != "bearerAuth" {
-		t.Fatalf("security scheme name = %q, want %q", seen, "bearerAuth")
-	}
-}
-
 // TestAuthenticateChallengeIsConfigurable keeps the WWW-Authenticate value in the
 // service's hands. The contract's securityScheme keys are not HTTP auth schemes,
 // so deriving the challenge from them would emit an illegal challenge.

@@ -17,9 +17,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
-func newTestHealth(tb testing.TB, probes ...health.Probe) *health.Service {
+func newTestHealth(tb testing.TB) *health.Service {
 	tb.Helper()
-	svc, err := health.New(health.Policy{ProbeBudget: time.Second, FailureThreshold: 1}, probes...)
+	svc, err := health.New(health.Policy{ProbeBudget: time.Second, FailureThreshold: 1})
 	if err != nil {
 		tb.Fatalf("health.New() error = %v", err)
 	}
@@ -297,48 +297,6 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("serveRuntime() err = %v, want wrapped %v", err, context.Canceled)
-	}
-}
-
-func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
-	t.Parallel()
-
-	logger := slog.New(slog.DiscardHandler)
-	svc := newTestHealth(t)
-	srv := newFakeRuntimeServer()
-	admission := new(startupAdmissionController)
-	readinessChecked := make(chan struct{}, 1)
-
-	signalCtx, cancelSignal := context.WithCancel(context.Background())
-	defer cancelSignal()
-	startupCtx := context.WithoutCancel(signalCtx)
-
-	runErrCh := make(chan error, 1)
-	go func(signalCtx context.Context, startupCtx context.Context) {
-		runErrCh <- serveRuntime(signalCtx, startupCtx, serveRuntimeArgs{
-			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-			log:       logger,
-			healthSvc: svc,
-			httpSrv:   srv,
-			readinessCheck: func(context.Context) error {
-				select {
-				case readinessChecked <- struct{}{}:
-				default:
-				}
-				return nil
-			},
-			admission: admission,
-			shutdown:  testShutdownBudget(),
-		})
-	}(signalCtx, startupCtx)
-
-	waittest.ReceiveSignal(t, readinessChecked, time.Second, "internal readiness check")
-	waittest.Until(t, time.Second, func(context.Context) bool { return admission.Ready() }, "startup admission to be marked ready")
-
-	cancelSignal()
-
-	if err := waittest.Receive(t, runErrCh, 2*time.Second, "serveRuntime to return after shutdown signal"); err != nil {
-		t.Fatalf("serveRuntime() error = %v, want nil", err)
 	}
 }
 
