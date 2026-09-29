@@ -15,9 +15,9 @@ import (
 
 // TestAuthenticatedPrincipalReachesOperation is the whole point of the seam, and
 // it is also the canary for the assumption it rests on: the validator hands the
-// next handler the same *http.Request the AuthenticationFunc was given. If a
-// future version of oapi-codegen/nethttp-middleware copies the request instead,
-// this test fails rather than authorization silently going missing.
+// next handler the same *http.Request the AuthenticationFunc was given. If
+// requestValidator or openapi3filter ever copies the request instead, this test
+// fails rather than authorization silently going missing.
 func TestAuthenticatedPrincipalReachesOperation(t *testing.T) {
 	t.Parallel()
 
