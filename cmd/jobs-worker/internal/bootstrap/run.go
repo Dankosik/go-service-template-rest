@@ -143,13 +143,11 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	}
 	// stopStartedRiver arms the process window for a River that started but
 	// cannot serve, and hands deferred cleanup that window and River's join.
-	stopStartedRiver := func(parent context.Context, trigger error) error {
-		window, cancelProcess := runtimeopts.ArmTeardown(parent, cfg.HTTP.GracePeriod)
+	stopStartedRiver := func(trigger error) (context.Context, bool, error) {
+		window, cancelProcess := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 		defer cancelProcess()
-		cleanupWindow = window
-		var stopErr error
-		cleanupSafe, stopErr = hardStopRiver(window)
-		return errors.Join(trigger, stopErr)
+		stopped, stopErr := hardStopRiver(window)
+		return window, stopped, errors.Join(trigger, stopErr)
 	}
 
 	runCtx, cancelRun := context.WithCancel(context.WithoutCancel(signalCtx))
@@ -158,7 +156,9 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if err != nil {
 		startErr := fmt.Errorf("start River client: %w", err)
 		if started {
-			return stopStartedRiver(signalCtx, startErr)
+			var stopErr error
+			cleanupWindow, cleanupSafe, stopErr = stopStartedRiver(startErr)
+			return stopErr
 		}
 		return startErr
 	}
@@ -174,7 +174,9 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		cfg.Observability.Pprof.Enabled,
 	)
 	if err != nil {
-		return stopStartedRiver(signalCtx, err)
+		var stopErr error
+		cleanupWindow, cleanupSafe, stopErr = stopStartedRiver(err)
+		return stopErr
 	}
 
 	var trigger error

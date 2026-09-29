@@ -51,7 +51,7 @@ func TestAdmissionPolicyPublishesAdmissionMetrics(t *testing.T) {
 	noop := func(context.Context) error { return nil }
 
 	err := policy.business.around(t.Context(), func(ctx context.Context) error {
-		if got := telemetrytest.Int64SumValue(t, reader, activeRPCsInstrument); got != 1 {
+		if got := telemetrytest.Int64SumValue(ctx, t, reader, activeRPCsInstrument); got != 1 {
 			t.Fatalf("%s while admitted = %d, want 1", activeRPCsInstrument, got)
 		}
 		assertStatusCode(t, policy.business.around(ctx, noop), codes.ResourceExhausted)
@@ -61,7 +61,7 @@ func TestAdmissionPolicyPublishesAdmissionMetrics(t *testing.T) {
 		t.Fatalf("business around: %v", err)
 	}
 	err = policy.health.around(t.Context(), func(ctx context.Context) error {
-		if got := telemetrytest.Int64SumValue(t, reader, activeRPCsInstrument); got != 0 {
+		if got := telemetrytest.Int64SumValue(ctx, t, reader, activeRPCsInstrument); got != 0 {
 			t.Fatalf("%s while health admitted = %d, want 0", activeRPCsInstrument, got)
 		}
 		assertStatusCode(t, policy.health.around(ctx, noop), codes.ResourceExhausted)
@@ -76,7 +76,7 @@ func TestAdmissionPolicyPublishesAdmissionMetrics(t *testing.T) {
 		shedRPCsInstrument:       1,
 		healthShedRPCsInstrument: 1,
 	} {
-		if got := telemetrytest.Int64SumValue(t, reader, name); got != want {
+		if got := telemetrytest.Int64SumValue(t.Context(), t, reader, name); got != want {
 			t.Fatalf("%s = %d, want %d", name, got, want)
 		}
 	}

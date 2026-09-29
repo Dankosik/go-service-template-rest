@@ -1,6 +1,7 @@
 package telemetrytest
 
 import (
+	"context"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -36,11 +37,11 @@ func NewManualMeterProvider(tb testing.TB) (*sdkmetric.ManualReader, *sdkmetric.
 // ForEachMetric visits every collected metric across every scope, so a caller
 // states what it wants from a metric instead of repeating the collect-and-walk.
 // It is also the one place a collection failure is reported.
-func ForEachMetric(tb testing.TB, reader *sdkmetric.ManualReader, visit func(metricdata.Metrics)) {
+func ForEachMetric(ctx context.Context, tb testing.TB, reader *sdkmetric.ManualReader, visit func(metricdata.Metrics)) {
 	tb.Helper()
 
 	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(tb.Context(), &collected); err != nil {
+	if err := reader.Collect(ctx, &collected); err != nil {
 		tb.Fatalf("collect metrics: %v", err)
 	}
 	for _, scope := range collected.ScopeMetrics {
@@ -73,12 +74,12 @@ func SinglePoint[N int64 | float64](tb testing.TB, name string, points []metricd
 }
 
 // Int64SumValue is the value of a named unattributed int64 sum.
-func Int64SumValue(tb testing.TB, reader *sdkmetric.ManualReader, name string) int64 {
+func Int64SumValue(ctx context.Context, tb testing.TB, reader *sdkmetric.ManualReader, name string) int64 {
 	tb.Helper()
 
 	var value int64
 	found := false
-	ForEachMetric(tb, reader, func(measured metricdata.Metrics) {
+	ForEachMetric(ctx, tb, reader, func(measured metricdata.Metrics) {
 		if measured.Name != name {
 			return
 		}

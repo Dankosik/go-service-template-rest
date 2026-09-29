@@ -46,7 +46,7 @@ func TestGeneratedClientUsesSharedInstrumentedConnection(t *testing.T) {
 		t.Fatal("client span was not recorded")
 	}
 	metricRecorded := false
-	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+	telemetrytest.ForEachMetric(ctx, t, reader, func(measured metricdata.Metrics) {
 		if measured.Name == "rpc.client.call.duration" {
 			metricRecorded = true
 		}
