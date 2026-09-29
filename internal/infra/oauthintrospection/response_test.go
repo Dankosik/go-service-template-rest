@@ -12,7 +12,7 @@ import (
 func TestResponseEnvelopeAdmission(t *testing.T) {
 	t.Parallel()
 	policy := testPolicy(t)
-	valid := activeJSON("subject-1", "client-1")
+	valid := activeJSON()
 	if _, err := admitResponse([]byte(valid), policy, testNow); err != nil {
 		t.Fatalf("valid envelope error = %v", err)
 	}
