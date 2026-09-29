@@ -36,8 +36,9 @@ rather than resolving mutable `main`.
 
 Strict-server generation provides typed request/response glue; it does not install
 full runtime OpenAPI schema or security validation. The generated operations are
-wrapped once by `oapi-codegen/nethttp-middleware`, which enforces path, query,
-JSON body, and unknown-field validation from the embedded spec at runtime.
+wrapped once by the request validator in `internal/infra/http/router.go`, which
+runs kin-openapi's `openapi3filter` to enforce path, query, JSON body, and
+unknown-field validation from the embedded spec at runtime.
 Protected routes still require a real `AuthenticationFunc`; the template
 deliberately provides no placeholder auth, and no placeholder operations may be
 left in the spec: replace the public security decision with a real OpenAPI

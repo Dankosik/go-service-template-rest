@@ -17,6 +17,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
@@ -136,4 +138,19 @@ func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode p
 // pass whether or not the wiring is right.
 func newTestServiceLogger(out io.Writer) *slog.Logger {
 	return logctx.NewProcessLogger(out, slog.LevelInfo)
+}
+
+func mustRequestValidator(
+	tb testing.TB,
+	spec *openapi3.T,
+	authenticate openapi3filter.AuthenticationFunc,
+	rejectRequest func(http.ResponseWriter, *http.Request, error),
+) func(http.Handler) http.Handler {
+	tb.Helper()
+
+	validator, err := requestValidator(spec, authenticate, rejectRequest)
+	if err != nil {
+		tb.Fatalf("requestValidator() error = %v", err)
+	}
+	return validator
 }
