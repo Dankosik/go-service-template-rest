@@ -1,7 +1,6 @@
 package postgresoutbox
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -53,9 +52,11 @@ func NewAppender(maxPayloadBytes int, route Router) (*Appender, error) {
 }
 
 // Append stores one immutable publication job in the transaction owned by the
-// caller. It never begins or commits a transaction. Re-appending an event ID
-// with matching publication data is a successful replay and returns nil; using
-// that ID for different publication data returns ErrEventIDConflict.
+// caller. It never begins or commits a transaction. While River retains the
+// earlier job, re-appending its event ID with matching publication data is a
+// successful replay and returns nil, and using that ID for different
+// publication data returns ErrEventIDConflict. After River deletes the job, the
+// ID is accepted as a new publication.
 func (a *Appender) Append(ctx context.Context, tx pgx.Tx, event domainevent.Event) error {
 	if a == nil || a.client == nil || a.route == nil {
 		return fmt.Errorf("%w: appender is required", ErrConfig)
@@ -93,13 +94,5 @@ func (a *Appender) Append(ctx context.Context, tx pgx.Tx, event domainevent.Even
 
 func sameJob(encoded []byte, want PublishJob) bool {
 	var got PublishJob
-	if json.Unmarshal(encoded, &got) != nil {
-		return false
-	}
-	return got.ID == want.ID &&
-		got.Type == want.Type &&
-		got.Version == want.Version &&
-		got.OccurredAt.Equal(want.OccurredAt) &&
-		got.Subject == want.Subject &&
-		bytes.Equal(got.Payload, want.Payload)
+	return json.Unmarshal(encoded, &got) == nil && got.samePublication(want)
 }

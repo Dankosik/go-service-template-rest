@@ -31,9 +31,11 @@ const (
 )
 
 type transportEvidence struct {
-	StatusCode  int
-	Certainty   sendCertainty
-	LocalDenial bool
+	StatusCode int
+	Certainty  sendCertainty
+	// LocalPermanent marks a request that was not sent and cannot be sent by
+	// retrying, such as an invalid prepared send or a failed TLS validation.
+	LocalPermanent bool
 }
 
 func parseRetryAfter(raw, date string, attemptedAt time.Time, maxDelay time.Duration) (time.Duration, bool) {
@@ -107,15 +109,16 @@ func webhookNextRetry(job *river.Job[deliveryArgs], now time.Time) time.Time {
 	}
 	now = now.UTC()
 	due := now.Add(webhookBackoff(job.Args.DeliveryID, job.Attempt))
-	var metadata struct {
-		RetryAfterAt time.Time `json:"webhook_retry_after_at"`
-	}
-	if json.Unmarshal(job.Metadata, &metadata) == nil && metadata.RetryAfterAt.After(due) {
-		due = metadata.RetryAfterAt
+	var metadata map[string]json.RawMessage
+	var retryAfterAt time.Time
+	if json.Unmarshal(job.Metadata, &metadata) == nil &&
+		json.Unmarshal(metadata[retryAfterMetadataKey], &retryAfterAt) == nil && retryAfterAt.After(due) {
+		due = retryAfterAt
 	}
 	if !job.CreatedAt.IsZero() {
 		deadline := job.CreatedAt.Add(webhookMaxElapsed)
 		if !deadline.After(now) {
+			// The next attempt only runs webhookDeliveryExpired and cancels.
 			return now.Add(time.Second)
 		}
 		if deadline.Before(due) {

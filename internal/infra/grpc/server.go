@@ -31,11 +31,11 @@ type Server struct {
 	server *grpc.Server
 	health *health.Server
 
-	healthMu sync.Mutex
-	draining bool
+	healthMu       sync.Mutex
+	healthDraining bool
 
 	healthDrain healthDrain
-	drain       *rpcDrain
+	rpcDrain    *rpcDrain
 	stopOnce    sync.Once
 	stopDone    chan struct{}
 }
@@ -44,7 +44,7 @@ type Server struct {
 func (s *Server) SetServing(ready bool) {
 	s.healthMu.Lock()
 	defer s.healthMu.Unlock()
-	if s.draining {
+	if s.healthDraining {
 		return
 	}
 	status := healthgrpc.HealthCheckResponse_NOT_SERVING
@@ -59,12 +59,12 @@ func (s *Server) SetServing(ready bool) {
 func (s *Server) StartDrain() {
 	s.healthMu.Lock()
 	defer s.healthMu.Unlock()
-	if s.draining {
+	if s.healthDraining {
 		return
 	}
-	s.draining = true
+	s.healthDraining = true
 	s.health.Shutdown()
-	s.healthDrain.stop()
+	s.healthDrain.cancelAll()
 }
 
 // Serve runs the native server and normalizes the expected stop result.
@@ -81,7 +81,8 @@ func (s *Server) Serve(listener net.Listener) error {
 // RPC context but does not wait for a handler that ignores that cancellation.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.StartDrain()
-	drained := s.drain.start()
+	drained := s.rpcDrain.start()
+	// An already finished drain wins over an expired ctx: stop gracefully.
 	select {
 	case <-drained:
 		s.gracefulStop()
@@ -109,7 +110,7 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) forceStop() {
-	s.healthDrain.stop()
+	s.healthDrain.cancelAll()
 	s.stopOnce.Do(func() {
 		s.server.Stop()
 		close(s.stopDone)

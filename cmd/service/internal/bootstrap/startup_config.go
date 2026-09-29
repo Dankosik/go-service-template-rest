@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/example/go-service-template-rest/internal/config"
 )
@@ -14,14 +13,6 @@ const (
 	startupConfigCompatibilityStage  = "startup.config.compatibility"
 	startupConfigCompatibilityReason = "startup_compatibility"
 )
-
-func failedConfigStage(report config.LoadReport) string {
-	stage := strings.TrimSpace(report.FailedStage)
-	if stage == "" {
-		return config.StageLoadDefaults
-	}
-	return stage
-}
 
 func bootstrapConfigStage(
 	startupCtx context.Context,
@@ -39,9 +30,8 @@ func bootstrapConfigStage(
 		)...,
 	)
 
-	cfg, configReport, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
+	cfg, configReport, err := config.Load(startupCtx, loadOptions)
 	if err != nil {
-		failedStage := failedConfigStage(configReport)
 		errorType := config.ErrorType(err)
 		slog.ErrorContext(
 			startupCtx,
@@ -50,7 +40,7 @@ func bootstrapConfigStage(
 				"config_loader",
 				"load",
 				"error",
-				"stage", failedStage,
+				"stage", configReport.FailedStage,
 				"error.type", errorType,
 			)...,
 		)

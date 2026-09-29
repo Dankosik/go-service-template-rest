@@ -18,7 +18,6 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
-	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -27,10 +26,22 @@ type Provider string
 const (
 	ProviderAmazonS3   Provider = "amazon_s3"
 	ProviderCloudflare Provider = "cloudflare_r2"
+)
 
-	CredentialSourceAWSDefault = "aws_default"
-	CredentialSourceStatic     = "static"
+// CredentialSource selects where [New] takes provider credentials from.
+type CredentialSource string
 
+const (
+	// CredentialSourceAWSDefault leaves credentials to the AWS SDK's default
+	// chain, resolved on the first request.
+	CredentialSourceAWSDefault CredentialSource = "aws_default"
+	// CredentialSourceStatic reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and
+	// the optional AWS_SESSION_TOKEN from the process environment once, in
+	// [New]. Cloudflare R2 requires it.
+	CredentialSourceStatic CredentialSource = "static"
+)
+
+const (
 	multipartPartBytes      int64 = 8 << 20
 	maximumUploadParts      int64 = 10_000
 	maximumObjectBytes            = multipartPartBytes * maximumUploadParts
@@ -42,10 +53,10 @@ const (
 )
 
 var (
-	bucketName          = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
-	regionName          = regexp.MustCompile(`^[a-z]{2}(?:-gov)?-[a-z]+-\d+$`)
-	r2Endpoint          = regexp.MustCompile(`^[0-9a-f]{32}(?:\.(?:eu|fedramp))?\.r2\.cloudflarestorage\.com$`)
-	bucketOwner         = regexp.MustCompile(`^\d{12}$`)
+	bucketNamePattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
+	regionNamePattern   = regexp.MustCompile(`^[a-z]{2}(?:-gov)?-[a-z]+-\d+$`)
+	r2EndpointPattern   = regexp.MustCompile(`^[0-9a-f]{32}(?:\.(?:eu|fedramp))?\.r2\.cloudflarestorage\.com$`)
+	bucketOwnerPattern  = regexp.MustCompile(`^\d{12}$`)
 	errRequestFailed    = errors.New("object storage request failed")
 	errTransferComplete = errors.New("object storage transfer completion failed")
 )
@@ -57,7 +68,7 @@ type Config struct {
 	Region              string
 	Bucket              string
 	ExpectedBucketOwner string
-	CredentialSource    string
+	CredentialSource    CredentialSource
 	MaxObjectBytes      int64
 }
 
@@ -85,8 +96,9 @@ type Client struct {
 	tokens    chan struct{}
 }
 
-// New builds the client without provider I/O. Credential retrieval remains owned
-// by the explicitly selected SDK provider.
+// New validates cfg and builds the client without contacting the provider.
+// cfg.CredentialSource decides where credentials come from; see
+// [CredentialSourceStatic] for the one source New reads itself.
 func New(ctx context.Context, cfg Config) (*Client, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("build S3 adapter: %w", errRequestFailed)
@@ -159,7 +171,6 @@ func configureTransfer(options *transfermanager.Options) {
 	options.Concurrency = 1
 	options.FailTimeout = multipartFailureTimeout
 	options.MaxUploadParts = maximumUploadParts
-	options.ChecksumAlgorithm = tmtypes.ChecksumAlgorithm("CRC64NVME")
 	options.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 }
 
@@ -180,7 +191,7 @@ func (c transferClient) CompleteMultipartUpload(
 }
 
 func (cfg Config) validate() error {
-	if !bucketName.MatchString(cfg.Bucket) {
+	if !bucketNamePattern.MatchString(cfg.Bucket) {
 		return errors.New("build S3 adapter: bucket must be one dotless DNS name")
 	}
 	if cfg.MaxObjectBytes <= 0 || cfg.MaxObjectBytes > maximumObjectBytes {
@@ -194,12 +205,12 @@ func (cfg Config) validate() error {
 
 	switch cfg.Provider {
 	case ProviderAmazonS3:
-		if cfg.Endpoint != "" || !regionName.MatchString(cfg.Region) || !bucketOwner.MatchString(cfg.ExpectedBucketOwner) {
+		if cfg.Endpoint != "" || !regionNamePattern.MatchString(cfg.Region) || !bucketOwnerPattern.MatchString(cfg.ExpectedBucketOwner) {
 			return errors.New("build S3 adapter: Amazon requires a region, expected owner, and no endpoint override")
 		}
 	case ProviderCloudflare:
 		endpoint, err := url.Parse(cfg.Endpoint)
-		if err != nil || !isHTTPSOrigin(endpoint) || !r2Endpoint.MatchString(endpoint.Host) || cfg.Region != "auto" || cfg.ExpectedBucketOwner != "" || cfg.CredentialSource != CredentialSourceStatic {
+		if err != nil || !isHTTPSOrigin(endpoint) || !r2EndpointPattern.MatchString(endpoint.Host) || cfg.Region != "auto" || cfg.ExpectedBucketOwner != "" || cfg.CredentialSource != CredentialSourceStatic {
 			return errors.New("build S3 adapter: R2 requires its HTTPS account endpoint, region auto, static credentials, and no expected owner")
 		}
 	default:

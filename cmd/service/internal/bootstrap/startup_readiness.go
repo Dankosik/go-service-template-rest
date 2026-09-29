@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/example/go-service-template-rest/internal/background"
@@ -17,11 +18,22 @@ import (
 // reported path as any other failed background work. health.Cached expiring a
 // verdict nothing is refreshing is what covers the ways it can die without
 // reporting.
+//
+// The probe budget is the aggregate readiness budget because it covers the
+// complete serial probe set, including optional probes.
 func newReadinessService(
+	cfg config.Config,
 	probes []health.Probe,
 	supervisor *background.Supervisor,
-) *health.Service {
-	return health.New(append(probes, supervisor)...)
+) (*health.Service, error) {
+	service, err := health.New(health.Policy{
+		ProbeBudget:      cfg.HTTP.ReadinessTimeout,
+		FailureThreshold: cfg.Health.FailureThreshold,
+	}, append(probes, supervisor)...)
+	if err != nil {
+		return nil, fmt.Errorf("build readiness service: %w", err)
+	}
+	return service, nil
 }
 
 func superviseReadiness(
@@ -39,8 +51,6 @@ func superviseReadiness(
 			return service.Watch(
 				ctx,
 				cfg.Health.RefreshInterval,
-				readinessProbeBudget(cfg),
-				cfg.Health.FailureThreshold,
 				func(err error) {
 					logReadinessTransition(ctx, log, err)
 					// profile:grpc:start

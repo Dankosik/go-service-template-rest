@@ -9,9 +9,11 @@ import (
 	"strings"
 )
 
-// The standard OpenTelemetry endpoint variables. A signal-specific one is
-// already a complete endpoint for that signal; the signal-agnostic one is a root
-// that OTLP defines each signal's path relative to.
+// Where an OTLP endpoint can come from — this service's configuration keys and
+// the standard OpenTelemetry variables — and the path each signal appends to a
+// root. A signal-specific setting is already a complete endpoint for that
+// signal; a signal-agnostic one is a root that OTLP defines each signal's path
+// relative to.
 const (
 	// SharedOTLPExporterConfigKey names the service-owned OTLP endpoint shared
 	// by traces and metrics when it contains a collector root.
@@ -36,22 +38,19 @@ type ExporterEndpoint struct {
 	// an operator can tell a platform-injected endpoint from this service's own.
 	// Empty when URL is empty.
 	Source string
-	// ConfiguredByService distinguishes this service's configuration from an
-	// endpoint supplied by the platform environment.
+	// ConfiguredByService reports that this service's configuration, rather than
+	// the platform environment, named the destination. It decides whether
+	// ambient credential and trust material is a conflict: material this service
+	// cannot verify must not travel to an endpoint this service chose.
 	ConfiguredByService bool
+	// signalPath is the OTLP path of the signal this endpoint was resolved for,
+	// which selects that signal's rejected ambient variables.
+	signalPath string
 }
 
 // Configured reports whether an exporter should be built.
 func (e ExporterEndpoint) Configured() bool {
 	return e.URL != ""
-}
-
-// fromConfig reports whether this service, rather than the platform, named the
-// destination. It decides whether ambient credential and trust material is a
-// conflict: material this service cannot verify must not travel to an endpoint
-// this service chose.
-func (e ExporterEndpoint) fromConfig() bool {
-	return e.ConfiguredByService
 }
 
 // parseSignalOTLPEndpoint validates a complete endpoint for one signal. A missing
@@ -63,7 +62,7 @@ func parseSignalOTLPEndpoint(raw, signalPath string) (string, error) {
 		return "", err
 	}
 
-	if path := strings.TrimSpace(parsedURL.EscapedPath()); path == "" || path == "/" {
+	if hasNoOTLPPath(parsedURL) {
 		parsedURL.Path = signalPath
 		parsedURL.RawPath = ""
 	}
@@ -98,21 +97,21 @@ type otlpCandidate struct {
 	// base marks a signal-agnostic collector root, which gets the signal's OTLP
 	// path appended. The zero value is a complete endpoint for one signal.
 	base bool
-	// configuredByService marks values from the service's typed configuration.
-	configuredByService bool
 }
 
 // resolveOTLPEndpoint walks the settings this service owns and then the ambient
 // ones, returning the first that names an endpoint. Both signals resolve through
-// it, so neither can answer this differently from the other.
+// it, so neither can answer this differently from the other. Which list supplied
+// the endpoint is what sets ConfiguredByService.
 //
 // The two lists are separate rather than one because headers are a collector
 // credential, and a configured one pins the destination to a setting this
-// service owns: past owned the endpoint would come from ambient environment, and
-// sending the service's own credentials somewhere it never named is what this
-// must not create. Without configured headers the ambient variables are honored,
-// because they are what a platform collector injects and ignoring them would
-// leave a service reporting healthy while exporting nothing.
+// service owns: once the owned settings are exhausted the endpoint would come
+// from ambient environment, and sending the service's own credentials somewhere
+// it never named is what this must not create. Without configured headers the
+// ambient variables are honored, because they are what a platform collector
+// injects and ignoring them would leave a service reporting healthy while
+// exporting nothing.
 //
 // Only an ambient parse failure names its source. An operator did not write that
 // value in this service's configuration and has to be told which injected
@@ -125,6 +124,7 @@ func resolveOTLPEndpoint(signalPath, headers string, owned, ambient []otlpCandid
 			return ExporterEndpoint{}, err
 		}
 		if ok {
+			endpoint.ConfiguredByService = true
 			return endpoint, nil
 		}
 	}
@@ -160,10 +160,7 @@ func (c otlpCandidate) resolve(signalPath string) (ExporterEndpoint, bool, error
 	if err != nil {
 		return ExporterEndpoint{}, false, err
 	}
-	return ExporterEndpoint{
-		URL: endpointURL, Source: c.source,
-		ConfiguredByService: c.configuredByService,
-	}, true, nil
+	return ExporterEndpoint{URL: endpointURL, Source: c.source, signalPath: signalPath}, true, nil
 }
 
 // ambientOTLPCandidates are the standard OpenTelemetry endpoint variables in the
@@ -188,7 +185,12 @@ func namesOTLPRoot(raw string) bool {
 	if err != nil {
 		return false
 	}
-	path := strings.TrimSpace(parsedURL.EscapedPath())
+	return hasNoOTLPPath(parsedURL)
+}
+
+// hasNoOTLPPath reports whether u carries no path beyond the root.
+func hasNoOTLPPath(u *url.URL) bool {
+	path := strings.TrimSpace(u.EscapedPath())
 	return path == "" || path == "/"
 }
 

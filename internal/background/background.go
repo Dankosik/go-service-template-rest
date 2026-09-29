@@ -68,12 +68,13 @@ type Supervisor struct {
 	// stopping rejects new tasks after Shutdown begins and makes a task ending
 	// during the drain an ordinary stop rather than a readiness failure.
 	stopping atomic.Bool
-	// failure holds the first task that ended with an error while the process was
-	// still serving.
-	failure atomic.Pointer[taskFailure]
-	// failures delivers that same first failure to the process lifecycle owner.
-	// It is buffered because the failing task must never wait for that owner.
-	failures chan error
+	// recordedFailure holds the first task that ended with an error while the
+	// process was still serving.
+	recordedFailure atomic.Pointer[taskFailure]
+	// firstFailure delivers that same first failure to the process lifecycle
+	// owner. It is buffered because the failing task must never wait for that
+	// owner.
+	firstFailure chan error
 }
 
 type taskFailure struct {
@@ -90,11 +91,11 @@ func New(ctx context.Context, log *slog.Logger) *Supervisor {
 	taskCtx, cancel := context.WithCancel(ctx)
 
 	return &Supervisor{
-		log:      log,
-		group:    new(errgroup.Group),
-		taskCtx:  taskCtx,
-		cancel:   cancel,
-		failures: make(chan error, 1),
+		log:          log.With("component", "background"),
+		group:        new(errgroup.Group),
+		taskCtx:      taskCtx,
+		cancel:       cancel,
+		firstFailure: make(chan error, 1),
 	}
 }
 
@@ -104,7 +105,7 @@ func New(ctx context.Context, log *slog.Logger) *Supervisor {
 func (s *Supervisor) Go(task Task) {
 	name := cmp.Or(task.Name, "unnamed")
 	if task.Run == nil {
-		s.log.Error("background_task_invalid", "component", "background", "task", name, "reason", "run is nil")
+		s.log.Error("background_task_invalid", "task", name, "reason", "run is nil")
 		s.recordStop(name, errors.New("run is nil"))
 		return
 	}
@@ -114,7 +115,6 @@ func (s *Supervisor) Go(task Task) {
 		s.lifecycleMu.Unlock()
 		s.log.Error(
 			"background_task_invalid",
-			"component", "background",
 			"task", name,
 			"reason", "supervisor is stopping",
 		)
@@ -122,9 +122,9 @@ func (s *Supervisor) Go(task Task) {
 	}
 	s.group.Go(func() error {
 		s.startOnce.Do(func() {
-			s.log.Info("background_supervisor_started", "component", "background")
+			s.log.Info("background_supervisor_started")
 		})
-		s.log.Info("background_task_started", "component", "background", "task", name)
+		s.log.Info("background_task_started", "task", name)
 
 		err := s.runTask(name, task.Run)
 		s.recordStop(name, err)
@@ -144,8 +144,8 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 		s.log.Error(
 			"background_task_panic",
 			append(
-				[]any{"component", "background", "task", name},
-				logctx.PanicAttrs(recovered, debug.Stack())...,
+				[]any{"task", name},
+				logctx.PanicArgs(recovered, debug.Stack())...,
 			)...,
 		)
 		runErr = fmt.Errorf("%w: %s", ErrPanic, name)
@@ -155,18 +155,18 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 		// The parent context and Shutdown own this context's terminal error, so a
 		// task returning that same cause stopped as asked rather than failed.
 		if taskErr := s.taskCtx.Err(); taskErr != nil && matchesOnly(err, taskErr) {
-			s.log.Info("background_task_canceled", "component", "background", "task", name)
+			s.log.Info("background_task_canceled", "task", name)
 			return nil
 		}
-		s.log.Error("background_task_failed", "component", "background", "task", name, "err", err)
+		s.log.Error("background_task_failed", "task", name, "err", err)
 		return fmt.Errorf("background task %s: %w", name, err)
 	}
 	if s.taskCtx.Err() != nil {
-		s.log.Info("background_task_stopped", "component", "background", "task", name)
+		s.log.Info("background_task_stopped", "task", name)
 		return nil
 	}
 	err := fmt.Errorf("%w: %s", ErrTaskStopped, name)
-	s.log.Error("background_task_failed", "component", "background", "task", name, "err", err)
+	s.log.Error("background_task_failed", "task", name, "err", err)
 	return err
 }
 
@@ -204,15 +204,16 @@ func (s *Supervisor) recordStop(name string, err error) {
 		return
 	}
 	recorded := &taskFailure{task: name, err: err}
-	if s.failure.CompareAndSwap(nil, recorded) {
-		s.failures <- taskFailureError(recorded)
+	if s.recordedFailure.CompareAndSwap(nil, recorded) {
+		s.firstFailure <- taskFailureError(recorded)
 	}
 }
 
-// Failures reports only the first recorded task failure. It is neither a full
-// error stream nor a shutdown-completion signal, and Shutdown does not close it.
-func (s *Supervisor) Failures() <-chan error {
-	return s.failures
+// FirstFailure delivers only the first recorded task failure. It is neither a
+// full error stream nor a shutdown-completion signal, and Shutdown does not
+// close it.
+func (s *Supervisor) FirstFailure() <-chan error {
+	return s.firstFailure
 }
 
 func (s *Supervisor) Name() string {
@@ -224,7 +225,7 @@ func (s *Supervisor) Name() string {
 // the honest signal is to stop taking traffic and let the platform's restart
 // policy start a clean process.
 func (s *Supervisor) Check(context.Context) error {
-	recorded := s.failure.Load()
+	recorded := s.recordedFailure.Load()
 	if recorded == nil {
 		return nil
 	}
@@ -264,10 +265,10 @@ func (s *Supervisor) Shutdown(ctx context.Context) error {
 		}
 
 		if s.stopErr != nil {
-			s.log.ErrorContext(ctx, "background_shutdown_failed", "component", "background", "err", s.stopErr)
+			s.log.ErrorContext(ctx, "background_shutdown_failed", "err", s.stopErr)
 			return
 		}
-		s.log.InfoContext(ctx, "background_shutdown_completed", "component", "background")
+		s.log.InfoContext(ctx, "background_shutdown_completed")
 	})
 	return s.stopErr
 }

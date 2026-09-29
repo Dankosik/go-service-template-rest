@@ -28,6 +28,6 @@ func logRecoveredPanic(ctx context.Context, log *slog.Logger, method string, rec
 	log.ErrorContext(
 		ctx,
 		"grpc_panic_recovered",
-		append([]any{"rpc.method", method}, logctx.PanicAttrs(recovered, debug.Stack())...)...,
+		append([]any{"rpc.method", method}, logctx.PanicArgs(recovered, debug.Stack())...)...,
 	)
 }

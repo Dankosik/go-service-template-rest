@@ -78,6 +78,8 @@ type Writer interface {
 // fn returning an error rolls everything back. A partial success is never
 // observable.
 type Store interface {
+	// FindBySlug returns ErrNotFound when no article has slug; the adapter
+	// translates its own "no row" result into that identity.
 	FindBySlug(ctx context.Context, slug string) (Article, error)
 	// Do calls fn with a transactional Writer. All Writer operations finish
 	// before fn returns; fn must not retain the Writer after that call.
@@ -105,14 +107,14 @@ func NewService(store Store) (*Service, error) {
 // The two writes are one unit of work. Nothing here knows what kind of
 // transaction that is.
 func (s *Service) Create(ctx context.Context, draft Draft) (Article, error) {
+	if err := validateDraft(draft); err != nil {
+		return Article{}, err
+	}
 	created := Article{
 		Slug:      draft.Slug,
 		Title:     draft.Title,
 		Summary:   draft.Summary,
 		Published: true,
-	}
-	if err := validateDraft(created); err != nil {
-		return Article{}, err
 	}
 
 	// failure.Op rather than fmt.Errorf, because this unit of work has two writes
@@ -135,14 +137,14 @@ func (s *Service) Create(ctx context.Context, draft Draft) (Article, error) {
 	return created, nil
 }
 
-func validateDraft(candidate Article) error {
-	if !slugPattern.MatchString(candidate.Slug) {
+func validateDraft(draft Draft) error {
+	if !slugPattern.MatchString(draft.Slug) {
 		return fmt.Errorf("%w: slug must match %s", ErrInvalid, slugPattern)
 	}
-	if candidate.Title == "" || utf16CodeUnitCount(candidate.Title) > maxTitleUTF16CodeUnits {
+	if draft.Title == "" || utf16CodeUnitCount(draft.Title) > maxTitleUTF16CodeUnits {
 		return fmt.Errorf("%w: title must be 1..%d characters", ErrInvalid, maxTitleUTF16CodeUnits)
 	}
-	if candidate.Summary == "" || utf16CodeUnitCount(candidate.Summary) > maxSummaryUTF16CodeUnits {
+	if draft.Summary == "" || utf16CodeUnitCount(draft.Summary) > maxSummaryUTF16CodeUnits {
 		return fmt.Errorf("%w: summary must be 1..%d characters", ErrInvalid, maxSummaryUTF16CodeUnits)
 	}
 	return nil

@@ -86,7 +86,6 @@ func TestSDKPolicyOptions(t *testing.T) {
 		transferOptions.MultipartUploadThreshold != multipartPartBytes ||
 		transferOptions.Concurrency != 1 || transferOptions.FailTimeout != multipartFailureTimeout ||
 		transferOptions.MaxUploadParts != maximumUploadParts ||
-		transferOptions.ChecksumAlgorithm != tmtypes.ChecksumAlgorithm("CRC64NVME") ||
 		transferOptions.RequestChecksumCalculation != aws.RequestChecksumCalculationWhenRequired {
 		t.Fatalf("transfer policy = %#v", transferOptions)
 	}

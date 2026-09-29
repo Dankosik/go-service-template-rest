@@ -60,7 +60,7 @@ func appendViolations(violations []fieldViolation, err error, field string) []fi
 
 	// A failed security requirement is about the credential, not a field, and
 	// its wrapped resolver errors are dependency text this boundary refuses to
-	// publish. handleGeneratedRequestError already answers it with a challenge.
+	// publish. RejectRequest already answers it with a challenge.
 	if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
 		return violations
 	}

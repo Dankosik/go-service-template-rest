@@ -6,6 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"maps"
+	"slices"
 	"time"
 )
 
@@ -13,7 +16,10 @@ var (
 	ErrInvalidBinding   = errors.New("inbound webhook binding is invalid")
 	ErrDuplicateBinding = errors.New("inbound webhook binding is duplicate")
 	ErrUnknownBinding   = errors.New("inbound webhook binding is unknown")
-	ErrDecodeRejected   = errors.New("inbound webhook decode rejected")
+	// ErrDecodeRejected is what a decoder returns, or wraps, to reject a payload
+	// for good: the receipt is quarantined without retries. Any other decoder
+	// error is retried, and a handler error is always retried.
+	ErrDecodeRejected = errors.New("inbound webhook decode rejected")
 )
 
 // VerifiedDelivery is the verified durable receipt a feature handler sees.
@@ -37,7 +43,8 @@ func NewRegistry() *Registry {
 	return &Registry{bindings: make(map[string]dispatchHandle)}
 }
 
-// Bind registers one non-nil decoder and handler for endpointID.
+// Bind registers one non-nil decoder and handler for endpointID. See
+// [ErrDecodeRejected] for how decoder and handler errors are retried.
 func Bind[T any](
 	r *Registry,
 	endpointID string,
@@ -72,22 +79,25 @@ func (r *Registry) HasBinding(endpointID string) bool {
 	return ok
 }
 
-// RequireExact requires the registered set to equal configured.
+// RequireExact requires the registered set to equal configured. The error
+// wraps [ErrInvalidBinding] and names the first endpoint that differs.
 func (r *Registry) RequireExact(configured []string) error {
 	if r == nil {
-		return ErrInvalidBinding
-	}
-	if len(configured) != len(r.bindings) {
-		return ErrInvalidBinding
+		return fmt.Errorf("%w: registry is nil", ErrInvalidBinding)
 	}
 	seen := make(map[string]struct{}, len(configured))
 	for _, id := range configured {
 		if _, duplicate := seen[id]; duplicate {
-			return ErrInvalidBinding
+			return fmt.Errorf("%w: endpoint %q is configured twice", ErrInvalidBinding, id)
 		}
 		seen[id] = struct{}{}
 		if _, ok := r.bindings[id]; !ok {
-			return ErrInvalidBinding
+			return fmt.Errorf("%w: configured endpoint %q has no binding", ErrInvalidBinding, id)
+		}
+	}
+	for _, id := range slices.Sorted(maps.Keys(r.bindings)) {
+		if _, ok := seen[id]; !ok {
+			return fmt.Errorf("%w: bound endpoint %q is not configured", ErrInvalidBinding, id)
 		}
 	}
 	return nil

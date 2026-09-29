@@ -98,16 +98,17 @@ func (Service) ClientStream(stream referencev1.EchoService_ClientStreamServer) e
 				ErrStreamLimit,
 			)
 		}
-		if totalValueBytes+len(value) > maxClientStreamValueBytes {
+		nextTotal := totalValueBytes + len(value)
+		if nextTotal > maxClientStreamValueBytes {
 			return fmt.Errorf(
 				"client stream reached the %d-byte limit at %d bytes: %w",
 				maxClientStreamValueBytes,
-				totalValueBytes+len(value),
+				nextTotal,
 				ErrStreamLimit,
 			)
 		}
 		values = append(values, value)
-		totalValueBytes += len(value)
+		totalValueBytes = nextTotal
 	}
 }
 

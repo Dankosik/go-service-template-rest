@@ -16,6 +16,8 @@ import (
 // probeOperationCount is the always-present generated surface this package owns.
 const probeOperationCount = 2
 
+// Handlers are the operation implementations and probe dependencies NewRouter
+// serves.
 type Handlers struct {
 	Health        *health.Service
 	ReadinessGate func(context.Context) error

@@ -34,13 +34,14 @@ type HardenConfig struct {
 	// LogHealthProbes re-enables access logging for platform probe routes,
 	// which are excluded by default.
 	LogHealthProbes bool
-	// RateLimit rejects a caller that is over its budget with 429. Nil leaves the
-	// middleware out of the chain, which is the shipped default; see RateLimiter
-	// for why the limit and the identity it charges are the service's decision,
-	// and NewKeyedRateLimiter for the one implementation this repository ships.
-	RateLimit RateLimiter
+	// RateLimiter rejects a caller that is over its budget with 429. Nil leaves
+	// the middleware out of the chain, which is the shipped default; see the
+	// RateLimiter type for why the limit and the identity it charges are the
+	// service's decision, and NewKeyedRateLimiter for the one implementation this
+	// repository ships.
+	RateLimiter RateLimiter
 	// RateLimitKey reports which bucket a request is charged against, and is
-	// required when RateLimit is set. There is no default: the identity worth
+	// required when RateLimiter is set. There is no default: the identity worth
 	// limiting is the whole decision, and the two candidates a template could
 	// guess — the client address and a forwarded-for header — are respectively
 	// useless and spoofable without knowing the edge. See HeaderRateLimitKey.
@@ -77,9 +78,9 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg HardenConfig, apiS
 	if cfg.MaxInFlight < 0 {
 		return nil, errors.New("http router: max in flight must be >= 0")
 	}
-	// Same reason: a limiter with no key silently limits nothing, which looks
-	// exactly like a limiter that is working.
-	if cfg.RateLimit != nil && cfg.RateLimitKey == nil {
+	// A limiter with no key silently limits nothing, which looks exactly like a
+	// limiter that is working, so Harden refuses it.
+	if cfg.RateLimiter != nil && cfg.RateLimitKey == nil {
 		return nil, errors.New("http router: rate limit key is required when a rate limiter is configured")
 	}
 
@@ -124,7 +125,7 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg HardenConfig, apiS
 		// answers 503 before it starts attributing the overload to one caller, and
 		// well outside the generated validator, so an over-budget caller does not
 		// get their body schema-validated before being told no.
-		func(next http.Handler) http.Handler { return RateLimit(cfg.RateLimit, cfg.RateLimitKey, next) },
+		func(next http.Handler) http.Handler { return RateLimit(cfg.RateLimiter, cfg.RateLimitKey, next) },
 		// Innermost here, and still outside the generated router, so a panic
 		// raised inside an operation becomes a sanitized 500.
 		func(next http.Handler) http.Handler { return Recover(log, next) },
@@ -147,7 +148,7 @@ func newRootRouter(
 	root := chi.NewRouter()
 	root.Use(middlewares...)
 	root.Mount("/", apiSubrouter)
-	applyHTTPPolicy(root)
+	applyFallbackPolicy(root)
 	return root
 }
 

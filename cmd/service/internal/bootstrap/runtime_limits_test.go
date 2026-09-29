@@ -70,11 +70,11 @@ func TestApplyMemoryLimitReportsItsDecision(t *testing.T) {
 	)
 
 	line := logged.String()
-	if got != int64(detected) {
-		t.Fatalf("detected limit = %d, want %d", got, detected)
+	if got.containerBytes != int64(detected) {
+		t.Fatalf("detected limit = %d, want %d", got.containerBytes, detected)
 	}
-	if got, want := debug.SetMemoryLimit(-1), int64(detected*9/10); got != want {
-		t.Fatalf("memory limit = %d, want %d", got, want)
+	if applied := debug.SetMemoryLimit(-1); applied != got.gcBytes || applied != int64(detected*9/10) {
+		t.Fatalf("memory limit = %d, reported %d, want %d", applied, got.gcBytes, detected*9/10)
 	}
 	if !strings.Contains(line, "runtime_memory_limit_applied") {
 		t.Fatalf("log = %q, want an applied record", line)
@@ -82,6 +82,15 @@ func TestApplyMemoryLimitReportsItsDecision(t *testing.T) {
 	if !strings.Contains(line, `"component":"runtime_limits"`) {
 		t.Fatalf("log = %q, want the runtime_limits component", line)
 	}
+}
+
+// gcLimit is the memoryLimit applyMemoryLimit reports for a container limit and
+// ratio; a zero container limit reports none.
+func gcLimit(containerBytes int64, ratio float64) memoryLimit {
+	if containerBytes <= 0 {
+		return memoryLimit{}
+	}
+	return memoryLimit{containerBytes: containerBytes, gcBytes: int64(float64(containerBytes) * ratio)}
 }
 
 // restoreMemoryLimit puts the process-wide GC limit back after a test touches it.
@@ -155,7 +164,7 @@ func TestReportRequestBufferBudget(t *testing.T) {
 			t.Parallel()
 
 			var logged bytes.Buffer
-			reportRequestBufferBudget(slog.New(slog.NewJSONHandler(&logged, nil)), tc.cfg, tc.limit)
+			reportRequestBufferBudget(slog.New(slog.NewJSONHandler(&logged, nil)), tc.cfg, gcLimit(tc.limit, tc.cfg.Runtime.MemoryLimitRatio))
 
 			got := strings.Contains(logged.String(), "runtime_request_buffer_budget_exceeded")
 			if got != tc.want {
@@ -168,7 +177,7 @@ func TestReportRequestBufferBudget(t *testing.T) {
 	reportRequestBufferBudget(
 		slog.New(slog.NewJSONHandler(&logged, nil)),
 		budgetConfig(100_000, math.MaxInt64),
-		gibibyte,
+		gcLimit(gibibyte, 0.9),
 	)
 	if !strings.Contains(logged.String(), `"request_buffers.worst_case_bytes":9223372036854775807`) {
 		t.Fatalf("overflowing request-buffer product was not saturated: %s", logged.String())

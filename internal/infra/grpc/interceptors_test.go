@@ -44,7 +44,7 @@ func TestUnaryInterceptorOrder(t *testing.T) {
 	}
 	chain := unaryChain(
 		slog.New(slog.DiscardHandler),
-		newAdmissionPolicy(1, 1, serverLoad{}),
+		newAdmissionPolicy(1, 1, serverLoad{}, newRPCDrain()),
 		time.Minute,
 		[]grpc.UnaryServerInterceptor{policy},
 		validator,
@@ -64,7 +64,7 @@ func TestUnaryInterceptorOrder(t *testing.T) {
 	}
 	chain = unaryChain(
 		slog.New(slog.DiscardHandler),
-		newAdmissionPolicy(1, 1, serverLoad{}),
+		newAdmissionPolicy(1, 1, serverLoad{}, newRPCDrain()),
 		time.Minute,
 		[]grpc.UnaryServerInterceptor{panickingPolicy},
 		validator,

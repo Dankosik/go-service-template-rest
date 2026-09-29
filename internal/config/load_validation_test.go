@@ -14,11 +14,11 @@ unknown:
   field: value
 `)
 
-	_, _, err := LoadDetailed(LoadOptions{
+	_, _, err := Load(t.Context(), LoadOptions{
 		ConfigOverlays: []string{overlayPath},
 	})
 	if err == nil {
-		t.Fatal("LoadDetailed() expected unknown overlay key error")
+		t.Fatal("Load() expected unknown overlay key error")
 	}
 	if !errors.Is(err, ErrUnknownKey) {
 		t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -38,9 +38,9 @@ func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv(tc.envKey, "oops")
 
-			_, report, err := LoadDetailed(LoadOptions{})
+			_, report, err := Load(t.Context(), LoadOptions{})
 			if err == nil {
-				t.Fatal("LoadDetailed() expected unknown key error")
+				t.Fatal("Load() expected unknown key error")
 			}
 			if !errors.Is(err, ErrUnknownKey) {
 				t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -63,9 +63,9 @@ func TestScalarSectionRejects(t *testing.T) {
 http: oops
 `)
 
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	_, _, err := Load(t.Context(), LoadOptions{ConfigPath: configPath})
 	if err == nil {
-		t.Fatal("LoadDetailed() error = nil, want unknown key error")
+		t.Fatal("Load() error = nil, want unknown key error")
 	}
 	if !errors.Is(err, ErrUnknownKey) {
 		t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -80,9 +80,9 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 		resetConfigEnv(t)
 		t.Setenv("APP__POSTGRES__ENABLED", "true")
 
-		_, _, err := LoadDetailed(LoadOptions{})
+		_, _, err := Load(t.Context(), LoadOptions{})
 		if err == nil {
-			t.Fatal("LoadDetailed() expected secret policy error")
+			t.Fatal("Load() expected secret policy error")
 		}
 		if !errors.Is(err, ErrSecretPolicy) {
 			t.Fatalf("error = %v, want ErrSecretPolicy", err)
@@ -96,9 +96,9 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 		t.Setenv("APP__POSTGRES__ENABLED", "true")
 		t.Setenv("APP__POSTGRES__DSN", dsn)
 
-		cfg, _, err := LoadDetailed(LoadOptions{})
+		cfg, _, err := Load(t.Context(), LoadOptions{})
 		if err != nil {
-			t.Fatalf("LoadDetailed() error = %v", err)
+			t.Fatalf("Load() error = %v", err)
 		}
 		if !cfg.Postgres.Enabled {
 			t.Fatal("Postgres.Enabled = false, want true")

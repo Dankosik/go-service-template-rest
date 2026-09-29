@@ -152,7 +152,7 @@ func TestJWKSRefreshFailureIsUnavailable(t *testing.T) {
 		testPolicy(t),
 		func(ctx context.Context) jwt.Keyfunc {
 			return func(*jwt.Token) (any, error) {
-				failureState, ok := ctx.Value(refreshFailureKey).(*refreshFailure)
+				failureState, ok := refreshObserverFrom(ctx)
 				if !ok {
 					return nil, errors.New("refresh failure state is missing")
 				}
@@ -196,7 +196,7 @@ func TestRefreshFailureReportingPolicy(t *testing.T) {
 		t.Fatal("scheduled refresh failure was suppressed after the library canceled its attempt context")
 	}
 
-	requestCtx := context.WithValue(processCtx, refreshFailureKey, new(refreshFailure))
+	requestCtx, _ := withRefreshObserver(processCtx)
 	if !shouldReportRefreshFailure(processCtx, requestCtx) {
 		t.Fatal("live request refresh failure was suppressed")
 	}

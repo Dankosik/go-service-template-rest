@@ -12,11 +12,9 @@ import (
 // shared catalog.
 //
 // Two things are worth copying. The code, title, and type URI come from
-// internal/problem rather than a local table: the one this replaced fell through
-// to the 500 type URI for a 409, and no test noticed because the status in the
-// body was still 409. And the body carries the request identifier, so a domain
-// error is as traceable as the transport rejections the template's own middleware
-// writes.
+// internal/problem rather than a local table, so status and type URI cannot
+// drift apart. And the body carries the request identifier, so a domain error is
+// as traceable as the transport rejections the template's own middleware writes.
 func newProblem(ctx context.Context, code problem.Code, detail string) openapi.Problem {
 	definition := problem.ForCodeOrInternal(code)
 

@@ -69,10 +69,12 @@ func newServer(cfg serverConfig, options Options) (*Server, error) {
 		return nil, fmt.Errorf("build protobuf validator: %w", err)
 	}
 	options = withOptionDefaults(options)
+	rpcDrain := newRPCDrain()
 	admission := newAdmissionPolicy(
 		cfg.maxConcurrentRPCs,
 		cfg.maxConcurrentHealthRPCs,
 		newServerLoad(options.MeterProvider),
+		rpcDrain,
 	)
 	healthDrain := newHealthDrain()
 	registeredMethods := make(methodSet)
@@ -92,7 +94,7 @@ func newServer(cfg serverConfig, options Options) (*Server, error) {
 				return known && !isHealthMethod(info.FullMethodName)
 			}),
 		)),
-		grpc.StatsHandler(admission.statsHandler()),
+		grpc.StatsHandler(drainStatsHandler{drain: rpcDrain}),
 		grpc.ChainUnaryInterceptor(unaryChain(
 			options.Logger,
 			admission,
@@ -119,7 +121,7 @@ func newServer(cfg serverConfig, options Options) (*Server, error) {
 	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
 	healthgrpc.RegisterHealthServer(nativeServer, healthServer)
 	if err := registerServices(nativeServer, options.Services, registeredMethods); err != nil {
-		healthDrain.stop()
+		healthDrain.cancelAll()
 		nativeServer.Stop()
 		return nil, err
 	}
@@ -127,7 +129,7 @@ func newServer(cfg serverConfig, options Options) (*Server, error) {
 		server:      nativeServer,
 		health:      healthServer,
 		healthDrain: healthDrain,
-		drain:       admission.drain,
+		rpcDrain:    rpcDrain,
 		stopDone:    make(chan struct{}),
 	}, nil
 }

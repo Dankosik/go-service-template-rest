@@ -13,6 +13,9 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
+// The HTTP side of PostgreSQL idempotency. docs/postgres-http-idempotency.md
+// owns the contract: which operations opt in, what is replayed, and why.
+
 const idempotencyExtension = "x-idempotent"
 
 var idempotencyReplayHeaders = []string{

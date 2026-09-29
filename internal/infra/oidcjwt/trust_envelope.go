@@ -6,7 +6,7 @@ import "time"
 // the algorithm or provider-work bounds is a code-reviewed trust decision.
 // Shared token size and clock-skew bounds live in bearerauthn.
 const (
-	maxProviderBody        = 1 << 20
+	maxProviderBodyBytes   = 1 << 20
 	maxProviderHeaderBytes = 32 << 10
 	maxProviderInFlight    = 1
 	allowedAlgorithm       = "RS256"

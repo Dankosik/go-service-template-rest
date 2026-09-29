@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
@@ -63,126 +62,109 @@ type serverResult struct {
 	err  error
 }
 
-type runtimeListeners struct {
-	http net.Listener
-	// profile:grpc:start
-	grpc net.Listener
-	// profile:grpc:end
-	diagnostics net.Listener
+// boundServer is one server paired with the listener it serves. label names it
+// in the start log; name identifies it in serverResult.
+type boundServer struct {
+	name     string
+	label    string
+	server   runtimeServer
+	listener net.Listener
 }
 
-func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (runtimeListeners, string, error) {
-	var listeners runtimeListeners
+// bindRuntimeListeners binds every configured server's listener. On failure it
+// closes the listeners already bound and reports the failed operation.
+func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (bound []boundServer, failedOperation string, err error) {
 	var listenConfig net.ListenConfig
 
 	httpListener, err := listenConfig.Listen(ctx, "tcp", args.cfg.HTTP.Addr)
 	if err != nil {
-		return listeners, "startup.http_listen", fmt.Errorf("listen http server: %w", err)
+		return nil, "http_listen", fmt.Errorf("listen http server: %w", err)
 	}
-	listeners.http = boundedAPIListener(httpListener, args.cfg.HTTP.MaxConnections)
+	bound = append(bound, boundServer{
+		name:     "http",
+		label:    "http",
+		server:   args.httpSrv,
+		listener: boundedAPIListener(httpListener, args.cfg.HTTP.MaxConnections),
+	})
 
 	// profile:grpc:start
 	if args.grpcSrv != nil {
 		grpcListener, grpcErr := listenConfig.Listen(ctx, "tcp", args.cfg.GRPC.Server.Addr)
 		if grpcErr != nil {
-			listeners.close()
-			return runtimeListeners{}, "startup.grpc_listen", fmt.Errorf("listen gRPC server: %w", grpcErr)
+			closeBoundListeners(bound)
+			return nil, "grpc_listen", fmt.Errorf("listen gRPC server: %w", grpcErr)
 		}
-		listeners.grpc = boundedAPIListener(grpcListener, grpcx.MaxConnections)
+		bound = append(bound, boundServer{
+			name:     "grpc",
+			label:    "gRPC",
+			server:   args.grpcSrv,
+			listener: boundedAPIListener(grpcListener, grpcx.MaxConnections),
+		})
 	}
 	// profile:grpc:end
 
 	if args.diagnosticsSrv != nil && args.cfg.Observability.Metrics.Addr != "" {
 		diagnosticsListener, diagnosticsListenErr := listenConfig.Listen(ctx, "tcp", args.cfg.Observability.Metrics.Addr)
 		if diagnosticsListenErr != nil {
-			listeners.close()
-			return runtimeListeners{}, "startup.metrics_listen", fmt.Errorf("listen diagnostics server: %w", diagnosticsListenErr)
+			closeBoundListeners(bound)
+			return nil, "metrics_listen", fmt.Errorf("listen diagnostics server: %w", diagnosticsListenErr)
 		}
-		listeners.diagnostics = diagnosticsListener
+		bound = append(bound, boundServer{
+			name:     "diagnostics",
+			label:    "diagnostics",
+			server:   args.diagnosticsSrv,
+			listener: diagnosticsListener,
+		})
 	}
-	return listeners, "", nil
+	return bound, "", nil
 }
 
-func (l runtimeListeners) close() {
-	if l.http != nil {
-		_ = l.http.Close()
-	}
-	// profile:grpc:start
-	if l.grpc != nil {
-		_ = l.grpc.Close()
-	}
-	// profile:grpc:end
-	if l.diagnostics != nil {
-		_ = l.diagnostics.Close()
+func closeBoundListeners(bound []boundServer) {
+	for _, b := range bound {
+		_ = b.listener.Close()
 	}
 }
 
-func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args serveRuntimeArgs) error {
-	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
+func serveRuntime(signalCtx context.Context, startupCtx context.Context, args serveRuntimeArgs) error {
+	if err := startupRuntimeContextErr(signalCtx, startupCtx); err != nil {
 		return rejectRuntimeStartup(
-			bootstrapCtx,
+			startupCtx,
 			args.log,
-			"startup.http_listen",
+			"http_listen",
 			fmt.Errorf("startup canceled before http listen: %w", err),
 		)
 	}
 
-	listeners, stage, err := bindRuntimeListeners(bootstrapCtx, args)
+	bound, operation, err := bindRuntimeListeners(startupCtx, args)
 	if err != nil {
-		return rejectRuntimeStartup(bootstrapCtx, args.log, stage, err)
+		return rejectRuntimeStartup(startupCtx, args.log, operation, err)
 	}
-	listener := listeners.http
-	// profile:grpc:start
-	grpcListener := listeners.grpc
-	// profile:grpc:end
-	diagnosticsListener := listeners.diagnostics
 
-	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
-		listeners.close()
+	if err := startupRuntimeContextErr(signalCtx, startupCtx); err != nil {
+		closeBoundListeners(bound)
 		return rejectRuntimeStartup(
-			bootstrapCtx,
+			startupCtx,
 			args.log,
-			"startup.http_serve",
+			"http_serve",
 			fmt.Errorf("startup canceled before http serve: %w", err),
 		)
 	}
 
-	serverCount := 1
-	// profile:grpc:start
-	if grpcListener != nil {
-		serverCount++
-	}
-	// profile:grpc:end
-	if diagnosticsListener != nil {
-		serverCount++
-	}
-	runErrCh := make(chan serverResult, serverCount)
-	go func() {
-		args.log.InfoContext(bootstrapCtx, "http server started", "addr", listener.Addr().String(), "env", args.cfg.App.Env)
-		runErrCh <- serverResult{name: "http", err: normalizeServeError(args.httpSrv.Serve(listener))}
-	}()
-	// profile:grpc:start
-	if grpcListener != nil {
+	runErrCh := make(chan serverResult, len(bound))
+	for _, b := range bound {
 		go func() {
-			args.log.InfoContext(bootstrapCtx, "gRPC server started", "addr", grpcListener.Addr().String(), "env", args.cfg.App.Env)
-			runErrCh <- serverResult{name: "grpc", err: args.grpcSrv.Serve(grpcListener)}
-		}()
-	}
-	// profile:grpc:end
-	if diagnosticsListener != nil {
-		go func() {
-			args.log.InfoContext(bootstrapCtx, "diagnostics server started", "addr", diagnosticsListener.Addr().String(), "env", args.cfg.App.Env)
-			runErrCh <- serverResult{name: "diagnostics", err: normalizeServeError(args.diagnosticsSrv.Serve(diagnosticsListener))}
+			args.log.InfoContext(startupCtx, b.label+" server started", "addr", b.listener.Addr().String(), "env", args.cfg.App.Env)
+			runErrCh <- serverResult{name: b.name, err: normalizeServeError(b.server.Serve(b.listener))}
 		}()
 	}
 
-	admissionCtx, cancelAdmission := context.WithCancel(bootstrapCtx)
+	admissionCtx, cancelAdmission := context.WithCancel(startupCtx)
 	defer cancelAdmission()
 
 	admissionErrCh := startStartupAdmission(admissionCtx, args.readinessCheck, args.cfg.HTTP.ReadinessTimeout)
 	ready, terminalErr := waitForStartupAdmission(
 		signalCtx,
-		bootstrapCtx,
+		startupCtx,
 		args,
 		admissionErrCh,
 		runErrCh,
@@ -208,11 +190,10 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	// The diagnostics listener is deliberately not in this drain. Everything worth
 	// measuring happens during the window it occupies: the readiness propagation
 	// delay, up to the whole remaining shutdown budget of in-flight requests, and
-	// the shed and timed-out responses they produce. The version this replaced closed
-	// /metrics at the same instant as the API, so with the shipped scrape-only
-	// configuration none of that window was ever collected — the Prometheus target
-	// simply went down for the last fifteen seconds of every pod's life, which is
-	// exactly the fifteen seconds a rolling deploy is judged on.
+	// the shed and timed-out responses they produce. Closing /metrics with the API
+	// would leave that window uncollected under the shipped scrape-only
+	// configuration: the Prometheus target would go down for the end of every
+	// pod's life, which is the part a rolling deploy is judged on.
 	drainer := shutdownDrainer(args.healthSvc)
 	applicationServers := []shutdownServer{args.httpSrv}
 	// profile:grpc:start
@@ -297,28 +278,28 @@ func serverStoppedAfterReadiness(log *slog.Logger, result serverResult) error {
 	return fmt.Errorf("%s server stopped with error: %w", result.name, result.err)
 }
 
-func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Context) error {
+func startupRuntimeContextErr(signalCtx context.Context, startupCtx context.Context) error {
 	if err := signalCtx.Err(); err != nil {
 		return fmt.Errorf("startup signal context: %w", err)
 	}
-	if err := bootstrapCtx.Err(); err != nil {
+	if err := startupCtx.Err(); err != nil {
 		return fmt.Errorf("startup bootstrap context: %w", err)
 	}
 	return nil
 }
 
 func rejectRuntimeStartup(
-	bootstrapCtx context.Context,
+	startupCtx context.Context,
 	log *slog.Logger,
-	stage string,
+	operation string,
 	err error,
 ) error {
 	log.ErrorContext(
-		bootstrapCtx,
+		startupCtx,
 		"startup_blocked",
 		startupLogArgs(
 			startupLogComponentStartupProbes,
-			strings.TrimPrefix(stage, "startup."),
+			operation,
 			"error",
 			"error.type", "startup_error",
 			"err", err,

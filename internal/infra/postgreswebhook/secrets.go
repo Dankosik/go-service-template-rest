@@ -2,7 +2,6 @@ package postgreswebhook
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -11,15 +10,16 @@ import (
 	"github.com/example/go-service-template-rest/internal/webhooksecret"
 )
 
-const (
-	maxSecretManifestBytes   = 1 << 20
-	maxSecretManifestEntries = 4096
-)
-
 type secretTuple struct {
 	owner     string
 	receiver  string
 	reference string
+}
+
+// secretPrincipal is the receiver identity one secret may sign for.
+type secretPrincipal struct {
+	owner    string
+	receiver string
 }
 
 type SecretManifest struct {
@@ -38,18 +38,18 @@ type secretEntry struct {
 }
 
 func ParseSecretManifest(raw string) (*SecretManifest, error) {
-	if raw == "" || len(raw) > maxSecretManifestBytes {
+	if raw == "" || len(raw) > webhooksecret.MaxManifestBytes {
 		return nil, errors.New("parse webhook secret manifest: document size is invalid")
 	}
 	var document secretDocument
 	if err := json.UnmarshalRead(strings.NewReader(raw), &document, json.RejectUnknownMembers(true)); err != nil {
 		return nil, errors.New("parse webhook secret manifest: invalid JSON")
 	}
-	if len(document.Entries) == 0 || len(document.Entries) > maxSecretManifestEntries {
+	if len(document.Entries) == 0 || len(document.Entries) > webhooksecret.MaxManifestEntries {
 		return nil, errors.New("parse webhook secret manifest: entries are required")
 	}
 	manifest := &SecretManifest{entries: make(map[secretTuple][]byte, len(document.Entries))}
-	bindings := make(map[[sha256.Size]byte]secretTuple)
+	var bindings webhooksecret.Bindings[secretPrincipal]
 	for _, entry := range document.Entries {
 		for name, value := range map[string]string{
 			ownerScopeField: entry.OwnerScope, receiverIDField: entry.ReceiverID, "key_reference": entry.KeyReference,
@@ -66,11 +66,9 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 		if _, exists := manifest.entries[tuple]; exists {
 			return nil, errors.New("parse webhook secret manifest: duplicate binding")
 		}
-		digest := sha256.Sum256(secret)
-		if previous, exists := bindings[digest]; exists && (previous.owner != tuple.owner || previous.receiver != tuple.receiver) {
+		if !bindings.Bind(secret, secretPrincipal{owner: tuple.owner, receiver: tuple.receiver}) {
 			return nil, errors.New("parse webhook secret manifest: key is cross-bound")
 		}
-		bindings[digest] = tuple
 		manifest.entries[tuple] = bytes.Clone(secret)
 	}
 	return manifest, nil

@@ -7,6 +7,11 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
+// healthDrain ends standard health RPCs when the server drains. A Watch stream
+// lives as long as its peer, and GracefulStop waits for every open stream, so
+// without this cancellation a watching client would hold Shutdown until its
+// deadline. health.Server.Shutdown only publishes NOT_SERVING; it does not end
+// the streams.
 type healthDrain struct {
 	ctx    context.Context //nolint:containedctx // One server-lifetime cancellation signal.
 	cancel context.CancelFunc
@@ -17,7 +22,7 @@ func newHealthDrain() healthDrain {
 	return healthDrain{ctx: ctx, cancel: cancel}
 }
 
-func (d healthDrain) stop() { d.cancel() }
+func (d healthDrain) cancelAll() { d.cancel() }
 
 func (d healthDrain) around(ctx context.Context, fullMethod string, call func(context.Context) error) error {
 	if !isHealthMethod(fullMethod) {
@@ -40,8 +45,9 @@ func isHealthCheck(fullMethod string) bool {
 }
 
 // isHealthMethod matches the whole standard health service by prefix, so a
-// method grpc-go adds to it later is exempted from routine access logs, the
-// business RPC budget, and protocol telemetry without an edit here.
+// method grpc-go adds to it later is exempted from the business RPC budget,
+// deadline, drain accounting, error sanitizing, and protocol telemetry without an
+// edit here.
 // Over-matching costs a metric series or the wrong finite budget rather than
 // publishing work or leaving it unbounded.
 //

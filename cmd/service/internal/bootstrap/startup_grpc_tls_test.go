@@ -76,7 +76,7 @@ func startTLSGRPCRuntime(t *testing.T, settings config.GRPCTLSConfig) string {
 	server, err := newGRPCRuntime(
 		cfg,
 		slog.New(slog.DiscardHandler),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		nil,
 		grpcRuntimeBindings{},
 	)

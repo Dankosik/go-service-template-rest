@@ -11,6 +11,9 @@
 // import the other and the rules would otherwise live in two copies held in
 // step by a parity test.
 //
+// The HTTPS URL shape itself comes from internal/outboundtrust, the stdlib-only
+// leaf that also serves config and the outbound HTTP client.
+//
 // What stays out: this package holds no configured value and builds no policy
 // object. It answers about strings, so a caller may ask before it has anywhere
 // to put the answer.

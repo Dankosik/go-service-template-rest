@@ -6,6 +6,9 @@ import (
 )
 
 // HTTPIdempotencyConfig contains the one deployment-owned product quantity.
+// The load pipeline does not validate it: bootstrap calls
+// ValidateHTTPIdempotencyActive only when a route registers idempotency, so an
+// unused section cannot fail startup.
 type HTTPIdempotencyConfig struct {
 	Retention time.Duration `koanf:"retention"`
 }

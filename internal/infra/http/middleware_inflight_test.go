@@ -45,14 +45,14 @@ func TestServerLoadPublishesAdmissionMetrics(t *testing.T) {
 	release := load.Admitted(t.Context())
 	load.Shed(t.Context())
 
-	if got := telemetrytest.Int64SumValue(t, reader, activeRequestsInstrument); got != 1 {
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, activeRequestsInstrument); got != 1 {
 		t.Fatalf("%s = %d, want 1", activeRequestsInstrument, got)
 	}
-	if got := telemetrytest.Int64SumValue(t, reader, shedRequestsInstrument); got != 1 {
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, shedRequestsInstrument); got != 1 {
 		t.Fatalf("%s = %d, want 1", shedRequestsInstrument, got)
 	}
 	release()
-	if got := telemetrytest.Int64SumValue(t, reader, activeRequestsInstrument); got != 0 {
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, activeRequestsInstrument); got != 0 {
 		t.Fatalf("%s after release = %d, want 0", activeRequestsInstrument, got)
 	}
 }
@@ -241,7 +241,7 @@ func TestShedResponseIsCorrelatedAndLogged(t *testing.T) {
 		requests.Wait()
 	})
 
-	chain, err := Harden(log, telemetry.New(), HardenConfig{
+	chain, err := Harden(log, telemetry.NewMetrics(), HardenConfig{
 		MaxBodyBytes:   1,
 		RequestTimeout: time.Minute,
 		MaxInFlight:    1,

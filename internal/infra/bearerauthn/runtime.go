@@ -3,8 +3,6 @@ package bearerauthn
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -21,6 +19,10 @@ const (
 // Verifier is the consumer-owned trust-engine contract. It verifies one already
 // parsed bearer value and returns a principal plus expiry, or one sanitized
 // invalid, unavailable, or caller-context failure.
+//
+// A success must carry a complete Result: an identified principal and a
+// non-zero expiry; [Runtime] treats anything less as KindUnavailable. Close must
+// be idempotent, because [Runtime.Close] may reach it more than once.
 type Verifier interface {
 	Verify(ctx context.Context, token string) (Result, error)
 	Close()
@@ -68,18 +70,18 @@ func (r *Runtime) verifyCredential(ctx context.Context, values []string, carrier
 		return Result{}, r.recordVerificationOutcome(ctx, carrier, err)
 	}
 	verified, err := r.verifier.Verify(ctx, token)
-	if err == nil && !validResult(verified) {
-		verified = Result{}
-		// A success without a complete identity and expiry is an engine failure.
-		err = failure(KindUnavailable)
+	if err != nil {
+		return Result{}, r.recordVerificationOutcome(ctx, carrier, sanitizeVerifierError(err))
 	}
-	return verified, r.recordVerificationOutcome(ctx, carrier, sanitizeVerifierError(err))
+	if !validResult(verified) {
+		// A success without a complete identity and expiry is an engine failure.
+		return Result{}, r.recordVerificationOutcome(ctx, carrier, failure(KindUnavailable))
+	}
+	return verified, r.recordVerificationOutcome(ctx, carrier, nil)
 }
 
 func validResult(result Result) bool {
-	return strings.TrimSpace(result.Principal.Issuer) != "" &&
-		!result.ExpiresAt.IsZero() &&
-		(strings.TrimSpace(result.Principal.Subject) != "" || strings.TrimSpace(result.Principal.ClientID) != "")
+	return result.Principal.Identified() && !result.ExpiresAt.IsZero()
 }
 
 func (r *Runtime) recordVerificationOutcome(ctx context.Context, carrier transport, err error) error {
@@ -97,5 +99,5 @@ func sanitizeVerifierError(err error) error {
 	if _, ok := KindOf(err); ok {
 		return err
 	}
-	return fmt.Errorf("verify access token: %w", failure(KindInvalid))
+	return VerificationFailure(KindInvalid)
 }

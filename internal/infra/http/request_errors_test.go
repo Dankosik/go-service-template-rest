@@ -84,7 +84,7 @@ func TestMalformedRequestStaysBadRequest(t *testing.T) {
 	t.Parallel()
 
 	var logged bytes.Buffer
-	reject := handleGeneratedRequestError(newTestServiceLogger(&logged), defaultAuthenticateChallenge)
+	reject := RejectRequest(newTestServiceLogger(&logged), defaultAuthenticateChallenge)
 
 	resp := httptest.NewRecorder()
 	reject(resp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil), errors.New("parameter is required"))
@@ -103,7 +103,7 @@ func TestMalformedRequestStaysBadRequest(t *testing.T) {
 func TestOversizedBodyStaysRequestEntityTooLarge(t *testing.T) {
 	t.Parallel()
 
-	reject := handleGeneratedRequestError(slog.New(slog.DiscardHandler), defaultAuthenticateChallenge)
+	reject := RejectRequest(slog.New(slog.DiscardHandler), defaultAuthenticateChallenge)
 
 	resp := httptest.NewRecorder()
 	reject(resp, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/x", nil), &http.MaxBytesError{Limit: 1})
@@ -181,7 +181,7 @@ func securedHandlerWithTerminal(
 		tb.Fatalf("build secured router: %v", err)
 	}
 
-	validator := mustRequestValidator(tb, spec, authenticate, handleGeneratedRequestError(log, challenge))
+	validator := mustRequestValidator(tb, spec, authenticate, RejectRequest(log, challenge))
 
 	return RequestCorrelation(validator(terminal))
 }

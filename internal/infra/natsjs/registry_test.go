@@ -133,3 +133,18 @@ func TestSchemaVersionRequiresCanonicalSpelling(t *testing.T) {
 		}
 	}
 }
+
+func TestRouteTableSubjectRejectsUnroutedKind(t *testing.T) {
+	t.Parallel()
+
+	subjects, err := buildRoutes([]Route{{Type: "order.updated", Version: 1, Subject: "events.orders"}})
+	if err != nil {
+		t.Fatalf("buildRoutes() error = %v", err)
+	}
+	if subject, err := subjects.subject("order.updated", 1); err != nil || subject != "events.orders" {
+		t.Fatalf("subject(order.updated, 1) = %q, %v", subject, err)
+	}
+	if _, err := subjects.subject("order.updated", 2); !errors.Is(err, ErrRejected) {
+		t.Fatalf("subject(order.updated, 2) error = %v, want ErrRejected", err)
+	}
+}

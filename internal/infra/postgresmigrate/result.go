@@ -38,6 +38,13 @@ type RunResult struct {
 	Duration     time.Duration
 }
 
+// recordVersions records the versions read before any migration runs; After
+// starts at before until applied migrations move it.
+func (r *RunResult) recordVersions(before, target int64) {
+	r.Before, r.After, r.Target = before, before, target
+	r.BeforeKnown, r.AfterKnown, r.TargetKnown = true, true, true
+}
+
 type RunError struct {
 	Stage FailureStage
 	Err   error
@@ -89,7 +96,6 @@ func setAfterFromApplied(
 	if len(applied) == 0 {
 		return
 	}
-	result.AfterKnown = true
 	switch direction {
 	case directionUp:
 		result.After = migrationVersion(applied[len(applied)-1])

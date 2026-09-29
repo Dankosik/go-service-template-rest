@@ -20,10 +20,14 @@ func (c *Client) HTTP(base *httpclient.Client) (*HTTPClient, error) {
 	if !c.available() || base == nil {
 		return nil, ErrInvalidConfiguration
 	}
-	return &HTTPClient{client: newNoRedirectHTTPClient(&oauth2.Transport{
+	// The token transport sits between two no-redirect layers: this client and
+	// the bounded one underneath.
+	client := base.StandardClient()
+	client.Transport = &oauth2.Transport{
 		Source: clientTokenSource{client: c},
-		Base:   doerRoundTripper{client: base},
-	})}, nil
+		Base:   client.Transport,
+	}
+	return &HTTPClient{client: client}, nil
 }
 
 // Do authenticates one request copy with the current valid token. Token

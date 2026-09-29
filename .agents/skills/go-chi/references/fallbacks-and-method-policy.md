@@ -4,7 +4,7 @@
 Load when a change touches fallback responses, method discovery, the `Allow` header, `HEAD` or `OPTIONS` behavior, or cross-origin preflight.
 
 ## What Already Owns This
-`applyHTTPPolicy` in `internal/infra/http/router.go` owns 404, 405, `Allow`, and bare `OPTIONS` for every router built through `NewRouter` or `Harden`. A service inherits that policy; it does not re-register its own.
+`applyFallbackPolicy` in `internal/infra/http/router_policy.go` owns 404, 405, `Allow`, and bare `OPTIONS` for every router built through `NewRouter` or `Harden`. A service inherits that policy; it does not re-register its own.
 
 ## Why Allow Is Rebuilt By Hand
 chi's built-in 405 handler writes `Allow` from the methods it matched. Setting a custom `MethodNotAllowed` handler replaces that handler outright — chi still computes the allowed set but has nowhere to hand it, so the header silently disappears. Any JSON 405 pays this cost.

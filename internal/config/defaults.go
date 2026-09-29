@@ -53,7 +53,7 @@ func defaultValues() map[string]any {
 	maps.Copy(values, jobsDefaults())
 	// profile:jobs-postgres:end
 	// profile:webhooks-durable:start
-	maps.Copy(values, webhooksDefaults())
+	maps.Copy(values, outboundWebhooksDefaults())
 	// profile:webhooks-durable:end
 	// profile:inbound-webhooks-standard:start
 	maps.Copy(values, inboundWebhooksDefaults())

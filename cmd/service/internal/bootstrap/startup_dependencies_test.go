@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -28,28 +27,6 @@ func TestPostgresDependencyInitFailurePreservesWrappedCause(t *testing.T) {
 	}
 	if !errors.Is(err, rootCause) {
 		t.Fatalf("error = %v, want wrapped root cause", err)
-	}
-}
-
-func TestPostgresDependencyInitFailureDoesNotDuplicateDependencyInitSentinel(t *testing.T) {
-	t.Parallel()
-
-	cause := fmt.Errorf("%w: dial failed", errDependencyInit)
-	err := postgresDependencyInitFailure(cause)
-	if err == nil {
-		t.Fatal("postgresDependencyInitFailure() error = nil, want non-nil")
-	}
-	if !errors.Is(err, errDependencyInit) {
-		t.Fatalf("postgresDependencyInitFailure() error = %v, want wrapped %v", err, errDependencyInit)
-	}
-	if !errors.Is(err, cause) {
-		t.Fatalf("postgresDependencyInitFailure() error = %v, want wrapped cause", err)
-	}
-	if count := strings.Count(err.Error(), errDependencyInit.Error()); count != 1 {
-		t.Fatalf("postgresDependencyInitFailure() error = %v, dependency init count = %d, want 1", err, count)
-	}
-	if !strings.Contains(err.Error(), "postgres init failed") {
-		t.Fatalf("postgresDependencyInitFailure() error = %v, want dependency context", err)
 	}
 }
 
@@ -149,12 +126,12 @@ func TestPostgresRuntimeReadinessProbeFailsAfterChildDeadlineWithNilProbeResult(
 func TestInitPostgresDependencyRejectsDisabledProfile(t *testing.T) {
 	t.Parallel()
 
-	runtime := postgresStartupRuntime{
-		cfg: config.Config{},
-		log: slog.New(slog.DiscardHandler),
-	}
-
-	pg, err := initPostgresDependency(context.Background(), context.Background(), runtime)
+	pg, err := initPostgresDependency(
+		context.Background(),
+		context.Background(),
+		config.PostgresConfig{},
+		slog.New(slog.DiscardHandler),
+	)
 	if err == nil {
 		t.Fatal("initPostgresDependency() error = nil, want required-profile rejection")
 	}
@@ -205,17 +182,14 @@ func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 	probeCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	runtime := postgresStartupRuntime{
-		cfg: config.Config{Postgres: config.PostgresConfig{ //nolint:gosec // Local test DSN; no live credential.
-			Enabled: true,
-			DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
+	cfg := config.PostgresConfig{ //nolint:gosec // Local test DSN; no live credential.
+		Enabled: true,
+		DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
 
-			MaxOpenConns: 1,
-		}},
-		log: slog.New(slog.DiscardHandler),
+		MaxOpenConns: 1,
 	}
 
-	pool, err := initPostgresDependency(context.Background(), probeCtx, runtime)
+	pool, err := initPostgresDependency(context.Background(), probeCtx, cfg, slog.New(slog.DiscardHandler))
 	if err == nil {
 		t.Fatal("initPostgresDependency() error = nil, want cancellation rejection")
 	}
@@ -280,15 +254,12 @@ func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *tes
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
 
-	cfg, _, err := config.LoadDetailed(config.LoadOptions{})
+	cfg, _, err := config.Load(t.Context(), config.LoadOptions{})
 	if err != nil {
-		t.Fatalf("config.LoadDetailed() error = %v", err)
+		t.Fatalf("config.Load() error = %v", err)
 	}
 	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
 		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s default", cfg.HTTP.ReadinessTimeout)
-	}
-	if got := readinessProbeBudget(cfg); got != cfg.HTTP.ReadinessTimeout {
-		t.Fatalf("readinessProbeBudget() = %s, want aggregate budget %s", got, cfg.HTTP.ReadinessTimeout)
 	}
 	if err := validateStartupBudgetCompatibility(cfg); err != nil {
 		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for default Postgres readiness headroom", err)

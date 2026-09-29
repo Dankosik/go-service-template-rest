@@ -21,13 +21,13 @@ type Worker struct {
 
 	draining atomic.Bool
 	started  atomic.Bool
-	fatal    chan error
+	terminal chan error
 	runDone  chan struct{}
 	drain    chan struct{}
 
-	mu            sync.Mutex
-	consumers     []jetstream.ConsumeContext
-	handlerCancel context.CancelFunc
+	mu              sync.Mutex
+	consumeContexts []jetstream.ConsumeContext
+	handlerCancel   context.CancelFunc
 }
 
 // Run starts this single-use worker and must begin before normal shutdown.
@@ -44,23 +44,23 @@ func (w *Worker) Run(ctx context.Context) error {
 	w.handlerCancel = handlerCancel
 	w.mu.Unlock()
 
-	consumers, err := w.startConsumers(handlerRoot)
+	consumeContexts, err := w.startConsumeContexts(handlerRoot)
 	if err != nil {
 		handlerCancel()
 		return err
 	}
 	w.mu.Lock()
-	w.consumers = consumers
+	w.consumeContexts = consumeContexts
 	draining := w.draining.Load()
 	w.mu.Unlock()
 	if draining {
-		drainConsumers(consumers)
+		drainConsumeContexts(consumeContexts)
 	}
 	unexpectedClose := make(chan struct{}, 1)
 	var watchers sync.WaitGroup
-	for _, consumer := range consumers {
+	for _, consumeContext := range consumeContexts {
 		watchers.Go(func() {
-			<-consumer.Closed()
+			<-consumeContext.Closed()
 			if !w.draining.Load() {
 				select {
 				case unexpectedClose <- struct{}{}:
@@ -73,7 +73,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	var runErr error
 	select {
 	case <-w.drain:
-	case runErr = <-w.fatal:
+	case runErr = <-w.terminal:
 		w.StartDrain()
 	case <-unexpectedClose:
 		runErr = fmt.Errorf("%w: native consume context closed unexpectedly", ErrTerminal)
@@ -83,37 +83,37 @@ func (w *Worker) Run(ctx context.Context) error {
 		w.StartDrain()
 	}
 
-	waitConsumers(consumers)
+	waitConsumeContexts(consumeContexts)
 	watchers.Wait()
 	if runErr == nil {
 		select {
-		case runErr = <-w.fatal:
+		case runErr = <-w.terminal:
 		default:
 		}
 	}
 	return runErr
 }
 
-func (w *Worker) startConsumers(handlerRoot context.Context) ([]jetstream.ConsumeContext, error) {
-	consumers := make([]jetstream.ConsumeContext, 0, w.cfg.MaxConcurrency)
+func (w *Worker) startConsumeContexts(handlerRoot context.Context) ([]jetstream.ConsumeContext, error) {
+	consumeContexts := make([]jetstream.ConsumeContext, 0, w.cfg.MaxConcurrency)
 	for range w.cfg.MaxConcurrency {
-		consumer, err := w.consumer.Consume(
+		consumeContext, err := w.consumer.Consume(
 			func(msg jetstream.Msg) {
 				if handleErr := w.handle(handlerRoot, msg); handleErr != nil {
-					w.fail(handleErr)
+					w.failTerminal(handleErr)
 				}
 			},
 			jetstream.PullMaxMessages(1),
 			jetstream.PullExpiry(operationTimeout),
 		)
 		if err != nil {
-			stopConsumers(consumers)
-			waitConsumers(consumers)
-			return nil, fmt.Errorf("%w: start durable consumer: %w", ErrRejected, err)
+			stopConsumeContexts(consumeContexts)
+			waitConsumeContexts(consumeContexts)
+			return nil, fmt.Errorf("%w: start consume context: %w", ErrRejected, err)
 		}
-		consumers = append(consumers, consumer)
+		consumeContexts = append(consumeContexts, consumeContext)
 	}
-	return consumers, nil
+	return consumeContexts, nil
 }
 
 // StartDrain prevents new worker deliveries and publications through the
@@ -124,9 +124,9 @@ func (w *Worker) StartDrain() {
 	}
 	close(w.drain)
 	w.mu.Lock()
-	consumers := append([]jetstream.ConsumeContext(nil), w.consumers...)
+	consumeContexts := append([]jetstream.ConsumeContext(nil), w.consumeContexts...)
 	w.mu.Unlock()
-	drainConsumers(consumers)
+	drainConsumeContexts(consumeContexts)
 	w.client.StopPublish()
 }
 
@@ -137,10 +137,7 @@ func (w *Worker) Shutdown(ctx context.Context) error {
 	w.StartDrain()
 	select {
 	case <-w.runDone:
-		if err := w.client.Shutdown(ctx); err != nil {
-			return err
-		}
-		return nil
+		return w.client.Shutdown(ctx)
 	case <-ctx.Done():
 		w.forceClose()
 		return fmt.Errorf("forced messaging shutdown: %w", ctx.Err())
@@ -153,34 +150,34 @@ func (w *Worker) forceClose() {
 	if w.handlerCancel != nil {
 		w.handlerCancel()
 	}
-	consumers := append([]jetstream.ConsumeContext(nil), w.consumers...)
+	consumeContexts := append([]jetstream.ConsumeContext(nil), w.consumeContexts...)
 	w.mu.Unlock()
-	stopConsumers(consumers)
+	stopConsumeContexts(consumeContexts)
 	w.client.Close()
 }
 
-func (w *Worker) fail(err error) {
+func (w *Worker) failTerminal(err error) {
 	select {
-	case w.fatal <- err:
+	case w.terminal <- err:
 	default:
 	}
 	w.StartDrain()
 }
 
-func drainConsumers(consumers []jetstream.ConsumeContext) {
-	for _, consumer := range consumers {
-		consumer.Drain()
+func drainConsumeContexts(consumeContexts []jetstream.ConsumeContext) {
+	for _, consumeContext := range consumeContexts {
+		consumeContext.Drain()
 	}
 }
 
-func stopConsumers(consumers []jetstream.ConsumeContext) {
-	for _, consumer := range consumers {
-		consumer.Stop()
+func stopConsumeContexts(consumeContexts []jetstream.ConsumeContext) {
+	for _, consumeContext := range consumeContexts {
+		consumeContext.Stop()
 	}
 }
 
-func waitConsumers(consumers []jetstream.ConsumeContext) {
-	for _, consumer := range consumers {
-		<-consumer.Closed()
+func waitConsumeContexts(consumeContexts []jetstream.ConsumeContext) {
+	for _, consumeContext := range consumeContexts {
+		<-consumeContext.Closed()
 	}
 }

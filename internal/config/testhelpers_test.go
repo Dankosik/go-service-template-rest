@@ -43,7 +43,7 @@ func readEnvExample(t *testing.T, path string) map[string]string {
 		if key == "" {
 			t.Fatalf("%s:%d has an empty env key", path, lineNumber+1)
 		}
-		if !strings.HasPrefix(key, namespacePrefix) {
+		if !strings.HasPrefix(key, envPrefix) {
 			continue
 		}
 		values[key] = strings.TrimSpace(value)

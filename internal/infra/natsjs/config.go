@@ -2,6 +2,7 @@ package natsjs
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,7 +46,7 @@ func ValidateConfig(cfg Config) error {
 	if !cfg.AllowUnauthenticated && strings.TrimSpace(cfg.CredentialsFile) == "" {
 		return fmt.Errorf("%w: credentials file is required", ErrRejected)
 	}
-	if !validStreamOrConsumerName(cfg.Stream) {
+	if !messagingconfig.ValidStreamOrConsumerName(cfg.Stream) {
 		return fmt.Errorf("%w: invalid source stream", ErrRejected)
 	}
 	if cfg.MaxPayloadBytes <= 0 {
@@ -54,13 +55,9 @@ func ValidateConfig(cfg Config) error {
 	return nil
 }
 
-// validStreamOrConsumerName keeps the adapter's local vocabulary while the pure
-// leaf owns the rule shared with configuration loading.
-func validStreamOrConsumerName(value string) bool {
-	return messagingconfig.ValidStreamOrConsumerName(value)
-}
-
-func validSubject(value string, wildcards bool) bool {
+// validFilterSubject accepts a consumer filter: dot-separated tokens where "*"
+// may stand for any one token and a final ">" for every remaining one.
+func validFilterSubject(value string) bool {
 	if value == "" || strings.HasPrefix(value, ".") || strings.HasSuffix(value, ".") || strings.ContainsAny(value, " \t\r\n") {
 		return false
 	}
@@ -70,15 +67,12 @@ func validSubject(value string, wildcards bool) bool {
 			return false
 		}
 		if part == ">" {
-			if !wildcards || index != len(parts)-1 {
+			if index != len(parts)-1 {
 				return false
 			}
 			continue
 		}
 		if part == "*" {
-			if !wildcards {
-				return false
-			}
 			continue
 		}
 		if strings.ContainsAny(part, "*>") {
@@ -86,4 +80,12 @@ func validSubject(value string, wildcards bool) bool {
 		}
 	}
 	return true
+}
+
+// validPublishSubject accepts a subject a message can be published to: a valid
+// filter with no wildcard token.
+func validPublishSubject(value string) bool {
+	return validFilterSubject(value) && !slices.ContainsFunc(strings.Split(value, "."), func(part string) bool {
+		return part == "*" || part == ">"
+	})
 }

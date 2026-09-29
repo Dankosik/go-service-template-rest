@@ -107,12 +107,12 @@ func TestValidateGracePeriodChargesForTheTeardownThatFollowsTheDrain(t *testing.
 func rejectedGracePeriod(
 	t *testing.T,
 	gracePeriod time.Duration,
-	drainLeaf string,
+	drainName string,
 	drain, cleanupReserve time.Duration,
 ) string {
 	t.Helper()
 
-	err := runtimeopts.ValidateGracePeriod(gracePeriod, drainLeaf, drain, cleanupReserve)
+	err := runtimeopts.ValidateGracePeriod(gracePeriod, drainName, drain, cleanupReserve)
 	if err == nil {
 		t.Fatalf("ValidateGracePeriod(%s grace, %s drain) error = nil, want ErrValidate", gracePeriod, drain)
 	}

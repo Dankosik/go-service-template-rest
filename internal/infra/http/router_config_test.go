@@ -62,7 +62,7 @@ func TestHardenUsesCallerTraceFilter(t *testing.T) {
 
 	handler, err := Harden(
 		slog.New(slog.DiscardHandler),
-		telemetry.New(),
+		telemetry.NewMetrics(),
 		HardenConfig{
 			MaxBodyBytes:   testRouterMaxBodyBytes,
 			RequestTimeout: testRouterRequestTimeout,

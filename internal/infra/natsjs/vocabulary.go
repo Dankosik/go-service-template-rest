@@ -6,16 +6,16 @@ package natsjs
 // values that repeat across positions with different meanings are told apart by
 // name.
 //
-// outcome and event reach metric attributes and are bounded below, because an
-// unrecognized value there mints a time series. reason is a log field only, so
-// it is named for the reader and not collapsed.
+// outcome reaches metric attributes and is bounded below, because an
+// unrecognized value there mints a time series. operation and reason are log
+// fields only, so they are named for the reader rather than bounded.
 //
 // The dead-letter reasons are deliberately not here. They travel on the wire to
 // whatever consumes the dead-letter stream, so they are a published contract
 // rather than an internal label, and they live with the transfer that writes
 // them in message_deadletter.go.
 
-// Publication, handler, and drain outcomes.
+// Publication and handler outcomes, and the attribute that carries them.
 const (
 	attributeOutcome = "outcome"
 
@@ -30,12 +30,20 @@ const (
 	outcomeCanceled  = "canceled"
 	outcomeTimeout   = "timeout"
 	outcomeRetryable = "retryable"
-	// boundedOther is what an unrecognized outcome or connection event
-	// collapses to, so a value this list forgot cannot mint a time series.
+	// boundedOther is what an unrecognized outcome collapses to, so a value
+	// this list forgot cannot mint a time series. asyncErrorReason also uses it
+	// for a connection fault it does not class.
 	boundedOther = "other"
 )
 
 const connectionAsyncError = "async_error"
+
+// The operation field on an operator log record.
+const (
+	operationPublish    = "publish"
+	operationConsume    = "consume"
+	operationConnection = "connection"
+)
 
 // The reason field on an operator log record. It never reaches a metric.
 const (
@@ -63,12 +71,12 @@ const (
 	reasonConnection     = "connection"
 )
 
-// A redelivery request that the broker itself refused is logged as this
-// reason plus "_rejected", so the log names which settlement path failed.
+// A redelivery request that the broker itself refused is logged with the reason
+// naming which settlement path asked for it.
 const (
-	redeliveryHandler    = "handler_redelivery"
-	redeliveryDeadLetter = "dlq_redelivery"
-	redeliverySourceAck  = "source_ack_redelivery"
+	reasonHandlerRedeliveryRejected    = "handler_redelivery_rejected"
+	reasonDeadLetterRedeliveryRejected = "dlq_redelivery_rejected"
+	reasonSourceAckRedeliveryRejected  = "source_ack_redelivery_rejected"
 )
 
 // boundedOutcome is the closed vocabulary for the outcome attribute, shared by

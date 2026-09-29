@@ -169,7 +169,7 @@ func TestGeneratedResponseErrorHandlerMapsExpiredBudget(t *testing.T) {
 
 	options := generatedStrictServerOptions(
 		slog.New(slog.DiscardHandler),
-		handleGeneratedRequestError(slog.New(slog.DiscardHandler), defaultAuthenticateChallenge),
+		RejectRequest(slog.New(slog.DiscardHandler), defaultAuthenticateChallenge),
 		nil,
 	)
 

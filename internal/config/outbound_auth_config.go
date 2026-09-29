@@ -2,8 +2,9 @@ package config
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
+
+	"github.com/example/go-service-template-rest/internal/outboundtrust"
 )
 
 // OutboundAuthConfig is the immutable source tuple for one named OAuth client.
@@ -23,14 +24,10 @@ func validateOutboundAuthConfig(cfg *OutboundAuthConfig, prefix string) error {
 	if strings.TrimSpace(cfg.ClientSecret) == "" {
 		return fmt.Errorf("%w: %s.client_secret is required", ErrValidate, prefix)
 	}
-	endpoint, err := url.Parse(cfg.TokenURL)
-	if err != nil || endpoint == nil || !endpoint.IsAbs() || endpoint.Opaque != "" ||
-		!strings.EqualFold(endpoint.Scheme, "https") || endpoint.Host == "" || endpoint.Hostname() == "" ||
-		endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" {
+	endpoint, issue := outboundtrust.HTTPSTarget(cfg.TokenURL)
+	if issue != outboundtrust.TargetOK {
 		return fmt.Errorf("%w: %s.token_url must be an absolute HTTPS URL", ErrValidate, prefix)
 	}
-	endpoint.Scheme = "https"
-	endpoint.Host = strings.ToLower(endpoint.Host)
 	cfg.TokenURL = endpoint.String()
 	return nil
 }

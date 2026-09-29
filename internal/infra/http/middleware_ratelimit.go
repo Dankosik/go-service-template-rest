@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -67,11 +66,11 @@ func HeaderRateLimitKey(name string) RateLimitKeyFunc {
 //
 // Platform probe routes are exempt for the same reason they are exempt from
 // shedding: rate limiting a readiness probe evicts the instance.
-func RateLimit(limiter RateLimiter, key RateLimitKeyFunc, next http.Handler) http.Handler {
+func RateLimit(limiter RateLimiter, keyFor RateLimitKeyFunc, next http.Handler) http.Handler {
 	if limiter == nil {
 		return next
 	}
-	if key == nil {
+	if keyFor == nil {
 		panic("http rate limit: key is required when a limiter is configured")
 	}
 
@@ -80,21 +79,23 @@ func RateLimit(limiter RateLimiter, key RateLimitKeyFunc, next http.Handler) htt
 			next.ServeHTTP(w, r)
 			return
 		}
-		bucket := key(r)
-		if bucket == "" {
+		key := keyFor(r)
+		if key == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		allowed, retryAfter := limiter.Allow(r.Context(), bucket)
+		allowed, retryAfter := limiter.Allow(r.Context(), key)
 		if allowed {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(retryAfter)))
 		writeProblem(w, r, problemResponse{
 			code:   problem.CodeTooManyRequests,
 			detail: "too many requests for this caller",
+			// A limiter that reports no wait still gets the one-second floor:
+			// a 429 always says when to come back.
+			retryAfter: max(retryAfter, time.Nanosecond),
 		})
 	})
 }

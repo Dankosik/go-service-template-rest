@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -40,11 +41,6 @@ const (
 // DATABASE=none profile has none, so its stub declares no sentinel.
 var errDependencyInit = errors.New("dependency init")
 
-type postgresStartupRuntime struct {
-	cfg config.Config
-	log *slog.Logger
-}
-
 type runtimeDependencies struct {
 	readiness health.Probe
 	postgres  *pgxpool.Pool
@@ -63,19 +59,6 @@ func (d runtimeDependencies) ReadinessProbes() []health.Probe {
 		return nil
 	}
 	return []health.Probe{d.readiness}
-}
-
-// readinessProbeBudget is how long one steady-state readiness evaluation may
-// take. It covers the complete serial probe set, so the configured aggregate
-// budget remains the owner when optional probes are added.
-//
-// It is passed to health.Watch separately from the refresh interval. The two used
-// to be one argument, which clamped this budget to the interval: with the shipped
-// defaults a 3s PostgreSQL probe became 2s in steady state while startup
-// admission still granted the full budget, so a database answering in between
-// passed admission and then flapped out of rotation.
-func readinessProbeBudget(cfg config.Config) time.Duration {
-	return cfg.HTTP.ReadinessTimeout
 }
 
 // Close releases pooled dependencies, bounded by ctx, and is safe to call twice.
@@ -111,10 +94,7 @@ func initRuntimeDependencies(
 	bootstrap startupBootstrap,
 ) (runtimeDependencies, error) {
 	postgresCtx, postgresCancel := withStageBudget(startupCtx, postgresStartupBudget)
-	pg, err := initPostgresDependency(startupCtx, postgresCtx, postgresStartupRuntime{
-		cfg: bootstrap.cfg,
-		log: bootstrap.log,
-	})
+	pg, err := initPostgresDependency(startupCtx, postgresCtx, bootstrap.cfg.Postgres, bootstrap.log)
 	postgresCancel()
 	if err != nil {
 		return runtimeDependencies{}, err
@@ -136,16 +116,12 @@ func initRuntimeDependencies(
 func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*pgxpool.Pool, error) {
 	pg, err := postgres.Open(ctx, runtimeopts.Postgres(cfg))
 	if err != nil {
-		return nil, fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, err)
+		return nil, fmt.Errorf("open postgres pool: %w", err)
 	}
 	return pg, nil
 }
 
 func validateStartupBudgetCompatibility(cfg config.Config) error {
-	return validateStartupReadinessHeadroom(cfg)
-}
-
-func validateStartupReadinessHeadroom(cfg config.Config) error {
 	if !cfg.Postgres.Enabled {
 		return nil
 	}
@@ -195,11 +171,16 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 	return nil
 }
 
-func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.Context, runtime postgresStartupRuntime) (*pgxpool.Pool, error) {
-	if !runtime.cfg.Postgres.Enabled {
+func initPostgresDependency(
+	startupCtx context.Context,
+	dependencyCtx context.Context,
+	cfg config.PostgresConfig,
+	log *slog.Logger,
+) (*pgxpool.Pool, error) {
+	if !cfg.Enabled {
 		return nil, rejectPostgresStartupForDependencyInit(
-			bootstrapCtx,
-			runtime.log,
+			startupCtx,
+			log,
 			errors.New("postgres is required by the DATABASE=postgres profile"),
 		)
 	}
@@ -207,37 +188,25 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 	probeCtx, probeCancel := withStageBudget(dependencyCtx, postgresProbeBudget)
 	probeStarted := time.Now()
 
-	pg, probeErr := initPostgres(probeCtx, runtime.cfg.Postgres)
-	parentErr := dependencyCtx.Err()
-	stageErr := probeCtx.Err()
-	if probeErr == nil {
-		if parentErr != nil {
-			probeErr = parentErr
-		} else if stageErr != nil {
-			probeErr = stageErr
-		}
-	}
+	pg, probeErr := initPostgres(probeCtx, cfg)
+	probeErr = cmp.Or(probeErr, dependencyCtx.Err(), probeCtx.Err())
 	probeCancel()
 	probeDuration := time.Since(probeStarted)
 
-	pgReturned := false
-	defer func() {
-		if !pgReturned && pg != nil {
-			pg.Close()
-		}
-	}()
-
 	if probeErr != nil {
 		sanitizedErr := postgresDependencyInitFailure(probeErr)
-		recordDependencyProbeRejection(bootstrapCtx, runtime, probeDuration, sanitizedErr)
+		recordDependencyProbeRejection(startupCtx, log, probeDuration, sanitizedErr)
+		if pg != nil {
+			pg.Close()
+		}
 		return nil, sanitizedErr
 	}
 
 	// The probe duration is reported here because nothing else measures how long
 	// a dependency took to become usable, and a startup that is slow rather than
 	// broken is otherwise indistinguishable from one that is merely starting.
-	runtime.log.InfoContext(
-		bootstrapCtx,
+	log.InfoContext(
+		startupCtx,
 		"startup_dependency_ready",
 		startupLogArgs(
 			startupLogComponentStartupProbes,
@@ -248,17 +217,10 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 		)...,
 	)
 
-	pgReturned = true
 	return pg, nil
 }
 
 func postgresDependencyInitFailure(err error) error {
-	if err == nil {
-		return fmt.Errorf("%w: %s init failed", errDependencyInit, startupDependencyPostgres)
-	}
-	if errors.Is(err, errDependencyInit) {
-		return fmt.Errorf("%s init failed: %w", startupDependencyPostgres, err)
-	}
 	return fmt.Errorf("%w: %s init failed: %w", errDependencyInit, startupDependencyPostgres, err)
 }
 
@@ -285,11 +247,11 @@ func rejectPostgresStartupForDependencyInit(
 
 func recordDependencyProbeRejection(
 	ctx context.Context,
-	runtime postgresStartupRuntime,
+	log *slog.Logger,
 	probeDuration time.Duration,
 	err error,
 ) {
-	runtime.log.ErrorContext(
+	log.ErrorContext(
 		ctx,
 		"startup_blocked",
 		startupLogArgs(

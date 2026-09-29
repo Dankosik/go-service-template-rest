@@ -18,6 +18,8 @@ func SecurityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// RequestBodyLimit answers 413 for a declared length over maxBytes and caps
+// the body reader otherwise. A non-positive maxBytes disables the limit.
 func RequestBodyLimit(maxBytes int64, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if maxBytes <= 0 {

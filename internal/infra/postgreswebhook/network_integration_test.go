@@ -48,7 +48,7 @@ func TestWebhookNetworkSecurity(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if prepared.SelectedAddress != test.addresses[0] {
+			if prepared.Addresses[0] != test.addresses[0] {
 				t.Fatalf("prepared address = %+v", prepared)
 			}
 		})
@@ -58,13 +58,12 @@ func TestWebhookNetworkSecurity(t *testing.T) {
 func TestWebhookBoundedAttempt(t *testing.T) {
 	attempt := webhookNetworkAttempt()
 	prepared := preparedSend{
-		Attempt: attempt, URL: mustWebhookURL(t, attempt.URL),
-		SelectedAddress: netip.MustParseAddr("127.0.0.1"), Signature: "v1,test",
+		Attempt: attempt, URL: mustWebhookURL(t, attempt.URL), Signature: "v1,test",
 	}
 	ctx, cancel := context.WithDeadline(t.Context(), attempt.Deadline)
 	defer cancel()
 	started := time.Now()
-	result, err := send(ctx, prepared)
+	result, err := send(ctx, prepared, netip.MustParseAddr("127.0.0.1"))
 	if !errors.Is(err, errDestinationDenied) {
 		t.Fatalf("send() error = %v, want destination denial", err)
 	}
@@ -105,7 +104,7 @@ func TestWebhookComposedTransportContract(t *testing.T) {
 	t.Cleanup(server.Close)
 	transport := server.Client().Transport.(*http.Transport).Clone()
 	t.Cleanup(transport.CloseIdleConnections)
-	signature, err := signV1("whd_test", attemptedAt, body, [][]byte{key})
+	signature, err := signV1("whd_test", attemptedAt, body, key, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,16 +115,16 @@ func TestWebhookComposedTransportContract(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	prepared := preparedSend{
 		Attempt: deliveryAttempt{DeliveryID: "whd_test", Body: body, AttemptedAt: attemptedAt, Deadline: deadline},
-		URL:     parsed, SelectedAddress: netip.MustParseAddr("8.8.8.8"), Signature: signature,
+		URL:     parsed, Signature: signature,
 	}
 	ctx, cancel := context.WithDeadline(t.Context(), deadline)
 	defer cancel()
-	result, err := sendWithTransport(ctx, prepared, transport, new(bool))
+	result, err := sendWithTransport(ctx, prepared, transport)
 	if err != nil || result.Evidence.StatusCode != http.StatusNoContent || delivered.Load() != 1 {
 		t.Fatalf("delivery result = %+v, %v, count=%d", result, err, delivered.Load())
 	}
 	prepared.URL.Path = "/redirect"
-	result, err = sendWithTransport(ctx, prepared, transport, new(bool))
+	result, err = sendWithTransport(ctx, prepared, transport)
 	if err != nil || result.Evidence.StatusCode != http.StatusTemporaryRedirect || delivered.Load() != 1 {
 		t.Fatalf("redirect result = %+v, %v, count=%d", result, err, delivered.Load())
 	}
@@ -136,7 +135,7 @@ func webhookNetworkAttempt() deliveryAttempt {
 	return deliveryAttempt{
 		DeliveryID: "whd_delivery-01", OwnerScope: "owner-a", ReceiverID: "receiver-a",
 		URL: "https://hooks.test/deliver", Body: []byte(`{"id":"evt-01"}`),
-		AttemptedAt: attemptedAt, Deadline: attemptedAt.Add(time.Second), KeyReference: "key-a",
+		AttemptedAt: attemptedAt, Deadline: attemptedAt.Add(time.Second), ActiveKeyReference: "key-a",
 	}
 }
 

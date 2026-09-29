@@ -43,15 +43,17 @@ func normalizeRoutePathTemplate(method, pattern string) string {
 	return pattern
 }
 
-func joinMethodAndPattern(method, pattern string) string {
-	pattern = strings.TrimSpace(pattern)
-	if pattern == "" {
-		return ""
+// routeLabel is the route a log record names: the method and matched template,
+// or "<unmatched>" when routing matched nothing.
+func routeLabel(method, template string) string {
+	template = strings.TrimSpace(template)
+	if template == "" {
+		return "<unmatched>"
 	}
 
 	method = strings.TrimSpace(method)
 	if method == "" {
-		return pattern
+		return template
 	}
-	return method + " " + pattern
+	return method + " " + template
 }

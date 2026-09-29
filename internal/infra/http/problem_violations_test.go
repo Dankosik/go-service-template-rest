@@ -235,7 +235,7 @@ func TestRejectedRequestRecordNamesTheFieldsButNotTheReasons(t *testing.T) {
 
 	logStrictRequestError(newTestServiceLogger(&logged), httptest.NewRequestWithContext(
 		context.Background(), http.MethodPost, "/api/v1/articles", nil,
-	), err)
+	), err, requestViolations(err))
 
 	var record struct {
 		Message       string   `json:"msg"`

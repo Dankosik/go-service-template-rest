@@ -8,7 +8,9 @@ import (
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 )
 
-const meterName = "service.authn"
+// MeterName is the instrumentation scope every authentication metric is
+// published under, including the ones concrete trust engines record.
+const MeterName = "service.authn"
 
 type authnMetrics struct {
 	verifications metric.Int64Counter
@@ -18,7 +20,7 @@ func newAuthnMetrics(provider metric.MeterProvider) authnMetrics {
 	if provider == nil {
 		provider = metricnoop.NewMeterProvider()
 	}
-	meter := provider.Meter(meterName)
+	meter := provider.Meter(MeterName)
 	verifications, _ := meter.Int64Counter(
 		"authn.verifications",
 		metric.WithUnit("{verification}"),

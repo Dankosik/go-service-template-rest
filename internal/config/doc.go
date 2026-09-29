@@ -4,9 +4,8 @@
 //
 // # Loading
 //
-// [LoadDetailedWithContext] is the entry point, and [LoadDetailed] is the same
-// load without a caller context. The Stage constants in config.go name the steps
-// a failure is reported against, in the order they run:
+// [Load] is the entry point. The Stage constants in config.go name the steps a
+// failure is reported against, in the order they run:
 //
 //   - StageLoadDefaults — defaults.go merges each section's own defaults over the
 //     handful it declares inline.
@@ -17,8 +16,9 @@
 //   - StageParse — snapshot.go decodes the merged map into [Config], and parse.go
 //     owns the scalar conversions under it, one per kind, so a bad duration and a
 //     bad integer fail the same way.
-//   - StageValidate — validate.go runs each section's own validator and then the
-//     rules that hold only between sections.
+//   - StageValidate — validate.go runs each section's own validator in order.
+//     Validators that take a section pointer also canonicalize that section, so
+//     the returned snapshot is canonical.
 //
 // load_koanf.go is the merge those stages run inside. schema.go is what
 // load_file.go and load_koanf.go both need and neither owns: which sections
@@ -36,7 +36,10 @@
 // <section>_config.go. Those three change together — adding a field touches all
 // three — and a section a build profile removes then leaves with its file
 // instead of being cut out of three shared ones. types.go and defaults.go keep
-// the [Config] shape, the merge, and the sections small enough to read in place.
+// the [Config] shape, the merge, and the sections that are both always present
+// and small enough to read in place. HTTP and Observability are always present
+// too and still have their own files, because size, not removability, is what
+// earns one.
 //
 // A rule that spans two sections goes to whichever section depends on the other.
 // validate.go keeps only the rules that belong to neither.
@@ -45,7 +48,8 @@
 //
 // This package may not import a runtime adapter, so a rule that this package and
 // an adapter must agree on can live in neither. It goes to a pure leaf both
-// import, and a parity test pins the two together.
+// import. A parity test is needed only where one side adds its own mapping on
+// top of the leaf.
 // profile:authn-oidc-jwt:start
 // internal/authntrust is that leaf for the issuer, JWKS, and token-profile trust
 // rules.
@@ -59,5 +63,6 @@
 // document.
 // profile:inbound-webhooks-standard:end
 // internal/observability/otelconfig is that leaf for the OpenTelemetry sampler
-// vocabulary and validation.
+// vocabulary and validation, and internal/outboundtrust for the fixed HTTPS
+// target shape.
 package config

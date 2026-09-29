@@ -4,9 +4,11 @@ import (
 	"strings"
 )
 
-const namespacePrefix = "APP__"
+// envPrefix scopes the environment: only variables that start with it reach
+// config, and each "__" in the remainder separates key segments.
+const envPrefix = "APP__"
 
-func collectNamespaceValues(environ []string) (map[string]any, []string) {
+func collectEnvironmentValues(environ []string) (map[string]any, []string) {
 	values := make(map[string]any)
 	malformedKeys := make([]string, 0)
 
@@ -15,10 +17,10 @@ func collectNamespaceValues(environ []string) (map[string]any, []string) {
 		if !ok {
 			continue
 		}
-		if !strings.HasPrefix(envKey, namespacePrefix) {
+		if !strings.HasPrefix(envKey, envPrefix) {
 			continue
 		}
-		targetKey := namespaceEnvToKey(envKey)
+		targetKey := environmentKeyToConfigKey(envKey)
 		if targetKey == "" {
 			malformedKeys = append(malformedKeys, envKey)
 			continue
@@ -29,8 +31,8 @@ func collectNamespaceValues(environ []string) (map[string]any, []string) {
 	return values, malformedKeys
 }
 
-func namespaceEnvToKey(envKey string) string {
-	trimmed := strings.TrimPrefix(envKey, namespacePrefix)
+func environmentKeyToConfigKey(envKey string) string {
+	trimmed := strings.TrimPrefix(envKey, envPrefix)
 	if trimmed == "" {
 		return ""
 	}

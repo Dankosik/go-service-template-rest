@@ -6,9 +6,10 @@ import (
 )
 
 // StoppedBeforeReturn reports whether a runtime has finished before its caller
-// releases dependencies. A successful stop must join its completion; an error
-// path may only poll because the process owns cleanup when the runtime is still
-// using those dependencies.
+// releases dependencies. A nil stopErr blocks until stopped closes, because a
+// successful stop must join its completion. A non-nil stopErr only polls: false
+// means the runtime may still be using those dependencies, so the caller leaves
+// them to process exit instead of closing them.
 func StoppedBeforeReturn(stopErr error, stopped <-chan struct{}) bool {
 	if stopErr == nil {
 		<-stopped

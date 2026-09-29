@@ -32,9 +32,9 @@ const (
 	DefaultTracesSamplerArg float64 = 0.10
 )
 
-// TraceSamplerOrDefault normalizes name, substituting the repository default
+// TracesSamplerOrDefault normalizes name, substituting the repository default
 // when nothing was configured.
-func TraceSamplerOrDefault(name string) string {
+func TracesSamplerOrDefault(name string) string {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	if normalized == "" {
 		return DefaultTracesSampler
@@ -42,14 +42,14 @@ func TraceSamplerOrDefault(name string) string {
 	return normalized
 }
 
-// ValidateTraceSampler reports whether a sampler name and its ratio argument are
-// usable together. Both call sites previously repeated three separate predicates
-// in the same order; one entry point keeps them from drifting.
+// ValidateTracesSampler reports whether name, after [TracesSamplerOrDefault], is
+// a supported sampler and arg is a finite ratio in [0,1]. Config load and the
+// telemetry adapter both call it, so they accept the same settings.
 //
 // Messages name the settings rather than the Go parameters, so a caller can
 // prefix its own section and still produce an operator-actionable key.
-func ValidateTraceSampler(name string, arg float64) error {
-	switch TraceSamplerOrDefault(name) {
+func ValidateTracesSampler(name string, arg float64) error {
+	switch TracesSamplerOrDefault(name) {
 	case SamplerAlwaysOn, SamplerAlwaysOff, SamplerTraceIDRatio, SamplerParentBasedTraceIDRatio:
 	default:
 		return errors.New("traces_sampler is unsupported")

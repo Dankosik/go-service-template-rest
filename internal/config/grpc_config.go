@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+// Accepted grpc.server.transport_security values, after lowercasing.
+const (
+	GRPCTransportSecurityPlaintext = "plaintext"
+	GRPCTransportSecurityTLS       = "tls"
+)
+
 type GRPCConfig struct {
 	Server GRPCServerConfig `koanf:"server"`
 }
@@ -50,14 +56,14 @@ func validateGRPCConfig(cfg *GRPCConfig) error {
 		return err
 	}
 	switch server.TransportSecurity {
-	case "plaintext":
+	case GRPCTransportSecurityPlaintext:
 		if server.TLS.CertFile != "" || server.TLS.KeyFile != "" || server.TLS.ClientCAFile != "" {
 			return fmt.Errorf(
 				"%w: grpc.server.tls fields must be empty when transport_security is plaintext",
 				ErrValidate,
 			)
 		}
-	case "tls":
+	case GRPCTransportSecurityTLS:
 		if server.TLS.CertFile == "" || server.TLS.KeyFile == "" {
 			return fmt.Errorf(
 				"%w: grpc.server.tls cert_file and key_file are required when transport_security is tls",

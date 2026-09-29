@@ -6,7 +6,7 @@ import (
 )
 
 // checkContext classifies caller cancellation during config loading.
-func checkContext(ctx context.Context) error {
+func checkLoadContext(ctx context.Context) error {
 	return checkContextWithError(ctx, ErrLoad)
 }
 

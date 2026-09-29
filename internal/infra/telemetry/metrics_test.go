@@ -18,7 +18,7 @@ import (
 func TestMetricsHandlerExposesProcessCollectorOnly(t *testing.T) {
 	t.Parallel()
 
-	metricsText := collectMetricsText(t, New())
+	metricsText := collectMetricsText(t, NewMetrics())
 	if !strings.Contains(metricsText, "process_cpu_seconds_total") {
 		t.Fatal("metrics output does not contain process_cpu_seconds_total")
 	}

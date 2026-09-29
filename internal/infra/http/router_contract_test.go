@@ -11,7 +11,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/problem"
@@ -24,8 +23,8 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
-	}, telemetry.New(), RouterConfig{})
+		Health: newTestHealth(t),
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	t.Run("not found uses problem envelope", func(t *testing.T) {
 		t.Parallel()
@@ -180,7 +179,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	log := newTestServiceLogger(&out)
 	const attackerDetail = `invalid "token": secret-value`
 
-	options := generatedStrictServerOptions(log, handleGeneratedRequestError(log, defaultAuthenticateChallenge), nil)
+	options := generatedStrictServerOptions(log, RejectRequest(log, defaultAuthenticateChallenge), nil)
 	if options.RequestErrorHandlerFunc == nil {
 		t.Fatal("generatedStrictServerOptions() RequestErrorHandlerFunc = nil")
 	}
@@ -236,7 +235,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 	log := newTestServiceLogger(&out)
 	const attackerDetail = `invalid "token": secret-value`
 
-	options := generatedChiServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge))
+	options := generatedChiServerOptions(RejectRequest(log, defaultAuthenticateChallenge))
 	if options.ErrorHandlerFunc == nil {
 		t.Fatal("generatedChiServerOptions() ErrorHandlerFunc = nil")
 	}
@@ -294,7 +293,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 	// Health probes are excluded from the access log by default; this test is
 	// about route labelling and correlation fields, so it opts back in.
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
+		Health: newTestHealth(t),
 	}, nil, RouterConfig{LogHealthProbes: true})
 
 	const (
@@ -334,7 +333,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 
 func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
-	metrics := telemetry.New()
+	metrics := telemetry.NewMetrics()
 	telemetrytest.RestoreGlobals(t)
 	result, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
 		Resource: telemetry.ResourceConfig{
@@ -353,7 +352,7 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	})
 
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
+		Health: newTestHealth(t),
 	}, metrics, RouterConfig{})
 
 	liveReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
@@ -394,8 +393,8 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
-		Health: health.New(),
-	}, telemetry.New(), RouterConfig{})
+		Health: newTestHealth(t),
+	}, telemetry.NewMetrics(), RouterConfig{})
 
 	liveResp := doRequest(h, http.MethodGet, "/health/live")
 	if liveResp.Code != http.StatusOK {

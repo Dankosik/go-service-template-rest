@@ -24,13 +24,17 @@ import (
 var errWorkerPanic = errors.New("worker run loop panicked")
 
 const (
-	diagnosticsClose = 5 * time.Second
-	backgroundClose  = 5 * time.Second
-	handlerClose     = 5 * time.Second
-	telemetryClose   = 5 * time.Second
-	workerTailBudget = diagnosticsClose + backgroundClose + handlerClose + telemetryClose
+	diagnosticsShutdownTimeout = 5 * time.Second
+	backgroundShutdownTimeout  = 5 * time.Second
+	handlerShutdownTimeout     = 5 * time.Second
+	telemetryShutdownTimeout   = 5 * time.Second
+	workerTailBudget           = diagnosticsShutdownTimeout + backgroundShutdownTimeout + handlerShutdownTimeout + telemetryShutdownTimeout
 )
 
+// runWorkerLifecycle admits, serves, and drains the consumer. cleanupSafe
+// reports whether the handler joined, so run may release what it uses. The
+// returned window is already canceled and serves only as the parent for
+// runtimeopts.TeardownStage in deferred cleanup.
 func runWorkerLifecycle(
 	signalCtx context.Context,
 	startupCtx context.Context,
@@ -39,10 +43,16 @@ func runWorkerLifecycle(
 	metrics *telemetry.Metrics,
 	client *natsjs.Client,
 	worker *natsjs.Worker,
-) (bool, context.Context, error) {
+) (cleanupSafe bool, window context.Context, err error) {
 	unarmed := runtimeopts.UnarmedTeardown(signalCtx)
-	healthSvc := health.New(client)
-	if err := healthSvc.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
+	healthSvc, err := health.New(health.Policy{
+		ProbeBudget:      cfg.HTTP.ReadinessTimeout,
+		FailureThreshold: cfg.Health.FailureThreshold,
+	}, client)
+	if err != nil {
+		return true, unarmed, fmt.Errorf("build worker readiness: %w", err)
+	}
+	if err := healthSvc.Refresh(startupCtx); err != nil {
 		return true, unarmed, fmt.Errorf("admit worker readiness: %w", err)
 	}
 	diagnostics, err := runtimeopts.ListenDiagnostics(
@@ -63,7 +73,7 @@ func runWorkerLifecycle(
 	supervisor.Go(background.Task{
 		Name: "messaging_readiness",
 		Run: func(ctx context.Context) error {
-			return healthSvc.Watch(ctx, cfg.Health.RefreshInterval, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold, nil)
+			return healthSvc.Watch(ctx, cfg.Health.RefreshInterval, nil)
 		},
 	})
 	workerResult := make(chan error, 1)
@@ -72,29 +82,28 @@ func runWorkerLifecycle(
 	var triggerErr error
 	select {
 	case <-signalCtx.Done():
-	case triggerErr = <-supervisor.Failures():
+	case triggerErr = <-supervisor.FirstFailure():
 	case triggerErr = <-workerResult:
 	case <-diagnostics.Stopped():
 		// diagnostics.Stop below carries whatever Serve reported.
 		triggerErr = errors.New("worker diagnostics stopped unexpectedly")
 	}
-	if signalCtx.Err() == nil {
-		if triggerErr == nil {
-			triggerErr = errors.New("worker runtime stopped unexpectedly")
-		}
+	if triggerErr == nil && signalCtx.Err() == nil {
+		triggerErr = errors.New("worker runtime stopped unexpectedly")
 	}
 	healthSvc.StartDrain()
 	worker.StartDrain()
-	window, processCancel := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+	var processCancel context.CancelFunc
+	window, processCancel = runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer processCancel()
 	workerCtx, workerCancel := runtimeopts.TeardownStage(window, cfg.HTTP.ShutdownTimeout)
 	workerErr := worker.Shutdown(workerCtx)
 	workerCancel()
-	diagnosticsErr := diagnostics.Stop(window, diagnosticsClose)
-	backgroundCtx, backgroundCancel := runtimeopts.TeardownStage(window, backgroundClose)
+	diagnosticsErr := diagnostics.Stop(window, diagnosticsShutdownTimeout)
+	backgroundCtx, backgroundCancel := runtimeopts.TeardownStage(window, backgroundShutdownTimeout)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	backgroundCancel()
-	cleanupSafe := runtimeopts.StoppedBeforeReturn(workerErr, workerDone)
+	cleanupSafe = runtimeopts.StoppedBeforeReturn(workerErr, workerDone)
 	select {
 	case runErr := <-workerResult:
 		if triggerErr == nil {
@@ -144,7 +153,7 @@ func superviseWorkerRun(
 			log.ErrorContext(
 				ctx,
 				"worker_run_loop_panic",
-				append([]any{"component", "worker"}, logctx.PanicAttrs(recovered, debug.Stack())...)...,
+				append([]any{"component", "worker"}, logctx.PanicArgs(recovered, debug.Stack())...)...,
 			)
 			runErr = errWorkerPanic
 		}

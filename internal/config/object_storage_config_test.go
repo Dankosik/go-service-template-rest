@@ -22,9 +22,9 @@ func TestObjectStorageConfigContract(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv(test.key, test.value)
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if !errors.Is(err, ErrValidate) {
-				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+				t.Fatalf("Load() error = %v, want ErrValidate", err)
 			}
 		})
 	}
@@ -38,9 +38,9 @@ func TestObjectStorageConfigContract(t *testing.T) {
 		t.Setenv("APP__OBJECT_STORAGE__EXPECTED_BUCKET_OWNER", "  ")
 		t.Setenv("APP__OBJECT_STORAGE__CREDENTIAL_SOURCE", "  static  ")
 
-		cfg, _, err := LoadDetailed(LoadOptions{})
+		cfg, _, err := Load(t.Context(), LoadOptions{})
 		if err != nil {
-			t.Fatalf("LoadDetailed() error = %v", err)
+			t.Fatalf("Load() error = %v", err)
 		}
 		want := ObjectStorageConfig{
 			Provider: "cloudflare_r2", Endpoint: "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com",

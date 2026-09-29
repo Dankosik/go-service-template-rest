@@ -74,8 +74,8 @@ func newTelemetry(obs Observability) (*telemetry, error) {
 }
 
 //nolint:ireturn // metric.WithAttributes returns OTel's option interface.
-func outcomeAttribute(outcome string) metric.MeasurementOption {
-	return metric.WithAttributes(attribute.String("outcome", boundedOutcome(outcome)))
+func withOutcome(outcome string) metric.MeasurementOption {
+	return metric.WithAttributes(attribute.String(attributeOutcome, boundedOutcome(outcome)))
 }
 
 func publishSpanOptions(event Event) []trace.SpanStartOption {
@@ -109,24 +109,24 @@ func setSpanOutcome(span trace.Span, outcome string) {
 
 func (t *telemetry) recordPublish(ctx context.Context, event Event, outcome, reason string, started time.Time) {
 	duration := time.Since(started).Seconds()
-	attrs := outcomeAttribute(outcome)
+	attrs := withOutcome(outcome)
 	t.publishOperations.Add(ctx, 1, attrs)
 	t.publishDuration.Record(ctx, duration, attrs)
 	if outcome != outcomeAccepted {
 		t.log.WarnContext(ctx, "messaging_publish_failed",
-			"operation", "publish", "subject", event.Subject,
+			"operation", operationPublish, "subject", event.Subject,
 			"outcome", outcome, "duration_seconds", duration, "reason", reason,
 		)
 	}
 }
 
 func (t *telemetry) recordDeadLetterTransfer(ctx context.Context, outcome string) {
-	t.dlqTransfers.Add(ctx, 1, outcomeAttribute(outcome))
+	t.dlqTransfers.Add(ctx, 1, withOutcome(outcome))
 }
 
 func (t *telemetry) recordAsyncError(ctx context.Context, err error) {
 	t.log.WarnContext(ctx, "messaging_connection",
-		"operation", "connection", "outcome", connectionAsyncError, "reason", asyncErrorReason(err),
+		"operation", operationConnection, "outcome", connectionAsyncError, "reason", asyncErrorReason(err),
 	)
 }
 
@@ -149,19 +149,19 @@ func asyncErrorReason(err error) string {
 
 func (t *telemetry) recordHandler(ctx context.Context, msg Message, outcome, reason string, started time.Time) {
 	duration := time.Since(started).Seconds()
-	attrs := outcomeAttribute(outcome)
+	attrs := withOutcome(outcome)
 	t.handlerOperations.Add(ctx, 1, attrs)
 	t.handlerDuration.Record(ctx, duration, attrs)
 	if outcome != outcomeSuccess {
 		t.log.WarnContext(ctx, "messaging_delivery_failed",
-			"operation", "consume", "subject", msg.Subject(), "attempt", msg.Metadata().NumDelivered,
+			"operation", operationConsume, "subject", msg.Subject(), "attempt", msg.Metadata().NumDelivered,
 			"outcome", outcome, "duration_seconds", duration, "reason", reason,
 		)
 	}
 }
 
 func (t *telemetry) logTerminalDelivery(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, panicked *handlerPanic) {
-	args := []any{"operation", "consume", "subject", subject, "outcome", outcomeTerminal, "reason", reason}
+	args := []any{"operation", operationConsume, "subject", subject, "outcome", outcomeTerminal, "reason", reason}
 	if metadata != nil {
 		args = append(args, "attempt", metadata.NumDelivered)
 	}

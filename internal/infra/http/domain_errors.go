@@ -2,11 +2,9 @@ package httpx
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
-	"strconv"
 
 	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/problem"
@@ -25,12 +23,6 @@ import (
 // log receives the failures no mapper claimed, which are the ones answered with
 // a detail-free 500. A nil logger keeps that answer and loses the only record of
 // what caused it, so pass the service's own.
-func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
-	return handleGeneratedResponseError(log, domainErrors)
-}
-
-// handleGeneratedResponseError turns an error a generated operation returned into
-// a problem response.
 //
 // The expired-context case is checked before any service mapper: it is a
 // transport fact, and a mapper that forgot it would hide every slow dependency
@@ -39,43 +31,20 @@ func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.
 // log is only ever used for the unclassified case. A classified failure is an
 // answer this service chose, and the access log already carries its problem code;
 // recording it again at ERROR would put every 404 in the error stream.
-func handleGeneratedResponseError(log *slog.Logger, domainErrors []failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
+func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
 	domainErrors = slices.Clone(domainErrors)
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		// A handler that returns its expired context is reporting a spent
-		// request budget, not an internal fault, and this is the path most
-		// timeouts actually take: the generated wrapper commits a response
-		// here, so RequestTimeout never sees an uncommitted one. Reporting
-		// it as 500 would hide every slow dependency inside the error rate.
-		if errors.Is(err, context.DeadlineExceeded) {
-			writeProblem(w, r, timeBudgetExceededProblem())
-			return
-		}
-
-		// Cancellation answers here rather than falling through to the
-		// unclassified arm below. A caller that hung up is not a fault this
-		// service can act on, and treating one as unclassified spends an ERROR
-		// record and a 500 on every abandoned request — the two signals an
-		// operator watches to decide whether the service is broken.
-		//
-		// It shares the 504 class with the budget above because HTTP has no
-		// portable client-canceled status, which is the resolution
-		// handleGeneratedRequestError already applies to a canceled trust check.
-		// The two stay separable without a second code: an abandoned request
-		// ends well inside the budget, and the access log carries its duration.
-		if errors.Is(err, context.Canceled) {
-			writeProblem(w, r, problemResponse{
-				code:   problem.CodeGatewayTimeout,
-				detail: "request was canceled by the caller",
-			})
+		if response, ok := contextFailureProblem(err); ok {
+			writeProblem(w, r, response)
 			return
 		}
 
 		if mapped, ok := failure.Classify(err, domainErrors); ok {
-			if mapped.RetryAfter > 0 {
-				w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(mapped.RetryAfter)))
-			}
-			writeProblem(w, r, problemResponse{code: problem.Code(mapped.Code), detail: mapped.Detail})
+			writeProblem(w, r, problemResponse{
+				code:       problem.Code(mapped.Code),
+				detail:     mapped.Detail,
+				retryAfter: mapped.RetryAfter,
+			})
 			return
 		}
 
@@ -112,8 +81,9 @@ func handleGeneratedResponseError(log *slog.Logger, domainErrors []failure.Mappe
 func recordUnhandledResponseError(log *slog.Logger, r *http.Request, err error) {
 	// The generated strict server calls its response handler only with a non-nil
 	// error, but RejectResponse is exported and reaches this from callers this
-	// package does not own. Nothing below is worth a record without one.
-	if err == nil {
+	// package does not own. Nothing below is worth a record without an error or
+	// a logger.
+	if err == nil || log == nil {
 		return
 	}
 	// A nil request is handled for the same reason logStrictRequestError handles
@@ -121,16 +91,10 @@ func recordUnhandledResponseError(log *slog.Logger, r *http.Request, err error) 
 	// whose job is reporting a failure must not become a second one.
 	//nolint:contextcheck // There is no parent context when the request is nil, which is the only case this branch exists for.
 	ctx := context.Background()
-	route := "<unmatched>"
+	route := routeLabel("", "")
 	if r != nil {
 		ctx = r.Context()
-		if matched := joinMethodAndPattern(r.Method, routePathTemplateForRequest(r)); matched != "" {
-			route = matched
-		}
-	}
-
-	if log == nil {
-		return
+		route = routeLabel(r.Method, routePathTemplateForRequest(r))
 	}
 	log.LogAttrs(
 		ctx,

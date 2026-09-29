@@ -67,8 +67,9 @@ func httpDefaults() map[string]any {
 		"http.grace_period": "45s",
 		// shutdown_timeout bounds the drain only. It is 25s rather than the whole
 		// grace period because the teardown after the drain — diagnostics,
-		// background join, pool release, telemetry flush — needs the remaining 17s,
-		// and the flush that records how all three went is what runs last.
+		// background join, pool release, telemetry flush — needs the rest of it
+		// (shutdownTailBudget in the service bootstrap), and the flush that records
+		// how all three went is what runs last.
 		"http.shutdown_timeout":  "25s",
 		"http.readiness_timeout": "4s",
 		// readiness_propagation_delay holds the drain open long enough for a load

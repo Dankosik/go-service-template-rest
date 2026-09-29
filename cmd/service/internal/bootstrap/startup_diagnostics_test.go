@@ -37,7 +37,7 @@ func diagnosticsConfig(pprofEnabled bool) config.Config {
 func TestDiagnosticsServerAlwaysServesMetrics(t *testing.T) {
 	t.Parallel()
 
-	srv := newDiagnosticsServer(diagnosticsConfig(false), telemetry.New(), nil)
+	srv := newDiagnosticsServer(diagnosticsConfig(false), telemetry.NewMetrics(), nil)
 
 	resp := serveDiagnostics(srv, "/metrics")
 	if resp.Code != http.StatusOK {
@@ -60,7 +60,7 @@ func TestDiagnosticsServerServesBuildInfoWithoutPprof(t *testing.T) {
 	cfg.App = config.AppConfig{Env: "stage", Version: "v1.4.2", Commit: "0a1b2c3d"}
 	cfg.Observability.OTel.ServiceName = "orders"
 
-	resp := serveDiagnostics(newDiagnosticsServer(cfg, telemetry.New(), nil), "/debug/buildinfo")
+	resp := serveDiagnostics(newDiagnosticsServer(cfg, telemetry.NewMetrics(), nil), "/debug/buildinfo")
 	if resp.Code != http.StatusOK {
 		t.Fatalf("/debug/buildinfo status = %d, want %d with pprof disabled", resp.Code, http.StatusOK)
 	}
@@ -91,7 +91,7 @@ func TestDiagnosticsServerServesBuildInfoWithoutPprof(t *testing.T) {
 func TestDiagnosticsServerWithdrawsPprofWhenDisabled(t *testing.T) {
 	t.Parallel()
 
-	srv := newDiagnosticsServer(diagnosticsConfig(false), telemetry.New(), nil)
+	srv := newDiagnosticsServer(diagnosticsConfig(false), telemetry.NewMetrics(), nil)
 
 	for _, path := range []string{"/debug/pprof/", "/debug/pprof/heap", "/debug/pprof/cmdline"} {
 		resp := serveDiagnostics(srv, path)
@@ -104,7 +104,7 @@ func TestDiagnosticsServerWithdrawsPprofWhenDisabled(t *testing.T) {
 func TestDiagnosticsServerServesPprofWhenEnabled(t *testing.T) {
 	t.Parallel()
 
-	srv := newDiagnosticsServer(diagnosticsConfig(true), telemetry.New(), nil)
+	srv := newDiagnosticsServer(diagnosticsConfig(true), telemetry.NewMetrics(), nil)
 
 	// heap is routed by pprof.Index rather than by its own pattern, so it proves
 	// the prefix mount and not just one explicit handler.
@@ -126,7 +126,7 @@ func TestDiagnosticsServerWidensWriteTimeoutForProfiles(t *testing.T) {
 	t.Parallel()
 
 	cfg := diagnosticsConfig(true)
-	srv := newDiagnosticsServer(cfg, telemetry.New(), nil)
+	srv := newDiagnosticsServer(cfg, telemetry.NewMetrics(), nil)
 
 	if srv.WriteTimeout <= cfg.HTTP.WriteTimeout {
 		t.Fatalf("WriteTimeout = %s, want more than the API write timeout %s", srv.WriteTimeout, cfg.HTTP.WriteTimeout)
@@ -142,7 +142,7 @@ func TestDiagnosticsServerKeepsAPIWriteTimeoutWithoutPprof(t *testing.T) {
 	t.Parallel()
 
 	cfg := diagnosticsConfig(false)
-	srv := newDiagnosticsServer(cfg, telemetry.New(), nil)
+	srv := newDiagnosticsServer(cfg, telemetry.NewMetrics(), nil)
 
 	if srv.WriteTimeout != cfg.HTTP.WriteTimeout {
 		t.Fatalf("WriteTimeout = %s, want the API write timeout %s", srv.WriteTimeout, cfg.HTTP.WriteTimeout)
@@ -169,7 +169,7 @@ func TestDiagnosticsServerNeverServesDefaultServeMux(t *testing.T) {
 	}
 
 	for _, pprofEnabled := range []bool{false, true} {
-		srv := newDiagnosticsServer(diagnosticsConfig(pprofEnabled), telemetry.New(), nil)
+		srv := newDiagnosticsServer(diagnosticsConfig(pprofEnabled), telemetry.NewMetrics(), nil)
 		if srv.Handler == nil {
 			t.Fatalf("pprof enabled = %t: diagnostics Handler is nil, which makes net/http fall back to DefaultServeMux", pprofEnabled)
 		}

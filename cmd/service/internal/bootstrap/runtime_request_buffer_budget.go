@@ -37,11 +37,11 @@ const requestBufferBudgetRatio = 0.25
 // buffering is legitimately over the estimate, and refusing to start would be
 // wrong for it; a number in the startup log is what the other case needs.
 //
-// containerLimitBytes is the detected, unscaled container limit. Zero skips the
-// check when no cgroup limit exists, detection is disabled, or a platform-set
-// GOMEMLIMIT prevents detection.
-func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, containerLimitBytes int64) {
-	if containerLimitBytes <= 0 || cfg.Runtime.MemoryLimitRatio <= 0 {
+// limit is what applyMemoryLimit applied. A zero GC limit skips the check when
+// no cgroup limit exists, detection is disabled, or a platform-set GOMEMLIMIT
+// prevents detection.
+func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, limit memoryLimit) {
+	if limit.gcBytes <= 0 {
 		return
 	}
 	// Zero disables shedding, which means the ceiling is however many requests
@@ -54,7 +54,7 @@ func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, containerLim
 		saturatingMul(int64(cfg.HTTP.MaxInFlight), cfg.HTTP.MaxBodyBytes),
 		requestBufferCopyCount(),
 	)
-	budget := int64(float64(containerLimitBytes) * cfg.Runtime.MemoryLimitRatio * requestBufferBudgetRatio)
+	budget := int64(float64(limit.gcBytes) * requestBufferBudgetRatio)
 	if worstCase <= budget {
 		return
 	}
@@ -67,7 +67,7 @@ func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, containerLim
 		"http.max_body_bytes", cfg.HTTP.MaxBodyBytes,
 		"request_buffers.worst_case_bytes", worstCase,
 		"request_buffers.budget_bytes", budget,
-		"limit.bytes", containerLimitBytes,
+		"limit.bytes", limit.containerBytes,
 	)
 }
 

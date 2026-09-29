@@ -56,8 +56,8 @@ func (h *handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error 
 		DeliveryID: job.Args.DeliveryID, OwnerScope: job.Args.OwnerScope,
 		ReceiverID: job.Args.ReceiverID, URL: job.Args.URL,
 		Body: job.Args.Body, AttemptedAt: attemptedAt, Deadline: deadline,
-		KeyReference:         job.Args.ActiveKeyReference,
-		PredecessorReference: job.Args.PredecessorKeyReference,
+		ActiveKeyReference:      job.Args.ActiveKeyReference,
+		PredecessorKeyReference: job.Args.PredecessorKeyReference,
 	}
 	prepared, err := prepareSend(ctx, h.resolver, attempt, h.secrets)
 	if err != nil {
@@ -90,8 +90,8 @@ func prepareFailure(ctx context.Context, err error) error {
 func classifyDelivery(result sendResult, err error) error {
 	evidence := result.Evidence
 	switch {
-	case evidence.LocalDenial:
-		return cancelJob("webhook destination denied")
+	case evidence.LocalPermanent:
+		return cancelJob("webhook delivery cannot be sent")
 	case evidence.StatusCode >= http.StatusOK && evidence.StatusCode <= 299:
 		return nil
 	case retryableWebhookStatus(evidence.StatusCode):
@@ -122,5 +122,5 @@ func cancelJob(reason string) error {
 
 func retryableWebhookStatus(status int) bool {
 	return status == http.StatusRequestTimeout || status == http.StatusTooEarly || status == http.StatusTooManyRequests ||
-		status >= 500 && status <= 599 && status != http.StatusNotImplemented && status != http.StatusHTTPVersionNotSupported
+		(status >= 500 && status <= 599 && status != http.StatusNotImplemented && status != http.StatusHTTPVersionNotSupported)
 }

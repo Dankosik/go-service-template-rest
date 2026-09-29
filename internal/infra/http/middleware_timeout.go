@@ -36,8 +36,8 @@ func RequestTimeout(timeout time.Duration, next http.Handler) http.Handler {
 
 		// The deadline is installed on the caller's request rather than on a
 		// copy, because chi assigns the matched route to r.Pattern in place
-		// (chi/v5 mux.go:481) and otelhttp reads that field back off the request
-		// it handed down (otelhttp handler.go:187). A middleware here that
+		// (chi Mux.routeHTTP) and otelhttp reads that field back off the request
+		// it handed down (its middleware's serveHTTP). A middleware here that
 		// forwarded r.WithContext(ctx) would give routing a different struct to
 		// write to, and every span and metric would silently lose http.route —
 		// which is exactly what collapses 404s and 405s into per-method buckets.

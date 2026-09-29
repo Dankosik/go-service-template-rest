@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
@@ -21,13 +20,6 @@ type runtimeDependencies struct{}
 // This profile has no dependency to probe; startup admission and the background
 // supervisor still contribute their own.
 func (runtimeDependencies) ReadinessProbes() []health.Probe { return nil }
-
-// readinessProbeBudget mirrors the PostgreSQL profile's accessor. This profile
-// probes no dependency, so the evaluation only has to fit inside the budget the
-// readiness route itself answers within.
-func readinessProbeBudget(cfg config.Config) time.Duration {
-	return cfg.HTTP.ReadinessTimeout
-}
 
 // Close takes a context to match the PostgreSQL profile's signature, which needs
 // one to bound a pool release that can outlive the HTTP drain. This profile holds

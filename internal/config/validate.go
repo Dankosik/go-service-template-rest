@@ -11,27 +11,26 @@ import (
 	"time"
 )
 
-// validateConfig is pure computation over an in-memory snapshot: no I/O, and it
-// measures at 0ms in the startup log. Cancellation is observed once by the
-// caller before this runs rather than between every rule.
+// validateConfig checks and canonicalizes an in-memory snapshot: no I/O, and it
+// measures at 0ms in the startup log. Validators that take a section pointer
+// also canonicalize it (trimming, lowercasing, resolved defaults such as the R2
+// region), so the snapshot the load returns is already canonical. Cancellation
+// is observed once by the caller before this runs rather than between every
+// rule.
 //
 // Each section's rules live in its own <section>_config.go beside this one, so a
 // section that a build profile removes leaves with its file. This file keeps the
 // order they run in and the helpers more than one of them shares. A rule that
 // spans two sections goes to whichever section depends on the other, and takes
-// that section's other half as a parameter — postgres against the request
-// budget, outbox against postgres — so no rule outlives the section it is about.
+// that section's other half as a parameter, so no rule outlives the section it
+// is about.
 //
 // There is deliberately no rule tying health.refresh_interval to
 // http.readiness_timeout. The readiness handler answers from cached state and
 // performs no I/O, so its budget bounds nothing the refresher does; the interval
 // only has to be small relative to the orchestrator's own probe period, which
 // this service cannot see.
-func validateConfig(cfg *Config, unknownKeys []string) error {
-	if unknown := normalizeUnknownKeys(unknownKeys); len(unknown) > 0 {
-		return fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
-	}
-
+func validateConfig(cfg *Config) error {
 	if err := validateAppConfig(&cfg.App); err != nil {
 		return err
 	}
@@ -79,7 +78,7 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	}
 	// profile:jobs-postgres:end
 	// profile:webhooks-durable:start
-	if err := validateWebhooks(cfg.OutboundWebhooks, cfg.Postgres, cfg.Jobs); err != nil {
+	if err := validateOutboundWebhooks(cfg.OutboundWebhooks, cfg.Postgres, cfg.Jobs); err != nil {
 		return err
 	}
 	// profile:webhooks-durable:end

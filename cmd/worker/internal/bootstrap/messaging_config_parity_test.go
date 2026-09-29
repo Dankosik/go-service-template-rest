@@ -62,7 +62,7 @@ func loadMessagingConfig(t *testing.T, urls, stream string, plaintext bool) (*co
 	t.Setenv("APP__MESSAGING__STREAM", stream)
 	t.Setenv("APP__MESSAGING__ALLOW_PLAINTEXT", strconv.FormatBool(plaintext))
 
-	cfg, _, err := config.LoadDetailedWithContext(t.Context(), config.LoadOptions{})
+	cfg, _, err := config.Load(t.Context(), config.LoadOptions{})
 	if err == nil {
 		return &cfg.Messaging, nil
 	}

@@ -13,40 +13,43 @@ import (
 )
 
 func main() {
-	args := os.Args[1:]
+	code, err := run(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+	os.Exit(code)
+}
+
+func run(args []string) (int, error) {
 	if len(args) > 0 && args[0] == "--" {
 		args = args[1:]
 	}
 	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "usage: openapi-ref-check CONTRACT")
-		os.Exit(2)
+		return 2, errors.New("usage: openapi-ref-check CONTRACT")
 	}
 
 	contract, err := os.Open(args[0])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", args[0], err)
-		os.Exit(1)
+		return 1, fmt.Errorf("%s: %w", args[0], err)
 	}
 	defer contract.Close()
 
 	decoder := yaml.NewDecoder(contract)
 	var document yaml.Node
 	if err := decoder.Decode(&document); err != nil {
-		fmt.Fprintf(os.Stderr, "%s: decode OpenAPI contract: %v\n", args[0], err)
-		os.Exit(1)
+		return 1, fmt.Errorf("%s: decode OpenAPI contract: %w", args[0], err)
 	}
 	var extra yaml.Node
 	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
 			err = errors.New("multiple YAML documents are not supported")
 		}
-		fmt.Fprintf(os.Stderr, "%s: decode OpenAPI contract: %v\n", args[0], err)
-		os.Exit(1)
+		return 1, fmt.Errorf("%s: decode OpenAPI contract: %w", args[0], err)
 	}
 	if err := validateRefs(&document, map[*yaml.Node]bool{}); err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", args[0], err)
-		os.Exit(1)
+		return 1, fmt.Errorf("%s: %w", args[0], err)
 	}
+	return 0, nil
 }
 
 func validateRefs(node *yaml.Node, seen map[*yaml.Node]bool) error {

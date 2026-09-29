@@ -9,12 +9,17 @@ import (
 	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 )
 
-func signV1(deliveryID string, attemptedAt time.Time, body []byte, keys [][]byte) (string, error) {
+// signV1 signs with the active key and, when present, the predecessor key, in
+// that order.
+func signV1(deliveryID string, attemptedAt time.Time, body []byte, active, predecessor []byte) (string, error) {
+	// The signed content is id.timestamp.body, so a '.' in the ID would make
+	// it ambiguous.
 	if err := validateToken("delivery_id", deliveryID); err != nil || strings.Contains(deliveryID, ".") {
 		return "", ErrConfig
 	}
-	if len(keys) < 1 || len(keys) > 2 {
-		return "", errors.New("sign webhook: one active and optional predecessor key are required")
+	keys := [][]byte{active}
+	if predecessor != nil {
+		keys = append(keys, predecessor)
 	}
 	entries := make([]string, 0, len(keys))
 	for _, key := range keys {

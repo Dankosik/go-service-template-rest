@@ -11,6 +11,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // The dead-letter sub-protocol: a delivery the worker gave up on becomes a
@@ -21,24 +22,27 @@ import (
 // This is separate from message_wire.go because it changes for different
 // reasons: a redrive rule, or what an operator needs to see about why a record
 // stopped, rather than the envelope every message carries. The Original-* header
-// names it writes are declared with the rest of the wire contract in
-// message_wire.go, because they are one published contract.
+// names it writes are declared in message_wire.go, which says why.
 
-// The Dead-Letter-Reason values. They belong here rather than with the metric
-// and log labels in vocabulary.go because they travel on the wire to whatever
-// consumes the dead-letter stream: they are a published contract, and renaming
-// one is a consumer-visible change. worker_delivery.go names them; only
-// Worker.deadLetter consumes them.
+// The Dead-Letter-Reason values [DeadLetterReason] reports. They belong here
+// rather than with the metric and log labels in vocabulary.go because they
+// travel on the wire to whatever consumes the dead-letter stream: they are a
+// published contract, and changing one is a consumer-visible change.
 const (
-	deadLetterMalformed = "malformed"
-	deadLetterExhausted = "exhausted"
-	deadLetterPermanent = "permanent"
+	// DeadLetterMalformed marks a delivery whose envelope never decoded.
+	DeadLetterMalformed = "malformed"
+	// DeadLetterExhausted marks a delivery that used its whole attempt budget.
+	DeadLetterExhausted = "exhausted"
+	// DeadLetterPermanent marks a delivery the handler refused with [Permanent].
+	DeadLetterPermanent = "permanent"
 )
 
-// deadLetterMessage builds the transfer envelope: the original identity headers
-// and trace context, the Original-* record of where the message came from, and a
-// transfer id derived from that origin.
-func deadLetterMessage(source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, reason string) (*nats.Msg, string) {
+// deadLetterMessage builds the transfer onto subject: the original identity
+// headers and trace context, the Original-* record of where the message came
+// from, and a transfer id derived from that origin.
+func deadLetterMessage(
+	source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, subject, reason string,
+) (*nats.Msg, string) {
 	header := make(nats.Header)
 	carryIdentityHeaders(header, source.Headers())
 	header.Set(headerOriginalSubject, source.Subject())
@@ -57,7 +61,7 @@ func deadLetterMessage(source jetstream.Msg, metadata *jetstream.MsgMetadata, de
 	case header.Get(headerMessageID) == "":
 		header.Set(headerMessageID, transferID)
 	}
-	return &nats.Msg{Header: header, Data: slices.Clone(source.Data())}, transferID
+	return &nats.Msg{Subject: subject, Header: header, Data: slices.Clone(source.Data())}, transferID
 }
 
 // RestoreDeadLetter rebuilds the event one dead-letter record came from, so an
@@ -93,24 +97,18 @@ func RestoreDeadLetter(msg jetstream.Msg) (Event, error) {
 		return Event{}, fmt.Errorf("%w: dead-letter metadata unavailable", ErrRejected)
 	}
 	header := msg.Headers()
-	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))
-	if err != nil || createdAt.IsZero() {
+	createdAt, ok := parseCreatedAt(header)
+	if !ok {
 		return Event{}, fmt.Errorf("%w: dead-letter record carries no restorable creation time", ErrRejected)
 	}
 	event := Event{
-		Subject:   header.Get(headerOriginalSubject),
-		MessageID: header.Get(headerMessageID),
-		PublicationID: streamRecordID(
-			redrivePublicationPrefix,
-			metadata.Stream,
-			metadata.Sequence.Stream,
-			metadata.Timestamp,
-			header.Get(jetstream.MsgIDHeader),
-		),
-		Type:      header.Get(headerEventType),
-		Schema:    header.Get(headerEventSchema),
-		CreatedAt: createdAt.UTC(),
-		Payload:   slices.Clone(msg.Data()),
+		Subject:       header.Get(headerOriginalSubject),
+		MessageID:     header.Get(headerMessageID),
+		PublicationID: streamRecordID(redrivePublicationPrefix, msg, metadata),
+		Type:          header.Get(headerEventType),
+		Schema:        header.Get(headerEventSchema),
+		CreatedAt:     createdAt,
+		Payload:       slices.Clone(msg.Data()),
 	}
 	// The payload bound belongs to the producer this event is about to go
 	// through, which owns the configured maximum; everything checked here is the
@@ -122,13 +120,15 @@ func RestoreDeadLetter(msg jetstream.Msg) (Event, error) {
 }
 
 // DeadLetterReason is why the worker moved one record to the dead-letter
-// stream: "malformed", "exhausted", or "permanent". It is empty for a record
-// this package did not transfer.
+// stream: [DeadLetterMalformed], [DeadLetterExhausted], or
+// [DeadLetterPermanent]. It is empty for a record this package did not
+// transfer.
 //
 // An operator reads it to decide whether a redrive can succeed at all. Only
-// "exhausted" describes a failure a later attempt may survive unchanged;
-// "permanent" was the handler's own verdict and "malformed" never decoded, so
-// both need the cause addressed before the record is worth republishing.
+// [DeadLetterExhausted] describes a failure a later attempt may survive
+// unchanged; [DeadLetterPermanent] was the handler's own verdict and
+// [DeadLetterMalformed] never decoded, so both need the cause addressed before
+// the record is worth republishing.
 func DeadLetterReason(msg jetstream.Msg) string {
 	if msg == nil {
 		return ""
@@ -140,10 +140,7 @@ func DeadLetterReason(msg jetstream.Msg) string {
 // onto the transfer. An absent header is left absent rather than set empty, so
 // a consumer can tell "the publisher did not send this" from "it sent a blank".
 func carryIdentityHeaders(header, source nats.Header) {
-	for _, name := range []string{
-		headerMessageID, headerEventType, headerEventSchema, headerCreatedAt,
-		"traceparent", "tracestate",
-	} {
+	for _, name := range slices.Concat(envelopeHeaders, propagation.TraceContext{}.Fields()) {
 		if value := source.Get(name); value != "" {
 			header.Set(name, value)
 		}
@@ -156,13 +153,7 @@ func carryIdentityHeaders(header, source nats.Header) {
 // copies. The inputs are what identify one source delivery: the stream and
 // sequence that stored it, its store timestamp, and the publisher's own id.
 func deadLetterTransferID(source jetstream.Msg, metadata *jetstream.MsgMetadata) string {
-	return streamRecordID(
-		deadLetterTransferPrefix,
-		metadata.Stream,
-		metadata.Sequence.Stream,
-		metadata.Timestamp,
-		source.Headers().Get(jetstream.MsgIDHeader),
-	)
+	return streamRecordID(deadLetterTransferPrefix, source, metadata)
 }
 
 // The two prefixes streamRecordID is called with. They only make the derived
@@ -177,12 +168,16 @@ const (
 // broker deduplicates a retried publication instead of storing a second copy.
 // Both directions of the dead-letter path need that property: the transfer into
 // the stream and the redrive back out of it.
-func streamRecordID(prefix, stream string, sequence uint64, storedAt time.Time, publicationID string) string {
+//
+// The identity is the stream and sequence that stored the record, its store
+// timestamp, and the id it was published with. Its byte layout is the
+// deduplication contract: changing it makes a retried publication a new one.
+func streamRecordID(prefix string, msg jetstream.Msg, metadata *jetstream.MsgMetadata) string {
 	identity := strings.Join([]string{
-		stream,
-		strconv.FormatUint(sequence, 10),
-		storedAt.UTC().Format(time.RFC3339Nano),
-		publicationID,
+		metadata.Stream,
+		strconv.FormatUint(metadata.Sequence.Stream, 10),
+		metadata.Timestamp.UTC().Format(time.RFC3339Nano),
+		msg.Headers().Get(jetstream.MsgIDHeader),
 	}, "\x00")
 	digest := sha256.Sum256([]byte(identity))
 	return prefix + hex.EncodeToString(digest[:])

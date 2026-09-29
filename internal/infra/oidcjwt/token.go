@@ -1,10 +1,8 @@
 package oidcjwt
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -23,41 +21,40 @@ func validAccessTokenType(value any) bool {
 	return ok && (strings.EqualFold(typ, "at+jwt") || strings.EqualFold(typ, "application/at+jwt"))
 }
 
-func principalFromClaims(claims *accessTokenClaims, strict bool) (reqctx.Principal, error) {
+// principalFromClaims reports false when the claims do not name one caller.
+func principalFromClaims(claims *accessTokenClaims, strict bool) (reqctx.Principal, bool) {
 	if claims == nil {
-		return reqctx.Principal{}, failure(bearerauthn.KindInvalid)
+		return reqctx.Principal{}, false
 	}
-	clientID, err := oneClientID(claims.ClientID, claims.AuthorizedParty, claims.ApplicationID, claims.OktaClientID)
-	if err != nil {
-		return reqctx.Principal{}, err
+	clientID, ok := oneClientID(claims.ClientID, claims.AuthorizedParty, claims.ApplicationID, claims.OktaClientID)
+	if !ok {
+		return reqctx.Principal{}, false
 	}
 	subject := claims.Subject
 	if strings.TrimSpace(subject) != subject || (subject == "" && clientID == "") {
-		return reqctx.Principal{}, failure(bearerauthn.KindInvalid)
+		return reqctx.Principal{}, false
 	}
 	if strict && (subject == "" || strings.TrimSpace(claims.ClientID) == "" || strings.TrimSpace(claims.ID) == "" || claims.IssuedAt == nil) {
-		return reqctx.Principal{}, failure(bearerauthn.KindInvalid)
+		return reqctx.Principal{}, false
 	}
-	return reqctx.Principal{Issuer: claims.Issuer, Subject: subject, ClientID: clientID}, nil
+	return reqctx.Principal{Issuer: claims.Issuer, Subject: subject, ClientID: clientID}, true
 }
 
-func oneClientID(values ...string) (string, error) {
+// oneClientID reports false when the client ID claims disagree or carry
+// surrounding whitespace.
+func oneClientID(values ...string) (string, bool) {
 	selected := ""
 	for _, value := range values {
 		if value == "" {
 			continue
 		}
 		if strings.TrimSpace(value) != value {
-			return "", failure(bearerauthn.KindInvalid)
+			return "", false
 		}
 		if selected != "" && value != selected {
-			return "", failure(bearerauthn.KindInvalid)
+			return "", false
 		}
 		selected = value
 	}
-	return selected, nil
-}
-
-func failure(kind bearerauthn.Kind) error {
-	return fmt.Errorf("verify access token: %w", bearerauthn.NewError(kind))
+	return selected, true
 }

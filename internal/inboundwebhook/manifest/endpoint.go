@@ -15,7 +15,7 @@ import (
 const (
 	maxDocumentBytes = 1 << 20
 	maxEntries       = 4096
-	maxIDBytes       = 64
+	maxTokenBytes    = 64
 )
 
 // Endpoint is one non-secret inbound-webhook trust identity.
@@ -83,21 +83,21 @@ func ParseEndpoints(raw string) (*Endpoints, error) {
 }
 
 // Lookup returns the named endpoint.
-func (m *Endpoints) Lookup(endpointID string) (Endpoint, bool) {
-	if m == nil {
+func (e *Endpoints) Lookup(endpointID string) (Endpoint, bool) {
+	if e == nil {
 		return Endpoint{}, false
 	}
-	endpoint, ok := m.endpoints[endpointID]
+	endpoint, ok := e.endpoints[endpointID]
 	return endpoint, ok
 }
 
 // IDs returns configured endpoint identifiers.
-func (m *Endpoints) IDs() []string {
-	if m == nil {
+func (e *Endpoints) IDs() []string {
+	if e == nil {
 		return nil
 	}
-	ids := make([]string, 0, len(m.endpoints))
-	for id := range m.endpoints {
+	ids := make([]string, 0, len(e.endpoints))
+	for id := range e.endpoints {
 		ids = append(ids, id)
 	}
 	return ids
@@ -105,15 +105,15 @@ func (m *Endpoints) IDs() []string {
 
 // ValidEndpointID reports whether value is one bounded ASCII endpoint token.
 func ValidEndpointID(value string) bool {
-	if value == "" || len(value) > maxIDBytes || !utf8.ValidString(value) {
+	if value == "" || len(value) > maxTokenBytes {
 		return false
 	}
-	for _, r := range value {
-		allowed := r <= unicode.MaxASCII &&
-			(r == '_' || r == '-' ||
-				(r >= 'A' && r <= 'Z') ||
-				(r >= 'a' && r <= 'z') ||
-				(r >= '0' && r <= '9'))
+	for i := range len(value) {
+		c := value[i]
+		allowed := c == '_' || c == '-' ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= 'a' && c <= 'z') ||
+			(c >= '0' && c <= '9')
 		if !allowed {
 			return false
 		}
@@ -123,7 +123,7 @@ func ValidEndpointID(value string) bool {
 
 // ValidKeyReference reports whether value is one bounded non-space key token.
 func ValidKeyReference(value string) bool {
-	if value == "" || len(value) > maxIDBytes || !utf8.ValidString(value) {
+	if value == "" || len(value) > maxTokenBytes || !utf8.ValidString(value) {
 		return false
 	}
 	return strings.IndexFunc(value, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) < 0

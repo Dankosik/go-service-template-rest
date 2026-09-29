@@ -90,6 +90,8 @@ func newClient(rawBaseURL string, policy targetPolicy, limits TransportLimits) (
 		return nil, errors.New("build outbound HTTP client: default transport has unexpected type")
 	}
 	transport := baseTransport.Clone()
+	// No environment proxy: a proxy would be the address actually dialed, which
+	// takes both the dial gate and the authority pin out of the path.
 	transport.Proxy = nil
 	transport.ResponseHeaderTimeout = limits.ResponseHeaderTimeout
 	transport.MaxResponseHeaderBytes = limits.MaxResponseHeaderBytes
@@ -112,12 +114,16 @@ func newClient(rawBaseURL string, policy targetPolicy, limits TransportLimits) (
 		inFlight:          make(chan struct{}, limits.MaxInFlight),
 		absoluteBodyBytes: limits.AbsoluteBodyBytes,
 		httpClient: &http.Client{
-			Transport: roundTripper,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+			Transport:     roundTripper,
+			CheckRedirect: refuseRedirect,
 		},
 	}, nil
+}
+
+// refuseRedirect returns a redirect response to the caller instead of following
+// it: a followed Location would leave the one authority this client is pinned to.
+func refuseRedirect(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 // Do sends one non-streaming request under the provider-wide limits. The caller
@@ -125,7 +131,7 @@ func newClient(rawBaseURL string, policy targetPolicy, limits TransportLimits) (
 // admission remains held until terminal Read or Close. A terminal read releases
 // admission but does not remove the obligation to close the underlying body.
 func (c *Client) Do(request *http.Request) (*http.Response, error) {
-	return c.do(request, c.absoluteBodyBytes, nil, func() error {
+	return c.do(request, c.absoluteBodyBytes, func() {}, func() error {
 		if request == nil {
 			return nil
 		}
@@ -159,25 +165,20 @@ func (c *Client) DoWithPolicy(request *http.Request, policy OperationPolicy) (*h
 	})
 }
 
+// do owns cancelOperation from entry: every exit calls it exactly once.
 func (c *Client) do(request *http.Request, maxBodyBytes int64, cancelOperation func(), contextError func() error) (*http.Response, error) {
 	if request == nil || request.URL == nil {
-		if cancelOperation != nil {
-			cancelOperation()
-		}
+		cancelOperation()
 		return nil, errors.New("send outbound HTTP request: request URL is required")
 	}
 	if err := request.Context().Err(); err != nil {
-		if cancelOperation != nil {
-			cancelOperation()
-		}
+		cancelOperation()
 		return nil, fmt.Errorf("send outbound HTTP request: %w", err)
 	}
 	select {
 	case c.inFlight <- struct{}{}:
 	default:
-		if cancelOperation != nil {
-			cancelOperation()
-		}
+		cancelOperation()
 		if err := request.Context().Err(); err != nil {
 			return nil, fmt.Errorf("send outbound HTTP request: %w", err)
 		}
@@ -188,9 +189,7 @@ func (c *Client) do(request *http.Request, maxBodyBytes int64, cancelOperation f
 	releaseAdmissionAndCancelOperation := func() {
 		once.Do(func() {
 			<-c.inFlight
-			if cancelOperation != nil {
-				cancelOperation()
-			}
+			cancelOperation()
 		})
 	}
 
@@ -211,7 +210,7 @@ func (c *Client) do(request *http.Request, maxBodyBytes int64, cancelOperation f
 	response.Body = &boundedBody{
 		body:         response.Body,
 		remaining:    maxBodyBytes,
-		complete:     releaseAdmissionAndCancelOperation,
+		release:      releaseAdmissionAndCancelOperation,
 		contextError: contextError,
 	}
 	return response, nil
@@ -221,7 +220,7 @@ type boundedBody struct {
 	body         io.ReadCloser
 	remaining    int64
 	tooLarge     bool
-	complete     func()
+	release      func()
 	contextError func() error
 }
 
@@ -229,6 +228,8 @@ func (b *boundedBody) Read(buffer []byte) (int, error) {
 	if b.tooLarge {
 		return 0, ErrResponseTooLarge
 	}
+	// Reading one byte past the budget is what tells a body that ends exactly at
+	// the limit from one that exceeds it.
 	if b.remaining < int64(len(buffer)) {
 		buffer = buffer[:int(b.remaining)+1]
 	}
@@ -237,12 +238,12 @@ func (b *boundedBody) Read(buffer []byte) (int, error) {
 		n = int(b.remaining)
 		b.remaining = 0
 		b.tooLarge = true
-		b.complete()
+		b.release()
 		return n, ErrResponseTooLarge
 	}
 	b.remaining -= int64(n)
 	if err != nil {
-		b.complete()
+		b.release()
 		if contextErr := b.contextError(); contextErr != nil {
 			err = contextErr
 		}
@@ -252,11 +253,36 @@ func (b *boundedBody) Read(buffer []byte) (int, error) {
 
 func (b *boundedBody) Close() error {
 	err := b.body.Close()
-	b.complete()
+	b.release()
 	if err != nil {
 		return fmt.Errorf("close outbound HTTP response body: %w", err)
 	}
 	return nil
+}
+
+// StandardClient returns an *http.Client for an SDK that needs one. Every
+// request it sends goes through Do, and it returns redirects rather than
+// following them, as Do does.
+func (c *Client) StandardClient() *http.Client {
+	return &http.Client{
+		Transport:     doRoundTripper{client: c},
+		CheckRedirect: refuseRedirect,
+	}
+}
+
+type doRoundTripper struct {
+	client *Client
+}
+
+// RoundTrip drops a response that arrives with an error: RoundTripper allows
+// only one of the two, and Do returns both only where http.Client did, which
+// closes that body first.
+func (t doRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	response, err := t.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
 }
 
 // BaseURL returns the validated provider base URL.

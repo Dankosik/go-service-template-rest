@@ -144,7 +144,7 @@ func generatedStrictServerOptions(
 ) openapi.StrictHTTPServerOptions {
 	return openapi.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  rejectRequest,
-		ResponseErrorHandlerFunc: handleGeneratedResponseError(log, domainErrors),
+		ResponseErrorHandlerFunc: RejectResponse(log, domainErrors...),
 	}
 }
 

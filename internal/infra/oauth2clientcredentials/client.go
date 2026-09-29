@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	defaultAcquisitionTimeout = 5 * time.Second
-	defaultEarlyExpiry        = 10 * time.Second
-	maxTokenResponseHeaders   = 32 << 10
-	maxTokenResponseBody      = 1 << 20
-	maxTokenRequestsInFlight  = 1
+	defaultAcquisitionTimeout   = 5 * time.Second
+	defaultEarlyExpiry          = 10 * time.Second
+	maxTokenResponseHeaderBytes = 32 << 10
+	maxTokenResponseBodyBytes   = 1 << 20
+	maxTokenRequestsInFlight    = 1
 )
 
 type acquireToken func(context.Context) (*oauth2.Token, error)
@@ -44,6 +44,9 @@ func New(cfg Config) (*Client, error) {
 	return newClient(newAcquirer(validated, bounded), bounded.CloseIdleConnections), nil
 }
 
+// newClient wraps acquisition in x/oauth2's reuse cache. That TokenSource has no
+// context parameter, so acquisition runs under the Client's process context
+// with its own timeout, never under a caller's request.
 func newClient(acquire acquireToken, closeIdle func()) *Client {
 	processCtx, cancel := context.WithCancel(context.Background())
 	client := &Client{closeIdle: closeIdle, cancel: cancel}

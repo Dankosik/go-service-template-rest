@@ -15,7 +15,7 @@ import (
 // t.Setenv forbids t.Parallel, so these run sequentially.
 //
 //nolint:paralleltest // ambient env control is process-wide state.
-func TestBuildTraceExporterOptions(t *testing.T) {
+func TestTraceExporterEndpointAndExporter(t *testing.T) {
 	t.Run("endpoint without path defaults to the traces path", func(t *testing.T) {
 		telemetrytest.ClearAmbientExporterEnv(t)
 
@@ -26,17 +26,16 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPEndpoint: server.URL,
-		})
+		cfg := TraceExporterConfig{OTLPEndpoint: server.URL}
+		endpoint, err := resolveTraceExporterEndpoint(cfg)
 		if err != nil {
-			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+			t.Fatalf("resolveTraceExporterEndpoint() error = %v", err)
 		}
 		if !endpoint.Configured() {
 			t.Fatalf("endpoint = %+v, want configured", endpoint)
 		}
 
-		exportOneTestSpan(t, options)
+		exportOneTestSpan(t, endpoint, cfg)
 		assertCollectorPath(t, paths, "/v1/traces")
 	})
 
@@ -50,18 +49,38 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
-			OTLPEndpoint: server.URL + "/custom/traces",
-		})
+		cfg := TraceExporterConfig{OTLPEndpoint: server.URL + "/custom/traces"}
+		endpoint, err := resolveTraceExporterEndpoint(cfg)
 		if err != nil {
-			t.Fatalf("buildTraceExporterOptions() error = %v", err)
+			t.Fatalf("resolveTraceExporterEndpoint() error = %v", err)
 		}
 		if !endpoint.Configured() {
 			t.Fatalf("endpoint = %+v, want configured", endpoint)
 		}
 
-		exportOneTestSpan(t, options)
+		exportOneTestSpan(t, endpoint, cfg)
 		assertCollectorPath(t, paths, "/custom/traces")
+	})
+
+	t.Run("malformed headers still report the resolved endpoint", func(t *testing.T) {
+		telemetrytest.ClearAmbientExporterEnv(t)
+		telemetrytest.RestoreGlobals(t)
+
+		endpoint, shutdown, err := SetupTracing(t.Context(), TracingConfig{
+			Exporter: TraceExporterConfig{
+				OTLPEndpoint: "https://otel.example.com:4318",
+				OTLPHeaders:  "malformed",
+			},
+		})
+		if err == nil {
+			t.Fatal("SetupTracing() error = nil, want non-nil")
+		}
+		if shutdown != nil {
+			t.Fatal("SetupTracing() shutdown != nil, want nil on error")
+		}
+		if endpoint.Source != SharedOTLPExporterConfigKey {
+			t.Fatalf("endpoint source = %q, want %q", endpoint.Source, SharedOTLPExporterConfigKey)
+		}
 	})
 }
 

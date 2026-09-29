@@ -8,6 +8,9 @@ import (
 
 const requestIDHeader = reqctx.RequestIDHeader
 
+// RequestCorrelation accepts a valid caller request ID or generates one, echoes
+// it on the response, and publishes it on the request context for logs and
+// problem bodies.
 func RequestCorrelation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, requestID := reqctx.ContextWithAcceptedRequestID(r.Context(), r.Header.Get(requestIDHeader))

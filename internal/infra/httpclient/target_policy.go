@@ -18,6 +18,21 @@ type targetPolicy struct {
 	privateSuffix string
 }
 
+// private reports whether the policy admits only hosts under a configured
+// private DNS suffix instead of public addresses.
+func (p targetPolicy) private() bool {
+	return p.privateSuffix != ""
+}
+
+// allowsAddress reports whether a dial may reach resolved: a public address
+// for a public policy, a private one for a private policy.
+func (p targetPolicy) allowsAddress(resolved netip.Addr) bool {
+	if p.private() {
+		return resolved.Unmap().IsPrivate()
+	}
+	return outboundtrust.PublicAddress(resolved)
+}
+
 func privateHostSuffix(configured string) string {
 	suffix := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(configured)), ".")
 	if suffix == "" {
@@ -30,30 +45,25 @@ func privateHostSuffix(configured string) string {
 }
 
 func validateTarget(raw string, policy targetPolicy) (*url.URL, error) {
-	baseURL, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || baseURL == nil || !baseURL.IsAbs() || baseURL.Opaque != "" ||
-		baseURL.Host == "" || baseURL.Hostname() == "" {
+	baseURL, issue := outboundtrust.HTTPSTarget(strings.TrimSpace(raw))
+	switch issue {
+	case outboundtrust.TargetOK:
+	case outboundtrust.TargetNotAbsolute:
 		return nil, errors.New("build outbound HTTP client: base URL must be absolute")
-	}
-	if !strings.EqualFold(baseURL.Scheme, "https") {
+	case outboundtrust.TargetNotHTTPS:
 		return nil, errors.New("build outbound HTTP client: target requires HTTPS")
-	}
-	if baseURL.User != nil || baseURL.RawQuery != "" || baseURL.ForceQuery || baseURL.Fragment != "" {
+	case outboundtrust.TargetHasUserInfoOrFragment, outboundtrust.TargetHasQuery:
 		return nil, errors.New("build outbound HTTP client: base URL cannot contain user info, query, or fragment")
 	}
-	if policy.privateSuffix == "" {
-		if address, parseErr := netip.ParseAddr(baseURL.Hostname()); parseErr == nil && !outboundtrust.PublicAddress(address) {
-			return nil, ErrTargetDenied
-		}
-	} else {
-		hostname := strings.ToLower(strings.TrimSuffix(baseURL.Hostname(), "."))
+	if policy.private() {
+		hostname := strings.TrimSuffix(baseURL.Hostname(), ".")
 		if !strings.HasSuffix(hostname, policy.privateSuffix) {
 			return nil, errors.New("build outbound HTTP client: private target requires the configured DNS suffix")
 		}
+	} else if address, parseErr := netip.ParseAddr(baseURL.Hostname()); parseErr == nil && !policy.allowsAddress(address) {
+		return nil, ErrTargetDenied
 	}
-	baseURL.Scheme = "https"
-	baseURL.Host = strings.ToLower(baseURL.Host)
-	return baseURL, nil
+	return &baseURL, nil
 }
 
 func enforceDialAddress(policy targetPolicy, address string) error {
@@ -65,11 +75,10 @@ func enforceDialAddress(policy targetPolicy, address string) error {
 	if err != nil {
 		return ErrTargetDenied
 	}
-	if (policy.privateSuffix == "" && outboundtrust.PublicAddress(resolved)) ||
-		(policy.privateSuffix != "" && resolved.Unmap().IsPrivate()) {
-		return nil
+	if !policy.allowsAddress(resolved) {
+		return ErrTargetDenied
 	}
-	return ErrTargetDenied
+	return nil
 }
 
 type authorityTransport struct {

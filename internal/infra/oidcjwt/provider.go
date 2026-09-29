@@ -25,7 +25,7 @@ func providerTransportLimits() httpclient.TransportLimits {
 		ResponseHeaderTimeout:  providerTimeout,
 		MaxResponseHeaderBytes: maxProviderHeaderBytes,
 		MaxInFlight:            maxProviderInFlight,
-		AbsoluteBodyBytes:      maxProviderBody,
+		AbsoluteBodyBytes:      maxProviderBodyBytes,
 	}
 }
 
@@ -94,12 +94,12 @@ func (t jwksRoundTripper) RoundTrip(request *http.Request) (*http.Response, erro
 	if response == nil || response.Body == nil {
 		return nil, errors.New("JWKS provider returned an empty response")
 	}
-	body, readErr := io.ReadAll(io.LimitReader(response.Body, maxProviderBody+1))
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, maxProviderBodyBytes+1))
 	closeErr := response.Body.Close()
 	if readErr != nil || closeErr != nil {
 		return nil, errors.New("read JWKS provider response")
 	}
-	if len(body) > maxProviderBody {
+	if len(body) > maxProviderBodyBytes {
 		return nil, errors.New("JWKS provider response is too large")
 	}
 	response.Body = io.NopCloser(bytes.NewReader(body))
@@ -130,14 +130,14 @@ func fetchDocument(ctx context.Context, client requestClient, target string) ([]
 	if response.StatusCode != http.StatusOK {
 		return nil, errors.New("provider returned an unsuccessful status")
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxProviderBody+1))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxProviderBodyBytes+1))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, fmt.Errorf("provider response canceled: %w", ctxErr)
 		}
 		return nil, errors.New("provider response failed")
 	}
-	if len(body) > maxProviderBody {
+	if len(body) > maxProviderBodyBytes {
 		return nil, errors.New("provider response is too large")
 	}
 	return body, nil

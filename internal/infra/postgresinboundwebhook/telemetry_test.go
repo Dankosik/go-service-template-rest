@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
@@ -16,7 +17,7 @@ func TestInboundWebhookMetricVocabulary(t *testing.T) {
 	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	telem := newTelemetry(provider, nil)
 	ctx := context.Background()
-	for _, outcome := range []string{"accepted", "duplicate", "rejected"} {
+	for _, outcome := range []inboundwebhook.Outcome{inboundwebhook.OutcomeAccepted, inboundwebhook.OutcomeDuplicate, inboundwebhook.OutcomeRejected} {
 		telem.recordIngress(ctx, outcome)
 	}
 	for _, outcome := range []string{"quarantined", "retrying", "handled", "failed"} {

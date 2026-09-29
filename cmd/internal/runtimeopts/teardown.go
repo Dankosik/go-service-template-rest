@@ -56,22 +56,23 @@ func TeardownBudget(window context.Context, want time.Duration) time.Duration {
 //
 // The stage ceilings summed into cleanupReserve are process structure owned by
 // each composition root rather than configuration, which is why the reserve is a
-// parameter and only the grace period is read from config. drainLeaf names the
-// configuration the operator actually edits to make the sum fit, and differs per
-// binary because each drains something different.
+// parameter and only the grace period is read from config. drainName is the
+// configuration key that sets the drain when it has one, otherwise a description
+// of the code-owned drain budget; it differs per binary because each drains
+// something different.
 //
 // The bound is checked as two comparisons rather than one sum: a configured
 // drain near the int64 ceiling makes drain+cleanupReserve wrap negative, and a
 // wrapped requirement is one every grace period satisfies — which would admit
 // the process with a drain no shutdown can ever complete.
-func ValidateGracePeriod(gracePeriod time.Duration, drainLeaf string, drain, cleanupReserve time.Duration) error {
+func ValidateGracePeriod(gracePeriod time.Duration, drainName string, drain, cleanupReserve time.Duration) error {
 	if gracePeriod >= drain && gracePeriod-drain >= cleanupReserve {
 		return nil
 	}
 	return fmt.Errorf(
 		"%w: http.grace_period must be >= %s plus the post-drain teardown budget (%s + %s = %s)",
 		config.ErrValidate,
-		drainLeaf,
+		drainName,
 		drain,
 		cleanupReserve,
 		requiredGracePeriod(drain, cleanupReserve),

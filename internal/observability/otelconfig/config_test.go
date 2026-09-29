@@ -9,11 +9,11 @@ import (
 func TestTraceSamplerOrDefault(t *testing.T) {
 	t.Parallel()
 
-	if got := TraceSamplerOrDefault("  "); got != DefaultTracesSampler {
-		t.Fatalf("TraceSamplerOrDefault(empty) = %q, want %q", got, DefaultTracesSampler)
+	if got := TracesSamplerOrDefault("  "); got != DefaultTracesSampler {
+		t.Fatalf("TracesSamplerOrDefault(empty) = %q, want %q", got, DefaultTracesSampler)
 	}
-	if got := TraceSamplerOrDefault(" ALWAYS_ON "); got != SamplerAlwaysOn {
-		t.Fatalf("TraceSamplerOrDefault() = %q, want %q", got, SamplerAlwaysOn)
+	if got := TracesSamplerOrDefault(" ALWAYS_ON "); got != SamplerAlwaysOn {
+		t.Fatalf("TracesSamplerOrDefault() = %q, want %q", got, SamplerAlwaysOn)
 	}
 }
 
@@ -29,13 +29,13 @@ func TestValidateTraceSamplerAccepts(t *testing.T) {
 		SamplerParentBasedTraceIDRatio,
 	}
 	for _, sampler := range samplers {
-		if err := ValidateTraceSampler(sampler, DefaultTracesSamplerArg); err != nil {
-			t.Fatalf("ValidateTraceSampler(%q, %v) error = %v, want nil", sampler, DefaultTracesSamplerArg, err)
+		if err := ValidateTracesSampler(sampler, DefaultTracesSamplerArg); err != nil {
+			t.Fatalf("ValidateTracesSampler(%q, %v) error = %v, want nil", sampler, DefaultTracesSamplerArg, err)
 		}
 	}
 	for _, arg := range []float64{0, 1} {
-		if err := ValidateTraceSampler(SamplerTraceIDRatio, arg); err != nil {
-			t.Fatalf("ValidateTraceSampler(%q, %v) error = %v, want nil", SamplerTraceIDRatio, arg, err)
+		if err := ValidateTracesSampler(SamplerTraceIDRatio, arg); err != nil {
+			t.Fatalf("ValidateTracesSampler(%q, %v) error = %v, want nil", SamplerTraceIDRatio, arg, err)
 		}
 	}
 }
@@ -60,12 +60,12 @@ func TestValidateTraceSamplerRejects(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := ValidateTraceSampler(tc.sampler, tc.arg)
+			err := ValidateTracesSampler(tc.sampler, tc.arg)
 			if err == nil {
-				t.Fatal("ValidateTraceSampler() error = nil, want non-nil")
+				t.Fatal("ValidateTracesSampler() error = nil, want non-nil")
 			}
 			if !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("ValidateTraceSampler() error = %q, want to contain %q", err.Error(), tc.wantErr)
+				t.Fatalf("ValidateTracesSampler() error = %q, want to contain %q", err.Error(), tc.wantErr)
 			}
 		})
 	}

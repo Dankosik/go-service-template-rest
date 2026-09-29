@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	_ article.Store  = (*Repository)(nil)
+	_ article.Store  = (*Store)(nil)
 	_ article.Writer = (*staged)(nil)
 )
 
-type Repository struct {
+// Store is the in-memory article.Store.
+type Store struct {
 	// mu guards the state below: writes arrive concurrently from the HTTP server,
 	// and the uniqueness check plus the insert must be one atomic step.
 	mu     sync.RWMutex
@@ -24,8 +25,8 @@ type Repository struct {
 	events []article.Event
 }
 
-func New() *Repository {
-	return &Repository{bySlug: make(map[string]article.Article)}
+func New() *Store {
+	return &Store{bySlug: make(map[string]article.Article)}
 }
 
 // Do runs fn against a staged copy of the whole store and keeps the result only
@@ -35,7 +36,7 @@ func New() *Repository {
 // PostgreSQL, postgres.InTx, with fn handed a repository built over the
 // pgx.Tx rather than over the pool. What must not change is the signature: fn
 // receives an article.Writer, so the use case never sees a driver handle.
-func (r *Repository) Do(ctx context.Context, fn func(article.Writer) error) error {
+func (r *Store) Do(ctx context.Context, fn func(article.Writer) error) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("article unit of work: %w", err)
 	}
@@ -58,7 +59,7 @@ func (r *Repository) Do(ctx context.Context, fn func(article.Writer) error) erro
 
 // Events returns what has been recorded, for tests and for the demonstration
 // that a rolled-back Create leaves none behind.
-func (r *Repository) Events() []article.Event {
+func (r *Store) Events() []article.Event {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return slices.Clone(r.events)
@@ -90,7 +91,7 @@ func (s *staged) AppendEvent(ctx context.Context, event article.Event) error {
 	return nil
 }
 
-func (r *Repository) FindBySlug(ctx context.Context, slug string) (article.Article, error) {
+func (r *Store) FindBySlug(ctx context.Context, slug string) (article.Article, error) {
 	if err := ctx.Err(); err != nil {
 		return article.Article{}, fmt.Errorf("find article: %w", err)
 	}

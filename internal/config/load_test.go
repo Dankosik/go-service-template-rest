@@ -18,9 +18,9 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	t.Setenv("APP__OBSERVABILITY__OTEL__TRACES_SAMPLER", " parentbased_traceidratio ")
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", " https://otel.example.com/v1/traces ")
 
-	cfg, _, err := LoadDetailed(LoadOptions{})
+	cfg, _, err := Load(t.Context(), LoadOptions{})
 	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
+		t.Fatalf("Load() error = %v", err)
 	}
 
 	if cfg.App.Env != "local" || cfg.App.Version != "v1.2.3" {
@@ -70,15 +70,15 @@ func TestErrorTypeMapping(t *testing.T) {
 }
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestLoadDetailedWithContextCanceled(t *testing.T) {
+func TestLoadCanceled(t *testing.T) {
 	resetConfigEnv(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, _, err := LoadDetailedWithContext(ctx, LoadOptions{})
+	_, _, err := Load(ctx, LoadOptions{})
 	if err == nil {
-		t.Fatal("LoadDetailedWithContext() expected context cancellation error")
+		t.Fatal("Load() expected context cancellation error")
 	}
 	if !errors.Is(err, ErrLoad) {
 		t.Fatalf("error = %v, want ErrLoad", err)
@@ -88,14 +88,14 @@ func TestLoadDetailedWithContextCanceled(t *testing.T) {
 	}
 }
 
-func TestLoadDetailedFailedStageReporting(t *testing.T) {
+func TestLoadFailedStageReporting(t *testing.T) {
 	t.Run("parse_stage", func(t *testing.T) {
 		resetConfigEnv(t)
 		t.Setenv("APP__HTTP__READ_TIMEOUT", "oops")
 
-		_, report, err := LoadDetailed(LoadOptions{})
+		_, report, err := Load(t.Context(), LoadOptions{})
 		if err == nil {
-			t.Fatal("LoadDetailed() expected parse error")
+			t.Fatal("Load() expected parse error")
 		}
 		if !errors.Is(err, ErrParse) {
 			t.Fatalf("error = %v, want ErrParse", err)
@@ -113,9 +113,9 @@ unknown:
   field: value
 `)
 
-		_, report, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+		_, report, err := Load(t.Context(), LoadOptions{ConfigPath: configPath})
 		if err == nil {
-			t.Fatal("LoadDetailed() expected unknown key error")
+			t.Fatal("Load() expected unknown key error")
 		}
 		if !errors.Is(err, ErrUnknownKey) {
 			t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -129,9 +129,9 @@ unknown:
 		resetConfigEnv(t)
 		t.Setenv("APP__APP__ENV", "prod")
 
-		_, report, err := LoadDetailed(LoadOptions{ConfigPath: "/nonexistent/config.yaml"})
+		_, report, err := Load(t.Context(), LoadOptions{ConfigPath: "/nonexistent/config.yaml"})
 		if err == nil {
-			t.Fatal("LoadDetailed() expected load error")
+			t.Fatal("Load() expected load error")
 		}
 		if !errors.Is(err, ErrLoad) && !errors.Is(err, ErrSecretPolicy) {
 			t.Fatalf("error = %v, want ErrLoad or ErrSecretPolicy", err)
@@ -142,7 +142,7 @@ unknown:
 	})
 }
 
-func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
+func TestLoadRejectsEmptyExplicitPaths(t *testing.T) {
 	testCases := []struct {
 		name string
 		opts LoadOptions
@@ -161,9 +161,9 @@ func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetConfigEnv(t)
 
-			_, report, err := LoadDetailed(tc.opts)
+			_, report, err := Load(t.Context(), tc.opts)
 			if !errors.Is(err, ErrLoad) {
-				t.Fatalf("LoadDetailed() error = %v, want ErrLoad", err)
+				t.Fatalf("Load() error = %v, want ErrLoad", err)
 			}
 			if report.FailedStage != StageLoadFile {
 				t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageLoadFile)
@@ -191,9 +191,9 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv(tt.envKey, tt.envValue)
 
-			_, _, err := LoadDetailed(LoadOptions{})
+			_, _, err := Load(t.Context(), LoadOptions{})
 			if err == nil {
-				t.Fatal("LoadDetailed() error = nil, want parse error")
+				t.Fatal("Load() error = nil, want parse error")
 			}
 			if !errors.Is(err, ErrParse) {
 				t.Fatalf("error = %v, want ErrParse", err)
@@ -218,9 +218,9 @@ http:
 broken: [
 `)
 
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
+	_, _, err := Load(t.Context(), LoadOptions{ConfigPath: configPath})
 	if err == nil {
-		t.Fatal("LoadDetailed() expected parse error for malformed YAML")
+		t.Fatal("Load() expected parse error for malformed YAML")
 	}
 	if !errors.Is(err, ErrParse) {
 		t.Fatalf("error = %v, want ErrParse", err)
@@ -236,9 +236,9 @@ func TestParseErrorDoesNotLeakRawValue(t *testing.T) {
 	secretLikeValue := "supersecret-token-value"
 	t.Setenv("APP__HTTP__READ_TIMEOUT", secretLikeValue)
 
-	_, _, err := LoadDetailed(LoadOptions{})
+	_, _, err := Load(t.Context(), LoadOptions{})
 	if err == nil {
-		t.Fatal("LoadDetailed() expected parse error")
+		t.Fatal("Load() expected parse error")
 	}
 	if !errors.Is(err, ErrParse) {
 		t.Fatalf("error = %v, want ErrParse", err)

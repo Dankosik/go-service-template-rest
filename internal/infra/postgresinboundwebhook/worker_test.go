@@ -38,14 +38,14 @@ func (s *memoryStore) MarkHandled(context.Context, string) (bool, error) {
 		return false, errors.New("handled update failed")
 	}
 	s.handled++
-	s.receipt.Outcome = "handled"
+	s.receipt.State = "handled"
 	s.receipt.Payload = nil
 	return true, nil
 }
 
 func (s *memoryStore) MarkQuarantined(_ context.Context, _, _ string) (bool, error) {
 	s.quarantined++
-	s.receipt.Outcome = "quarantined"
+	s.receipt.State = "quarantined"
 	return true, nil
 }
 
@@ -55,7 +55,7 @@ func (s *memoryStore) MarkFailed(context.Context, string) (bool, error) {
 		return false, errors.New("terminal update failed")
 	}
 	s.failed++
-	s.receipt.Outcome = "failed"
+	s.receipt.State = "failed"
 	return true, nil
 }
 
@@ -67,7 +67,7 @@ func pendingReceipt() storedReceipt {
 		SignedAt:   time.Unix(1700000000, 0).UTC(),
 		ReceivedAt: time.Unix(1700000001, 0).UTC(),
 		Payload:    []byte(`{"hello":"world"}`),
-		Outcome:    "pending",
+		State:      receiptPending,
 	}
 }
 
@@ -107,7 +107,7 @@ func TestInboundWebhookQuarantine(t *testing.T) {
 		t.Fatalf("handled=%d quarantined=%d payload=%v", handled, store.quarantined, store.receipt.Payload)
 	}
 
-	store.receipt.Outcome = "quarantined"
+	store.receipt.State = "quarantined"
 	if err := worker.Work(context.Background(), &river.Job[receiptJobArgs]{
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 1, MaxAttempts: 25},
@@ -130,8 +130,8 @@ func TestInboundWebhookHandlerDecodeRejectionRetries(t *testing.T) {
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 1, MaxAttempts: 25},
 	})
-	if !errors.Is(err, errHandlerFailed) || store.quarantined != 0 || store.receipt.Outcome != "pending" {
-		t.Fatalf("err=%v quarantined=%d outcome=%s", err, store.quarantined, store.receipt.Outcome)
+	if !errors.Is(err, errHandlerFailed) || store.quarantined != 0 || store.receipt.State != "pending" {
+		t.Fatalf("err=%v quarantined=%d outcome=%s", err, store.quarantined, store.receipt.State)
 	}
 }
 
@@ -147,8 +147,8 @@ func TestInboundWebhookMissingBindingSnoozesAtAttemptLimit(t *testing.T) {
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 3, MaxAttempts: 3},
 	})
-	if _, ok := errors.AsType[*rivertype.JobSnoozeError](err); !ok || store.failed != 0 || store.receipt.Outcome != "pending" {
-		t.Fatalf("err=%v failed=%d outcome=%s", err, store.failed, store.receipt.Outcome)
+	if _, ok := errors.AsType[*rivertype.JobSnoozeError](err); !ok || store.failed != 0 || store.receipt.State != "pending" {
+		t.Fatalf("err=%v failed=%d outcome=%s", err, store.failed, store.receipt.State)
 	}
 }
 
@@ -187,7 +187,7 @@ func TestInboundWebhookHandledLifecycle(t *testing.T) {
 	if err := worker.Work(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	if handled != 1 || store.receipt.Payload != nil || store.receipt.Outcome != "handled" {
+	if handled != 1 || store.receipt.Payload != nil || store.receipt.State != "handled" {
 		t.Fatalf("handled=%d receipt=%+v", handled, store.receipt)
 	}
 	if err := worker.Work(context.Background(), job); err != nil || handled != 1 {

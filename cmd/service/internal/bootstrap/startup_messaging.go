@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
@@ -17,7 +16,7 @@ type messagingRuntime struct {
 }
 
 func initMessagingRuntime(ctx context.Context, cfg config.MessagingConfig, log *slog.Logger) (messagingRuntime, error) {
-	if strings.TrimSpace(cfg.URLs) == "" {
+	if !cfg.Enabled() {
 		return messagingRuntime{}, nil
 	}
 	client, err := natsjs.Connect(

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/failure"
@@ -94,7 +93,6 @@ func MaxInFlight(limit int, load ServerLoad, next http.Handler) http.Handler {
 	}
 
 	sem := semaphore.NewWeighted(int64(limit))
-	retryAfter := strconv.Itoa(retryAfterSeconds(shedRetryAfter))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isHealthProbeRequest(r) {
@@ -105,10 +103,10 @@ func MaxInFlight(limit int, load ServerLoad, next http.Handler) http.Handler {
 		// this middleware exists to prevent, just one layer further out.
 		if !sem.TryAcquire(1) {
 			load.Shed(r.Context())
-			w.Header().Set("Retry-After", retryAfter)
 			writeProblem(w, r, problemResponse{
-				code:   problem.CodeServiceUnavailable,
-				detail: failure.AtCapacityDetail,
+				code:       problem.CodeServiceUnavailable,
+				detail:     failure.AtCapacityDetail,
+				retryAfter: shedRetryAfter,
 			})
 			return
 		}

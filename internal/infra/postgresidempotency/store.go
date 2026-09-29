@@ -26,7 +26,7 @@ var ErrConfig = errors.New("postgres idempotency config")
 type Store struct {
 	pool      *pgxpool.Pool
 	retention time.Duration
-	inTx      func(context.Context, pgx.TxOptions, func(pgx.Tx) error) error
+	inTx      func(context.Context, *pgxpool.Pool, pgx.TxOptions, func(pgx.Tx) error) error
 }
 
 // NewExecutor binds a transaction-scoped feature repository before Work runs.
@@ -47,17 +47,16 @@ func NewExecutor[Repository, Response any](
 			var zero Response
 			return zero, false, fmt.Errorf("%w: executor and work are required", ErrConfig)
 		}
-		var workResponse Response
+		var zero Response
 		result, replayed, err := store.execute(ctx, request, func(ctx context.Context, tx pgx.Tx) ([]byte, error) {
-			var err error
-			workResponse, err = work(ctx, bind(tx))
+			response, err := work(ctx, bind(tx))
 			if err != nil {
 				return nil, err
 			}
-			return codec.Encode(workResponse)
+			return codec.Encode(response)
 		})
 		if err != nil {
-			return workResponse, false, fmt.Errorf("execute idempotent operation: %w", err)
+			return zero, false, fmt.Errorf("execute idempotent operation: %w", err)
 		}
 		decodedResponse, err := codec.Decode(result)
 		if err != nil {
@@ -78,10 +77,7 @@ func NewStore(pool *pgxpool.Pool, retention time.Duration) (*Store, error) {
 		return nil, fmt.Errorf("%w: retention must be positive", ErrConfig)
 	}
 	return &Store{
-		pool: pool, retention: retention,
-		inTx: func(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
-			return postgres.InTx(ctx, pool, opts, fn)
-		},
+		pool: pool, retention: retention, inTx: postgres.InTx,
 	}, nil
 }
 
@@ -92,12 +88,14 @@ func (s *Store) execute(
 	ctx context.Context,
 	request httpidempotency.Request,
 	work func(context.Context, pgx.Tx) ([]byte, error),
-) (result []byte, replayed bool, err error) {
+) ([]byte, bool, error) {
 	if s == nil || s.pool == nil || s.inTx == nil || !request.Valid() || work == nil {
 		return nil, false, fmt.Errorf("%w: store, request, and work are required", ErrConfig)
 	}
 
-	err = s.inTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	var result []byte
+	var replayed bool
+	err := s.inTx(ctx, s.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		var transactionErr error
 		result, replayed, transactionErr = s.executeTransaction(ctx, tx, request, work)
 		return transactionErr
@@ -105,16 +103,21 @@ func (s *Store) execute(
 	if err == nil {
 		return result, replayed, nil
 	}
+	// A replay only read evidence committed earlier, so failing to commit its
+	// read-only transaction cannot change that result.
 	if replayed {
-		return result, replayed, nil
+		return result, true, nil
 	}
 	if !errors.Is(err, postgres.ErrCommitUnknown) {
 		return nil, false, fmt.Errorf("execute idempotency transaction: %w", err)
 	}
 
-	result, readErr := s.read(ctx, request)
+	// The commit may have landed. Committed evidence read back outside the
+	// transaction is the result; without it the outcome stays unknown and the
+	// work is not retried.
+	stored, readErr := s.read(ctx, request)
 	if readErr == nil {
-		return result, true, nil
+		return stored, true, nil
 	}
 	return nil, false, fmt.Errorf("%w: %w", httpidempotency.ErrOutcomeUnknown, err)
 }
@@ -126,6 +129,9 @@ func (s *Store) executeTransaction(
 	work func(context.Context, pgx.Tx) ([]byte, error),
 ) ([]byte, bool, error) {
 	queries := sqlcgen.New(tx)
+	// A claim finds no row when a live row blocks it or the session cannot
+	// write. If the blocking row is no longer live when read (it expired in
+	// between), one more claim decides.
 	for range 2 {
 		claimed, err := s.claim(ctx, queries, request)
 		if err != nil {
@@ -137,7 +143,7 @@ func (s *Store) executeTransaction(
 		}
 		row, err := queries.ReadHTTPIdempotency(ctx, request.Identity())
 		if err != nil {
-			return nil, false, unavailable(ctx, "read", err)
+			return nil, false, storageFailure(ctx, "read", err)
 		}
 		result, found, err := storedEvidence(request, row)
 		if err != nil {
@@ -170,7 +176,7 @@ func (s *Store) executeWork(
 		return nil, httpidempotency.ErrIntegrity
 	}
 	if err != nil {
-		return nil, unavailable(ctx, "complete", err)
+		return nil, storageFailure(ctx, "complete", err)
 	}
 	if len(completed) == 0 {
 		return nil, httpidempotency.ErrIntegrity
@@ -182,6 +188,8 @@ func storedEvidence(
 	request httpidempotency.Request,
 	row sqlcgen.ReadHTTPIdempotencyRow,
 ) ([]byte, bool, error) {
+	// Only a writable primary proves current evidence; a standby or read-only
+	// session may lag or be unable to claim.
 	if !row.WriterPrimary {
 		return nil, false, httpidempotency.ErrUnavailable
 	}
@@ -208,7 +216,7 @@ func (s *Store) claim(ctx context.Context, queries *sqlcgen.Queries, request htt
 		return false, nil
 	}
 	if err != nil {
-		return false, unavailable(ctx, "claim", err)
+		return false, storageFailure(ctx, "claim", err)
 	}
 	return true, nil
 }
@@ -219,12 +227,12 @@ func (s *Store) read(ctx context.Context, request httpidempotency.Request) ([]by
 	}
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
-		return nil, unavailable(ctx, "read connection", err)
+		return nil, storageFailure(ctx, "read connection", err)
 	}
 	defer conn.Release()
 	row, err := sqlcgen.New(conn).ReadHTTPIdempotency(ctx, request.Identity())
 	if err != nil {
-		return nil, unavailable(ctx, "read", err)
+		return nil, storageFailure(ctx, "read", err)
 	}
 	result, found, err := storedEvidence(request, row)
 	if err != nil {
@@ -254,12 +262,12 @@ func (s *Store) Cleanup(ctx context.Context) (int64, error) {
 func (s *Store) cleanupBatch(ctx context.Context) (int64, error) {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
-		return 0, unavailable(ctx, "cleanup connection", err)
+		return 0, storageFailure(ctx, "cleanup connection", err)
 	}
 	defer conn.Release()
 	rows, err := sqlcgen.New(conn).CleanupHTTPIdempotency(ctx, cleanupBatchSize)
 	if err != nil {
-		return 0, unavailable(ctx, "cleanup", err)
+		return 0, storageFailure(ctx, "cleanup", err)
 	}
 	return rows, nil
 }
@@ -281,7 +289,9 @@ func (s *Store) Maintain(ctx context.Context, log *slog.Logger) error {
 	}
 }
 
-func unavailable(ctx context.Context, stage string, err error) error {
+// storageFailure classifies a storage error as ErrUnavailable, except that a
+// canceled or expired ctx returns its own error instead.
+func storageFailure(ctx context.Context, stage string, err error) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return fmt.Errorf("%s: %w", stage, ctxErr)
 	}
