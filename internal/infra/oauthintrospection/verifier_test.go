@@ -129,12 +129,12 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 		body   string
 		wantOK bool
 	}{
-		{name: "json parameters", status: 200, ctype: "application/json; charset=utf-8", body: activeJSON("subject-1", "client-1"), wantOK: true},
+		{name: "json parameters", status: 200, ctype: "application/json; charset=utf-8", body: activeJSON("client-1"), wantOK: true},
 		{name: "exact limit", status: 200, ctype: "application/json", body: exactLimitJSON(t), wantOK: true},
 		{name: "no content", status: 204, ctype: "application/json", body: canary},
-		{name: "missing media", status: 200, body: activeJSON("subject-1", "client-1")},
-		{name: "wrong media", status: 200, ctype: "text/plain", body: activeJSON("subject-1", "client-1")},
-		{name: "malformed media", status: 200, ctype: "application/", body: activeJSON("subject-1", "client-1")},
+		{name: "missing media", status: 200, body: activeJSON("client-1")},
+		{name: "wrong media", status: 200, ctype: "text/plain", body: activeJSON("client-1")},
+		{name: "malformed media", status: 200, ctype: "application/", body: activeJSON("client-1")},
 		{name: "oversize", status: 200, ctype: "application/json", body: strings.Repeat("x", maxProviderBodyBytes+1)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 
 func exactLimitJSON(t *testing.T) string {
 	t.Helper()
-	body := activeJSON("subject-1", "client-1")
+	body := activeJSON("client-1")
 	pad := maxProviderBodyBytes - len(body) - len(`,"pad":""`)
 	if pad < 0 {
 		return body
@@ -356,7 +356,7 @@ func TestUncachedIndependentDecisions(t *testing.T) {
 		case 7:
 			_, _ = io.WriteString(response, `{"active":false}`)
 		default:
-			_, _ = io.WriteString(response, activeJSON("subject-1", "client-1"))
+			_, _ = io.WriteString(response, activeJSON("client-1"))
 		}
 	})
 	verifier := newPinnedVerifier(t, provider)

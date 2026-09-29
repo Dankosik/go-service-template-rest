@@ -212,10 +212,17 @@ func validatePostgresDSNSettings(settings map[string]string) error {
 // (~/.pgpass, ~/.postgresql/*), so no ambient file can supply credentials.
 func normalizePostgresURLDSN(parsedURL *url.URL) string {
 	query := parsedURL.Query()
+	// pgx uses the last duplicate, so publish only the first value validated above.
+	for key, values := range query {
+		if len(values) > 1 {
+			query.Set(key, values[0])
+		}
+	}
 	for _, key := range postgresFileDefaultDSNKeys {
 		query.Set(key.name, "")
 	}
-	parsedURL.RawQuery = query.Encode()
+	// pgx treats + literally; percent encoding retains Go URL query semantics.
+	parsedURL.RawQuery = strings.ReplaceAll(query.Encode(), "+", "%20")
 	return parsedURL.String()
 }
 

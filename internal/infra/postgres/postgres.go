@@ -67,7 +67,6 @@ func Open(ctx context.Context, opts Options) (*pgxpool.Pool, error) {
 	ApplyStatementTimeouts(poolConfig.ConnConfig, defaultStatementTimeout)
 	applyContextWatcher(poolConfig.ConnConfig, defaultStatementTimeout)
 	poolConfig.ConnConfig.Tracer = otelpgx.NewTracer(
-		otelpgx.WithTrimSQLInSpanName(),
 		otelpgx.WithSpanNameFunc(postgresOperationName),
 		otelpgx.WithDisableSQLStatementInAttributes(),
 		otelpgx.WithDisableConnectionDetailsInAttributes(),

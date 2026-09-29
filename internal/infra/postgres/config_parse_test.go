@@ -11,11 +11,15 @@ func TestParsePoolConfigAcceptsStrictSingleTargetDSNs(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
-		name string
-		dsn  string
+		name         string
+		dsn          string
+		wantPassword string
+		wantTLS      bool
 	}{
-		{name: "postgres scheme", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable"},     //nolint:gosec // Synthetic DSN fixture; no live credential.
-		{name: "postgresql scheme", dsn: "postgresql://user:pass@localhost:5432/app?sslmode=disable"}, //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "postgres scheme", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable", wantPassword: "pass"},                                                      //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "postgresql scheme", dsn: "postgresql://user:pass@localhost:5432/app?sslmode=disable", wantPassword: "pass"},                                                  //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "validated first TLS mode", dsn: "postgres://user:pass@localhost:5432/app?sslmode=verify-full&sslmode=disable", wantPassword: "pass", wantTLS: true},          //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "percent encoded password space", dsn: "postgres://user:pass@localhost:5432/app?sslmode=disable&password=synthetic%20space", wantPassword: "synthetic space"}, //nolint:gosec // Synthetic DSN fixture; no live credential.
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -33,8 +37,15 @@ func TestParsePoolConfigAcceptsStrictSingleTargetDSNs(t *testing.T) {
 			if config.ConnConfig.User != "user" {
 				t.Fatalf("User = %q, want user", config.ConnConfig.User)
 			}
-			if config.ConnConfig.Password != "pass" {
-				t.Fatalf("Password = %q, want pass", config.ConnConfig.Password)
+			if config.ConnConfig.Password != tc.wantPassword {
+				t.Fatalf("Password = %q, want %q", config.ConnConfig.Password, tc.wantPassword)
+			}
+			if tc.wantTLS {
+				if config.ConnConfig.TLSConfig == nil || config.ConnConfig.TLSConfig.InsecureSkipVerify || config.ConnConfig.TLSConfig.ServerName != "localhost" {
+					t.Fatal("TLSConfig does not preserve verify-full for localhost")
+				}
+			} else if config.ConnConfig.TLSConfig != nil {
+				t.Fatal("TLSConfig is configured for sslmode=disable")
 			}
 			if config.ConnConfig.Database != "app" {
 				t.Fatalf("Database = %q, want app", config.ConnConfig.Database)
