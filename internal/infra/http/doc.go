@@ -46,6 +46,12 @@
 // no net/http import at all, and middleware_guards.go carries the two guards too
 // small to have earned a file each.
 //
+// request_body_shape.go is the validator's fast path for a JSON body whose schema
+// states only types, members, and required fields: one streaming pass instead of
+// decoding into a map and walking the schema. It only ever admits; every body it
+// does not admit is revalidated in full, so what is rejected, and how, is the
+// validator's alone.
+//
 // The error path splits by which half of an exchange failed, not by status.
 // request_errors.go answers a request the generated validator rejected;
 // domain_errors.go answers an operation that returned an error instead of a
