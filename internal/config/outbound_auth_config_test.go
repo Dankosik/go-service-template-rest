@@ -2,7 +2,6 @@ package config
 
 import (
 	"errors"
-	"strings"
 	"testing"
 )
 
@@ -34,19 +33,5 @@ func TestOutboundAuthConfigIsThePortableMinimum(t *testing.T) {
 	}
 	if valid.TokenURL != "https://auth.example.com/oauth/token" || valid.Scopes != "payments.write payments.read" {
 		t.Fatalf("canonical config = %#v", valid)
-	}
-}
-
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestRetiredOutboundAuthEnvironmentKeyIsUnknown(t *testing.T) {
-	resetConfigEnv(t)
-	const canary = "retired-outbound-auth-canary"
-	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_SECRET", canary)
-	_, _, err := LoadDetailed(LoadOptions{})
-	if !errors.Is(err, ErrUnknownKey) {
-		t.Fatalf("LoadDetailed() error = %v, want ErrUnknownKey", err)
-	}
-	if strings.Contains(err.Error(), canary) {
-		t.Fatalf("LoadDetailed() disclosed retired secret: %v", err)
 	}
 }

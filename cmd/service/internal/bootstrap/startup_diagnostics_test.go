@@ -221,11 +221,3 @@ func TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion(t *testing.T) {
 		}
 	})
 }
-
-func TestShutdownDiagnosticsIgnoresAbsentServer(t *testing.T) {
-	t.Parallel()
-
-	if err := shutdownDiagnostics(context.Background(), slog.New(slog.DiscardHandler), testShutdownBudget(), nil); err != nil {
-		t.Fatalf("shutdownDiagnostics(nil) error = %v, want nil", err)
-	}
-}

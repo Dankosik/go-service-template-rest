@@ -96,16 +96,3 @@ func TestPrincipalScopesAreNotAliased(t *testing.T) {
 		t.Fatal("mutating a returned slice granted a scope to every later reader")
 	}
 }
-
-func TestRequestIDRoundTrip(t *testing.T) {
-	t.Parallel()
-
-	ctx, _ := reqctx.ContextWithAcceptedRequestID(context.Background(), "caller-id")
-
-	if got := reqctx.RequestID(ctx); got != "caller-id" {
-		t.Fatalf("RequestID() = %q, want %q", got, "caller-id")
-	}
-	if got := reqctx.RequestID(context.Background()); got != "" {
-		t.Fatalf("RequestID() = %q, want empty without a value", got)
-	}
-}

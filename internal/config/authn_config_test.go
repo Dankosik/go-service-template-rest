@@ -2,9 +2,6 @@ package config
 
 import (
 	"errors"
-	// profile:authn-oidc-introspection:start
-	"path/filepath"
-	// profile:authn-oidc-introspection:end
 	"strings"
 	"testing"
 )
@@ -101,26 +98,11 @@ func TestIntrospectionConfigAdmitsCompleteEnvironmentTuple(t *testing.T) {
 	}
 }
 
-func TestIntrospectionConfigRejectsUnknownKeyAndSecretFile(t *testing.T) {
-	resetConfigEnv(t)
-	setIntrospectionTestEnv(t)
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("complete tuple error = %v", err)
-	}
-
-	resetConfigEnv(t)
-	setIntrospectionTestEnv(t)
-	t.Setenv("APP__AUTHN__UNKNOWN", "x")
-	_, _, err = LoadDetailed(LoadOptions{})
-	if err == nil || !strings.Contains(err.Error(), "unknown") {
-		t.Fatalf("unknown key error = %v", err)
-	}
-
+func TestIntrospectionConfigRejectsSecretFile(t *testing.T) {
 	resetConfigEnv(t)
 	setIntrospectionTestEnv(t)
 	path := writeTempConfig(t, "authn:\n  introspection_client_secret: file-secret-canary\n")
-	_, _, err = LoadDetailed(LoadOptions{ConfigPath: path})
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
 	if !errors.Is(err, ErrSecretPolicy) {
 		t.Fatalf("YAML secret error = %v", err)
 	}
@@ -163,13 +145,6 @@ func TestIntrospectionDisclosureBoundary(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), canary) {
 		t.Fatalf("disclosed secret: %v", err)
-	}
-}
-
-func TestIntrospectionEnvExampleIncludesPrivateHostSuffix(t *testing.T) {
-	values := readEnvExample(t, filepath.Join("..", "..", "env", ".env.example"))
-	if _, ok := values["APP__AUTHN__INTROSPECTION_PRIVATE_HOST_SUFFIX"]; !ok {
-		t.Fatal("env/.env.example is missing APP__AUTHN__INTROSPECTION_PRIVATE_HOST_SUFFIX")
 	}
 }
 

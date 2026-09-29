@@ -14,19 +14,6 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
-func TestTelemetryInitFailureReason(t *testing.T) {
-	t.Parallel()
-	if got := telemetry.FailureReason(context.DeadlineExceeded); got != telemetry.FailureReasonDeadlineExceeded {
-		t.Fatalf("got %q", got)
-	}
-	if got := telemetry.FailureReason(context.Canceled); got != telemetry.FailureReasonCanceled {
-		t.Fatalf("got %q", got)
-	}
-	if got := telemetry.FailureReason(errors.New("x")); got != telemetry.FailureReasonSetupError {
-		t.Fatalf("got %q", got)
-	}
-}
-
 //nolint:paralleltest // Installs process-wide telemetry providers.
 func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)

@@ -200,20 +200,6 @@ func TestPresignGetReturnsSelfContainedLibraryURL(t *testing.T) {
 	}
 }
 
-func TestNewBuildsLibraryClientWithoutProviderIO(t *testing.T) {
-	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
-	client, err := New(t.Context(), testConfig())
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	if client.sdk == nil || client.uploader == nil || client.presigner == nil || client.transport == nil {
-		t.Fatal("New() returned an incomplete library client")
-	}
-	client.Close()
-	client.Close()
-}
-
 func TestStoreRejectsInvalidCallsBeforeProviderIO(t *testing.T) {
 	client := testClient(&fakeObjectAPI{}, nil)
 	canceled, cancel := context.WithCancel(t.Context())

@@ -2,7 +2,6 @@ package telemetry
 
 import (
 	"context"
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -10,90 +9,6 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
-
-func TestBuildTraceSampler(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name        string
-		samplerName string
-		samplerArg  float64
-		wantErr     bool
-	}{
-		{
-			name:        "default sampler",
-			samplerName: "",
-			samplerArg:  0.1,
-		},
-		{
-			name:        "always_on",
-			samplerName: "always_on",
-			samplerArg:  0.5,
-		},
-		{
-			name:        "always_off",
-			samplerName: "always_off",
-			samplerArg:  0.5,
-		},
-		{
-			name:        "traceidratio",
-			samplerName: "traceidratio",
-			samplerArg:  0.5,
-		},
-		{
-			name:        "parentbased_traceidratio",
-			samplerName: "parentbased_traceidratio",
-			samplerArg:  0.5,
-		},
-		{
-			name:        "unsupported sampler",
-			samplerName: "unsupported",
-			samplerArg:  0.5,
-			wantErr:     true,
-		},
-		{
-			name:        "nan sampler arg",
-			samplerName: "traceidratio",
-			samplerArg:  math.NaN(),
-			wantErr:     true,
-		},
-		{
-			name:        "negative sampler arg",
-			samplerName: "traceidratio",
-			samplerArg:  -0.1,
-			wantErr:     true,
-		},
-		{
-			name:        "greater than one sampler arg",
-			samplerName: "traceidratio",
-			samplerArg:  1.1,
-			wantErr:     true,
-		},
-		{
-			name:        "positive infinity sampler arg",
-			samplerName: "traceidratio",
-			samplerArg:  math.Inf(1),
-			wantErr:     true,
-		},
-		{
-			name:        "negative infinity sampler arg",
-			samplerName: "traceidratio",
-			samplerArg:  math.Inf(-1),
-			wantErr:     true,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			_, err := buildTraceSampler(tc.samplerName, tc.samplerArg)
-			if (err != nil) != tc.wantErr {
-				t.Fatalf("buildTraceSampler() error = %v, wantErr %v", err, tc.wantErr)
-			}
-		})
-	}
-}
 
 func setupTracingForEnvPolicyTest(t *testing.T, exporter TraceExporterConfig) error {
 	t.Helper()

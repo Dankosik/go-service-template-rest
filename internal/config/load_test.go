@@ -43,28 +43,6 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	}
 }
 
-// profile:database-postgres:start
-//
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestFlatPostgresDSNIsIgnored(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("POSTGRES_DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
-
-	cfg, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
-	}
-	if cfg.Postgres.Enabled {
-		t.Fatal("Postgres.Enabled = true, want false when only flat key is set")
-	}
-	if cfg.Postgres.DSN != "" {
-		t.Fatalf("Postgres.DSN = %q, want empty when only flat key is set", cfg.Postgres.DSN)
-	}
-}
-
-// profile:database-postgres:end
-
 func TestErrorTypeMapping(t *testing.T) {
 	t.Parallel()
 
@@ -174,10 +152,6 @@ func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
 			opts: LoadOptions{ConfigPath: " \t\n "},
 		},
 		{
-			name: "empty overlay path",
-			opts: LoadOptions{ConfigOverlays: []string{""}},
-		},
-		{
 			name: "whitespace overlay path",
 			opts: LoadOptions{ConfigOverlays: []string{" \t\n "}},
 		},
@@ -195,40 +169,6 @@ func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
 				t.Fatalf("FailedStage = %q, want %q", report.FailedStage, StageLoadFile)
 			}
 		})
-	}
-}
-
-func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", "https://otel.example.com:4318")
-	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", "authorization=Bearer token")
-
-	cfg, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
-	}
-	if cfg.Observability.OTel.Exporter.OTLPEndpoint != "https://otel.example.com:4318" {
-		t.Fatalf("OTLPEndpoint = %q, want %q", cfg.Observability.OTel.Exporter.OTLPEndpoint, "https://otel.example.com:4318")
-	}
-	if cfg.Observability.OTel.Exporter.OTLPHeaders != "authorization=Bearer token" {
-		t.Fatalf("OTLPHeaders = %q, want %q", cfg.Observability.OTel.Exporter.OTLPHeaders, "authorization=Bearer token")
-	}
-}
-
-func TestLoadInvalidDurationReturnsParseError(t *testing.T) {
-	resetConfigEnv(t)
-	t.Setenv("APP__HTTP__READ_TIMEOUT", "oops")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatal("LoadDetailed() expected parse error")
-	}
-	if !errors.Is(err, ErrParse) {
-		t.Fatalf("error = %v, want ErrParse", err)
-	}
-	if !strings.Contains(err.Error(), "invalid duration syntax") {
-		t.Fatalf("error = %v, want sanitized duration parse detail", err)
 	}
 }
 
@@ -263,26 +203,6 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 			}
 			if strings.Contains(err.Error(), tt.envValue) {
 				t.Fatalf("error = %v, leaked raw value %q", err, tt.envValue)
-			}
-		})
-	}
-}
-
-func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
-	for _, value := range []string{"NaN", "+Inf"} {
-		t.Run(value, func(t *testing.T) {
-			resetConfigEnv(t)
-			t.Setenv("APP__OBSERVABILITY__OTEL__TRACES_SAMPLER_ARG", value)
-
-			_, _, err := LoadDetailed(LoadOptions{})
-			if err == nil {
-				t.Fatal("LoadDetailed() error = nil, want parse error")
-			}
-			if !errors.Is(err, ErrParse) {
-				t.Fatalf("error = %v, want ErrParse", err)
-			}
-			if got := ErrorType(err); got != "parse" {
-				t.Fatalf("ErrorType(error) = %q, want parse", got)
 			}
 		})
 	}

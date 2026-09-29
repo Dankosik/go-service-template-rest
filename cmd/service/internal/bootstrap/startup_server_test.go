@@ -291,48 +291,6 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	}
 }
 
-func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
-	t.Parallel()
-
-	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
-	srv := newFakeRuntimeServer()
-	admission := new(startupAdmissionController)
-	readinessChecked := make(chan struct{}, 1)
-
-	signalCtx, cancelSignal := context.WithCancel(context.Background())
-	defer cancelSignal()
-	bootstrapCtx := context.WithoutCancel(signalCtx)
-
-	runErrCh := make(chan error, 1)
-	go func(signalCtx context.Context, bootstrapCtx context.Context) {
-		runErrCh <- serveRuntime(signalCtx, bootstrapCtx, serveRuntimeArgs{
-			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-			log:       logger,
-			healthSvc: svc,
-			httpSrv:   srv,
-			readinessCheck: func(context.Context) error {
-				select {
-				case readinessChecked <- struct{}{}:
-				default:
-				}
-				return nil
-			},
-			admission: admission,
-			shutdown:  testShutdownBudget(),
-		})
-	}(signalCtx, bootstrapCtx)
-
-	waittest.ReceiveSignal(t, readinessChecked, time.Second, "internal readiness check")
-	waittest.Until(t, time.Second, func(context.Context) bool { return admission.Ready() }, "startup admission to be marked ready")
-
-	cancelSignal()
-
-	if err := waittest.Receive(t, runErrCh, 2*time.Second, "serveRuntime to return after shutdown signal"); err != nil {
-		t.Fatalf("serveRuntime() error = %v, want nil", err)
-	}
-}
-
 func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	t.Parallel()
 

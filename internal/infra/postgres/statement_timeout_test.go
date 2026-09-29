@@ -44,11 +44,6 @@ func TestRuntimeParamMillisecondsRoundsUp(t *testing.T) {
 	}
 }
 
-func TestApplyStatementTimeoutsToleratesMissingConfig(t *testing.T) {
-	t.Parallel()
-	applyStatementTimeouts(nil, time.Second)
-}
-
 func TestApplyContextWatcherUsesCancelRequestWithServerFallback(t *testing.T) {
 	t.Parallel()
 

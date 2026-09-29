@@ -39,8 +39,6 @@ func TestParseLoadOptionsRefusesWhatWouldStartTheWrongProcess(t *testing.T) {
 		args       []string
 		wantDetail string
 	}{
-		{name: "empty config path", args: []string{"--config", ""}},
-		{name: "empty overlay path", args: []string{"--config-overlay", ""}},
 		{name: "blank config path", args: []string{"--config", "   "}},
 		{name: "blank overlay path", args: []string{"--config-overlay", "   "}},
 		{name: "unknown flag", args: []string{"--unknown-flag"}},

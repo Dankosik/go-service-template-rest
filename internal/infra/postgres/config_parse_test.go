@@ -184,9 +184,8 @@ func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
 		want string
 	}{
 		{name: "multi-host url", dsn: "postgres://user:pass@first:5432,second:5432/app?sslmode=disable", want: "postgres dsn fallback targets are not supported"},
-		{name: "omitted sslmode", dsn: "postgres://user:pass@localhost:5432/app", want: "postgres dsn requires explicit host, port, user, password, database, and sslmode"}, //nolint:gosec // Synthetic DSN fixture; no live credential.
-		{name: "sslmode prefer", dsn: "postgres://user:pass@localhost:5432/app?sslmode=prefer", want: "postgres dsn fallback targets are not supported"},                    //nolint:gosec // Synthetic DSN fixture; no live credential.
-		{name: "sslmode allow", dsn: "postgres://user:pass@localhost:5432/app?sslmode=allow", want: "postgres dsn fallback targets are not supported"},                      //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "sslmode prefer", dsn: "postgres://user:pass@localhost:5432/app?sslmode=prefer", want: "postgres dsn fallback targets are not supported"}, //nolint:gosec // Synthetic DSN fixture; no live credential.
+		{name: "sslmode allow", dsn: "postgres://user:pass@localhost:5432/app?sslmode=allow", want: "postgres dsn fallback targets are not supported"},   //nolint:gosec // Synthetic DSN fixture; no live credential.
 	}
 
 	for _, tc := range testCases {

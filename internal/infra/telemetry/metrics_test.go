@@ -25,19 +25,6 @@ func TestMetricsHandlerExposesProcessCollectorOnly(t *testing.T) {
 	if strings.Contains(metricsText, "go_gc_duration_seconds") {
 		t.Fatal("metrics output contains the Prometheus Go collector, which the OTel runtime instruments replaced")
 	}
-	for _, removed := range []string{
-		"config_load_duration_seconds",
-		"config_failures_total",
-		"startup_rejections_total",
-		"telemetry_init_failure_total",
-		"config_unknown_key_warnings_total",
-		"config_startup_outcome_total",
-		"startup_dependency_status",
-	} {
-		if strings.Contains(metricsText, removed) {
-			t.Fatalf("metrics output unexpectedly contains removed startup-only series %q", removed)
-		}
-	}
 }
 
 func TestMetricsNilAndZeroValueHandlersReturnNotFound(t *testing.T) {

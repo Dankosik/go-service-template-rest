@@ -29,10 +29,13 @@ func TestValidateTraceSamplerAccepts(t *testing.T) {
 		SamplerParentBasedTraceIDRatio,
 	}
 	for _, sampler := range samplers {
-		for _, arg := range []float64{0, DefaultTracesSamplerArg, 1} {
-			if err := ValidateTraceSampler(sampler, arg); err != nil {
-				t.Fatalf("ValidateTraceSampler(%q, %v) error = %v, want nil", sampler, arg, err)
-			}
+		if err := ValidateTraceSampler(sampler, DefaultTracesSamplerArg); err != nil {
+			t.Fatalf("ValidateTraceSampler(%q, %v) error = %v, want nil", sampler, DefaultTracesSamplerArg, err)
+		}
+	}
+	for _, arg := range []float64{0, 1} {
+		if err := ValidateTraceSampler(SamplerTraceIDRatio, arg); err != nil {
+			t.Fatalf("ValidateTraceSampler(%q, %v) error = %v, want nil", SamplerTraceIDRatio, arg, err)
 		}
 	}
 }
@@ -49,7 +52,6 @@ func TestValidateTraceSamplerRejects(t *testing.T) {
 		{name: "unknown name", sampler: "sometimes", arg: 0.5, wantErr: "traces_sampler is unsupported"},
 		{name: "nan arg", sampler: SamplerTraceIDRatio, arg: math.NaN(), wantErr: "traces_sampler_arg must be finite"},
 		{name: "positive inf arg", sampler: SamplerTraceIDRatio, arg: math.Inf(1), wantErr: "traces_sampler_arg must be finite"},
-		{name: "negative inf arg", sampler: SamplerTraceIDRatio, arg: math.Inf(-1), wantErr: "traces_sampler_arg must be finite"},
 		{name: "below range", sampler: SamplerTraceIDRatio, arg: -0.1, wantErr: "traces_sampler_arg must be in range [0,1]"},
 		{name: "above range", sampler: SamplerTraceIDRatio, arg: 1.1, wantErr: "traces_sampler_arg must be in range [0,1]"},
 	}

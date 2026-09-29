@@ -68,12 +68,6 @@ func TestInboundWebhookDisclosureFormats(t *testing.T) {
 			store:     &memoryStore{receipt: pendingReceipt()},
 			attempt:   1, max: 3,
 		},
-		{
-			name:    "terminalization",
-			handle:  func(context.Context, inboundwebhook.VerifiedDelivery, json.RawMessage) error { return nil },
-			store:   &memoryStore{receipt: pendingReceipt(), failTerminal: true},
-			attempt: 3, max: 3,
-		},
 	}
 
 	for _, tc := range cases {

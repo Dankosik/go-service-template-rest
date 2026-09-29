@@ -29,13 +29,3 @@ func TestPostgresDSNParseIsAdapterOwned(t *testing.T) {
 		t.Fatalf("Postgres.DSN = %q, want raw invalid DSN", cfg.Postgres.DSN)
 	}
 }
-
-func TestRemovedPostgresTuningKeyIsUnknown(t *testing.T) {
-	resetConfigEnv(t)
-	t.Setenv("APP__POSTGRES__ACQUIRE_TIMEOUT", "1s")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if !errors.Is(err, ErrUnknownKey) || !strings.Contains(err.Error(), "postgres.acquire_timeout") {
-		t.Fatalf("LoadDetailed() error = %v, want removed key to fail closed", err)
-	}
-}

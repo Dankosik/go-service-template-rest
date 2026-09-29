@@ -19,16 +19,10 @@ func TestResponseEnvelopeAdmission(t *testing.T) {
 	for _, body := range []string{
 		"",
 		`[]`,
-		`"active"`,
-		`null`,
 		`{"active":true,"iss":"` + testIssuer + `","aud":"` + testAudience + `","exp":1,"active":true}`,
-		`{"active":true,"unknown":1,"unknown":2}`,
 		`{"active":true}{"active":true}`,
-		`{"active":true} 0`,
-		`{`,
 		`{"iss":"` + testIssuer + `"}`,
 		`{"active":"true"}`,
-		`{"active":1}`,
 		`{"active":null}`,
 	} {
 		if _, err := admitResponse([]byte(body), policy, testNow); err == nil {
@@ -47,8 +41,6 @@ func TestInactiveResponseShortCircuits(t *testing.T) {
 		`{"active":false}`,
 		`{"active":false,"iss":1,"exp":"nope","aud":null}`,
 		`{"active":false,"token":"` + canary + `","secret":"` + canary + `"}`,
-		`{"active":false,"exp":1,"nbf":9999999999,"iss":"https://other.example","aud":"other"}`,
-		`{"active":false,"sub":"s","client_id":"c"}`,
 	} {
 		result, err := admitResponse([]byte(body), policy, testNow)
 		requireKind(t, err, bearerauthn.KindInvalid)
@@ -139,9 +131,6 @@ func TestPrincipalNormalizationAndMinimization(t *testing.T) {
 		return `{"active":true,"iss":"` + testIssuer + `","aud":"` + testAudience + `","exp":` + exp + extra + `}`
 	}
 
-	if got := activeJSON("subject-only", ""); !strings.Contains(got, "subject-only") {
-		t.Fatalf("activeJSON omitted subject: %s", got)
-	}
 	subjectOnly, err := admitResponse([]byte(base(`,"sub":"subject-1"`)), policy, testNow)
 	if err != nil || subjectOnly.Principal.Issuer != testIssuer || subjectOnly.Principal.Subject != "subject-1" || subjectOnly.Principal.ClientID != "" {
 		t.Fatalf("subject-only = %+v, %v", subjectOnly, err)

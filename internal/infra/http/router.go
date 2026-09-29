@@ -1,7 +1,6 @@
 package httpx
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -15,7 +14,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
-	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
+	"github.com/getkin/kin-openapi/routers/gorillamux"
 )
 
 type RouterConfig struct {
@@ -58,7 +57,11 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		return nil, err
 	}
 	// profile:http-idempotency-postgres:end
-	apiMiddlewares := []openapi.MiddlewareFunc{requestValidator(spec, cfg.Authenticate, rejectRequest)}
+	validator, err := requestValidator(spec, cfg.Authenticate, rejectRequest)
+	if err != nil {
+		return nil, err
+	}
+	apiMiddlewares := []openapi.MiddlewareFunc{validator}
 	// profile:http-idempotency-postgres:start
 	// oapi-codegen wraps first to last, so capture runs before validation while
 	// parsing remains in the authenticated handler through NewRequestFromContext.
@@ -79,26 +82,59 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	return Harden(log, metrics, cfg.HardenConfig, apiSubrouter)
 }
 
+// requestValidator validates every request against the contract, as
+// openapi3filter.ValidateRequest does: security, then parameters, then the body,
+// stopping at the first failure. Each step runs once, against the operation
+// kin-openapi's own router matched.
+//
+// A body step whose schema is structural is decided first by one streaming pass
+// (see request_body_shape.go). A body that pass does not admit goes through
+// openapi3filter.ValidateRequestBody, so every rejection is the validator's.
 func requestValidator(
 	spec *openapi3.T,
 	authenticate openapi3filter.AuthenticationFunc,
 	rejectRequest func(http.ResponseWriter, *http.Request, error),
-) openapi.MiddlewareFunc {
-	return oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddleware.Options{
-		DoNotValidateServers: true,
-		Options: openapi3filter.Options{
-			AuthenticationFunc: authenticate,
-		},
-		ErrorHandlerWithOpts: func(
-			_ context.Context,
-			err error,
-			w http.ResponseWriter,
-			r *http.Request,
-			_ oapimiddleware.ErrorHandlerOpts,
-		) {
-			rejectRequest(w, r, err)
-		},
-	})
+) (openapi.MiddlewareFunc, error) {
+	// The service is reached through whatever host its edge presents, so the
+	// contract's servers take no part in matching a route.
+	spec.Servers = nil
+	router, err := gorillamux.NewRouter(spec)
+	if err != nil {
+		return nil, fmt.Errorf("http router: build OpenAPI request router: %w", err)
+	}
+	bodies := structuralRequestBodies(spec)
+	options := &openapi3filter.Options{AuthenticationFunc: authenticate}
+	withoutBody := &openapi3filter.Options{AuthenticationFunc: authenticate, ExcludeRequestBody: true}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			route, pathParams, err := router.FindRoute(r)
+			if err != nil {
+				rejectRequest(w, r, err)
+				return
+			}
+			input := &openapi3filter.RequestValidationInput{
+				Request:    r,
+				PathParams: pathParams,
+				Route:      route,
+				Options:    options,
+			}
+			body, structural := bodies[route.Operation]
+			if structural {
+				input.Options = withoutBody
+			}
+			err = openapi3filter.ValidateRequest(r.Context(), input)
+			if err == nil && structural && !body.admits(r) {
+				input.Options = options
+				err = openapi3filter.ValidateRequestBody(r.Context(), input, route.Operation.RequestBody.Value)
+			}
+			if err != nil {
+				rejectRequest(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}, nil
 }
 
 func generatedStrictServerOptions(

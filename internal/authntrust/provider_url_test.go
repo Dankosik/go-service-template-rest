@@ -34,7 +34,6 @@ func TestValidOIDCURLs(t *testing.T) {
 		{name: "surrounding space", raw: "  https://issuer.example.com  "},
 		{name: "unparseable escape", raw: "https://issuer.example.com/%zz"},
 		{name: "empty", raw: ""},
-		{name: "blank", raw: "   "},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()

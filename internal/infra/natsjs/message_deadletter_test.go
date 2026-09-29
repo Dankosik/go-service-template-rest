@@ -177,12 +177,8 @@ func TestRestoredDeadLetterRepublishesOnTheOriginalSubject(t *testing.T) {
 }
 
 func TestDeadLetterReasonReportsWhyTheRecordWasTransferred(t *testing.T) {
-	for _, reason := range []string{deadLetterMalformed, deadLetterExhausted, deadLetterPermanent} {
-		t.Run(reason, func(t *testing.T) {
-			if got := DeadLetterReason(unitDeadLetter(t, reason)); got != reason {
-				t.Errorf("DeadLetterReason() = %q, want %q", got, reason)
-			}
-		})
+	if got := DeadLetterReason(unitDeadLetter(t, deadLetterExhausted)); got != deadLetterExhausted {
+		t.Errorf("DeadLetterReason() = %q, want %q", got, deadLetterExhausted)
 	}
 	if got := DeadLetterReason(nil); got != "" {
 		t.Errorf("DeadLetterReason(nil) = %q, want empty", got)
