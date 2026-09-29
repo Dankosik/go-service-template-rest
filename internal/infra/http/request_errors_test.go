@@ -181,7 +181,7 @@ func securedHandlerWithTerminal(
 		tb.Fatalf("build secured router: %v", err)
 	}
 
-	validator := requestValidator(spec, authenticate, handleGeneratedRequestError(log, challenge))
+	validator := mustRequestValidator(tb, spec, authenticate, handleGeneratedRequestError(log, challenge))
 
 	return RequestCorrelation(validator(terminal))
 }
