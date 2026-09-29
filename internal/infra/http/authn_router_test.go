@@ -168,7 +168,7 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 			}
 			reject := RejectRequest(slog.New(slog.DiscardHandler), "Bearer")
 			router := chi.NewRouter()
-			router.Use(requestValidator(spec, Authenticated(resolve), reject))
+			router.Use(mustRequestValidator(t, spec, Authenticated(resolve), reject))
 			router.Get("/secure", func(w http.ResponseWriter, request *http.Request) {
 				calls.Add(1)
 				principal, ok := reqctx.PrincipalFromContext(request.Context())
@@ -261,7 +261,7 @@ func TestHTTPAuthnRunsInsideMaxInFlight(t *testing.T) {
 	}
 	reject := RejectRequest(slog.New(slog.DiscardHandler), "Bearer")
 	inner := chi.NewRouter()
-	inner.Use(requestValidator(spec, Authenticated(runtime.ResolveHTTP), reject))
+	inner.Use(mustRequestValidator(t, spec, Authenticated(runtime.ResolveHTTP), reject))
 	inner.Get("/secure", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
