@@ -11,7 +11,8 @@ Choose one path for each derived service and keep its evidence separate.
 ### Railway source build
 
 Connect the derived GitHub repository and branch in Railway. Railway builds
-`build/docker/Dockerfile` from that source and applies `railway.toml`.
+`build/docker/Dockerfile` from that source and applies the
+[Railway service settings](#railway-service-settings) below.
 
 For GitHub-triggered builds, Railway supplies `RAILWAY_GIT_COMMIT_SHA`.
 The Dockerfile embeds its first 12 characters as the default application
@@ -43,33 +44,50 @@ candidate, advances the marker to the verified candidate digest, and only then
 promotes public aliases. If the package already exists but the marker is
 missing, publication stays blocked for an explicit history-recovery procedure.
 
-This is opt-in operator configuration. Neither `railway.toml` nor the workflow
-contains a Railway project identifier or changes a Railway service.
+This is opt-in operator configuration. Neither this repository's files nor the
+workflow contain a Railway project identifier or change a Railway service.
 
 See [CI/CD Production-Ready Checklist](ci-cd-production-ready.md) for consumer
 verification commands.
 
-## Repository-owned Railway policy
+## Railway service settings
 
-`railway.toml` is the source of truth only for non-secret settings that Railway
-can read from the derived source repository:
+Deployment policy lives in the Railway service settings. No repository file
+carries it: Railway stops reading `railway.toml` and `railway.json` (Config as
+Code) on 2026-12-01, and until then a committed file would take precedence over
+the service settings. This template ships neither; do not add one to a derived
+service. This section is the repository's record of the non-secret settings a
+new service must be given. Keep secrets in Railway variables.
 
-- `builder = "DOCKERFILE"`
-- `dockerfilePath = "build/docker/Dockerfile"`
+The template never connects to Railway. The operator applies these settings to
+each derived service (dashboard or Railway API) and records any deliberate
+deviation here. The names below are the service-instance fields that
+`railway.toml` used to set, so each maps one to one onto a service setting:
+
+- `builder` = `DOCKERFILE`
+- `dockerfilePath` = `build/docker/Dockerfile`
 - `watchPatterns` covering runtime source, module manifests, migrations, the
-  production Dockerfile, `.dockerignore`, and this policy file
-- `preDeployCommand = ["/migrate"]` (PostgreSQL profile only)
-- `healthcheckPath = "/health/ready"`
-- `healthcheckTimeout = 180`
-- `restartPolicyType = "ON_FAILURE"`
-- `restartPolicyMaxRetries = 5`
-- `overlapSeconds = 45`
-- `drainingSeconds = 45`
+  production Dockerfile, and `.dockerignore`: `/.dockerignore`, `/api/**`,
+  `/build/docker/**`, `/cmd/**`, `/internal/**`, `/migrations/**`, `/go.mod`,
+  and `/go.sum`
+<!-- profile:database-postgres:start -->
+- `preDeployCommand` = `/migrate` (PostgreSQL profile only)
+<!-- profile:database-postgres:end -->
+- `healthcheckPath` = `/health/ready`
+- `healthcheckTimeout` = `180`
+- `restartPolicyType` = `ON_FAILURE`
+- `restartPolicyMaxRetries` = `5`
+- `overlapSeconds` = `45`
+- `drainingSeconds` = `45`
+
+The platform and service owners own these settings. A change is a
+deployment-policy change: update this section in the same pull request that
+depends on it, and run the affected CI and release gates.
 
 The watch patterns prevent documentation, test, local Compose, and agent-only
 changes from starting a Railway source deployment. Keep them conservative:
-when a new path can affect the runtime image or deployment policy, add it in
-the same pull request.
+when a new path can affect the runtime image, change the `watchPatterns`
+setting and this list together.
 
 The application default worst-case shutdown sequence is 35 seconds: the
 30-second HTTP shutdown budget (which includes the 15-second
@@ -90,8 +108,8 @@ Railway service ID.
 <!-- profile:webhooks-durable:start -->
 ## Durable webhook jobs
 
-The image contains `/jobs-worker`, but `railway.toml` does not create or
-configure a second Railway service. An adopter must run that binary from the
+The image contains `/jobs-worker`, but the service settings above do not create
+or configure a second Railway service. An adopter must run that binary from the
 exact service image, use the same write-home PostgreSQL writer, supply the
 worker-only webhook secret manifest, expose only its private diagnostics port,
 and preserve the jobs worker stop-grace contract. Freshly initialized services
@@ -105,10 +123,10 @@ secret-rotation checkpoints with authenticated evidence.
 ## Native gRPC networking
 
 The gRPC profile adds a second application listener but does not change
-Railway exposure automatically. `railway.toml` still targets the REST port and
-uses `/health/ready`; enabling `APP__GRPC__SERVER__ENABLED` neither publishes
-the gRPC port nor proves that a public Railway HTTP domain preserves native
-gRPC HTTP/2 trailers.
+Railway exposure automatically. The service settings still use the REST
+`/health/ready` healthcheck; enabling `APP__GRPC__SERVER__ENABLED` neither
+publishes the gRPC port nor proves that a public Railway HTTP domain preserves
+native gRPC HTTP/2 trailers.
 
 For service-to-service traffic in one Railway environment, bind the gRPC
 listener to `::` and call `<service>.railway.internal:<grpc-port>` through
@@ -222,7 +240,8 @@ health, and the external user path owned by the derived service.
 
 For changes to this profile:
 
-1. review the `railway.toml` and Dockerfile diff;
+1. review the Dockerfile diff and, for a settings change, this document's
+   service-settings list;
 2. run `make migration-validate` and any other affected image leaf;
 3. confirm the runtime image becomes ready and exits cleanly on SIGTERM;
 4. leave project-specific settings and live deployment evidence to the derived

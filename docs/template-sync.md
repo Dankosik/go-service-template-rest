@@ -61,13 +61,13 @@ These documents stay repository-owned and the sync never touches them:
 | `docs/project-structure-and-module-organization.md` | This service's package layout |
 | `docs/build-test-and-development-commands.md` | The commands this service actually has |
 | `docs/ci-cd-production-ready.md` | This repository's setup, module path, and owners |
-| `docs/railway-deployment-profile.md` | This service's deployment target |
+| `docs/railway-deployment-profile.md` | This service's deployment target and Railway service settings |
 | `test/README.md` | This service's integration-test topology and commands |
 | `docs/first-production-feature.md` | Template-only onboarding; not shipped to services |
 | `make/service.mk` | Service-only commands and their variables |
 | `.golangci.yml`, `.gitleaks.toml`, and `.redocly.yaml` | Service code policy, reviewed exceptions, and API lint policy |
 | `.gitleaks.baseline.json` | Reviewed findings for this repository's history |
-| `.github/workflows/*.yml` and `railway.toml` | Repository-specific required-check, publication, and deployment activation |
+| `.github/workflows/*.yml` | Repository-specific required-check, publication, and deployment activation |
 
 Record a service-specific decision in one of those, or in a task-local artifact.
 Never in an owned path. `make template-owned-purity-check` validates safe
