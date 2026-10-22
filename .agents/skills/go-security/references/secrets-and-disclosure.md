@@ -11,8 +11,8 @@ repository.
 - `internal/config/secret_policy.go` rejects secret-like keys — `password`,
   `token`, `secret`, `authorization`, `dsn` — in a config file at load time.
   YAML holds non-secret defaults and `APP__...` environment variables are the
-  secret channel, per `docs/configuration-source-policy.md`. `railway.toml` is
-  deployment policy, not a secret store.
+  secret channel, per `docs/configuration-source-policy.md`. Railway service
+  settings are non-secret deployment policy; secrets stay in Railway variables.
 - Sanitized failure is a type here, not a habit: `oidcjwt.Error` carries a
   closed `Kind` and no parser, token, key, endpoint, or provider text. A change
   that wraps a cause into it — or into a `problem` detail crossing the API

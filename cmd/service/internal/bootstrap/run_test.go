@@ -38,9 +38,9 @@ func testShutdownBudget() *shutdownBudget {
 //
 // http.shutdown_timeout bounded the drain, and four hard-coded constants bounded
 // everything after it, so the worst-case teardown was their sum — 47s against the
-// 45s railway.toml grants and the 30s Kubernetes grants by default. Nothing
-// related the two, so the overrun was only ever observable as a SIGKILL that took
-// the shutdown telemetry with it.
+// 45s Railway's draining window grants and the 30s Kubernetes grants by default.
+// Nothing related the two, so the overrun was only ever observable as a SIGKILL
+// that took the shutdown telemetry with it.
 func TestShippedDefaultsFitTheGracePeriod(t *testing.T) {
 	resetShutdownConfigEnv(t)
 

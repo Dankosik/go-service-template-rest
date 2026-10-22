@@ -1546,7 +1546,7 @@ parent_main() {
 		die "${reason_precondition}" "unresolved template profile sources remain"
 	fi
 	local marker_roots=(
-		README.md Makefile railway.toml .gitleaks.toml .golangci.yml
+		README.md Makefile .gitleaks.toml .golangci.yml
 		api build cmd docs env internal migrations test .github scripts/dev scripts/ci
 	)
 	local present_marker_roots=()
