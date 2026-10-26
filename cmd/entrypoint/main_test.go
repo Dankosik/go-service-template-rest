@@ -136,7 +136,7 @@ func TestUnknownNameProcessRejectsBeforeRoleCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.CommandContext(t.Context(), executable)
+	cmd := exec.CommandContext(t.Context(), executable) //nolint:gosec // Re-executes this test binary, not caller input.
 	cmd.Args = []string{"/no-such-role", "-config", "/nonexistent/config.yaml"}
 	cmd.Env = append(os.Environ(), execMainEnv+"=1", "APP__LOG__LEVEL=not-a-level")
 	var stdout, stderr bytes.Buffer
@@ -167,7 +167,7 @@ func TestServiceNameReachesServiceRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.CommandContext(t.Context(), executable)
+	cmd := exec.CommandContext(t.Context(), executable) //nolint:gosec // Re-executes this test binary, not caller input.
 	cmd.Args = []string{"/service", "-no-such-flag"}
 	cmd.Env = append(os.Environ(), execMainEnv+"=1")
 	var stderr bytes.Buffer
