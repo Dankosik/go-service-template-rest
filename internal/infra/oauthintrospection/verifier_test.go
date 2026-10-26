@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/authntrust"
 	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
 
 	// profile:grpc:start
@@ -195,6 +196,24 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 		transport.TLSClientConfig.InsecureSkipVerify = false
 		verifier := newVerifier(policy, client, func() time.Time { return testNow })
 		_, err := verifier.Verify(t.Context(), testToken)
+		requireKind(t, err, bearerauthn.KindUnavailable)
+	})
+
+	// New is the constructor generated services call. Its external client must
+	// refuse a non-public provider address before any provider I/O.
+	t.Run("constructed external client refuses loopback", func(t *testing.T) {
+		policy := mustPolicy(t, PolicyInput{
+			Issuer:       testIssuer,
+			Audience:     testAudience,
+			Endpoint:     "https://127.0.0.1:8443/oauth/introspect",
+			TargetClass:  authntrust.TargetClassExternalHTTPS,
+			ClientID:     testClientID,
+			ClientSecret: testSecret,
+		})
+		verifier, err := New(policy)
+		if verifier != nil {
+			t.Fatal("New() returned a verifier for a loopback provider")
+		}
 		requireKind(t, err, bearerauthn.KindUnavailable)
 	})
 }
