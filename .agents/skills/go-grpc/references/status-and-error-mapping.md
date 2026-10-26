@@ -26,11 +26,12 @@ about which code and detail the client observes.
 - Methods under `/grpc.health.v1.Health/` bypass both admission and error
   mapping, so standard health keeps its own semantics — an unknown service stays
   `NOT_FOUND` rather than being rewritten by application mapping.
-- `examples/grpc-reference-service` returns raw `status.Error(codes.ResourceExhausted, …)`
-  and its test registers the service on a bare `grpc.NewServer`. Composed through
-  `grpcx.NewServer` — as `cmd/benchmark-server` does, with no `DomainErrors` — the
-  same handler answers `INTERNAL`. Copy its ownership shape, not its status
-  handling.
+- `examples/grpc-reference-service` is the shape to copy: its handler returns the
+  domain identity `ErrStreamLimit`, and `DomainErrors()` classifies it for
+  `grpcx.Options.DomainErrors`. Its tests dial `grpcx.NewServer`, not a bare
+  `grpc.NewServer`; against a bare server a raw
+  `status.Error(codes.ResourceExhausted, …)` would satisfy the assertion while
+  the composed service answered `INTERNAL`.
 
 ## Reject
 

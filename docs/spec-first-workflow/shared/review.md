@@ -38,8 +38,11 @@ intermediate self-review or reviewer.
 ## Lifecycle
 
 The owner fixes one candidate, its authoritative inputs, phase adapter, and
-evidence boundary. The reviewer keeps that boundary read-only, attempts to
-falsify it, and returns [Review Result V1](../interfaces/review-result-v1.md).
+evidence boundary. The review brief carries only these and omits the author's
+rationale, self-assessment, and expected verdict; accepted decisions recorded
+in authoritative artifacts remain inputs. The reviewer keeps that boundary
+read-only, attempts to falsify it, and returns [Review Result
+V1](../interfaces/review-result-v1.md).
 Review never owns repair, integration, acceptance, or movement. It reuses
 available evidence and investigates concrete defects within that boundary,
 rather than starting a second verification project. Missing optional proof and
@@ -55,6 +58,11 @@ that reviewer's anchored findings, leaves Outcome, Boundary, accepted inputs,
 interfaces, and risk surface unchanged, and introduces no unrelated behavior or
 writable owner. The reviewer remains read-only and does not prescribe or
 perform the repair.
+
+The owner either repairs a blocking finding or contests it with anchored
+evidence. A contested finding closes only when that reviewer's delta recheck
+withdraws it or a fresh `adjudicator-agent` resolves the conflict; the owner
+never dismisses it alone.
 
 For Implementation, retain that reviewer across bounded repairs while findings
 close or new discriminating evidence advances the diagnosis. For repeated
