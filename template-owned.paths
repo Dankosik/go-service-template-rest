@@ -50,6 +50,7 @@ docs/configuration-source-policy.md
 docs/database-schema.md
 docs/prompt-maintenance.md
 docs/prompt-composition.md
+docs/runtime-executable-migration.md
 docs/skill-authoring.md
 docs/spec-first-workflow.md
 docs/subagent-brief-template.md

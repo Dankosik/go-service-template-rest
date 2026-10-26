@@ -31,7 +31,7 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 	}
 	serviceRoot := initializedMessagingServiceRoot(t, repositoryRoot)
 	binary := filepath.Join(t.TempDir(), "service")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, "./cmd/service")
+	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, "./cmd/entrypoint")
 	build.Dir = serviceRoot
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build initialized messaging service: %v\n%s", err, output)
@@ -139,7 +139,7 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 	}
 	repositoryRoot := filepath.Dir(workingDirectory)
 	binary := filepath.Join(t.TempDir(), "worker")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, "./cmd/worker")
+	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, "./cmd/entrypoint")
 	build.Dir = repositoryRoot
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build worker: %v\n%s", err, output)

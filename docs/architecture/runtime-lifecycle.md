@@ -2,7 +2,8 @@
 
 Load for startup, readiness, drain, shutdown, or process-resource ownership.
 
-1. `cmd/service/main.go` delegates to bootstrap.
+1. `cmd/entrypoint` selects the service role from the `/service` entry path,
+   and `cmd/service/role.go` delegates to bootstrap.
 2. Bootstrap creates the signal-aware root context, baseline metrics, and the
    immutable config snapshot.
 3. It configures logging and telemetry, validates ingress admission, and probes

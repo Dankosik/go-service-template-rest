@@ -11,7 +11,7 @@ initialization requires both outbox and NATS.
 
 <!-- profile:jobs-postgres:start -->
 The PostgreSQL jobs pack delegates queue state and lifecycle to River, retains a
-separate worker binary, stays inert without a business worker builder, and uses
+separate worker role and process, stays inert without a business worker builder, and uses
 `InsertTx` for caller-owned transactions.
 <!-- profile:jobs-postgres:end -->
 
@@ -39,5 +39,5 @@ without inventing consumer ordering.
 
 Business behavior stays in `internal/<feature>`, mechanics in
 `internal/infra/<integration>`, and lifecycle/config/telemetry in an explicit
-`cmd/<binary>` root. A distinct lifecycle or scaling model earns a separate
-binary instead of a durable loop hidden in an HTTP handler.
+`cmd/<role>` root. A distinct lifecycle or scaling model earns a separate role,
+run as its own process, instead of a durable loop hidden in an HTTP handler.

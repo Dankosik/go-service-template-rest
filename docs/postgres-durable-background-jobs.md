@@ -15,8 +15,9 @@ scheduling, concurrency, shutdown, readiness, telemetry, or operator engine.
 River owns those mechanics. The worker adds River's OpenTelemetry plugin to the
 repository's existing providers and exposes the standard process diagnostics.
 
-The reusable binary deliberately has no job kind. A derived service replaces its
-nil worker builder and registers its business workers before PostgreSQL is opened.
+The reusable jobs worker role deliberately has no job kind. A derived service
+replaces its nil worker builder and registers its business workers before
+PostgreSQL is opened.
 `jobs.max_workers` is the only jobs-specific runtime setting; the source template
 uses `0` to stay inert, and a selected deployment starts at `1` unless capacity
 evidence supports more.

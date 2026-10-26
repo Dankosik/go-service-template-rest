@@ -35,17 +35,19 @@ RUN --mount=type=bind,target=. \
           "${PGO_PROFILE}" "${PGO_MANIFEST}" "${PGO_ACCEPTED_BUILD_FINGERPRINT}"; \
     fi && \
     module_path="$(go list -m)" && \
-    build_packages="./cmd/service" && \
+    mkdir -p /out/bin && \
 # profile:messaging-nats-jetstream:start
-    if [ -d ./cmd/worker ]; then build_packages="${build_packages} ./cmd/worker"; fi && \
+    if [ -d ./cmd/worker ]; then ln -s service /out/bin/worker; fi && \
 # profile:messaging-nats-jetstream:end
-# profile:outbox-postgres:start
-    if [ -d ./cmd/outbox-relay ]; then build_packages="${build_packages} ./cmd/outbox-relay"; fi && \
-# profile:outbox-postgres:end
 # profile:jobs-postgres:start
-    if [ -d ./cmd/jobs-worker ]; then build_packages="${build_packages} ./cmd/jobs-worker"; fi && \
+    if [ -d ./cmd/jobs-worker ]; then ln -s service /out/bin/jobs-worker; fi && \
 # profile:jobs-postgres:end
-    if [ -d ./cmd/migrate ]; then build_packages="${build_packages} ./cmd/migrate"; fi && \
+# profile:outbox-postgres:start
+    if [ -d ./cmd/outbox-relay ]; then ln -s service /out/bin/outbox-relay; fi && \
+# profile:outbox-postgres:end
+# profile:database-postgres:start
+    if [ -d ./cmd/migrate ]; then ln -s service /out/bin/migrate; fi && \
+# profile:database-postgres:end
     resolved_version="${APP_VERSION}" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
       resolved_version="sha-$(printf '%.12s' "${RAILWAY_GIT_COMMIT_SHA}")"; \
@@ -58,13 +60,13 @@ RUN --mount=type=bind,target=. \
       -mod=readonly \
       -buildvcs=false \
       -ldflags="${ldflags}" \
-      -o /out/ ${build_packages}
+      -o /out/bin/service ./cmd/entrypoint
 # profile:database-postgres:start
 RUN --mount=type=bind,target=. \
     mkdir -p /out/migrations && \
     if [ -d /src/migrations ]; then cp -R /src/migrations/. /out/migrations/; fi
 # profile:database-postgres:end
-RUN find /out -exec touch -d "@${SOURCE_DATE_EPOCH}" {} +
+RUN find /out -exec touch -h -d "@${SOURCE_DATE_EPOCH}" {} +
 
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99
 
@@ -77,18 +79,9 @@ LABEL org.opencontainers.image.version="${RAILWAY_GIT_COMMIT_SHA:-$APP_VERSION}"
       org.opencontainers.image.source="${SOURCE_URL}"
 
 WORKDIR /
-COPY --link --from=build /out/service /service
-# profile:messaging-nats-jetstream:start
-COPY --link --from=build /out/worker /worker
-# profile:messaging-nats-jetstream:end
-# profile:outbox-postgres:start
-COPY --link --from=build /out/outbox-relay /outbox-relay
-# profile:outbox-postgres:end
-# profile:jobs-postgres:start
-COPY --link --from=build /out/jobs-worker /jobs-worker
-# profile:jobs-postgres:end
+# One executable; each selected role's entry path is a relative link to it.
+COPY --link --from=build /out/bin/ /
 # profile:database-postgres:start
-COPY --link --from=build /out/migrate /migrate
 COPY --link --from=build /out/migrations /migrations
 # profile:database-postgres:end
 

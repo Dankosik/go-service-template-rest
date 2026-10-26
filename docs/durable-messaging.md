@@ -70,7 +70,7 @@ Runtime configuration is limited to:
 - source stream, durable consumer, filter subject, and dead-letter subject;
 - maximum payload bytes and worker concurrency.
 
-Empty URLs disable messaging in the API process. Worker and outbox binaries
+Empty URLs disable messaging in the API process. Worker and outbox roles
 require URLs. Delivery bytes, the 30-second handler timeout, retry sequence
 `1s,5s,30s,2m`, 30-second DLQ retry delay, and drain behavior are safe code
 defaults rather than operator knobs. Shutdown spends the existing process grace

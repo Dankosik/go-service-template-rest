@@ -10,7 +10,8 @@ Do not create a directory before its first real artifact.
 | --- | --- |
 | Business behavior, types, ports, invariants, domain errors | `internal/<feature>/` |
 | Concrete provider/transport adapters | `internal/infra/<provider>/` |
-| Process composition and lifecycle | `cmd/<binary>/internal/bootstrap/` |
+| Process composition and lifecycle | `cmd/<role>/internal/bootstrap/` |
+| Role selection for the image's one executable | `cmd/entrypoint/` |
 | Client-visible REST contracts | `api/openapi/service.yaml` |
 | Protobuf contracts when enabled | `api/proto/` |
 | Generated Go | Derived directory named by the owning generator; never manual authority |
@@ -22,9 +23,9 @@ Do not create a directory before its first real artifact.
 
 There is no public `pkg/` until reusable external API ownership is explicitly
 accepted. Empty `api/proto/`, `migrations/`, query, or generated directories are
-not reserved. A new binary requires an independent process lifecycle; a new
-network boundary, cache, queue, store, or shared package requires its accepted
-architecture force.
+not reserved. A new role requires an independent process lifecycle and is a
+`cmd/<role>` package with an entry in `cmd/entrypoint`; a new network boundary,
+cache, queue, store, or shared package requires its accepted architecture force.
 
 ## Non-Obvious Repository Rules
 

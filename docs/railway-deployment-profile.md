@@ -91,7 +91,7 @@ Railway service ID.
 ## Durable webhook jobs
 
 The image contains `/jobs-worker`, but `railway.toml` does not create or
-configure a second Railway service. An adopter must run that binary from the
+configure a second Railway service. An adopter must run that entry path from the
 exact service image, use the same write-home PostgreSQL writer, supply the
 worker-only webhook secret manifest, expose only its private diagnostics port,
 and preserve the jobs worker stop-grace contract. Freshly initialized services

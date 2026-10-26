@@ -40,5 +40,5 @@ dynamic or caller-controlled URL requires a separate security decision.
 
 Before enabling a runtime dependency, close its contract source, trust and
 egress policy, criticality, timeout/retry budget, readiness participation,
-partial-startup cleanup, telemetry labels, and bootstrap proof. New executable
-surfaces use their own `cmd/<binary>` composition root.
+partial-startup cleanup, telemetry labels, and bootstrap proof. A new process
+role uses its own `cmd/<role>` composition root.

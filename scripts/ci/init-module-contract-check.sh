@@ -374,6 +374,33 @@ assert_profile() {
 	esac
 }
 
+# assert_role_isolation keeps each role's composition private now that the one
+# cmd/entrypoint executable links every selected role: no role package reaches
+# another role's packages or cmd/entrypoint, and the service role never reaches
+# the migration adapter, so application startup still never migrates.
+assert_role_isolation() {
+	local root="$1"
+	local roles=(service worker jobs-worker outbox-relay migrate)
+	local module role other dependencies service_dependencies=''
+	module="$(cd "${root}" && go list -m)"
+	for role in "${roles[@]}"; do
+		[[ -d "${root}/cmd/${role}" ]] || continue
+		dependencies="$(cd "${root}" && go list -deps "./cmd/${role}")"
+		[[ ${role} != service ]] || service_dependencies="${dependencies}"
+		for other in "${roles[@]}" entrypoint; do
+			[[ ${other} != "${role}" ]] || continue
+			if awk -v p="${module}/cmd/${other}" '$0 == p || index($0, p "/") == 1 { found = 1 } END { exit !found }' <<<"${dependencies}"; then
+				echo "init-module contract: cmd/${role} reaches cmd/${other} in ${root}" >&2
+				return 1
+			fi
+		done
+	done
+	if grep -Fxq "${module}/internal/infra/postgresmigrate" <<<"${service_dependencies}"; then
+		echo "init-module contract: cmd/service reaches internal/infra/postgresmigrate in ${root}" >&2
+		return 1
+	fi
+}
+
 verify_template_sync() {
 	local root="$1"
 	local harness="$2"
@@ -399,6 +426,7 @@ verify_profile() {
 	run_init "${profile_checkout}" "${module}" "${overrides[@]:1}"
 	assert_identity "${profile_checkout}" "${module}" "${service_name}" "${harness}"
 	assert_profile "${profile_checkout}" "${name}"
+	assert_role_isolation "${profile_checkout}"
 	assert_harness "${profile_checkout}" "${harness}"
 	(
 		cd "${profile_checkout}"

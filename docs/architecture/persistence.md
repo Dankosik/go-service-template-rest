@@ -5,7 +5,8 @@ durable-schema change.
 
 `internal/infra/postgres/` owns strict connection admission, template defaults,
 commit-outcome policy, and repository code over `pgxpool`.
-`internal/infra/postgresmigrate/` owns migration execution for `cmd/migrate`.
+`internal/infra/postgresmigrate/` owns migration execution for the `migrate` role
+(`cmd/migrate`).
 Canonical Goose files under `migrations/` own schema; SQLC query sources own
 generated access code. Runtime repositories map generated rows into
 feature-facing types and join a caller transaction only through the existing

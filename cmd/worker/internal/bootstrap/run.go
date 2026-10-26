@@ -17,7 +17,7 @@ import (
 
 const startupTimeout = 30 * time.Second
 
-// HandlerBuilder registers binary-local typed event handlers. Any returned
+// HandlerBuilder registers role-local typed event handlers. Any returned
 // cleanup normally runs before Run returns, including when the builder returns
 // an invalid result.
 // If forced shutdown leaves an uncooperative handler running, process exit owns
@@ -53,11 +53,11 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg)
 	metrics := telemetry.NewMetrics()
-	// A metrics provider that could not be built stops this binary, which is this
-	// composition root's own answer rather than InstallTelemetry's: a worker with
-	// no meter cannot report what it consumed, so nothing would notice it stopped
-	// consuming, while a worker with no exporter for spans still records every
-	// count an alert is built on.
+	// A metrics provider that could not be built stops this role's process, which
+	// is this composition root's own answer rather than InstallTelemetry's: a
+	// worker with no meter cannot report what it consumed, so nothing would
+	// notice it stopped consuming, while a worker with no exporter for spans
+	// still records every count an alert is built on.
 	flushTelemetry, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "worker")
 	cleanupWindow := runtimeopts.UnarmedTeardown(signalCtx)
 	// False means the handler did not join within the shutdown budget. Its

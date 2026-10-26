@@ -38,8 +38,8 @@ type WorkerRegistration struct {
 	// profile:inbound-webhooks-standard:end
 }
 
-// WorkersBuilder is binary-local business composition. Derived services add
-// their typed River workers here; the reusable binary has no default job kind.
+// WorkersBuilder is role-local business composition. Derived services add
+// their typed River workers here; the reusable role has no default job kind.
 type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (WorkerRegistration, error)
 
 func Run(args []string, buildWorkers WorkersBuilder) error {

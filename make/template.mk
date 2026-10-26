@@ -1,5 +1,4 @@
 SERVICE_NAME ?= $(shell awk '/^module / { count = split($$2, part, "/"); if (part[count] ~ /^v([2-9]|[1-9][0-9]+)$$/ && count > 1) count--; print part[count]; exit }' go.mod)
-SERVICE_CMD := ./cmd/service
 BINARY := bin/$(SERVICE_NAME)
 WORKER_CMD := ./cmd/worker
 WORKER_BINARY := bin/$(SERVICE_NAME)-worker
@@ -7,6 +6,17 @@ OUTBOX_RELAY_CMD := ./cmd/outbox-relay
 OUTBOX_RELAY_BINARY := bin/$(SERVICE_NAME)-outbox-relay
 JOBS_WORKER_CMD := ./cmd/jobs-worker
 JOBS_WORKER_BINARY := bin/$(SERVICE_NAME)-jobs-worker
+# Every role builds from one entrypoint; the *_CMD paths above only probe which
+# optional roles are selected. A local artifact pins its role at link time
+# because its file name is not a role name.
+ENTRYPOINT_CMD := ./cmd/entrypoint
+RUNTIME_EXECUTABLE_GUIDE := docs/runtime-executable-migration.md
+role_ldflags = -X main.pinnedRole=$(1)
+# require_entrypoint stops a role target on a layout that still has one main
+# package per role, which these targets can no longer build.
+define require_entrypoint
+if [ ! -f $(ENTRYPOINT_CMD)/main.go ]; then echo "$@: $(ENTRYPOINT_CMD)/main.go is missing; migrate this repository to the single runtime executable with $(RUNTIME_EXECUTABLE_GUIDE)" >&2; exit 1; fi
+endef
 GO ?= go
 MIGRATION_DIR ?= migrations
 MIGRATION_ENGINE ?= goose
@@ -472,19 +482,22 @@ run-jobs-worker:
 	@if [ ! -d $(JOBS_WORKER_CMD) ]; then \
 		echo "not applicable: no jobs worker"; \
 	else \
-		set -a; if [ -f .env ]; then . ./.env; fi; set +a; go run $(JOBS_WORKER_CMD); \
+		$(require_entrypoint); \
+		set -a; if [ -f .env ]; then . ./.env; fi; set +a; go run -ldflags='$(call role_ldflags,jobs-worker)' $(ENTRYPOINT_CMD); \
 	fi
 
 build-jobs-worker:
 	@if [ ! -d $(JOBS_WORKER_CMD) ]; then echo "not applicable: no jobs worker"; else \
-		mkdir -p bin; CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w' -o $(JOBS_WORKER_BINARY) $(JOBS_WORKER_CMD); \
+		$(require_entrypoint); \
+		mkdir -p bin; CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w $(call role_ldflags,jobs-worker)' -o $(JOBS_WORKER_BINARY) $(ENTRYPOINT_CMD); \
 	fi
 
 run-outbox-relay:
 	@if [ ! -d $(OUTBOX_RELAY_CMD) ]; then \
 		echo "not applicable: no outbox relay"; \
 	else \
-		set -a; if [ -f .env ]; then . ./.env; fi; set +a; go run $(OUTBOX_RELAY_CMD); \
+		$(require_entrypoint); \
+		set -a; if [ -f .env ]; then . ./.env; fi; set +a; go run -ldflags='$(call role_ldflags,outbox-relay)' $(ENTRYPOINT_CMD); \
 	fi
 
 lint lint-package: lint-changed
@@ -721,10 +734,11 @@ test-s3-conformance-r2:
 	@if [ ! -d test/s3conformance ]; then echo "not applicable: no S3 conformance surface"; else REQUIRE_S3_CONFORMANCE=1 S3_CONFORMANCE_PROVIDER=cloudflare_r2 $(S3_CONFORMANCE_TEST); fi
 
 run:
+	@$(require_entrypoint)
 	@set -a; \
 	if [ -f .env ]; then . ./.env; fi; \
 	set +a; \
-	go run $(SERVICE_CMD)
+	go run -ldflags='$(call role_ldflags,service)' $(ENTRYPOINT_CMD)
 
 benchmark-capture:
 	$(PERFORMANCE_SCRIPT) capture
@@ -746,25 +760,29 @@ run-worker:
 	@if [ ! -d $(WORKER_CMD) ]; then \
 		echo "not applicable: no messaging worker"; \
 	else \
-		set -a; if [ -f .env ]; then . ./.env; fi; set +a; go run $(WORKER_CMD); \
+		$(require_entrypoint); \
+		set -a; if [ -f .env ]; then . ./.env; fi; set +a; go run -ldflags='$(call role_ldflags,worker)' $(ENTRYPOINT_CMD); \
 	fi
 
 build-outbox-relay:
 	@if [ ! -d $(OUTBOX_RELAY_CMD) ]; then echo "not applicable: no outbox relay"; else \
-		mkdir -p bin; CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w' -o $(OUTBOX_RELAY_BINARY) $(OUTBOX_RELAY_CMD); \
+		$(require_entrypoint); \
+		mkdir -p bin; CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w $(call role_ldflags,outbox-relay)' -o $(OUTBOX_RELAY_BINARY) $(ENTRYPOINT_CMD); \
 	fi
 
 build:
+	@$(require_entrypoint)
 	@if [ "$(PGO_PROFILE)" != "off" ]; then \
 		if [ -z "$(PGO_PROFILE)" ] || [ "$(PGO_PROFILE)" = "auto" ]; then echo "PGO_PROFILE must name an explicit CPU profile" >&2; exit 2; fi; \
 		GO="$(GO)" $(PERFORMANCE_SCRIPT) verify-pgo "$(PGO_PROFILE)" "$(PGO_MANIFEST)"; \
 	fi
 	mkdir -p bin
-	CGO_ENABLED=0 $(GO) build -pgo="$(PGO_PROFILE)" -trimpath -ldflags='-s -w' -o $(BINARY) $(SERVICE_CMD)
+	CGO_ENABLED=0 $(GO) build -pgo="$(PGO_PROFILE)" -trimpath -ldflags='-s -w $(call role_ldflags,service)' -o $(BINARY) $(ENTRYPOINT_CMD)
 
 build-worker:
 	@if [ ! -d $(WORKER_CMD) ]; then echo "not applicable: no messaging worker"; else \
-		mkdir -p bin; CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w' -o $(WORKER_BINARY) $(WORKER_CMD); \
+		$(require_entrypoint); \
+		mkdir -p bin; CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w $(call role_ldflags,worker)' -o $(WORKER_BINARY) $(ENTRYPOINT_CMD); \
 	fi
 
 build-pgo:

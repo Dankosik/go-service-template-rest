@@ -9,7 +9,7 @@ authority.
 
 1. Business behavior stays in `internal/<feature>`; transports and providers
    stay in `internal/infra`; concrete wiring and process lifecycle stay in an
-   explicit `cmd/<binary>` composition root.
+   explicit `cmd/<role>` composition root.
 2. Generated code is derived. Edit the contract or generation input first,
    regenerate, and prove drift with its repository-owned check.
 3. One fact has one canonical writer. A projection, transport, cache, or
@@ -30,8 +30,9 @@ authority.
 | `internal/config/` build and validation | Runtime snapshot consumed by bootstrap and adapters |
 | `env/config/*.yaml`, `APP__...`, runtime flags | Inputs whose precedence/secret rules live in [Configuration Source Policy](configuration-source-policy.md) |
 | `migrations/*.sql` | Database shape consumed by runtime and generated SQL access |
-| `internal/<feature>/*` | Behavior consumed by transports, jobs, and future binaries |
-| `cmd/<binary>/internal/bootstrap/*` | That binary's composition and lifecycle |
+| `internal/<feature>/*` | Behavior consumed by transports, jobs, and future roles |
+| `cmd/<role>/internal/bootstrap/*` | That role's composition and lifecycle |
+| `cmd/entrypoint` | Selects one role per process from its entry path; owns nothing else |
 
 Concrete adapter wiring belongs in the composition root. Generated outputs are
 never edited as the source of truth.

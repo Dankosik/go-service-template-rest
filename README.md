@@ -160,7 +160,8 @@ rules.
 
 ```text
 api/openapi/service.yaml    HTTP API source of truth
-cmd/service/                service entrypoint and runtime assembly
+cmd/entrypoint/             the image's one executable; selects a role per process
+cmd/service/                service role entry and runtime assembly
 internal/<feature>/         business behavior
 internal/infra/             HTTP, database, messaging, and provider adapters
 internal/config/            runtime configuration
