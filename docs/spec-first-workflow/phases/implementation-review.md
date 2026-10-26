@@ -61,10 +61,16 @@ structure whose consumers it removes. For each package the diff stops
 importing somewhere, compare its importing packages before and after; one
 remaining production owner makes it a collapse candidate.
 
+When an accepted [Ownership Map V1](../interfaces/ownership-map-v1.md) covers
+the candidate, compare the diff with it first. Structure the map does not
+record, a copy where it assigns reuse, and a Consumer Changes disposition the
+diff does not carry out are findings. A deviation the delivery owner shows improves placement closes by
+updating the map under Go Code / Ownership Design's Refinement.
+
 Apply [Go Structural Quality](../../../.agents/skills/go-structural-quality/SKILL.md)'s
-deletion test to each structure, and search the whole repository for an
-existing owner of the same responsibility; `dupl` does not see cross-package
-clones. A test survives when it proves behavior no other test proves.
+deletion test to each structure. For structure no accepted map records, search
+the whole repository for an existing owner of the same responsibility; `dupl`
+does not see cross-package clones. A test survives when it proves behavior no other test proves.
 Machine-enforced layout and accepted contracts are current constraints.
 Behavior and alternative organizations that keep the same responsibilities are
 out of scope.

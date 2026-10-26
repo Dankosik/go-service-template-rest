@@ -55,7 +55,7 @@ Evaluate these triggers before loading a phase owner:
 | Current or external evidence can change a named decision | [Research](spec-first-workflow/phases/research.md) |
 | Structured work lacks a ready behavior delta | [Specification](spec-first-workflow/phases/specification.md) |
 | Implementation would otherwise choose a runtime boundary, truth, material flow, failure/recovery behavior, or rollout mechanism | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) |
-| Package/file ownership is not mechanically forced by current code and accepted design | [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md) |
+| Package/file ownership is not mechanically forced by current code and accepted design; a new package, executable, or composition root never is | [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md) |
 | Structured work lacks one ready fixed unit or the smallest dependency-ordered ledger | [Planning](spec-first-workflow/phases/planning.md) |
 | One accepted implementation unit is ready and authorized | [Implementation](spec-first-workflow/phases/implementation.md) |
 
