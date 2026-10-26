@@ -52,10 +52,33 @@ candidate-caused findings. `NEEDS_PARENT` names proof or action outside reviewer
 authority. A missing fixed delivery boundary returns `REVIEW_HANDOFF_INVALID`
 through [Review Result V1](../interfaces/review-result-v1.md).
 
+## Zoom-out
+
+Use when shared Review selects a zoom-out pass. Review only structure the
+candidate adds — packages, files, exported types, interfaces, helpers, tests,
+dependencies, configuration surfaces, and parallel paths — and existing shared
+structure whose consumers it removes. For each package the diff stops
+importing somewhere, compare its importing packages before and after; one
+remaining production owner makes it a collapse candidate.
+
+Apply [Go Structural Quality](../../../.agents/skills/go-structural-quality/SKILL.md)'s
+deletion test to each structure, and search the whole repository for an
+existing owner of the same responsibility; `dupl` does not see cross-package
+clones. A test survives when it proves behavior no other test proves.
+Machine-enforced layout and accepted contracts are current constraints.
+Behavior and alternative organizations that keep the same responsibilities are
+out of scope.
+
+Return each reviewed structure as `keep` with the constraint it serves, or
+`remove` with the existing owner it duplicates or the responsibility it lacks.
+A `remove` is a structure `TASK_DEFECT` under Final Delivery.
+
 ## Delta recheck
 
-When Review selects a bounded delta recheck, falsify only the anchored findings
-and their invalidated proof. Do not reopen unaffected reasoning.
+When Review selects a bounded delta recheck, falsify only the anchored findings,
+their invalidated proof, and structure the repair added, using
+[Go Structural Quality](../../../.agents/skills/go-structural-quality/SKILL.md)'s
+deletion test. Do not reopen unaffected reasoning.
 
 ## Integrated candidate
 

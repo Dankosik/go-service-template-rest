@@ -130,7 +130,8 @@ Finish under Validation budget and report the outcome, checks actually run, and
 material limitations. Select final independent [Review](docs/spec-first-workflow/shared/review.md)
 when requested, when behavior materially affects authorization, money, data
 integrity, concurrency safety, or hard-to-reverse migration, or when a material
-correctness question remains uncertain or contested.
+correctness question remains uncertain or contested. Review also selects a
+zoom-out pass when the diff adds structure.
 
 Tasks and lanes within an active Implementation ledger stay under its owner
 through final validation. For a non-direct outcome, or when the outcome loses
