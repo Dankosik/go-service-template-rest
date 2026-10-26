@@ -67,7 +67,7 @@ pgo_candidate_fingerprint() (
 	}
 
 	snapshot_git read-tree --empty
-	for path in Makefile build/docker/Dockerfile go.mod go.sum cmd/internal cmd/service internal migrations; do
+	for path in Makefile build/docker/Dockerfile go.mod go.sum cmd/entrypoint cmd/internal cmd/service internal migrations; do
 		[[ ! -e "${path}" ]] || snapshot_git add -A -- "${path}"
 	done
 	tree="$(snapshot_git write-tree)"

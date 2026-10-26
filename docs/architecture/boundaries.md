@@ -6,7 +6,8 @@ authority.
 
 | Area | Owns | Does not own |
 | --- | --- | --- |
-| `cmd/service/main.go` | Thin process entrypoint that delegates to bootstrap. | Business logic, request handling, dependency details. |
+| `cmd/entrypoint/` | The image's one executable: selects one role per process from its entry path and calls that role's `Main`. The only importer of `cmd/<role>` packages. | Configuration, flags, signals, logging, telemetry, or any role behavior. |
+| `cmd/<role>/role.go` | Thin role process entry (`Main`) that delegates to that role's bootstrap. | Business logic, request handling, dependency details, other roles. |
 | `cmd/service/internal/bootstrap/` | Composition, startup/shutdown, dependency admission, and runtime policy. | Use-case semantics, transport contracts, persistence logic. |
 | `internal/config/` | One validated immutable config snapshot. | Feature behavior, dependency wiring, request handling. |
 | `api/openapi/service.yaml` | REST contract source of truth. | Runtime logic. |
@@ -97,11 +98,14 @@ or deployment ingress.
 ## Dependency Direction
 
 ```text
-cmd/service/main.go
-  -> cmd/service/internal/bootstrap
-     -> internal/config
-     -> internal/<feature>/*
-     -> internal/infra/*
+cmd/entrypoint
+  -> cmd/<role> (Main)
+     -> cmd/<role>/internal/bootstrap
+
+cmd/service/internal/bootstrap
+  -> internal/config
+  -> internal/<feature>/*
+  -> internal/infra/*
 
 internal/infra/http
   -> internal/openapi
@@ -114,7 +118,9 @@ internal/config, internal/infra/telemetry
   -> internal/observability/otelconfig
 ```
 
-Feature packages never depend on concrete transports. Integration packages stay
+Only `cmd/entrypoint` imports role packages, and no role package imports
+another role or `cmd/entrypoint`; each role's composition stays in its own
+`internal/bootstrap`. Feature packages never depend on concrete transports. Integration packages stay
 under `internal/infra`; bootstrap may know them because it is the composition
 root. Shared contracts start beside their real consumer and move only for
 observed reuse. Rule and logging leaves do not import config, concrete adapters,

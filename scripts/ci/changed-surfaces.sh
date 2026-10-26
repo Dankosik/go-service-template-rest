@@ -159,8 +159,10 @@ classify() {
 				mark messaging_integration
 				;;
 		esac
+		# cmd/*/main.go matters only to a derived repository still on the per-role
+		# main.go layout; drop it once template sync no longer supports that layout.
 		case "${file}" in
-			cmd/jobs-worker/*|cmd/*/main.go|cmd/*/internal/bootstrap/*|cmd/internal/runtimeopts/*|test/*process*|test/current_repository_fixture*)
+			cmd/jobs-worker/*|cmd/entrypoint/*|cmd/*/main.go|cmd/*/role.go|cmd/*/internal/bootstrap/*|cmd/internal/runtimeopts/*|test/*process*|test/current_repository_fixture*)
 				mark process_integration
 				;;
 		esac
@@ -325,6 +327,12 @@ self_test() {
 	assert_case build/docker/Dockerfile \
 		"runtime_image image_security" \
 		"go_source go_root_dependencies go_tool_dependencies go_lint_config db_integration messaging_integration process_integration integration_race"
+	assert_case cmd/entrypoint/main.go \
+		"go_source process_integration" \
+		"db_integration messaging_integration"
+	assert_case cmd/service/role.go \
+		"go_source process_integration" \
+		"db_integration messaging_integration"
 	assert_case scripts/ci/runtime-image-check.sh \
 		"shell runtime_image image_security" \
 		"go_source go_root_dependencies go_tool_dependencies go_lint_config db_integration messaging_integration process_integration integration_race"

@@ -1,6 +1,6 @@
 //go:build inbound_webhook_test_worker
 
-package main
+package jobsworker
 
 import (
 	"context"

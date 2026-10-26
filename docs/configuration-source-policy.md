@@ -39,7 +39,7 @@ Runtime config value precedence (last wins):
 An empty `APP__...` value is still an explicit final override. Empty values for required keys are not treated as absent; they flow through parsing or validation and fail fast when the key cannot be empty.
 Unknown keys from files, overlays, or `APP__...` variables fail validation in
 the full service snapshot; malformed `APP__...` names fail too. The jobs worker
-is the deliberate exception: it projects only the sections that binary
+is the deliberate exception: it projects only the sections that role
 consumes, so keys from foreign optional profiles are ignored, while unknown
 keys inside retained sections still fail.
 
@@ -92,8 +92,8 @@ variables after excluding the honored endpoint source and credential/trust
 settings already rejected by setup. The record reports names only, never values,
 and makes no false claim that SDK-owned tuning was ignored.
 
-Telemetry setup failures never block the service binary: they log a bounded
-reason and a sanitized setup error. Background binaries may choose a stricter
+Telemetry setup failures never block the service role: they log a bounded
+reason and a sanitized setup error. Background roles may choose a stricter
 policy when their own operator contract requires working metrics.
 
 Trace-export initialization is queryable rather than log-only. The startup
@@ -125,7 +125,7 @@ when `observability.pprof.enabled` is true.
 - Secret-like YAML keys may exist only as empty placeholders for schema/default visibility.
 - Non-empty secret-like YAML values are rejected at load time (`dsn`, `password`, `token`, `secret`, `authorization`, `otlp_headers`).
 - Explicit config paths come from process arguments, at the same trust level as
-  the selected binary and entrypoint. Relative paths and symlinks are accepted;
+  the selected role and entry path. Relative paths and symlinks are accepted;
   Kubernetes projected ConfigMap and Secret volumes depend on symlinks for
   atomic updates. The loader does not impose an allowed-root or file-permission
   policy. It does bound every file read to 1 MiB and rejects non-empty

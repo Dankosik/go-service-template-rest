@@ -34,7 +34,7 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 	}
 
 	binary := filepath.Join(t.TempDir(), "jobs-worker")
-	build := exec.CommandContext(ctx, "go", "build", "-tags", "inbound_webhook_test_worker", "-o", binary, "./cmd/jobs-worker")
+	build := exec.CommandContext(ctx, "go", "build", "-tags", "inbound_webhook_test_worker", "-o", binary, "./cmd/entrypoint")
 	build.Dir = ".."
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build jobs worker: %v\n%s", err, output)
@@ -150,7 +150,7 @@ func TestInboundWebhookDisclosureBoundary(t *testing.T) {
 	}
 
 	binary := filepath.Join(t.TempDir(), "jobs-worker")
-	build := exec.CommandContext(ctx, "go", "build", "-tags", "inbound_webhook_test_worker", "-o", binary, "./cmd/jobs-worker")
+	build := exec.CommandContext(ctx, "go", "build", "-tags", "inbound_webhook_test_worker", "-o", binary, "./cmd/entrypoint")
 	build.Dir = ".."
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build jobs worker: %v\n%s", err, output)

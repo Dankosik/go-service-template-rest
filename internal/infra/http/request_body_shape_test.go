@@ -184,6 +184,9 @@ func TestStreamedRequestBodyMatchesLibraryValidator(t *testing.T) {
 // second authentication of the same request would fail.
 func consumeBearer(_ context.Context, input *openapi3filter.AuthenticationInput) (reqctx.Principal, error) {
 	request := authenticatedRequest(input)
+	if request == nil {
+		return reqctx.Principal{}, errors.New("request missing")
+	}
 	credential := request.Header.Get("Authorization")
 	request.Header.Del("Authorization")
 	if credential != "Bearer token" {

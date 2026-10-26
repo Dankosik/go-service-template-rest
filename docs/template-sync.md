@@ -103,6 +103,11 @@ of the manifest. The result stays in the target working tree for ordinary
 review and commit. A service-owned skill and links for selected Claude/Qwen
 views retain their existing Git status.
 
+A derived repository whose `cmd/` and Dockerfile still build one executable
+per role follows [Runtime Executable Migration](runtime-executable-migration.md)
+before relying on the synced role build and run targets, which otherwise stop
+and name that guide.
+
 Portable validation invokes the synced helper scripts through the shared Make
 implementation. Service commands remain in `make/service.mk`; defining a second
 recipe for a standard target is drift, not an override mechanism.

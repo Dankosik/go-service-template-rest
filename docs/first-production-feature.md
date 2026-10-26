@@ -250,7 +250,8 @@ return postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 `InTx` owns begin, bounded rollback, commit, and unknown-commit
 classification. Do not begin or finish the transaction manually and do not
 hide transaction state in context. `internal/infra/postgresmigrate` belongs
-only to `cmd/migrate` and must not enter the service dependency graph.
+only to the `migrate` role (`cmd/migrate`) and must not enter the service
+role's dependency graph.
 
 When `examples/reference-service` is present, the executable reference for that
 shape is the `pgAdapter` in

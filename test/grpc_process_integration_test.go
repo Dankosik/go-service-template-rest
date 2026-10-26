@@ -48,7 +48,7 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	}
 	serviceRoot := initializedProcessServiceRoot(t, repositoryRoot)
 	binaryPath := filepath.Join(t.TempDir(), "service")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", binaryPath, "./cmd/service")
+	build := exec.CommandContext(t.Context(), "go", "build", "-o", binaryPath, "./cmd/entrypoint")
 	build.Dir = serviceRoot
 	if output, buildErr := build.CombinedOutput(); buildErr != nil {
 		t.Fatalf("build service: %v\n%s", buildErr, output)

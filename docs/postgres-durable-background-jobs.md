@@ -15,8 +15,9 @@ scheduling, concurrency, shutdown, readiness, telemetry, or operator engine.
 River owns those mechanics. The worker adds River's OpenTelemetry plugin to the
 repository's existing providers and exposes the standard process diagnostics.
 
-The reusable binary deliberately has no job kind. A derived service replaces its
-nil worker builder and registers its business workers before PostgreSQL is opened.
+The reusable jobs worker role deliberately has no job kind. A derived service
+replaces its nil worker builder and registers its business workers before
+PostgreSQL is opened.
 `jobs.max_workers` is the only jobs-specific runtime setting; the source template
 uses `0` to stay inert, and a selected deployment starts at `1` unless capacity
 evidence supports more.
@@ -35,7 +36,8 @@ personal data; OSS retention is client-wide.
 The template source retains migration `000004` as append-only legacy history;
 freshly initialized services omit it and start on `000008_river.sql`. That
 shared migration vendors River v0.44.0 migrations 001-007 into the canonical
-Goose sequence for jobs, outbox, and webhooks. Existing deployments that applied
+Goose sequence for jobs, outbox, and webhooks; `000011` records River v0.49.0
+migration 008, a no-op on PostgreSQL, in River's ledger. Existing deployments that applied
 `000004` must stop legacy production, drain every nonterminal `postgres_jobs`
 row, apply the additive River schema, and then switch producer and worker code.
 If legacy work cannot drain, do not deploy this cutover without a separately
