@@ -1025,7 +1025,7 @@ else
 	fi
 
 if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" && "${inbound_webhooks}" == "none" ]]; then
-	rm -f -- migrations/000008_river.sql
+	rm -f -- migrations/000008_river.sql migrations/000011_river_job_id_autoincrement.sql
 fi
 
 # All PostgreSQL capability profiles derive from the same SQLC package. Resolve

@@ -322,6 +322,7 @@ assert_profile() {
 	postgres)
 		test -d "${root}/internal/infra/postgres"
 		test ! -e "${root}/migrations/000008_river.sql"
+		test ! -e "${root}/migrations/000011_river_job_id_autoincrement.sql"
 		! find "${root}/migrations" -type f -name '*_postgres_outbox*.sql' -print -quit 2>/dev/null | grep -q .
 		;;
 	http-idempotency)
@@ -332,6 +333,7 @@ assert_profile() {
 		test -d "${root}/cmd/jobs-worker"
 		test ! -e "${root}/migrations/000004_postgres_jobs.sql"
 		test -e "${root}/migrations/000008_river.sql"
+		test -e "${root}/migrations/000011_river_job_id_autoincrement.sql"
 		;;
 	webhooks)
 		test -d "${root}/internal/infra/postgreswebhook"
@@ -343,6 +345,7 @@ assert_profile() {
 		test ! -e "${root}/migrations/000006_postgres_webhook_reference_repairs.sql"
 		test ! -e "${root}/migrations/000007_postgres_webhooks_retire.sql"
 		test -e "${root}/migrations/000008_river.sql"
+		test -e "${root}/migrations/000011_river_job_id_autoincrement.sql"
 		;;
 	inbound-webhooks)
 		test -d "${root}/internal/inboundwebhook/manifest"
@@ -355,6 +358,7 @@ assert_profile() {
 		test -d "${root}/internal/infra/postgresoutbox"
 		test ! -e "${root}/migrations/000001_postgres_outbox.sql"
 		test -e "${root}/migrations/000008_river.sql"
+		test -e "${root}/migrations/000011_river_job_id_autoincrement.sql"
 		! grep -R -E 'type Outbox(Event|CommitReceipt|OrderingHead|Redrife)' "${root}/internal/infra/postgres/sqlcgen" 2>/dev/null
 		;;
 	messaging)
