@@ -13,8 +13,10 @@ trap cleanup EXIT
 
 if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	tmp="$(mktemp -d -t runtime-image.XXXXXX)"
-	context="${tmp}/service"
-	mkdir -p "${context}"
+	# BuildKit resumes a context transfer by directory name and skips files whose
+	# size and mtime match. Every mtime below is pinned, so a fixed name would
+	# silently build a same-size edit (a dependency bump) from stale sources.
+	context="${tmp}"
 	(
 		cd "${ROOT_DIR}"
 		git ls-files --cached --others --exclude-standard |

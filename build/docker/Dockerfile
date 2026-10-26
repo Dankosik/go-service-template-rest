@@ -2,7 +2,7 @@
 
 ARG SOURCE_DATE_EPOCH=0
 
-FROM --platform=$BUILDPLATFORM golang:1.27.1-bookworm@sha256:69a7b9788769bec032d238959b61854e9ae87f57be9029ec04e9885fabf99195 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.3-trixie@sha256:fbb7ae40b62ff8afe31662df570d39b4f5052ac32b90dae8e60d7657a20a74f4 AS build
 
 WORKDIR /src
 
@@ -66,7 +66,7 @@ RUN --mount=type=bind,target=. \
 # profile:database-postgres:end
 RUN find /out -exec touch -d "@${SOURCE_DATE_EPOCH}" {} +
 
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99
 
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
@@ -77,19 +77,19 @@ LABEL org.opencontainers.image.version="${RAILWAY_GIT_COMMIT_SHA:-$APP_VERSION}"
       org.opencontainers.image.source="${SOURCE_URL}"
 
 WORKDIR /
-COPY --from=build /out/service /service
+COPY --link --from=build /out/service /service
 # profile:messaging-nats-jetstream:start
-COPY --from=build /out/worker /worker
+COPY --link --from=build /out/worker /worker
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
-COPY --from=build /out/outbox-relay /outbox-relay
+COPY --link --from=build /out/outbox-relay /outbox-relay
 # profile:outbox-postgres:end
 # profile:jobs-postgres:start
-COPY --from=build /out/jobs-worker /jobs-worker
+COPY --link --from=build /out/jobs-worker /jobs-worker
 # profile:jobs-postgres:end
 # profile:database-postgres:start
-COPY --from=build /out/migrate /migrate
-COPY --from=build /out/migrations /migrations
+COPY --link --from=build /out/migrate /migrate
+COPY --link --from=build /out/migrations /migrations
 # profile:database-postgres:end
 
 EXPOSE 8080
