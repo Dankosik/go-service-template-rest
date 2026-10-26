@@ -364,7 +364,8 @@ unclassified paths, runs only matching leaves, and exposes one always-reported
 tool-module, build, and lint caches; the main quality owner refreshes them.
 Generated Go, compose, publication metadata, and the messaging/outbox/webhook
 race owners route independently, and image-only work skips Go setup.
-`codeql.yml` uses the same exact-diff classifier and restores downloaded modules
-without restoring the build cache CodeQL must observe. `cd.yml` waits for
+`codeql.yml` uses the same exact-diff classifier, restores the module and build
+caches CI saves, and moves the module cache outside the checkout so CodeQL does
+not report dependency sources as repository code. `cd.yml` waits for
 exact-SHA CI and CodeQL before publishing through the digest-bound
 `publish-image` action. GitHub Rulesets remain external repository policy.
