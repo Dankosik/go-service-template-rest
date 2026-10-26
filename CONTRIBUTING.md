@@ -94,7 +94,8 @@ matches the claim.
 
 For Railway policy changes:
 
-- keep `railway.toml` non-secret and PR-reviewed;
+- keep Railway service settings non-secret and recorded in
+  `docs/railway-deployment-profile.md` in the same PR;
 - keep the canonical build path in `build/docker/Dockerfile`;
 - retain applicable CI/release gates and explicitly requested migration,
   runtime-image, and deployment verification;

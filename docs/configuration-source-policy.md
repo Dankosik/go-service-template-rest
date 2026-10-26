@@ -161,7 +161,7 @@ when `observability.pprof.enabled` is true.
   | Docker | `docker run --stop-timeout 45` / `docker stop --time 45` |
   | Compose | `stop_grace_period: 45s` |
   | ECS | `stopTimeout: 45` |
-  | Railway | `drainingSeconds` in `railway.toml` (already set to `45`) |
+  | Railway | `drainingSeconds` service setting (`45` in the deployment profile) |
 
   Changing `http.shutdown_timeout` changes this number; re-derive it and re-run
   the runtime-image shutdown check. See

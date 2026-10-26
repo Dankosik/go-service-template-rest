@@ -16,9 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  actions: read
   contents: read
-  security-events: write
 
 env:
   GOTOOLCHAIN: local
@@ -60,19 +58,23 @@ jobs:
     name: Analyze (actions)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           languages: actions
           build-mode: none
           queries: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && 'security-extended' || 'security-and-quality' }}
       - name: Analyze
-        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
 
   analyze-go:
     needs: changes
@@ -80,6 +82,10 @@ jobs:
     name: Analyze (go)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,8 +113,18 @@ jobs:
           restore-keys: |
             go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
             go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
+      - name: Move Go modules outside the source root
+        # The restore path must match the one CI saves, but CodeQL reports
+        # every Go file under the checkout, dependency sources included.
+        run: |
+          set -euo pipefail
+          target="${RUNNER_TEMP}/gomod"
+          if [[ -d "${GOMODCACHE}" ]]; then
+            mv "${GOMODCACHE}" "${target}"
+          fi
+          echo "GOMODCACHE=${target}" >>"${GITHUB_ENV}"
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
           languages: go
           build-mode: manual
@@ -118,7 +134,7 @@ jobs:
           GOFLAGS: -mod=readonly
         run: bash ./scripts/ci/measure.sh codeql-go-build -- go build ./...
       - name: Analyze
-        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
 
   codeql-required:
     if: always()

@@ -72,7 +72,6 @@ for reserved in \
 	docs/railway-deployment-profile.md \
 	docs/repo-architecture.md \
 	make/service.mk \
-	railway.toml \
 	test/README.md; do
 	contains_path "${reserved}" && fail "${reserved} is repository-owned"
 done

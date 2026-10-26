@@ -19,9 +19,9 @@ Deployment configuration does not change. The image keeps the same entry
 paths: `/service` (also the image `ENTRYPOINT`), and, when that role is
 present, `/worker`, `/jobs-worker`, `/outbox-relay`, and `/migrate`. Each takes
 the same `-config` and `-config-overlay` arguments, environment, and signals,
-and keeps its exit statuses, output, and drain behavior. `railway.toml`,
-Kubernetes `command` values, `docker run --entrypoint`, and the
-`preDeployCommand = ["/migrate"]` pre-deploy need no edit.
+and keeps its exit statuses, output, and drain behavior. Railway service
+settings, including the `/migrate` pre-deploy command, Kubernetes `command`
+values, and `docker run --entrypoint` need no edit.
 
 The image shrinks because every role used to carry its own copy of the Go
 runtime, the shared internal packages, and their dependencies. Now one file,
