@@ -1,6 +1,7 @@
 # Ownership Map V1
 
-Return two reconciled sections.
+Return reconciled Responsibilities and Files sections, plus Reused
+Capabilities and Consumer Changes when they have rows.
 
 Describe each responsibility, its constraints, and evidence once in
 Responsibilities. Files references those entries by unambiguous name or anchor
@@ -27,6 +28,31 @@ One row per added or materially changed Go file:
 ```text
 path | responsibilities | one present reason to exist | declarations/visibility | call-path role | lifecycle/error ownership | allowed dependencies | forbidden responsibilities
 ```
+
+## Reused Capabilities
+
+One row per capability that a new package, executable, composition root, or
+test fixture needs and an existing owner already provides, such as
+configuration loading, logging, telemetry, lifecycle, or fixtures:
+
+```text
+capability | new consumer | existing owner | reuse or shared owner | dependency rule forbidding direct reuse | extraction dependency
+```
+
+Reuse the existing owner. When a dependency rule forbids direct reuse, name
+the shared owner both consumers import; its extraction is a Planning
+dependency. A copy is not a placement.
+
+## Consumer Changes
+
+One row per existing shared package whose importing packages the change
+reduces:
+
+```text
+package | importing packages before -> after | keep with current constraint, or collapse into remaining owner
+```
+
+One remaining production owner makes the package a collapse candidate.
 
 Every responsibility appears exactly once and every file maps back to a present
 responsibility. Use an evidence-bounded deterministic placement rule only when

@@ -24,8 +24,14 @@ Passing tests do not replace this final review. Its evidence scope stays within
 the [Evidence Contract](evidence-contract.md#local-completion): a review trigger
 does not authorize extra infrastructure or new mandatory runtime checks.
 
-Otherwise the delivery owner completes final validation without a separate
-review report. Record the final disposition in the existing Completion result.
+Select one fresh zoom-out pass for the final delivery candidate when its diff
+adds a package, file, exported identifier, interface, dependency,
+configuration surface, or parallel path, or removes a consumer of shared
+structure. When final review is also selected, that reviewer applies the
+zoom-out lens in the same result instead of a second pass.
+
+When neither is selected, the delivery owner completes final validation without
+a separate review report. Record the final disposition in the existing Completion result.
 Resolve outstanding blocking findings before acceptance. Reuse current evidence
 and recheck only repairs and invalidated reasoning; task count does not add
 review cycles.
@@ -38,8 +44,11 @@ intermediate self-review or reviewer.
 ## Lifecycle
 
 The owner fixes one candidate, its authoritative inputs, phase adapter, and
-evidence boundary. The reviewer keeps that boundary read-only, attempts to
-falsify it, and returns [Review Result V1](../interfaces/review-result-v1.md).
+evidence boundary. The review brief carries only these and omits the author's
+rationale, self-assessment, and expected verdict; accepted decisions recorded
+in authoritative artifacts remain inputs. The reviewer keeps that boundary
+read-only, attempts to falsify it, and returns [Review Result
+V1](../interfaces/review-result-v1.md).
 Review never owns repair, integration, acceptance, or movement. It reuses
 available evidence and investigates concrete defects within that boundary,
 rather than starting a second verification project. Missing optional proof and
@@ -54,7 +63,15 @@ Use a bounded delta recheck by the same reviewer when repair addresses only
 that reviewer's anchored findings, leaves Outcome, Boundary, accepted inputs,
 interfaces, and risk surface unchanged, and introduces no unrelated behavior or
 writable owner. The reviewer remains read-only and does not prescribe or
-perform the repair.
+perform the repair. The recheck also falsifies the repair itself: each
+requirement, component, mechanism, or code structure it adds must be needed to
+close those findings or meet another current constraint, or that addition is a
+finding.
+
+The owner either repairs a blocking finding or contests it with anchored
+evidence. A contested finding closes only when that reviewer's delta recheck
+withdraws it or a fresh `adjudicator-agent` resolves the conflict; the owner
+never dismisses it alone.
 
 For Implementation, retain that reviewer across bounded repairs while findings
 close or new discriminating evidence advances the diagnosis. For repeated
@@ -92,6 +109,7 @@ The phase adapter owns lenses and threshold, while the artifact, ledger, or
 | Planning result | [Task Review / Readiness](../phases/task-review-readiness.md) |
 | Single-unit final delivery or explicit standalone implementation review | [Implementation Review](../phases/implementation-review.md) |
 | Integrated implementation candidate | [Implementation Review](../phases/implementation-review.md#integrated-candidate) |
+| Final delivery whose diff adds structure | [Implementation Review](../phases/implementation-review.md#zoom-out) |
 
 A phase-owned complementary panel replaces the default reviewer only when its
 trigger partitions one fixed candidate into named non-overlapping lenses and

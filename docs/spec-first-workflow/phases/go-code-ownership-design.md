@@ -22,8 +22,9 @@ Review](../rubrics/go-ownership-review.md) only when its conditional trigger is
 present. A broader shared [Review](../shared/review.md) routes through Technical
 Design Review and consumes any current panel receipts.
 
-Done when every responsibility has one owner, every changed file one present
-reason, the import graph is acyclic, and Planning can preserve placement without
+Done when every responsibility and reused capability has one owner and no
+copy, every changed file one present reason, every reduced shared package a
+disposition, the import graph is acyclic, and Planning can preserve placement without
 choosing ownership, dependency/composition, generated authority, lifecycle,
 cleanup, proof location, or exported surface. Reopen System Design when
 placement cannot preserve mechanism/truth; reopen Specification when it cannot
