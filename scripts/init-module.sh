@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 PROFILE_ROOTS=(
-	README.md Makefile railway.toml .gitleaks.toml .golangci.yml
+	README.md Makefile .gitleaks.toml .golangci.yml
 	api build cmd docs env internal migrations test .github scripts/dev scripts/ci
 )
 

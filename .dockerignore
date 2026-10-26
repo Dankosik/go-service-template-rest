@@ -30,7 +30,6 @@ test
 tools
 LICENSE
 Makefile
-railway.toml
 template-owned.paths
 **/*_test.go
 **/testdata

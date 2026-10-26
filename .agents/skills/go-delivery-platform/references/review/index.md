@@ -6,4 +6,4 @@
 | Migration files, `preDeployCommand`, overlap/draining windows, backfill, or rollback-class changes. | [migration-rollout-window.md](../decision/migration-rollout-window.md) |
 | Publish conditions, `workflow_run` guards, workflow permissions, signing, attestation, or SBOM changes. | [release-publication-trust.md](../decision/release-publication-trust.md) |
 
-A changed Dockerfile, generated artifact, or `railway.toml` knob is reviewed against the file itself and the gate that enforces it; no reference stands between them.
+A changed Dockerfile or generated artifact is reviewed against the file itself and the gate that enforces it; a changed Railway service setting is reviewed against `docs/railway-deployment-profile.md` and the live service settings. No reference stands between them.

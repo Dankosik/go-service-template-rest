@@ -59,11 +59,12 @@ const httpTerminalResponseReserve = time.Second
 func httpDefaults() map[string]any {
 	return map[string]any{
 		"http.addr": ":8080",
-		// grace_period matches railway.toml's drainingSeconds, the platform this
-		// repository ships a deployment profile for. Kubernetes grants 30s by
-		// default, so a deployment there sets both this and shutdown_timeout;
-		// leaving them mismatched is what validateShutdownGraceBudget rejects at
-		// startup rather than letting a SIGKILL discover it.
+		// grace_period matches the drainingSeconds service setting in
+		// docs/railway-deployment-profile.md, the platform this repository ships
+		// a deployment profile for. Kubernetes grants 30s by default, so a
+		// deployment there sets both this and shutdown_timeout; leaving them
+		// mismatched is what validateShutdownGraceBudget rejects at startup
+		// rather than letting a SIGKILL discover it.
 		"http.grace_period": "45s",
 		// shutdown_timeout bounds the drain only. It is 25s rather than the whole
 		// grace period because the teardown after the drain — diagnostics,
