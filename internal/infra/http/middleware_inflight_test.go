@@ -37,23 +37,46 @@ func (failingMeter) Int64Counter(string, ...metric.Int64CounterOption) (metric.I
 	return nil, errors.New("instrument failed")
 }
 
-func TestServerLoadPublishesAdmissionMetrics(t *testing.T) {
+// An operator reads saturation from the admission instruments: a request in
+// the handler is active load, and a refused one is counted as shed.
+func TestMaxInFlightPublishesAdmissionMetrics(t *testing.T) {
 	t.Parallel()
 
 	reader, provider := telemetrytest.NewManualMeterProvider(t)
-	load := newServerLoad(provider)
-	release := load.Admitted(t.Context())
-	load.Shed(t.Context())
+	release := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	handler := MaxInFlight(1, newServerLoad(provider), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		entered <- struct{}{}
+		<-release
+		w.WriteHeader(http.StatusNoContent)
+	}))
 
-	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, activeRequestsInstrument); got != 1 {
-		t.Fatalf("%s = %d, want 1", activeRequestsInstrument, got)
+	releaseHandler := sync.OnceFunc(func() { close(release) })
+	held := make(chan *httptest.ResponseRecorder, 1)
+	var requests sync.WaitGroup
+	t.Cleanup(func() {
+		releaseHandler()
+		requests.Wait()
+	})
+	requests.Go(func() { held <- doRequest(handler, http.MethodGet, "/work") })
+	waittest.ReceiveSignal(t, entered, 2*time.Second, "first request to reach the handler")
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, "http.server.active_requests"); got != 1 {
+		t.Fatalf("http.server.active_requests while held = %d, want 1", got)
 	}
-	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, shedRequestsInstrument); got != 1 {
-		t.Fatalf("%s = %d, want 1", shedRequestsInstrument, got)
+
+	if resp := doRequest(handler, http.MethodGet, "/work"); resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("second request status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
 	}
-	release()
-	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, activeRequestsInstrument); got != 0 {
-		t.Fatalf("%s after release = %d, want 0", activeRequestsInstrument, got)
+
+	releaseHandler()
+	if resp := waittest.Receive(t, held, 2*time.Second, "held request to finish"); resp.Code != http.StatusNoContent {
+		t.Fatalf("held request status = %d, want %d", resp.Code, http.StatusNoContent)
+	}
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, "http.server.active_requests"); got != 0 {
+		t.Fatalf("http.server.active_requests after release = %d, want 0", got)
+	}
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, "http.server.shed_requests"); got != 1 {
+		t.Fatalf("http.server.shed_requests = %d, want 1", got)
 	}
 }
 

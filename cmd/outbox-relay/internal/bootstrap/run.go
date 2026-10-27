@@ -186,7 +186,7 @@ func runLifecycle(
 		startupCtx,
 		cfg.Observability.Metrics.Addr,
 		"outbox",
-		func() bool { return relayReady(admitted.Load(), messaging.Ready(), readiness.Cached()) },
+		func() bool { return admitted.Load() && messaging.Ready() && readiness.Cached() == nil },
 		metrics,
 		cfg.Observability.Pprof.Enabled,
 	)
@@ -285,10 +285,6 @@ type messagingRuntime interface {
 	Run(ctx context.Context) error
 	StopPublish()
 	Shutdown(ctx context.Context) error
-}
-
-func relayReady(admitted, messagingReady bool, dependencyErr error) bool {
-	return admitted && messagingReady && dependencyErr == nil
 }
 
 type riverRuntime interface {

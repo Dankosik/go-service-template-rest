@@ -67,6 +67,24 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	}
 	assertOutboxAtomicCounts(t, pool, "domain-1", event.ID, 1, 1)
 
+	// A replayed producer must not publish twice once the first job has
+	// finished, however it finished. River's default uniqueness releases the
+	// identity for cancelled and discarded jobs, so those are the decisive rows.
+	for _, finished := range []string{"completed", "cancelled", "discarded"} {
+		if _, err := pool.Exec(ctx,
+			"UPDATE river_job SET state = $2::river_job_state, finalized_at = now() WHERE args->>'id' = $1",
+			event.ID, finished,
+		); err != nil {
+			t.Fatalf("finish job as %s: %v", finished, err)
+		}
+		if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+			return appender.Append(ctx, tx, event)
+		}); err != nil {
+			t.Fatalf("repeat event after %s job: %v", finished, err)
+		}
+		assertOutboxAtomicCounts(t, pool, "domain-1", event.ID, 1, 1)
+	}
+
 	conflict, err := kind.New(
 		event.ID,
 		event.OccurredAt,

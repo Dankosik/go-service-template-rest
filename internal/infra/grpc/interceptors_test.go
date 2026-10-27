@@ -2,13 +2,12 @@ package grpcx
 
 import (
 	"context"
-	"log/slog"
-	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	"buf.build/go/protovalidate"
 	"github.com/example/go-service-template-rest/internal/failure"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,63 +15,103 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func TestUnaryInterceptorOrder(t *testing.T) {
-	validator, err := protovalidate.New()
-	if err != nil {
-		t.Fatalf("protovalidate.New() error = %v", err)
-	}
-	messageType := validationMessageType(t)
-	invalid := messageType.New().Interface()
-	invalid.ProtoReflect().Set(
-		invalid.ProtoReflect().Descriptor().Fields().ByName("value"),
-		protoreflect.ValueOfString("invalid"),
-	)
+// The validated method only this file drives: its request is the dynamic
+// message from validationMessageType, which grpctest's typed descriptor cannot
+// decode into.
+const (
+	validatedServiceName     = "grpcx.validation.test.Service"
+	validatedUnaryFullMethod = "/" + validatedServiceName + "/Call"
+)
 
-	policyCalled := false
-	handlerCalled := false
+// A caller that sends no deadline still hands a supplied policy a bounded
+// context: the server's unary budget is installed before the policy runs.
+func TestUnaryPolicySeesTheServerDeadline(t *testing.T) {
+	cfg := testServerConfig()
+	cfg.unaryTimeout = time.Hour
+
+	remaining := make(chan time.Duration, 1)
 	policy := func(
 		ctx context.Context,
 		request any,
 		_ *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (any, error) {
-		policyCalled = true
-		if _, ok := ctx.Deadline(); !ok {
-			t.Fatal("supplied policy ran before the unary deadline")
-		}
+		// No deadline reads as the zero time, which is far in the past.
+		deadline, _ := ctx.Deadline()
+		remaining <- time.Until(deadline)
 		return handler(ctx, request)
 	}
-	chain := unaryChain(
-		slog.New(slog.DiscardHandler),
-		newAdmissionPolicy(1, 1, serverLoad{}, newRPCDrain()),
-		time.Minute,
-		[]grpc.UnaryServerInterceptor{policy},
-		validator,
-		handlerErrorBoundary(slog.New(slog.DiscardHandler), nil),
-	)
-	_, err = invokeUnaryInterceptors(t.Context(), invalid, chain, func(context.Context, any) (any, error) {
-		handlerCalled = true
-		return &emptypb.Empty{}, nil
-	})
-	assertValidationStatus(t, err)
-	if !policyCalled || handlerCalled {
-		t.Fatalf("policy/handler calls = %t/%t, want true/false", policyCalled, handlerCalled)
+	register := func(registrar grpc.ServiceRegistrar) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+				return &emptypb.Empty{}, nil
+			})
 	}
+	_, connection := startTestServerWithOptions(t, cfg, register, Options{
+		UnaryPolicy: []grpc.UnaryServerInterceptor{policy},
+	})
 
-	panickingPolicy := func(context.Context, any, *grpc.UnaryServerInfo, grpc.UnaryHandler) (any, error) {
+	if err := connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{}); err != nil {
+		t.Fatalf("Invoke() error = %v", err)
+	}
+	got := waittest.Receive(t, remaining, 5*time.Second, "policy deadline observation")
+	if got <= 0 || got > time.Hour {
+		t.Fatalf("policy deadline remaining = %s, want within the 1h server budget", got)
+	}
+}
+
+// Request validation runs after a supplied policy and before the handler: the
+// policy still sees an invalid request, and the caller gets the validation
+// status without the handler running.
+func TestUnaryPolicyRunsBeforeValidation(t *testing.T) {
+	messageType := validationMessageType(t)
+	invalid := messageType.New().Interface()
+	invalid.ProtoReflect().Set(
+		invalid.ProtoReflect().Descriptor().Fields().ByName("value"),
+		protoreflect.ValueOfString(rejectedValidationValue),
+	)
+
+	var policyCalled, handlerCalled atomic.Bool
+	policy := func(
+		ctx context.Context,
+		request any,
+		_ *grpc.UnaryServerInfo,
+		handler grpc.UnaryHandler,
+	) (any, error) {
+		policyCalled.Store(true)
+		return handler(ctx, request)
+	}
+	register := func(registrar grpc.ServiceRegistrar) {
+		registerValidatedUnaryService(registrar, messageType, func() {
+			handlerCalled.Store(true)
+		})
+	}
+	_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
+		UnaryPolicy: []grpc.UnaryServerInterceptor{policy},
+	})
+
+	err := connection.Invoke(t.Context(), validatedUnaryFullMethod, invalid, &emptypb.Empty{})
+	assertValidationStatus(t, err)
+	if !policyCalled.Load() || handlerCalled.Load() {
+		t.Fatalf("policy/handler calls = %t/%t, want true/false", policyCalled.Load(), handlerCalled.Load())
+	}
+}
+
+func TestPanickingUnaryPolicyIsSanitized(t *testing.T) {
+	panicking := func(context.Context, any, *grpc.UnaryServerInfo, grpc.UnaryHandler) (any, error) {
 		panic("policy panic")
 	}
-	chain = unaryChain(
-		slog.New(slog.DiscardHandler),
-		newAdmissionPolicy(1, 1, serverLoad{}, newRPCDrain()),
-		time.Minute,
-		[]grpc.UnaryServerInterceptor{panickingPolicy},
-		validator,
-		handlerErrorBoundary(slog.New(slog.DiscardHandler), nil),
-	)
-	_, err = invokeUnaryInterceptors(t.Context(), &emptypb.Empty{}, chain, func(context.Context, any) (any, error) {
-		return &emptypb.Empty{}, nil
+	register := func(registrar grpc.ServiceRegistrar) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+				return &emptypb.Empty{}, nil
+			})
+	}
+	_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
+		UnaryPolicy: []grpc.UnaryServerInterceptor{panicking},
 	})
+
+	err := connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
 	assertSanitizedInternal(t, err)
 }
 
@@ -110,18 +149,34 @@ func assertSanitizedInternal(t *testing.T, err error) {
 	}
 }
 
-func invokeUnaryInterceptors(
-	ctx context.Context,
-	request any,
-	interceptors []grpc.UnaryServerInterceptor,
-	handler grpc.UnaryHandler,
-) (any, error) {
-	info := &grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod}
-	for _, interceptor := range slices.Backward(interceptors) {
-		next := handler
-		handler = func(ctx context.Context, request any) (any, error) {
-			return interceptor(ctx, request, info, next)
-		}
+// registerValidatedUnaryService registers validatedUnaryFullMethod with a
+// request of messageType, so the server's real validator sees the field rule.
+// called runs when the handler is entered.
+func registerValidatedUnaryService(
+	registrar grpc.ServiceRegistrar,
+	messageType protoreflect.MessageType,
+	called func(),
+) {
+	handler := func(context.Context, any) (any, error) {
+		called()
+		return &emptypb.Empty{}, nil
 	}
-	return handler(ctx, request)
+	registrar.RegisterService(&grpc.ServiceDesc{
+		ServiceName: validatedServiceName,
+		Methods: []grpc.MethodDesc{{
+			MethodName: "Call",
+			Handler: func(
+				_ any,
+				ctx context.Context,
+				decode func(any) error,
+				interceptor grpc.UnaryServerInterceptor,
+			) (any, error) {
+				request := messageType.New().Interface()
+				if err := decode(request); err != nil {
+					return nil, err
+				}
+				return interceptor(ctx, request, &grpc.UnaryServerInfo{FullMethod: validatedUnaryFullMethod}, handler)
+			},
+		}},
+	}, nil)
 }

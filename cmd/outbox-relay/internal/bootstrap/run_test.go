@@ -5,24 +5,27 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/riverqueue/river"
 )
 
 type lifecycleMessaging struct {
-	ready            bool
+	ready            atomic.Bool
 	stopPublishCalls int
 	shutdownCalls    int
 }
 
 func (*lifecycleMessaging) Name() string                { return "messaging" }
 func (*lifecycleMessaging) Check(context.Context) error { return nil }
-func (m *lifecycleMessaging) Ready() bool               { return m.ready }
+func (m *lifecycleMessaging) Ready() bool               { return m.ready.Load() }
 func (*lifecycleMessaging) Run(ctx context.Context) error {
 	<-ctx.Done()
 	return fmt.Errorf("run messaging fixture: %w", ctx.Err())
@@ -101,15 +104,64 @@ func TestValidateRuntimeConfig(t *testing.T) {
 	}
 }
 
+// TestRelayReadinessRequiresImmediateMessagingReadiness proves the readiness
+// endpoint reads the live messaging connection on every request: a NATS
+// disconnect turns the next probe 503 without waiting for a dependency refresh,
+// which here is an hour away.
 func TestRelayReadinessRequiresImmediateMessagingReadiness(t *testing.T) {
-	t.Parallel()
+	riverClient := &lifecycleRiver{started: make(chan struct{}), stopped: make(chan struct{})}
+	messaging := &lifecycleMessaging{}
+	messaging.ready.Store(true)
+	address := waittest.FreeTCPAddr(t, "outbox diagnostics")
+	cfg := config.Config{}
+	cfg.HTTP.GracePeriod = time.Second
+	cfg.HTTP.ReadinessTimeout = 100 * time.Millisecond
+	cfg.Health.RefreshInterval = time.Hour
+	cfg.Health.FailureThreshold = 1
+	cfg.Observability.Metrics.Addr = address
 
-	if relayReady(true, false, nil) {
-		t.Fatal("relay remained ready after messaging disconnected")
+	signalCtx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	result := make(chan error, 1)
+	go func() {
+		_, _, err := runLifecycle(
+			signalCtx, t.Context(), cfg, slog.New(slog.DiscardHandler), telemetry.NewMetrics(),
+			healthyPostgres{}, messaging, riverClient,
+		)
+		result <- err
+	}()
+	waittest.ReceiveSignal(t, riverClient.started, 5*time.Second, "River start")
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		status, err := readinessStatus(ctx, address)
+		return err == nil && status == http.StatusOK
+	}, "outbox /health/ready to report 200")
+
+	messaging.ready.Store(false)
+	status, err := readinessStatus(t.Context(), address)
+	if err != nil {
+		t.Fatalf("GET /health/ready after messaging disconnected: %v", err)
 	}
-	if !relayReady(true, true, nil) {
-		t.Fatal("relay was not ready after runtime, messaging, and dependencies were ready")
+	if status != http.StatusServiceUnavailable {
+		t.Fatalf("GET /health/ready after messaging disconnected = %d, want 503", status)
 	}
+
+	cancel()
+	if err := waittest.Receive(t, result, 5*time.Second, "runLifecycle to return"); err != nil {
+		t.Fatalf("runLifecycle() error = %v", err)
+	}
+}
+
+func readinessStatus(ctx context.Context, address string) (int, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+address+"/health/ready", http.NoBody)
+	if err != nil {
+		return 0, fmt.Errorf("build readiness request: %w", err)
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return 0, fmt.Errorf("get readiness: %w", err)
+	}
+	_ = response.Body.Close()
+	return response.StatusCode, nil
 }
 
 func TestRunLifecycleDoesNotCloseMessagingBeforeRiverStops(t *testing.T) {
@@ -117,7 +169,8 @@ func TestRunLifecycleDoesNotCloseMessagingBeforeRiverStops(t *testing.T) {
 	riverClient := &lifecycleRiver{
 		started: make(chan struct{}), stopped: make(chan struct{}), stopErr: stopErr,
 	}
-	messaging := &lifecycleMessaging{ready: true}
+	messaging := &lifecycleMessaging{}
+	messaging.ready.Store(true)
 	cfg := config.Config{}
 	cfg.HTTP.GracePeriod = time.Second
 	cfg.HTTP.ReadinessTimeout = 100 * time.Millisecond

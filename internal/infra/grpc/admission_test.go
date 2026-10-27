@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -43,42 +45,85 @@ func (failingMeter) Int64Counter(string, ...metric.Int64CounterOption) (metric.I
 	return nil, errors.New("instrument failed")
 }
 
-func TestAdmissionPolicyPublishesAdmissionMetrics(t *testing.T) {
-	t.Parallel()
+// An operator reads saturation from the admission instruments: a held business
+// RPC is active load, and each refusal from either budget is counted where the
+// operator looks for it.
+func TestServerPublishesAdmissionMetrics(t *testing.T) {
+	cfg := testServerConfig()
+	cfg.maxConcurrentRPCs = 1
+	cfg.maxConcurrentHealthRPCs = 1
 
+	occupied := make(chan struct{})
+	release := make(chan struct{})
+	register := func(registrar grpc.ServiceRegistrar) {
+		registerStreamTestService(registrar, admissionStreamFullMethod,
+			func(stream grpc.ServerStream) error {
+				var request emptypb.Empty
+				if err := stream.RecvMsg(&request); err != nil {
+					return fmt.Errorf("receive admission stream request: %w", err)
+				}
+				close(occupied)
+				<-release
+				return nil
+			})
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+				return &emptypb.Empty{}, nil
+			})
+	}
 	reader, provider := telemetrytest.NewManualMeterProvider(t)
-	policy := newAdmissionPolicy(1, 1, newServerLoad(provider), newRPCDrain())
-	noop := func(context.Context) error { return nil }
+	_, connection := startTestServerWithOptions(t, cfg, register, Options{MeterProvider: provider})
+	releaseHandler := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(releaseHandler)
 
-	err := policy.business.around(t.Context(), func(ctx context.Context) error {
-		if got := telemetrytest.Int64SumValue(ctx, t, reader, activeRPCsInstrument); got != 1 {
-			t.Fatalf("%s while admitted = %d, want 1", activeRPCsInstrument, got)
-		}
-		assertStatusCode(t, policy.business.around(ctx, noop), codes.ResourceExhausted)
-		return nil
-	})
+	stream, err := connection.NewStream(
+		t.Context(),
+		&grpc.StreamDesc{ServerStreams: true},
+		admissionStreamFullMethod,
+	)
 	if err != nil {
-		t.Fatalf("business around: %v", err)
+		t.Fatalf("ClientConn.NewStream() error = %v", err)
 	}
-	err = policy.health.around(t.Context(), func(ctx context.Context) error {
-		if got := telemetrytest.Int64SumValue(ctx, t, reader, activeRPCsInstrument); got != 0 {
-			t.Fatalf("%s while health admitted = %d, want 0", activeRPCsInstrument, got)
-		}
-		assertStatusCode(t, policy.health.around(ctx, noop), codes.ResourceExhausted)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("health around: %v", err)
+	if err := stream.SendMsg(&emptypb.Empty{}); err != nil {
+		t.Fatalf("ClientStream.SendMsg() error = %v", err)
+	}
+	waittest.ReceiveSignal(t, occupied, 5*time.Second, "streaming handler admission slot")
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, "rpc.server.active_requests"); got != 1 {
+		t.Fatalf("rpc.server.active_requests while held = %d, want 1", got)
 	}
 
-	for name, want := range map[string]int64{
-		activeRPCsInstrument:     0,
-		shedRPCsInstrument:       1,
-		healthShedRPCsInstrument: 1,
-	} {
-		if got := telemetrytest.Int64SumValue(t.Context(), t, reader, name); got != want {
-			t.Fatalf("%s = %d, want %d", name, got, want)
-		}
+	err = connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
+	assertStatusCode(t, err, codes.ResourceExhausted)
+
+	// One standing watch fills the health budget; the second is refused.
+	watchCtx, cancelWatch := context.WithCancel(t.Context())
+	t.Cleanup(cancelWatch)
+	health := healthgrpc.NewHealthClient(connection)
+	held, err := health.Watch(watchCtx, &healthgrpc.HealthCheckRequest{})
+	if err != nil {
+		t.Fatalf("Health.Watch() error = %v", err)
+	}
+	if _, err := held.Recv(); err != nil {
+		t.Fatalf("Health.Watch() first status = %v", err)
+	}
+	refused, err := health.Watch(watchCtx, &healthgrpc.HealthCheckRequest{})
+	if err == nil {
+		_, err = refused.Recv()
+	}
+	assertStatusCode(t, err, codes.ResourceExhausted)
+
+	releaseHandler()
+	if err := stream.RecvMsg(&emptypb.Empty{}); !errors.Is(err, io.EOF) {
+		t.Fatalf("held stream end = %v, want io.EOF", err)
+	}
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, "rpc.server.active_requests"); got != 0 {
+		t.Fatalf("rpc.server.active_requests after release = %d, want 0", got)
+	}
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, "rpc.server.shed_requests"); got != 1 {
+		t.Fatalf("rpc.server.shed_requests = %d, want 1", got)
+	}
+	if got := telemetrytest.Int64SumValue(t.Context(), t, reader, "rpc.server.health.shed_requests"); got != 1 {
+		t.Fatalf("rpc.server.health.shed_requests = %d, want 1", got)
 	}
 }
 
