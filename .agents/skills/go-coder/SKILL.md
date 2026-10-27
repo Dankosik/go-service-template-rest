@@ -36,7 +36,8 @@ whose removal preserves accepted behavior and current
 Reuse adequate coverage; when adding a test, state why it rejects missing or
 wrong behavior. Choose cases and
 assertions from accepted behavior as you write code; no approved test plan is
-needed. Consult `go-test-strategy` only for a non-obvious testing
+needed. Every added or changed test follows the [test
+shape](../go-test-implementation/SKILL.md#test-shape). Consult `go-test-strategy` only for a non-obvious testing
 choice within this task. Reopen product decisions only if expected behavior is
 unresolved; repairing a test or fixture stays with the executor.
 

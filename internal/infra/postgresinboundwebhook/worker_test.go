@@ -38,14 +38,11 @@ func (s *memoryStore) MarkHandled(context.Context, string) (bool, error) {
 		return false, errors.New("handled update failed")
 	}
 	s.handled++
-	s.receipt.State = "handled"
-	s.receipt.Payload = nil
 	return true, nil
 }
 
 func (s *memoryStore) MarkQuarantined(_ context.Context, _, _ string) (bool, error) {
 	s.quarantined++
-	s.receipt.State = "quarantined"
 	return true, nil
 }
 
@@ -55,7 +52,6 @@ func (s *memoryStore) MarkFailed(context.Context, string) (bool, error) {
 		return false, errors.New("terminal update failed")
 	}
 	s.failed++
-	s.receipt.State = "failed"
 	return true, nil
 }
 
@@ -103,8 +99,8 @@ func TestInboundWebhookQuarantine(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if handled != 0 || store.quarantined != 1 || store.receipt.Payload == nil {
-		t.Fatalf("handled=%d quarantined=%d payload=%v", handled, store.quarantined, store.receipt.Payload)
+	if handled != 0 || store.quarantined != 1 {
+		t.Fatalf("handled=%d quarantined=%d", handled, store.quarantined)
 	}
 
 	store.receipt.State = "quarantined"
@@ -130,8 +126,8 @@ func TestInboundWebhookHandlerDecodeRejectionRetries(t *testing.T) {
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 1, MaxAttempts: 25},
 	})
-	if !errors.Is(err, errHandlerFailed) || store.quarantined != 0 || store.receipt.State != "pending" {
-		t.Fatalf("err=%v quarantined=%d outcome=%s", err, store.quarantined, store.receipt.State)
+	if !errors.Is(err, errHandlerFailed) || store.quarantined != 0 {
+		t.Fatalf("err=%v quarantined=%d", err, store.quarantined)
 	}
 }
 
@@ -147,8 +143,8 @@ func TestInboundWebhookMissingBindingSnoozesAtAttemptLimit(t *testing.T) {
 		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
 		JobRow: &rivertype.JobRow{Attempt: 3, MaxAttempts: 3},
 	})
-	if _, ok := errors.AsType[*rivertype.JobSnoozeError](err); !ok || store.failed != 0 || store.receipt.State != "pending" {
-		t.Fatalf("err=%v failed=%d outcome=%s", err, store.failed, store.receipt.State)
+	if _, ok := errors.AsType[*rivertype.JobSnoozeError](err); !ok || store.failed != 0 {
+		t.Fatalf("err=%v failed=%d", err, store.failed)
 	}
 }
 
@@ -187,9 +183,13 @@ func TestInboundWebhookHandledLifecycle(t *testing.T) {
 	if err := worker.Work(context.Background(), job); err != nil {
 		t.Fatal(err)
 	}
-	if handled != 1 || store.receipt.Payload != nil || store.receipt.State != "handled" {
-		t.Fatalf("handled=%d receipt=%+v", handled, store.receipt)
+	if handled != 1 || store.handled != 1 {
+		t.Fatalf("handled=%d marked handled=%d", handled, store.handled)
 	}
+	// Clearing the payload belongs to the SQL, and the schema CHECK proven in
+	// test/postgres_inbound_webhook_integration_test.go enforces it; the replay
+	// below needs only the state MarkHandled leaves behind.
+	store.receipt.State = "handled"
 	if err := worker.Work(context.Background(), job); err != nil || handled != 1 {
 		t.Fatalf("replay handled=%d err=%v", handled, err)
 	}

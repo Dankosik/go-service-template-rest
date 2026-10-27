@@ -9,16 +9,23 @@ import (
 func TestDecodeAndValidKeyBounds(t *testing.T) {
 	t.Parallel()
 
-	for _, size := range []int{31, 32, 64, 65} {
+	for _, size := range []int{32, 64} {
 		key := bytes.Repeat([]byte{'k'}, size)
-		want := size >= 32 && size <= 64
-		if got := ValidKey(key); got != want {
-			t.Fatalf("ValidKey(%d bytes) = %t, want %t", size, got, want)
+		if !ValidKey(key) {
+			t.Fatalf("ValidKey(%d bytes) = false, want true", size)
 		}
-		encoded := "whsec_" + base64.StdEncoding.EncodeToString(key)
-		decoded, ok := Decode(encoded)
-		if ok != want || (ok && !bytes.Equal(decoded, key)) {
-			t.Fatalf("Decode(%d bytes) = %d bytes, %t, want %t", size, len(decoded), ok, want)
+		decoded, ok := Decode("whsec_" + base64.StdEncoding.EncodeToString(key))
+		if !ok || !bytes.Equal(decoded, key) {
+			t.Fatalf("Decode(%d bytes) = %d bytes, %t, want the key back", size, len(decoded), ok)
+		}
+	}
+	for _, size := range []int{31, 65} {
+		key := bytes.Repeat([]byte{'k'}, size)
+		if ValidKey(key) {
+			t.Fatalf("ValidKey(%d bytes) = true, want false", size)
+		}
+		if _, ok := Decode("whsec_" + base64.StdEncoding.EncodeToString(key)); ok {
+			t.Fatalf("Decode(%d bytes) accepted an out-of-bounds key", size)
 		}
 	}
 	for _, value := range []string{

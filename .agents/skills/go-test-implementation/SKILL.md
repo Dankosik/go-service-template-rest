@@ -25,6 +25,38 @@ contract without a distinct failure mode; retain separate cases or proving
 layers when they can fail independently, including success and denial paths.
 This judgment needs no separate inventory or approval.
 
+## Test Shape
+
+Every new or changed test, routine or not, takes this shape:
+
+- **Caller's view.** Drive the entry point a real caller uses — the router, the
+  gRPC client, the exported function, ideally from a `_test` package — and
+  assert what that client, operator, or feature author observes: status and
+  body, error identity, durable row, emitted signal. Test an unexported helper
+  only when the exported path cannot reach the case; never keep an export,
+  package variable, or hook alive only for a test.
+- **Real before fake.** Use real in-process collaborators first: stdlib types,
+  `httptest`, the chi router, `bufconn`. When the engine owns the claim, use
+  the existing Testcontainers fixtures — `pgtest` and the shared NATS harness.
+  A fake stands in only for an out-of-process dependency on a Go-owned claim,
+  and it returns data; it never implements the behavior the test asserts.
+  Calls recorded on a fake are not evidence when a client-visible or durable
+  effect exists.
+- **No logic.** Expected values are literals or fixture data written from the
+  accepted behavior. No loop, branch, or production helper computes an
+  expected value; a table row that needs a different assertion shape becomes
+  its own test.
+- **Regression first.** For a bug, write the test at the owner boundary, watch
+  it fail on the pre-fix code for the bug's reason, then fix. A regression test
+  never seen failing proves nothing.
+- **Probe for gaps.** After testing a changed predicate or branch, mutate it by
+  hand — flip a comparison, drop a condition, return early — and rerun the
+  focused test; a green run names a missing case. Revert the mutation. An
+  invariant over generated input gets a fuzz target; see
+  [proving-layer-and-oracle.md](references/proving-layer-and-oracle.md).
+
+## Scenarios And Completion
+
 For a new integration scenario family, write one complete path through state
 creation, the operation, independent observation, and cleanup before expanding
 cases. Reuse that foundation while binding each case to its own inputs. An

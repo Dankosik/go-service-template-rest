@@ -117,4 +117,36 @@ func TestInTxCommitOutcomes(t *testing.T) {
 			t.Fatalf("rows after unknown commit result = %d, want 1", count)
 		}
 	})
+
+	// The caller's cancellation must reach the server and stay visible in the
+	// error: the statement stops long before the statement_timeout fallback, no
+	// backend keeps running it, and the caller can still tell it canceled.
+	t.Run("caller cancellation stops the server statement", func(t *testing.T) {
+		callCtx, cancelCall := context.WithCancel(ctx)
+		defer cancelCall()
+		time.AfterFunc(200*time.Millisecond, cancelCall)
+
+		started := time.Now()
+		err := InTx(callCtx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+			_, err := tx.Exec(callCtx, "SELECT pg_sleep(30) /* intx_cancel_probe */")
+			return err
+		})
+		if !errors.Is(err, context.Canceled) || !errors.Is(err, ErrTransaction) {
+			t.Fatalf("InTx() error = %v, want ErrTransaction carrying context.Canceled", err)
+		}
+		if elapsed := time.Since(started); elapsed > 4*time.Second {
+			t.Fatalf("InTx() returned after %s, want the cancel request rather than the 8s fallback", elapsed)
+		}
+
+		var running int
+		if err := pool.QueryRow(ctx, `
+			SELECT count(*) FROM pg_stat_activity
+			WHERE state = 'active' AND query LIKE '%intx_cancel_probe%' AND pid <> pg_backend_pid()`,
+		).Scan(&running); err != nil {
+			t.Fatalf("count running probe statements: %v", err)
+		}
+		if running != 0 {
+			t.Fatalf("server backends still running the canceled statement = %d, want 0", running)
+		}
+	})
 }

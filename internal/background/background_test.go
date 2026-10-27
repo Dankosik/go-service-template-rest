@@ -72,25 +72,36 @@ func TestPanicInTaskDoesNotKillProcess(t *testing.T) {
 }
 
 // TestOnePanicDoesNotStopSiblingWork keeps a single bad task from silently
-// disarming the rest of the process's background work before shutdown.
+// disarming the rest of the process's background work before shutdown. Like
+// TestFailedTaskLeavesSiblingsRunning, it looks before Shutdown, whose own
+// cancel would otherwise stop the sibling and satisfy the test.
 func TestOnePanicDoesNotStopSiblingWork(t *testing.T) {
 	t.Parallel()
 
-	healthyStopped := make(chan struct{})
 	sup := New(context.Background(), discardLogger())
+
+	siblingCtx := make(chan context.Context, 1)
+	sup.Go(Task{Name: "healthy", Run: func(ctx context.Context) error {
+		siblingCtx <- ctx
+		<-ctx.Done()
+		return nil
+	}})
+	ctx := <-siblingCtx
 	sup.Go(Task{Name: "exploder", Run: func(context.Context) error {
 		panic("boom")
 	}})
-	sup.Go(Task{Name: "healthy", Run: func(ctx context.Context) error {
-		<-ctx.Done()
-		close(healthyStopped)
-		return ctx.Err()
-	}})
+
+	failure := waittest.Receive(t, sup.FirstFailure(), 2*time.Second, "panic reported as a task failure")
+	if !errors.Is(failure, ErrPanic) {
+		t.Fatalf("FirstFailure() error = %v, want ErrPanic", failure)
+	}
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("sibling task was canceled by an unrelated panic: %v", err)
+	}
 
 	if err := sup.Shutdown(context.Background()); !errors.Is(err, ErrPanic) {
 		t.Fatalf("Shutdown() error = %v, want ErrPanic", err)
 	}
-	waittest.ReceiveSignal(t, healthyStopped, 2*time.Second, "sibling task cancellation")
 }
 
 // TestFailedTaskLeavesSiblingsRunning is the isolation property, asserted before

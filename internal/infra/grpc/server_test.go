@@ -8,14 +8,16 @@
 package grpcx
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/failure"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -52,8 +54,9 @@ func TestServerHealthPreservesStandardUnknownServiceStatus(t *testing.T) {
 
 // policyBoundaryCase is the contrast the policy error boundary exists to draw:
 // a status the policy chose reaches the caller intact, and anything else becomes
-// a sanitized INTERNAL. Both RPC kinds run the same two rows, because the
-// boundary is one rule and the kinds differ only in how the caller drives them.
+// a sanitized INTERNAL — including a status the policy merely wrapped. Both RPC
+// kinds run the same rows, because the boundary is one rule and the kinds differ
+// only in how the caller drives them.
 type policyBoundaryCase struct {
 	name       string
 	policyErr  error
@@ -72,6 +75,13 @@ func TestServerPolicyErrorBoundary(t *testing.T) {
 		{
 			name:       "raw error is sanitized",
 			policyErr:  errors.New("authentication dependency credential=secret"),
+			wantCode:   codes.Internal,
+			wantDetail: "request failed",
+		},
+		{
+			name: "wrapped status is sanitized",
+			policyErr: fmt.Errorf("policy dependency: %w",
+				status.Error(codes.PermissionDenied, "credential=secret")),
 			wantCode:   codes.Internal,
 			wantDetail: "request failed",
 		},
@@ -129,6 +139,13 @@ func TestServerStreamingPolicyErrorBoundary(t *testing.T) {
 			wantCode:   codes.Internal,
 			wantDetail: "request failed",
 		},
+		{
+			name: "wrapped status is sanitized",
+			policyErr: fmt.Errorf("authorization dependency: %w",
+				status.Error(codes.PermissionDenied, "credential=secret")),
+			wantCode:   codes.Internal,
+			wantDetail: "request failed",
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, connection := startTestServerWithOptions(t, testServerConfig(), nil, Options{
@@ -157,32 +174,25 @@ func TestServerStreamingPolicyErrorBoundary(t *testing.T) {
 	}
 }
 
-func TestPolicyErrorMappingDoesNotTrustWrappedStatus(t *testing.T) {
-	t.Parallel()
-
-	mapped, sanitized := mapPolicyError(fmt.Errorf(
-		"policy dependency: %w",
-		status.Error(codes.PermissionDenied, "credential=secret"),
-	))
-	if !sanitized {
-		t.Fatal("wrapped policy status was trusted")
+func TestServerPreservesWrappedHandlerCancellation(t *testing.T) {
+	var output bytes.Buffer
+	register := func(registrar grpc.ServiceRegistrar) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+				return nil, fmt.Errorf("handler stopped: %w", context.Canceled)
+			})
 	}
-	assertStatusCode(t, mapped, codes.Internal)
-	if detail := status.Convert(mapped).Message(); detail != failure.SanitizedDetail {
-		t.Fatalf("wrapped policy detail = %q, want %q", detail, failure.SanitizedDetail)
-	}
-}
+	_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
+		Logger: logctx.NewProcessLogger(&output, slog.LevelError),
+	})
 
-func TestHandlerErrorMappingPreservesWrappedCancellation(t *testing.T) {
-	t.Parallel()
-
-	mapped, sanitized := mapHandlerError(fmt.Errorf("handler stopped: %w", context.Canceled), nil, "")
-	if sanitized {
-		t.Fatal("wrapped cancellation was reported as an unhandled failure")
-	}
-	assertStatusCode(t, mapped, codes.Canceled)
-	if detail := status.Convert(mapped).Message(); detail != "request canceled" {
+	err := connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
+	assertStatusCode(t, err, codes.Canceled)
+	if detail := status.Convert(err).Message(); detail != "request canceled" {
 		t.Fatalf("cancellation detail = %q, want %q", detail, "request canceled")
+	}
+	if output.Len() != 0 {
+		t.Fatalf("wrapped cancellation was logged as an unhandled failure: %q", output.String())
 	}
 }
 
