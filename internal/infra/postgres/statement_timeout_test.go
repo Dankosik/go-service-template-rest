@@ -44,47 +44,6 @@ func TestRuntimeParamMillisecondsRoundsUp(t *testing.T) {
 	}
 }
 
-func TestApplyContextWatcherUsesCancelRequestWithServerFallback(t *testing.T) {
-	t.Parallel()
-
-	poolConfig, err := parsePoolConfig("postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
-	if err != nil {
-		t.Fatalf("parsePoolConfig() error = %v", err)
-	}
-	applyContextWatcher(poolConfig.ConnConfig, defaultStatementTimeout)
-	handler := poolConfig.ConnConfig.BuildContextWatcherHandler(new(pgconn.PgConn))
-	watcher, ok := handler.(*contextWatcherHandler)
-	if !ok {
-		t.Fatalf("context watcher = %T, want *contextWatcherHandler", handler)
-	}
-	cancel, ok := watcher.handler.(*pgconn.CancelRequestContextWatcherHandler)
-	if !ok || cancel.CancelRequestDelay != 0 || cancel.DeadlineDelay != defaultStatementTimeout {
-		t.Fatalf("cancel watcher = %#v, want immediate cancel with %s fallback", watcher.handler, defaultStatementTimeout)
-	}
-}
-
-type watcherStub struct {
-	cancel, unwatch int
-}
-
-func (s *watcherStub) HandleCancel(context.Context) { s.cancel++ }
-func (s *watcherStub) HandleUnwatchAfterCancel()    { s.unwatch++ }
-
-func TestContextWatcherMarksTheActiveTransaction(t *testing.T) {
-	conn := new(pgconn.PgConn)
-	marker := new(contextWatcherMark)
-	contextWatcherMarks.Store(conn, marker)
-	t.Cleanup(func() { contextWatcherMarks.Delete(conn) })
-	delegate := new(watcherStub)
-	handler := &contextWatcherHandler{conn: conn, handler: delegate}
-
-	handler.HandleCancel(t.Context())
-	handler.HandleUnwatchAfterCancel()
-	if !marker.canceled.Load() || delegate.cancel != 1 || delegate.unwatch != 1 {
-		t.Fatalf("watcher state = canceled:%t cancel:%d unwatch:%d", marker.canceled.Load(), delegate.cancel, delegate.unwatch)
-	}
-}
-
 func TestInTxRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 

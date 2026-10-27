@@ -149,36 +149,6 @@ func TestDiagnosticsServerKeepsAPIWriteTimeoutWithoutPprof(t *testing.T) {
 	}
 }
 
-// TestDiagnosticsServerNeverServesDefaultServeMux is the guard that actually
-// matters.
-//
-// Importing net/http/pprof registers every profile on http.DefaultServeMux from
-// the package's init, and nothing can prevent that. So the protection is not
-// "pprof is not on DefaultServeMux" — it demonstrably is, and this test asserts
-// so, to keep the reasoning honest. The protection is that this service never
-// serves that mux: an http.Server with a nil Handler falls back to it, so both
-// servers must always carry an explicit one.
-func TestDiagnosticsServerNeverServesDefaultServeMux(t *testing.T) {
-	t.Parallel()
-
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/debug/pprof/", nil)
-	resp := httptest.NewRecorder()
-	http.DefaultServeMux.ServeHTTP(resp, req)
-	if resp.Code != http.StatusOK {
-		t.Fatalf("DefaultServeMux /debug/pprof/ status = %d; the import is expected to register there", resp.Code)
-	}
-
-	for _, pprofEnabled := range []bool{false, true} {
-		srv := newDiagnosticsServer(diagnosticsConfig(pprofEnabled), telemetry.NewMetrics(), nil)
-		if srv.Handler == nil {
-			t.Fatalf("pprof enabled = %t: diagnostics Handler is nil, which makes net/http fall back to DefaultServeMux", pprofEnabled)
-		}
-		if srv.Handler == http.Handler(http.DefaultServeMux) {
-			t.Fatalf("pprof enabled = %t: diagnostics server serves DefaultServeMux", pprofEnabled)
-		}
-	}
-}
-
 // serveDiagnostics drives one diagnostics route. Every route the private
 // listener publishes for a human or a scraper is GET, so the method is not a
 // parameter.

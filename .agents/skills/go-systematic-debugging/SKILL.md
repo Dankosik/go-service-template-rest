@@ -43,9 +43,13 @@ when the far-side contract or runtime locator changes the experiment, and load
 one matching [debugging reference](references/index.md) only when its stated
 pressure does.
 
-In `fix_authorized`, repair the earliest shared owner and confirm the fix against
-the original symptom and focused regression proof at the correct seam. Reuse a
-sufficient existing test; if confirmation cannot run, report that exact gap.
+In `fix_authorized`, first turn the signal into a regression test at the correct
+seam and watch it fail for the diagnosed cause, as the [test
+shape](../go-test-implementation/SKILL.md#test-shape) requires; an existing
+test that already fails that way suffices. Then repair the earliest shared
+owner and confirm the fix against that test and the original symptom. If the
+failure cannot be captured in a test or confirmation cannot run, report that
+exact gap.
 In `diagnosis_only`, make no repository edit.
 
 Complete when one causal chain survives the signal and its smallest available

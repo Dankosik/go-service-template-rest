@@ -27,7 +27,10 @@ become named Go tests, or the layer that should carry the proof is unsettled.
   paying for one buys latency rather than evidence.
 - Reach for a fuzz target when the oracle is an invariant over generated input —
   a parser, decoder, or validator — rather than over cases you can name, as
-  `FuzzParseDuration` and `FuzzStrictToken` already do here.
+  `FuzzParseDuration` and `FuzzStrictToken` already do here. Native fuzzing is
+  the repository's property-based tool: the oracle is a property — round-trip,
+  idempotence, ordering, never panics, agrees with a simpler model — not a
+  specific output copied from the implementation.
 - Missing exactness is an escalation, not a blank to fill. A status code, cache
   key, tenant rule, or retry policy the approved behavior never named stays
   unasserted; inventing one freezes a decision nobody made.

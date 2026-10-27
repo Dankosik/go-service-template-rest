@@ -278,15 +278,28 @@ func TestCachedRefusesAStaleVerdict(t *testing.T) {
 			t.Fatalf("Watch() error = %v", err)
 		}
 
-		synctest.Sleep(staleBudget(testRefreshInterval, testProbeBudget) + time.Second)
+		// 1s probe budget + 3 × 2s refresh interval, written out so the budget
+		// itself is under test: the verdict holds through it and expires after.
+		synctest.Sleep(7 * time.Second)
 		synctest.Wait()
-
-		if err := <-transitions; !errors.Is(err, ErrStale) {
-			t.Fatalf("stale transition error = %v, want ErrStale", err)
+		if err := svc.Cached(); err != nil {
+			t.Fatalf("Cached() at the stale budget error = %v, want nil", err)
 		}
 
+		synctest.Sleep(time.Millisecond)
+		synctest.Wait()
 		if err := svc.Cached(); !errors.Is(err, ErrStale) {
-			t.Fatalf("Cached() after the refresher stopped error = %v, want ErrStale", err)
+			t.Fatalf("Cached() after the stale budget error = %v, want ErrStale", err)
+		}
+		// Non-blocking, so a later timer cannot satisfy the receive by letting the
+		// bubble clock run past the budget.
+		select {
+		case err := <-transitions:
+			if !errors.Is(err, ErrStale) {
+				t.Fatalf("stale transition error = %v, want ErrStale", err)
+			}
+		default:
+			t.Fatal("no stale transition once the budget passed")
 		}
 	})
 }

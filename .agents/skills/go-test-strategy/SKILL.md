@@ -13,15 +13,15 @@ can observe it. This is an optional method while implementing code or tests,
 not a separate phase, approval, or mandatory preliminary test plan.
 
 Ground the assertion in accepted product behavior, not the implementation's
-current output. Reuse existing test patterns and controls. Preserve fixture
-cardinality, entity ownership, absent values, and event ordering. Prefer
-assertions that survive behavior-preserving refactors; test internal calls only
-when they carry an accepted contract or resource bound.
+current output, and keep the [test
+shape](../go-test-implementation/SKILL.md#test-shape). Reuse existing test
+patterns and controls. Preserve fixture cardinality, entity ownership, absent
+values, and event ordering. Test internal calls only when they carry an
+accepted contract or resource bound.
 
 For the concrete choice in front of you, identify the wrong behavior, its
 observable consequence, and deterministic inputs or fault control. Unit tests
-are sufficient when they observe that consequence. Exercise available real
-in-process boundaries where a mock would miss the wrong behavior. An explicit
+are sufficient when they observe that consequence. An explicit
 real-database or provider verification claim needs that actual boundary, but
 this method cannot make such a claim mandatory for local completion. Follow the
 [Evidence Contract](../../../docs/spec-first-workflow/shared/evidence-contract.md#required-and-optional-proof)
