@@ -190,7 +190,9 @@ jobs:
         with:
           path: ${{ env.GOMODCACHE }}
           key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
-          restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
+          # Main saves a missed key from an empty cache: restoring the previous
+          # one carried every superseded module version into each new save.
+          restore-keys: ${{ (github.event_name != 'push' || github.ref != 'refs/heads/main') && format('go-mod-root-{0}-{1}-', runner.os, runner.arch) || '' }}
       - name: Restore tool module cache
         if: >-
           steps.setup-go.outcome == 'success' &&
@@ -333,9 +335,9 @@ jobs:
           (needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.go_root_dependencies == 'true' || needs.changes.outputs.go_lint_config == 'true')
         run: bash ./scripts/ci/measure.sh quality-main-lint -- make lint-all GOLANGCI_LINT=golangci-lint
       - name: Whole-program analysis
-        if: >-
-          github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
-          needs.changes.outputs.go_handwritten == 'true'
+        # Runs on pull requests too: when it ran only on main, its findings
+        # surfaced after merge and kept main red.
+        if: needs.changes.outputs.go_handwritten == 'true'
         run: bash ./scripts/ci/measure.sh quality-whole-program -- make lint-deep
       - name: Root dependencies
         if: needs.changes.outputs.go_root_dependencies == 'true'
@@ -409,6 +411,15 @@ jobs:
       - name: Validation routing
         if: needs.changes.outputs.validation_system == 'true'
         run: bash ./scripts/ci/measure.sh quality-validation-system -- make verify-check changed-surfaces-check validation-lock-self-test affected-go-packages-check
+      - name: Complete root module cache
+        # Every job restores this cache, including integration-tagged builds
+        # that this job's steps do not compile.
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.setup-go.outcome == 'success' &&
+          steps.root-module-cache.outputs.cache-hit != 'true'
+        run: go mod download
       - name: Save root module cache
         if: >-
           github.event_name == 'push' &&

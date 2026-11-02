@@ -156,6 +156,16 @@ validation lock. Its exact passing receipt is shared by related worktrees and
 binds the resolved base, merge base, plan, execution inputs, tool versions, and
 candidate; a candidate change during execution invalidates the run.
 
+`scripts/dev/pre-push.sh` runs `make verify` as an opt-in Git pre-push hook,
+so lint and instruction failures stop the push instead of a CI round. Install
+it once per clone; linked worktrees share it:
+
+```bash
+ln -s ../../scripts/dev/pre-push.sh "$(git rev-parse --git-common-dir)/hooks/pre-push"
+```
+
+`git push --no-verify` skips it for one push.
+
 The explicit full-repository owner remains available when the claim spans it:
 
 ```bash
