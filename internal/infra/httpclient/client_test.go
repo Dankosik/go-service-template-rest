@@ -67,7 +67,7 @@ func TestDialAddressPolicy(t *testing.T) {
 	}
 }
 
-func TestClientRejectsResolvedPrivateAddressAndRedirects(t *testing.T) {
+func TestClientRejectsResolvedPrivateAddress(t *testing.T) {
 	client, err := NewExternalHTTPS("https://localhost:443", testTransportLimits())
 	if err != nil {
 		t.Fatalf("NewExternalHTTPS() error = %v", err)
@@ -84,117 +84,155 @@ func TestClientRejectsResolvedPrivateAddressAndRedirects(t *testing.T) {
 	if !errors.Is(err, ErrTargetDenied) {
 		t.Fatalf("Do() error = %v, want ErrTargetDenied", err)
 	}
-	if err := client.httpClient.CheckRedirect(request, nil); !errors.Is(err, http.ErrUseLastResponse) {
-		t.Fatalf("CheckRedirect() error = %v", err)
-	}
 }
 
 func TestAuthorityAndCorrelationPolicy(t *testing.T) {
-	var received *http.Request
-	var baseCalls int
-	base := roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		baseCalls++
-		received = request
-		return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
+	t.Parallel()
+	var calls atomic.Int32
+	received := make(chan *http.Request, 1)
+	server := newPinnedTLSServer(t, false, func(response http.ResponseWriter, request *http.Request) {
+		calls.Add(1)
+		_, _ = io.Copy(io.Discard, request.Body)
+		received <- &http.Request{Header: request.Header.Clone(), Trailer: request.Trailer.Clone()}
+		response.WriteHeader(http.StatusNoContent)
 	})
-	transport := propagationSanitizer{base: authorityTransport{base: base, scheme: "https", authority: "api.example.com"}}
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://api.example.com/path", http.NoBody)
+	client, err := NewExternalHTTPS("https://example.com", testTransportLimits())
+	if err != nil {
+		t.Fatalf("NewExternalHTTPS() error = %v", err)
+	}
+	t.Cleanup(client.CloseIdleConnections)
+	pinClientToTLSServer(t, client, server)
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodPost, client.BaseURL()+"/path", strings.NewReader("payload"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	// An unknown length makes the body chunked, which is what carries trailers.
+	request.ContentLength = -1
 	request.Header.Set("Traceparent", "stale")
 	request.Header.Set("Tracestate", "stale")
 	request.Header.Set("Baggage", "secret=value")
 	request.Header.Set("X-Request-ID", "stale")
 	request.Header.Set("Accept-Encoding", "br")
 	request.Header.Set("X-Provider", "retained")
-	request.Trailer = http.Header{"Baggage": {"secret=trailer"}}
-	response, err := transport.RoundTrip(request)
+	request.Trailer = http.Header{"Baggage": {"secret=trailer"}, "X-Checksum": {"retained"}}
+	response, err := client.Do(request)
 	if err != nil {
-		t.Fatalf("RoundTrip() error = %v", err)
-	}
-	if response == nil || response.Body == nil || received == nil {
-		t.Fatal("RoundTrip() returned an incomplete response")
+		t.Fatalf("Do() error = %v", err)
 	}
 	_ = response.Body.Close()
-	for _, name := range []string{"Accept-Encoding", "Traceparent", "Tracestate", "Baggage", "X-Request-ID"} {
-		if got := received.Header.Get(name); got != "" {
-			t.Errorf("received %s = %q", name, got)
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusNoContent)
+	}
+	got := <-received
+	for _, name := range []string{"Traceparent", "Tracestate", "Baggage", "X-Request-Id"} {
+		if values := got.Header.Values(name); len(values) != 0 {
+			t.Errorf("provider received %s = %q", name, values)
 		}
 	}
-	if received.Trailer.Get("Baggage") != "" {
-		t.Fatal("reserved trailer reached the provider")
+	if encoding := got.Header.Get("Accept-Encoding"); encoding != "gzip" {
+		t.Errorf("provider received Accept-Encoding = %q, want the transport's gzip", encoding)
 	}
-	if received.Header.Get("X-Provider") != "retained" || request.Header.Get("Traceparent") != "stale" {
-		t.Fatal("sanitizer changed an allowed or original header")
+	if provider := got.Header.Get("X-Provider"); provider != "retained" {
+		t.Errorf("provider received X-Provider = %q, want retained", provider)
 	}
-	if request.Trailer.Get("Baggage") != "secret=trailer" {
-		t.Fatal("sanitizer changed the original trailer")
+	if baggage := got.Trailer.Values("Baggage"); len(baggage) != 0 {
+		t.Errorf("provider received Baggage trailer = %q", baggage)
 	}
-	if baseCalls != 1 {
-		t.Fatalf("base calls = %d, want 1", baseCalls)
+	if checksum := got.Trailer.Get("X-Checksum"); checksum != "retained" {
+		t.Errorf("provider received X-Checksum trailer = %q, want retained", checksum)
+	}
+	if request.Header.Get("Traceparent") != "stale" || request.Trailer.Get("Baggage") != "secret=trailer" {
+		t.Error("Do() changed the caller's request")
 	}
 
-	overriddenHost := request.Clone(request.Context())
+	overriddenHost, err := http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL()+"/path", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
 	overriddenHost.Host = "other.example.com"
-	response, err = transport.RoundTrip(overriddenHost)
+	response, err = client.Do(overriddenHost)
 	if response != nil && response.Body != nil {
 		_ = response.Body.Close()
 	}
-	if !errors.Is(err, ErrTargetDenied) || baseCalls != 1 {
-		t.Fatalf("overridden Host error = %v, base calls = %d", err, baseCalls)
+	if !errors.Is(err, ErrTargetDenied) {
+		t.Fatalf("overridden Host error = %v, want ErrTargetDenied", err)
 	}
 
 	other, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://other.example.com/path", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err = transport.RoundTrip(other)
+	response, err = client.Do(other)
 	if response != nil && response.Body != nil {
 		_ = response.Body.Close()
 	}
-	if !errors.Is(err, ErrTargetDenied) || baseCalls != 1 {
-		t.Fatalf("alternate authority error = %v, base calls = %d", err, baseCalls)
+	if !errors.Is(err, ErrTargetDenied) {
+		t.Fatalf("alternate authority error = %v, want ErrTargetDenied", err)
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("server calls = %d, want 1", got)
 	}
 }
 
-func TestStandardClientSendsThroughDoWithoutRedirects(t *testing.T) {
+func TestRedirectsAreReturnedNotFollowed(t *testing.T) {
 	t.Parallel()
-	var calls int
-	client := &Client{
-		inFlight:          make(chan struct{}, 1),
-		absoluteBodyBytes: fixedMaxBodyBytes,
-		httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-			calls++
-			return &http.Response{
-				StatusCode: http.StatusTemporaryRedirect,
-				Header:     http.Header{"Location": []string{"/elsewhere"}},
-				Body:       http.NoBody,
-				Request:    request,
-			}, nil
-		}), CheckRedirect: refuseRedirect},
+	var followed atomic.Int32
+	server := newPinnedTLSServer(t, false, func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/elsewhere":
+			followed.Add(1)
+			response.WriteHeader(http.StatusOK)
+		case "/redirect":
+			response.Header().Set("Location", "/elsewhere")
+			response.WriteHeader(http.StatusTemporaryRedirect)
+		default:
+			response.WriteHeader(http.StatusNoContent)
+		}
+	})
+	limits := testTransportLimits()
+	limits.MaxInFlight = 1
+	client, err := NewExternalHTTPS("https://example.com", limits)
+	if err != nil {
+		t.Fatalf("NewExternalHTTPS() error = %v", err)
 	}
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://api.example.com/path", http.NoBody)
+	t.Cleanup(client.CloseIdleConnections)
+	pinClientToTLSServer(t, client, server)
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL()+"/redirect", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
-	response, err := client.StandardClient().Do(request)
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusTemporaryRedirect {
+		t.Fatalf("Do() status = %d, want %d", response.StatusCode, http.StatusTemporaryRedirect)
+	}
+
+	request, err = http.NewRequestWithContext(t.Context(), http.MethodGet, client.BaseURL()+"/redirect", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err = client.StandardClient().Do(request)
 	if err != nil {
 		t.Fatalf("StandardClient().Do() error = %v", err)
 	}
 	_ = response.Body.Close()
-	if response.StatusCode != http.StatusTemporaryRedirect || calls != 1 {
-		t.Fatalf("status = %d, calls = %d; want the redirect returned after one call", response.StatusCode, calls)
+	if response.StatusCode != http.StatusTemporaryRedirect {
+		t.Fatalf("StandardClient().Do() status = %d, want %d", response.StatusCode, http.StatusTemporaryRedirect)
 	}
-	if len(client.inFlight) != 0 {
-		t.Fatal("admission was not released after the body closed")
+	if got := followed.Load(); got != 0 {
+		t.Fatalf("redirect target calls = %d, want 0", got)
 	}
-}
 
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f(request)
+	// With one admission slot, this succeeds only if closing each redirect
+	// response released its slot.
+	if body := doPinnedRequest(t, client, "/"); body != "" {
+		t.Fatalf("follow-up body = %q", body)
+	}
 }
 
 const (
@@ -252,16 +290,9 @@ func TestTransportLimitsAdmission(t *testing.T) {
 	t.Cleanup(external.CloseIdleConnections)
 	t.Cleanup(private.CloseIdleConnections)
 
-	transport := clientTransport(t, external)
-	if transport.ResponseHeaderTimeout != fixedHeaderTimeout || transport.MaxResponseHeaderBytes != fixedMaxHeaderBytes {
-		t.Fatal("constructor did not apply response-header limits")
-	}
 	for _, client := range []*Client{external, private} {
 		if clientTransport(t, client).Proxy != nil {
 			t.Fatal("transport proxy is not disabled")
-		}
-		if err := client.httpClient.CheckRedirect(nil, nil); !errors.Is(err, http.ErrUseLastResponse) {
-			t.Fatalf("CheckRedirect() error = %v", err)
 		}
 		denied, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://other.example.com/", http.NoBody)
 		if err != nil {
