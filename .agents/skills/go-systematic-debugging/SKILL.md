@@ -36,6 +36,11 @@ the variable or probe whose effect it measures. Track competing hypotheses
 when several remain or a handoff needs their history, with the evidence that
 supports, rejects, or blocks each.
 
+When different repairs reproduce the same failure, identify the assumption they
+share. Where state is involved, re-check which actors can change it. Use that
+reassessment to choose the next discriminating probe or causal repair within
+the active workflow.
+
 Walk backward through affected boundaries until the earliest invariant whose
 inputs were valid but whose output was wrong. A downstream victim is not the
 root cause. Use [Integration Boundaries](../../../docs/architecture/integration.md)
