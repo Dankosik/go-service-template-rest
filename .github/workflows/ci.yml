@@ -97,18 +97,21 @@ jobs:
           fi
       - name: Select integration suites
         # Independent suites run as parallel legs of `integration`; each leg
-        # starts its own containers on its own runner.
+        # starts its own containers on its own runner. The gRPC process test
+        # gets its own leg, and the messaging producer process test runs only
+        # in `process`, which messaging changes therefore also select.
         id: integration
         env:
           DATABASE: ${{ steps.surfaces.outputs.db_integration }}
           MESSAGING: ${{ steps.surfaces.outputs.messaging_integration }}
           PROCESS: ${{ steps.surfaces.outputs.process_integration }}
+          PROCESS_OR_MESSAGING: ${{ steps.surfaces.outputs.process_integration == 'true' || steps.surfaces.outputs.messaging_integration == 'true' }}
           RACE: ${{ steps.surfaces.outputs.integration_race }}
           IMAGE: ${{ steps.surfaces.outputs.migrations == 'true' || steps.surfaces.outputs.runtime_image == 'true' || steps.surfaces.outputs.image_security == 'true' }}
         run: |
           set -euo pipefail
           suites=''
-          for pair in "database:${DATABASE}" "messaging:${MESSAGING}" "process:${PROCESS}" "race:${RACE}" "image:${IMAGE}"; do
+          for pair in "database:${DATABASE}" "messaging:${MESSAGING}" "process:${PROCESS_OR_MESSAGING}" "process-grpc:${PROCESS}" "race:${RACE}" "image:${IMAGE}"; do
             if [[ ${pair#*:} == true ]]; then suites+="${suites:+,}\"${pair%%:*}\""; fi
           done
           printf 'suites=[%s]\n' "${suites}" | tee -a "${GITHUB_OUTPUT}"
@@ -190,7 +193,9 @@ jobs:
         with:
           path: ${{ env.GOMODCACHE }}
           key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
-          restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
+          # Main saves a missed key from an empty cache: restoring the previous
+          # one carried every superseded module version into each new save.
+          restore-keys: ${{ (github.event_name != 'push' || github.ref != 'refs/heads/main') && format('go-mod-root-{0}-{1}-', runner.os, runner.arch) || '' }}
       - name: Restore tool module cache
         if: >-
           steps.setup-go.outcome == 'success' &&
@@ -333,9 +338,9 @@ jobs:
           (needs.changes.outputs.go_handwritten == 'true' || needs.changes.outputs.go_root_dependencies == 'true' || needs.changes.outputs.go_lint_config == 'true')
         run: bash ./scripts/ci/measure.sh quality-main-lint -- make lint-all GOLANGCI_LINT=golangci-lint
       - name: Whole-program analysis
-        if: >-
-          github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
-          needs.changes.outputs.go_handwritten == 'true'
+        # Runs on pull requests too: when it ran only on main, its findings
+        # surfaced after merge and kept main red.
+        if: needs.changes.outputs.go_handwritten == 'true'
         run: bash ./scripts/ci/measure.sh quality-whole-program -- make lint-deep
       - name: Root dependencies
         if: needs.changes.outputs.go_root_dependencies == 'true'
@@ -409,6 +414,15 @@ jobs:
       - name: Validation routing
         if: needs.changes.outputs.validation_system == 'true'
         run: bash ./scripts/ci/measure.sh quality-validation-system -- make verify-check changed-surfaces-check validation-lock-self-test affected-go-packages-check
+      - name: Complete root module cache
+        # Every job restores this cache, including integration-tagged builds
+        # that this job's steps do not compile.
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          steps.setup-go.outcome == 'success' &&
+          steps.root-module-cache.outputs.cache-hit != 'true'
+        run: go mod download
       - name: Save root module cache
         if: >-
           github.event_name == 'push' &&
@@ -697,7 +711,7 @@ jobs:
           key: go-mod-root-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum') }}
           restore-keys: go-mod-root-${{ runner.os }}-${{ runner.arch }}-
       - name: Restore integration build cache
-        if: matrix.suite != 'image' || needs.changes.outputs.migrations == 'true'
+        if: matrix.suite != 'race' && (matrix.suite != 'image' || needs.changes.outputs.migrations == 'true')
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/go-build
@@ -708,6 +722,18 @@ jobs:
           restore-keys: |
             go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
             go-build-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
+      - name: Restore race build cache
+        # -race builds share nothing with the cache quality saves, so the race
+        # leg keeps its own; without it most of the leg was compilation.
+        if: matrix.suite == 'race'
+        id: race-build-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: go-build-race-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-build-race-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
+            go-build-race-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
       - name: Set up Buildx
         if: matrix.suite == 'image'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -716,10 +742,13 @@ jobs:
         run: bash ./scripts/ci/measure.sh integration-db -- env REQUIRE_DOCKER=1 make test-integration-db
       - name: Messaging integration
         if: matrix.suite == 'messaging'
-        run: bash ./scripts/ci/measure.sh integration-messaging -- env REQUIRE_DOCKER=1 make test-integration-messaging
+        run: bash ./scripts/ci/measure.sh integration-messaging -- env REQUIRE_DOCKER=1 make test-integration-messaging INTEGRATION_SKIP='^TestNATS.*Process'
       - name: Process integration
         if: matrix.suite == 'process'
-        run: bash ./scripts/ci/measure.sh integration-process -- env REQUIRE_DOCKER=1 make test-integration-process
+        run: bash ./scripts/ci/measure.sh integration-process -- env REQUIRE_DOCKER=1 make test-integration-process INTEGRATION_SKIP='^TestGRPCProcessLifecycle'
+      - name: gRPC process integration
+        if: matrix.suite == 'process-grpc'
+        run: bash ./scripts/ci/measure.sh integration-process-grpc -- env REQUIRE_DOCKER=1 make test-integration-process INTEGRATION_RUN='^TestGRPCProcessLifecycle'
       - name: Messaging integration race
         if: matrix.suite == 'race' && needs.changes.outputs.integration_race_messaging == 'true'
         run: bash ./scripts/ci/measure.sh integration-race-messaging -- env REQUIRE_DOCKER=1 make test-messaging-race
@@ -755,6 +784,17 @@ jobs:
       - name: Image vulnerabilities
         if: matrix.suite == 'image' && needs.changes.outputs.image_security == 'true'
         run: bash ./scripts/ci/measure.sh integration-image-security -- make container-security CONTAINER_IMAGE=service:ci
+      - name: Save race build cache
+        # The weekly run also saves it: race owners rarely change on main.
+        if: >-
+          matrix.suite == 'race' &&
+          (github.event_name == 'push' || github.event_name == 'schedule') &&
+          github.ref == 'refs/heads/main' &&
+          steps.race-build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: ${{ steps.race-build-cache.outputs.cache-primary-key }}
 
   required:
     if: always()

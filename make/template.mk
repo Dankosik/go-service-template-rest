@@ -51,6 +51,10 @@ OUTBOX_RACE_PACKAGES := $(if $(wildcard test/postgres_outbox_*),./test)
 INTEGRATION_PACKAGES += $(if $(wildcard internal/infra/postgreswebhook),./internal/infra/postgreswebhook)
 WEBHOOK_RACE_PACKAGES := $(if $(wildcard internal/infra/postgreswebhook),./internal/infra/postgreswebhook ./test)
 INTEGRATION_RACE_PACKAGES := $(sort $(MESSAGING_RACE_PACKAGES) $(OUTBOX_RACE_PACKAGES) $(WEBHOOK_RACE_PACKAGES))
+# CI splits the ./test runs across legs: INTEGRATION_RUN replaces the process
+# selection, and INTEGRATION_SKIP drops tests from the messaging and process runs.
+INTEGRATION_RUN ?=
+INTEGRATION_SKIP ?=
 LINT_BASE_REF ?= origin/main
 VALIDATION_JOBS ?= 2
 VALIDATION_PARALLEL_TESTS ?= 2
@@ -467,7 +471,7 @@ test-integration-messaging:
 		echo "not applicable: no messaging integration surface"; \
 	else \
 		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./internal/infra/natsjs ./cmd/worker/internal/bootstrap; \
-		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./test -run '^Test(NATS|PostgresOutbox)'; \
+		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./test -run '^Test(NATS|PostgresOutbox)' $(if $(INTEGRATION_SKIP),-skip '$(INTEGRATION_SKIP)'); \
 	fi
 
 test-integration-process:
@@ -475,7 +479,7 @@ test-integration-process:
 	@if ! find test -maxdepth 1 -type f -name '*process_integration_test.go' -print -quit 2>/dev/null | grep -q .; then \
 		echo "not applicable: no process integration surface"; \
 	else \
-		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./test -run '^Test(GRPCProcessLifecycle|NATS.*Process|NATSWorkerMain|PostgresJobsWorkerProcess|InboundWebhookProcess)'; \
+		$(VALIDATION_LOCK) go test -vet=off -p=1 -parallel=$(VALIDATION_PARALLEL_TESTS) -count=1 -tags=integration ./test -run '$(or $(INTEGRATION_RUN),^Test(GRPCProcessLifecycle|NATS.*Process|NATSWorkerMain|PostgresJobsWorkerProcess|InboundWebhookProcess))' $(if $(INTEGRATION_SKIP),-skip '$(INTEGRATION_SKIP)'); \
 	fi
 
 run-jobs-worker:

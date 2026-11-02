@@ -231,11 +231,23 @@ func TestRejectedRequestRecordNamesTheFieldsButNotTheReasons(t *testing.T) {
 	t.Parallel()
 
 	var logged bytes.Buffer
-	err := schemaRejection(t, map[string]any{"slug": "Bad Slug", "title": "ok"})
-
-	logStrictRequestError(newTestServiceLogger(&logged), httptest.NewRequestWithContext(
+	resp := httptest.NewRecorder()
+	RejectRequest(newTestServiceLogger(&logged), defaultAuthenticateChallenge)(resp, httptest.NewRequestWithContext(
 		context.Background(), http.MethodPost, "/api/v1/articles", nil,
-	), err, requestViolations(err))
+	), schemaRejection(t, map[string]any{"slug": "Bad Slug", "title": "ok"}))
+
+	var body struct {
+		InvalidParams []struct {
+			Name   string `json:"name"`
+			Reason string `json:"reason"`
+		} `json:"invalid_params"`
+	}
+	if decodeErr := json.Unmarshal(resp.Body.Bytes(), &body); decodeErr != nil {
+		t.Fatalf("decode response %q: %v", resp.Body.String(), decodeErr)
+	}
+	if len(body.InvalidParams) != 1 || body.InvalidParams[0].Name != "/slug" || body.InvalidParams[0].Reason == "" {
+		t.Fatalf("invalid_params = %+v, want the caller told /slug and why", body.InvalidParams)
+	}
 
 	var record struct {
 		Message       string   `json:"msg"`

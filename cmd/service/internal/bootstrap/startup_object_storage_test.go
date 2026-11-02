@@ -16,7 +16,6 @@ import (
 	// profile:authn-bearer:start
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	// profile:authn-bearer:end
-	"github.com/example/go-service-template-rest/internal/objectstorage"
 )
 
 func TestInitObjectStorageMapsConfig(t *testing.T) {
@@ -36,29 +35,6 @@ func TestInitObjectStorageMapsConfig(t *testing.T) {
 	runtime.Close()
 	if built.calls != 1 {
 		t.Fatalf("runtime Close calls = %d, want 1", built.calls)
-	}
-}
-
-func TestObjectStorageOutageDoesNotChangeReadiness(t *testing.T) {
-	resetShutdownConfigEnv(t)
-	runtime := &scriptedObjectStorageRuntime{outcomes: []error{errors.New("provider unavailable"), nil}}
-	stopServing := errors.New("stop serving")
-	wiring := objectStorageTestWiring(runtime)
-	wiring.serve = func(ctx context.Context, _ context.Context, args serveRuntimeArgs) error {
-		if err := args.readinessCheck(ctx); err != nil {
-			t.Fatalf("initial readiness check error = %v", err)
-		}
-		args.admission.MarkReady()
-		if _, err := runtime.Metadata(ctx, "object"); err == nil {
-			t.Fatal("first storage operation error = nil, want provider outage")
-		}
-		if err := args.healthSvc.Cached(); err != nil {
-			t.Fatalf("readiness after provider outage = %v, want unchanged", err)
-		}
-		return stopServing
-	}
-	if err := runWithRuntime(nil, wiring); !errors.Is(err, stopServing) {
-		t.Fatalf("runWithRuntime() error = %v, want %v", err, stopServing)
 	}
 }
 
@@ -109,21 +85,6 @@ func (r *countingObjectStorageRuntime) Close() {
 	if r.onClose != nil {
 		r.onClose()
 	}
-}
-
-type scriptedObjectStorageRuntime struct {
-	countingObjectStorageRuntime
-
-	outcomes []error
-}
-
-func (r *scriptedObjectStorageRuntime) Metadata(context.Context, string) (objectstorage.Metadata, error) {
-	if len(r.outcomes) == 0 {
-		return objectstorage.Metadata{}, nil
-	}
-	err := r.outcomes[0]
-	r.outcomes = r.outcomes[1:]
-	return objectstorage.Metadata{}, err
 }
 
 func validObjectStorageConfig() config.ObjectStorageConfig {

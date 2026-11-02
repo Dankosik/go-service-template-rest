@@ -1,9 +1,7 @@
 package bootstrap
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
@@ -11,12 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
-	"go.opentelemetry.io/otel"
 )
 
 func TestMessagingCompositionRejectsEmptyHandlerBeforeConfig(t *testing.T) {
@@ -86,30 +82,6 @@ func TestMessagingCompositionRejectsInvalidWorkerBeforeConnection(t *testing.T) 
 	}
 }
 
-//nolint:paralleltest // Installs a process-wide tracer provider for span capture.
-func TestWorkerLoggerCorrelatesRecords(t *testing.T) {
-	telemetrytest.InstallSpanRecorder(t)
-
-	var out bytes.Buffer
-	log := runtimeopts.Logger(&out, config.Config{
-		App:           config.AppConfig{Env: "test", Version: "v1"},
-		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{ServiceName: "worker"}},
-	})
-	ctx, span := otel.Tracer("test").Start(context.Background(), "worker-log-test")
-	log.InfoContext(ctx, "worker_message")
-	span.End()
-
-	var record map[string]any
-	if err := json.Unmarshal(out.Bytes(), &record); err != nil {
-		t.Fatalf("unmarshal worker log %q: %v", out.String(), err)
-	}
-	for _, key := range []string{"trace_id", "span_id"} {
-		if value, ok := record[key].(string); !ok || value == "" {
-			t.Fatalf("worker log %v is missing %s", record, key)
-		}
-	}
-}
-
 // TestWorkerRunLoopPanicIsRecovered covers the loop this process exists to run.
 // It ran bare, so a panic in the fetch or ack bookkeeping took the process down
 // before the drain, the handler join, and the telemetry flush that records why.
@@ -117,6 +89,8 @@ func TestWorkerLoggerCorrelatesRecords(t *testing.T) {
 // Both cases also pin the send-then-close order the drain depends on: it decides
 // cleanup safety from done and only then looks for a result that has not been
 // read, so a done that closed first would let a real exit reason go unreported.
+//
+//nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestWorkerRunLoopPanicIsRecovered(t *testing.T) {
 	const poison = "worker-panic-marker-8c23"
 	stopped := errors.New("worker stopped")

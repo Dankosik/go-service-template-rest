@@ -16,7 +16,6 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +31,15 @@ import (
 const testErrorDomain = "grpcx.test.Service"
 
 var errSaturated = errors.New("dependency is saturated")
+
+// registerSaturatedService registers the unary test method with a handler that
+// always fails with errSaturated, leaving its classification to DomainErrors.
+func registerSaturatedService(registrar grpc.ServiceRegistrar) {
+	registerUnaryTestService(registrar, testUnaryFullMethod,
+		func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+			return nil, errSaturated
+		})
+}
 
 // saturatedMapper classifies errSaturated with a retry hint, which is the one
 // mapper value the two transports render differently.
@@ -93,27 +101,33 @@ func TestRetryHintReachesBothTransports(t *testing.T) {
 func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
 	t.Parallel()
 
-	expected := map[failure.Code]codes.Code{
-		failure.CodeBadRequest:            codes.InvalidArgument,
-		failure.CodeUnauthorized:          codes.Unauthenticated,
-		failure.CodeForbidden:             codes.PermissionDenied,
-		failure.CodeNotFound:              codes.NotFound,
-		failure.CodeMethodNotAllowed:      codes.Unimplemented,
-		failure.CodeAlreadyExists:         codes.AlreadyExists,
-		failure.CodeRequestEntityTooLarge: codes.ResourceExhausted,
+	// The reason column is the client-visible ErrorInfo.reason, written out
+	// rather than derived, so a change to the rendering rule fails here.
+	type rendering struct {
+		code   codes.Code
+		reason string
+	}
+	expected := map[failure.Code]rendering{
+		failure.CodeBadRequest:            {codes.InvalidArgument, "BAD_REQUEST"},
+		failure.CodeUnauthorized:          {codes.Unauthenticated, "UNAUTHORIZED"},
+		failure.CodeForbidden:             {codes.PermissionDenied, "FORBIDDEN"},
+		failure.CodeNotFound:              {codes.NotFound, "NOT_FOUND"},
+		failure.CodeMethodNotAllowed:      {codes.Unimplemented, "METHOD_NOT_ALLOWED"},
+		failure.CodeAlreadyExists:         {codes.AlreadyExists, "ALREADY_EXISTS"},
+		failure.CodeRequestEntityTooLarge: {codes.ResourceExhausted, "REQUEST_ENTITY_TOO_LARGE"},
 		// profile:authn-bearer:start
-		failure.CodeRequestHeaderFieldsTooLarge: codes.ResourceExhausted,
+		failure.CodeRequestHeaderFieldsTooLarge: {codes.ResourceExhausted, "REQUEST_HEADER_FIELDS_TOO_LARGE"},
 		// profile:authn-bearer:end
-		failure.CodeUnprocessableContent: codes.InvalidArgument,
-		failure.CodeTooManyRequests:      codes.ResourceExhausted,
+		failure.CodeUnprocessableContent: {codes.InvalidArgument, "UNPROCESSABLE_CONTENT"},
+		failure.CodeTooManyRequests:      {codes.ResourceExhausted, "TOO_MANY_REQUESTS"},
 		// profile:http-idempotency-postgres:start
-		failure.CodeIdempotencyKeyMismatch:    codes.InvalidArgument,
-		failure.CodeIdempotencyUnavailable:    codes.Unavailable,
-		failure.CodeIdempotencyOutcomeUnknown: codes.Unavailable,
+		failure.CodeIdempotencyKeyMismatch:    {codes.InvalidArgument, "IDEMPOTENCY_KEY_MISMATCH"},
+		failure.CodeIdempotencyUnavailable:    {codes.Unavailable, "IDEMPOTENCY_UNAVAILABLE"},
+		failure.CodeIdempotencyOutcomeUnknown: {codes.Unavailable, "IDEMPOTENCY_OUTCOME_UNKNOWN"},
 		// profile:http-idempotency-postgres:end
-		failure.CodeInternalError:      codes.Internal,
-		failure.CodeServiceUnavailable: codes.Unavailable,
-		failure.CodeGatewayTimeout:     codes.DeadlineExceeded,
+		failure.CodeInternalError:      {codes.Internal, "INTERNAL_ERROR"},
+		failure.CodeServiceUnavailable: {codes.Unavailable, "SERVICE_UNAVAILABLE"},
+		failure.CodeGatewayTimeout:     {codes.DeadlineExceeded, "GATEWAY_TIMEOUT"},
 	}
 	allCodes := failure.AllCodes()
 	if len(expected) != len(allCodes) {
@@ -125,7 +139,7 @@ func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
 		t.Run(string(failureCode), func(t *testing.T) {
 			t.Parallel()
 
-			wantCode, ok := expected[failureCode]
+			want, ok := expected[failureCode]
 			if !ok {
 				t.Fatalf("failure code %q has no expected gRPC status", failureCode)
 			}
@@ -133,8 +147,8 @@ func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
 				Code:   failureCode,
 				Detail: "classified failure",
 			}, testErrorDomain))
-			if converted.Code() != wantCode {
-				t.Fatalf("status code = %s, want %s", converted.Code(), wantCode)
+			if converted.Code() != want.code {
+				t.Fatalf("status code = %s, want %s", converted.Code(), want.code)
 			}
 
 			var errorInfo *errdetails.ErrorInfo
@@ -146,9 +160,8 @@ func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
 			if errorInfo == nil {
 				t.Fatal("status carried no ErrorInfo")
 			}
-			wantReason := strings.ToUpper(string(failureCode))
-			if errorInfo.GetReason() != wantReason || !reasonPattern.MatchString(errorInfo.GetReason()) {
-				t.Fatalf("ErrorInfo reason = %q, want conforming %q", errorInfo.GetReason(), wantReason)
+			if errorInfo.GetReason() != want.reason || !reasonPattern.MatchString(errorInfo.GetReason()) {
+				t.Fatalf("ErrorInfo reason = %q, want conforming %q", errorInfo.GetReason(), want.reason)
 			}
 			if errorInfo.GetDomain() != testErrorDomain {
 				t.Fatalf("ErrorInfo domain = %q, want %q", errorInfo.GetDomain(), testErrorDomain)
@@ -157,9 +170,7 @@ func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
 	}
 }
 
-func TestHandlerErrorBoundarySnapshotsDomainMappers(t *testing.T) {
-	t.Parallel()
-
+func TestServerSnapshotsDomainMappersAtConstruction(t *testing.T) {
 	specific := func(error) (failure.Classification, bool) {
 		return failure.Classification{Code: failure.CodeAlreadyExists, Detail: "specific"}, true
 	}
@@ -167,12 +178,12 @@ func TestHandlerErrorBoundarySnapshotsDomainMappers(t *testing.T) {
 		return failure.Classification{Code: failure.CodeBadRequest, Detail: "broad"}, true
 	}
 	mappers := []failure.Mapper{specific, broad}
-	boundary := handlerErrorBoundary(slog.New(slog.DiscardHandler), mappers)
+	_, connection := startTestServerWithOptions(t, testServerConfig(), registerSaturatedService, Options{
+		DomainErrors: mappers,
+	})
 	mappers[0] = broad
 
-	err := boundary(t.Context(), "/"+testErrorDomain+"/Unary", func(context.Context) error {
-		return errSaturated
-	})
+	err := connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
 	assertStatusCode(t, err, codes.AlreadyExists)
 }
 
@@ -201,9 +212,13 @@ func TestUnclassifiedErrorCarriesNoDetailsAndNoHandlerText(t *testing.T) {
 }
 
 func TestClassifiedEmptyDetailUsesGRPCOwnedFallback(t *testing.T) {
-	t.Parallel()
+	_, connection := startTestServerWithOptions(t, testServerConfig(), registerSaturatedService, Options{
+		DomainErrors: []failure.Mapper{func(error) (failure.Classification, bool) {
+			return failure.Classification{Code: failure.CodeAlreadyExists}, true
+		}},
+	})
 
-	err := mappedStatus(failure.Classification{Code: failure.CodeAlreadyExists}, "")
+	err := connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
 	if code := status.Code(err); code != codes.AlreadyExists {
 		t.Fatalf("code = %s, want %s", code, codes.AlreadyExists)
 	}
@@ -219,13 +234,7 @@ func grpcRetryInfoFromServer(
 ) *errdetails.RetryInfo {
 	t.Helper()
 
-	register := func(registrar grpc.ServiceRegistrar) {
-		registerUnaryTestService(registrar, testUnaryFullMethod,
-			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-				return nil, errSaturated
-			})
-	}
-	_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
+	_, connection := startTestServerWithOptions(t, testServerConfig(), registerSaturatedService, Options{
 		DomainErrors: mappers,
 	})
 

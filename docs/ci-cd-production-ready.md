@@ -52,7 +52,10 @@ version through a checksum-pinned binary and range scans pull requests, merge
 groups, and main pushes; tags and manual runs retain full-history proof.
 Integration runs each selected suite (database, messaging, process, race,
 image) as its own parallel leg; a suite leg starts its own containers, so the
-slowest suite, not their sum, bounds the job. The image leg builds one image
+slowest suite, not their sum, bounds the job. The gRPC process test runs in its
+own `process-grpc` leg. The messaging producer process test runs only in
+`process`, so a messaging change selects that leg too. The race leg keeps its
+own build cache, because `-race` builds share nothing with the ordinary one. The image leg builds one image
 only when a selected runtime gate needs it and reuses that image for
 lifecycle, migration, and the canonical Make-owned vulnerability gate.
 The module initializer contract runs as parallel `initializer` parts: one

@@ -16,6 +16,10 @@ if ! go test ./scripts/ci/integration-record-grpc-check.go ./scripts/ci/integrat
 	echo "integration record gRPC AST tests failed" >&2
 	status=1
 fi
+if ! go test ./scripts/ci/integration-record-bootstrap-check.go ./scripts/ci/integration-record-ast-common.go ./scripts/ci/integration-record-bootstrap-check_test.go; then
+	echo "integration record bootstrap AST tests failed" >&2
+	status=1
+fi
 
 require_literal() {
 	local record="$1" file="$2" literal="$3" description="$4"

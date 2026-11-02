@@ -6,6 +6,7 @@ Load this when changed behavior may have no named scenario, when an assertion ma
 ## Decide
 - A finding names three things: the changed behavior, the missing scenario or weak assertion, and the regression that stays green. Without the third, there is no finding yet.
 - Treat coverage percentage, test count, and package-level success as context. They are never the finding.
+- Make "the regression that stays green" concrete: mutate the changed line by hand — flip a comparison, drop a condition, return early — rerun the focused test, and revert. A green run is the finding; a red one retires the suspicion.
 - Judge an assertion by whether a plausible regression passes through it. Upgrade toward error identity via `errors.Is`/`errors.As`, status, persisted state, side effect, or emitted event.
 - Match exact text only where the text is the contract the caller or operator depends on; where phrasing is incidental, assert identity instead.
 - Ask for one representative failure class unless the code deliberately distinguishes several, and prefer a regression seed over new fuzzing when a crash is already known.

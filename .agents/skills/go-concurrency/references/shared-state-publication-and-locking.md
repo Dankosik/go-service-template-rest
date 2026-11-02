@@ -7,6 +7,10 @@ Load when shared maps/slices/pointers/interfaces cross goroutines, atomics or
 
 ## Decide
 
+Before introducing a lock or an owning goroutine, check whether the state can
+remain local to the operation or immutable after publication. Retain sharing
+when the current invariant requires it; synchronize its full span.
+
 Name the happens-before edge and the state span it covers. Unlock/lock,
 send/receive, close/observing receive, `Once`, completed goroutine/`Wait`, and an
 observed atomic store/load are edges; startup order and elapsed time are not.
