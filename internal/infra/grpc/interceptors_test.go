@@ -157,10 +157,10 @@ func registerValidatedUnaryService(
 	messageType protoreflect.MessageType,
 	called func(),
 ) {
-	handler := func(context.Context, any) (any, error) {
+	handler := grpc.UnaryHandler(func(context.Context, any) (any, error) {
 		called()
 		return &emptypb.Empty{}, nil
-	}
+	})
 	registrar.RegisterService(&grpc.ServiceDesc{
 		ServiceName: validatedServiceName,
 		Methods: []grpc.MethodDesc{{
