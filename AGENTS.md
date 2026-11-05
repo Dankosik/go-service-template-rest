@@ -1,5 +1,13 @@
 # AGENTS.md
 
+When a repository's documentation and its existing code disagree, follow the
+conventions used in the existing code, and in your final reply point out each
+inconsistency you found between the documentation and the code.
+
+[Authority](#authority) boundaries, an accepted task artifact's requirements,
+and rules for the code you write or change under [Go Change
+Surface](#go-change-surface) still bind; report those disagreements too.
+
 OpenAPI-first Go service template with safe runtime defaults, optional
 persistence profiles, observability, agent workflows, and CI.
 
