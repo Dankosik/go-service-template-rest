@@ -74,8 +74,12 @@ material decisions, proof, and remaining business input in plain language.
 ## Engineering
 
 Reuse the current owner, repository pattern, standard library, and installed
-dependencies before adding machinery. Prefer the smallest causal change that
-satisfies the accepted outcome. A new abstraction, layer, configuration
+dependencies before adding machinery. Prefer the smallest coherent change that
+satisfies the accepted outcome, including prerequisite refactoring needed to
+preserve responsibility boundaries and keep each rule with one owner. Bound
+that refactoring to the accepted outcome. If it requires revisiting accepted
+scope or decisions, resolve that through the existing decision owner before the
+dependent implementation. A new abstraction, layer, configuration
 surface, or dependency must carry a current accepted constraint, variation,
 dependency direction, or rollout need; hypothetical reuse and future
 flexibility do not count. Match the surrounding code's naming, comment density,
